@@ -1,3 +1,4 @@
 nbsphinx
 numpydoc
 pandoc
+astropy
