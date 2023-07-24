@@ -9,3 +9,17 @@ Top-Level Interface
     :undoc-members:
     :show-inheritance:
 
+.. automodule:: cov_setup
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. automodule:: cov_hod
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. automodule:: cov_halo_model
+    :members:
+    :undoc-members:
+    :show-inheritance:
