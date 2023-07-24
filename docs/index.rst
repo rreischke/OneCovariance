@@ -1,3 +1,7 @@
+.. image:: Onecov_logo.png
+   :width: 100 %
+   :align: center
+
 OneCovariance code by KiDS for kids and adults
 ===================================
 
