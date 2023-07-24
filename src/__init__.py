@@ -1,6 +1,6 @@
 """One covariance to rule them all"""
 
-from src.cov_input import Input, FileInput
+from .cov_input import Input, FileInput
 
 __author__ = 'Robert Reischke'
 __email__ = 'reischke@posteo.net'
