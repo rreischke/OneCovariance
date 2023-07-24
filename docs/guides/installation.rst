@@ -21,3 +21,5 @@ You can install both via ``conda``:
     git clone https://github.com/KiDS-WL/git@github.com:rreischke/OneCovariance.git
     cd OneCovariance    
     pip install .
+
+Once you have carried out these steps, you are ready to run the code.

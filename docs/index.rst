@@ -13,6 +13,7 @@ Contents
     :caption: User Guide
 
     guides/installation
+    guides/running
 
 .. toctree::
     :maxdepth: 1
