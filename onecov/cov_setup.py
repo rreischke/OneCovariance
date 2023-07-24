@@ -15,8 +15,8 @@ class Setup():
     galaxy samples (e.g., split in stellar mass bins). All consistency
     checks are automatically performed when the Setup class is called.
 
-    Parameters :
-    ------------
+    Atrributes
+    ----------
     cosmo_dict : dictionary
         Specifies all cosmological parameters. To be passed from the 
         read_input method of the Input class.
@@ -104,17 +104,17 @@ class Setup():
         number of tomographic bins relevant for cosmic shear and/or 
         galaxy-galaxy lensing analysis
     Pxy_tab : dictionary
-        See above in Parameters : Pxy_tab
+        See above in Parameters Pxy_tab
     Cxy_tab : dictionary
-        See above in Parameters : Cxy_tab
+        See above in Parameters Cxy_tab
     effbias_tab : dictionary
-        See above in Parameters : effbias_tab
+        See above in Parameters effbias_tab
     mor_tab : dictionary
-        See above in Parameters : mor_tab
+        See above in Parameters mor_tab
     occprob_tab : dictionary
-        See above in Parameters : occprob_tab
+        See above in Parameters occprob_tab
     occnum_tab : dictionary
-        See above in Parameters : occnum_tab
+        See above in Parameters occnum_tab
 
     Example :
     ---------
@@ -171,7 +171,7 @@ class Setup():
             Specifies all cosmological parameters. To be passed from the 
             read_input method of the Input class.
 
-        Returns :
+        Return
         ---------
         astropy.cosmology.w0waCDM : class
 
@@ -261,7 +261,7 @@ class Setup():
         number of sample bins. Enables smooth processing of 6x2pt 
         analysis. Gives warnings or errors if they are incompatible. 
 
-        Parameters :
+        Parameters
         ------------
         survey_params_dict : dictionary
             Specifies all the information unique to a specific survey.
@@ -468,7 +468,7 @@ class Setup():
         the configuration in [powspec evaluation]. Gives warnings if
         they are incompatible.
 
-        Parameters :
+        Parameters
         ------------
         powspec_prec : dictionary
             Contains precision information about the power spectra, 
@@ -509,7 +509,7 @@ class Setup():
         HOD class will ignore the rest. Gives warnings if they are 
         incompatible.
 
-        Parameters :
+        Parameters
         ------------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
@@ -1119,7 +1119,7 @@ class Setup():
         Reads in the survey area from a mask file with healpy for which 
         the covariance should be calculated.
 
-        Parameters :
+        Parameters
         ------------
         survey_params_dict : dictionary
             Specifies all the information unique to a specific survey.
@@ -1222,7 +1222,7 @@ class Setup():
         alm_file. Checks whether the survey area(s) are available and 
         calculates them if not.
 
-        Parameters :
+        Parameters
         ------------
         est1 : string
             specifies the estimator for which the a_lm's are needed,
@@ -1236,7 +1236,7 @@ class Setup():
             and the read_in bools. To be passed from the read_input 
             method of the Input class.
 
-        Returns :
+        Return
         ---------
         ell : list of arrays
             angular modes that fit into the survey area
@@ -1343,7 +1343,7 @@ class GaussLegendre:
     polynomials to approximate an integral over an arbitrary function
     by a polynomial up to some order.
 
-    Parameters :
+    Parameters
     ------------
     support : 1D array
         the support of the integrand, i.e. the integration variable
@@ -1407,7 +1407,7 @@ class GaussLegendre:
         Calculates the Gauss-Legendre quadrature in the interval lo and 
         hi. The roots and weights must be provided as tabulated input.
 
-        Parameters :
+        Parameters
         ------------
         lo : float
             lower integration limit
@@ -1418,7 +1418,7 @@ class GaussLegendre:
         weights : 1D array
             weights of the quadrature
 
-        Returns :
+        Return
         ---------
         the integral between lo and hi using roots and weights (float)
 

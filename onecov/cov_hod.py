@@ -75,7 +75,7 @@ class HOD():
         If individual mass-ranges for samples of galaxies are given,
         compute their logaarithmically spaced mass ranges per sample
 
-        Parameters :
+        Parameter
         ------------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
@@ -142,7 +142,7 @@ class HOD():
         Calculates the mass-observable relation for a specified 
         range of halo masses.
 
-        Parameters :
+        Parameter
         ------------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
@@ -154,7 +154,7 @@ class HOD():
             Is either 'cen' for central galaxies or 'sat' for satellite 
             galaxies.
 
-        Returns : 
+        Return 
         ------------
         Mobs : array
             with unit M_sun
@@ -179,7 +179,7 @@ class HOD():
         for a specified population of galaxies. Follows Eq. (15) of 
         van Uitert et al. (2016)
 
-        Parameters :
+        Parameter
         ------------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
@@ -194,7 +194,7 @@ class HOD():
             - "cen" for centrals
             - "sat" for satellites
 
-        Returns : 
+        Return 
         ------------
         logn : array
             with shape (sample_bins, 100, M_bins)
@@ -217,7 +217,7 @@ class HOD():
         for a specified population of galaxies. Follows Eq. (17) of 
         van Uitert et al. (2016)
 
-        Parameters :
+        Parameter
         ------------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
@@ -232,7 +232,7 @@ class HOD():
             - "cen" for centrals
             - "sat" for satellites
 
-        Returns : 
+        Return 
         ------------
         schech : array
             with shape (sample_bins, 100, M_bins)
@@ -261,7 +261,7 @@ class HOD():
         Calculates the expected number of objects of a given type of a 
         given mass, < N_cen/sat | M >.
 
-        Parameters :
+        Parameter
         ------------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
@@ -288,7 +288,7 @@ class HOD():
             halo mass per galaxy sample (optional). To be passed from 
             the read_input method of the FileInput class.
 
-        Returns : 
+        Return 
         ------------
         occ_num : array
             with shape (sample_bins, M_bins)
@@ -352,7 +352,7 @@ class HOD():
         Calculates the expected number of galaxies of a given mass, 
         < N_gal | M >.
 
-        Parameters :
+        Parameter
         ------------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
@@ -376,7 +376,7 @@ class HOD():
             halo mass per galaxy sample (optional). To be passed from 
             the read_input method of the FileInput class.
 
-        Returns :
+        Return
         ------------
         occ_num : array
             with shape (sample_bins, M_bins)

@@ -15,8 +15,8 @@ class Input:
     Lastly, a new configuration file can be generated that lists all 
     values used. A full list of all input values is given in the config.ini .
 
-    Attributes :
-    -------------------
+    Attributes
+    ----------
     ... too many to list >,< but all relevant ones are put into
         dictionaries and explained in the method 'read_input'
 
@@ -290,8 +290,8 @@ class Input:
         Every value that is not specified either raises an exception or
         gets a fall-back value which is reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -354,8 +354,8 @@ class Input:
         exception or gets a fall-back value which is reported to the 
         user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -461,8 +461,8 @@ class Input:
         either raises an exception or gets a fall-back value which is 
         reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -608,8 +608,8 @@ class Input:
         either raises an exception or gets a fall-back value which is 
         reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -790,8 +790,8 @@ class Input:
         either raises an exception or gets a fall-back value which is 
         reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -924,8 +924,8 @@ class Input:
         either raises an exception or gets a fall-back value which is 
         reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -1057,8 +1057,8 @@ class Input:
         specified either raises an exception or gets a fall-back value 
         which is reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -1159,8 +1159,8 @@ class Input:
         read_input method ('self.output_dir+self.output_file') will be 
         0. Every value that is not specified gets a fall-back value.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -1332,8 +1332,8 @@ class Input:
         covariance should be calculated. Every value that is not 
         specified gets a fall-back value which is reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -1469,8 +1469,8 @@ class Input:
         specified either raises an exception or gets a fall-back value 
         which is reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -1550,8 +1550,8 @@ class Input:
         value that is not specified either raises an exception or gets
         a fall-back value which is reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -1604,8 +1604,8 @@ class Input:
         exception or gets a fall-back value which is reported to the 
         user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -1926,8 +1926,8 @@ class Input:
         specified either raises an exception or gets a fall-back value 
         which is reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -2572,8 +2572,8 @@ class Input:
         hmf module (by Steven Murray). Every value that is not specified 
         gets a fall-back value which is reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -2718,8 +2718,8 @@ class Input:
         value that is not specified gets a fall-back value which is 
         reported to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -2793,8 +2793,8 @@ class Input:
         that is not specified gets a fall-back value which is reported 
         to the user.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -2920,8 +2920,8 @@ class Input:
         """
         Reads in miscellaneous information.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -3351,13 +3351,13 @@ class Input:
         dictionaries. Finally, a file is produced that lists all
         explicitly and implicitly set parameters for future reference.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config_name : string
             default : 'config.ini'
             Name of the configuration file.
 
-        Returns :
+        Return
         ---------
         covterms : dictionary
             Specifies which terms of the covariance (Gaussian, 
@@ -3525,8 +3525,8 @@ class FileInput:
     configuration file that the Input class can generate will be 
     appended with a list of all the files used.
 
-    Private Variables :
-    -------------------
+    Attributes
+    ----------
     ... too many to list >,< but all relevant ones are put into
         dictionaries and explained in the method 'read_input'
 
@@ -3713,8 +3713,8 @@ class FileInput:
         used for internal consistency checks in this and subsequently 
         called methods.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -3825,8 +3825,8 @@ class FileInput:
         should be calculated. If no redshift distribution is given, an
         exception is raised.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -3835,7 +3835,7 @@ class FileInput:
             exception texts.
 
         File structure :
-        ----------------
+        --------------
         # z     n(z)
         0.1     4.1e-4
         0.2     1.3e-3
@@ -4127,13 +4127,13 @@ class FileInput:
         given, an approximation of the shot noise contribution will be 
         used.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         nfile : string
             Name of the number of galaxy pairs file.
 
         File structure :
-        ----------------
+        --------------
         N_pairs must be the last column (as in the treecorr output, or 
                                          just a 2 column file)
         # theta  ...  N_pairs
@@ -4171,8 +4171,8 @@ class FileInput:
         tomographic bin combination is changed. In such a case, replace
         the two bin number with a '?' each.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -4339,13 +4339,13 @@ class FileInput:
         Reads in one file with a tabulated power spectrum which is used
         to calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         Pfile : string
             Name of the power spectrum file.
 
         File structure :
-        ----------------
+        --------------
         # z     k           P(z,k)[sample 1] ...  P(z,k)[sample N] 
         0.1     4.0e-5      265.1            ...  555.0
         0.2     3.9e-5      286.4            ...  599.7
@@ -4394,14 +4394,14 @@ class FileInput:
         internal consistency checks and gives appropriate warnings or
         raises exceptions.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
 
         File structure :
-        ----------------
+        --------------
         # z     k           P(z,k)[sample 1] ...  P(z,k)[sample N] 
         0.1     4.0e-5      265.1            ...  555.0
         0.2     3.9e-5      286.4            ...  599.7
@@ -4510,13 +4510,13 @@ class FileInput:
         Reads in one file with a tabulated projected power spectrum 
         which is used to calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         Cfile : string
             Name of the projected power spectrum file.
 
         File structure :
-        ----------------
+        --------------
         # ell   t1  t2    C(ell)[t1, t2, s1] ...  C(ell)[t1, t2, sN]
         2       1   1     xxe-x              ...  xxe-x
         2       1   ...   xxe-x              ...  xxe-x
@@ -4566,13 +4566,13 @@ class FileInput:
         Reads in one file with a tabulated projected power spectrum 
         which is used to calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         Cfiles : list
             List of names of the projected power spectrum file.
 
         File structure :
-        ----------------
+        --------------
         # ell   C(ell)[s1] ...  C(ell)[sN]
         2       xxe-x      ...  xxe-x
         3       xxe-x      ...  xxe-x
@@ -4655,14 +4655,14 @@ class FileInput:
         then performs internal consistency checks and gives appropriate 
         warnings or raises exceptions.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
 
         File structure :
-        ----------------
+        --------------
         # ell   t1  t2    C(ell)[t1, t2, s1] ...  C(ell)[t1, t2, sN]
         2       1   1     xxe-x              ...  xxe-x
         2       1   ...   xxe-x              ...  xxe-x
@@ -4827,13 +4827,13 @@ class FileInput:
         Reads in one file with a tabulated effective bias which is used
         to calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bfile : string
             Name of the power spectrum file.
 
         File structure :
-        ----------------
+        --------------
         # z     bias(z)[sample 1] ...  bias(z)[sample N] 
         0.1     1.2               ...  1.7
         0.2     1.3               ...  1.9
@@ -4877,14 +4877,14 @@ class FileInput:
         internal consistency checks and gives appropriate warnings or 
         raises exceptions.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
 
         File structure :
-        ----------------
+        --------------
         # z     bias(z)[sample 1] ...  bias(z)[sample N] 
         0.1     1.2               ...  1.7
         0.2     1.3               ...  1.9
@@ -4924,13 +4924,13 @@ class FileInput:
         Reads in one file with a tabulated mass-observable relation 
         which is used to calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         mfile : string
             Name of the mass-observable relation file.
 
         File structure :
-        ----------------
+        --------------
         # log10(M)     mor(M) 
          9.0           8.3e+2
          9.1           1.9e+3
@@ -4967,14 +4967,14 @@ class FileInput:
         then performs internal consistency checks and gives appropriate 
         warnings or raises exceptions.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
 
         File structure :
-        ----------------
+        --------------
         # log10(M)     mor(M) 
          9.0           8.3e+2
          9.1           1.9e+3
@@ -5022,15 +5022,15 @@ class FileInput:
         Reads in one file with a tabulated occupation distribution which 
         is used to calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         ofiles : string
             Name of the occupation distribution files.
         sampledim : int
             Number of galaxy samples (e.g., in stellar mass bins).
 
         File structure :
-        ----------------
+        --------------
         # the following should be provided per galaxy sample bin
         # log10(M)     log10(M for sample)  occprob(M, M for sample) 
          9.0           10.0                 0.0
@@ -5105,14 +5105,14 @@ class FileInput:
         then performs internal consistency checks and gives appropriate 
         warnings or raises exceptions.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
 
         File structure :
-        ----------------
+        --------------
         # the following should be provided per galaxy sample bin
         # log10(M)     log10(M for sample)  occprob(M, M for sample) 
          9.0           10.0                 0.0
@@ -5213,13 +5213,13 @@ class FileInput:
         Reads in one file with a tabulated occupation number which is 
         used to calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         nfile : string
             Name of the occupation number file.
 
         File structure :
-        ----------------
+        --------------
         # log10(M)     occnum(M)[sample 1]  ...  occnum(M)[sample N] 
          9.0           0.0                  ...  0.0
          9.1           0.0                  ...  0.0
@@ -5266,14 +5266,14 @@ class FileInput:
         performs internal consistency checks and gives appropriate
         warnings or raises exceptions.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
 
         File structure :
-        ----------------
+        --------------
         # log10(M)     occnum(M)[sample 1]  ...  occnum(M)[sample N] 
          9.0           0.0                  ...  0.0
          9.1           0.0                  ...  0.0
@@ -5353,13 +5353,13 @@ class FileInput:
         Reads in all files with a tabulated trispectrum which is used to
         calculate the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         Tfiles : string
             Name of the trispectrum files.
 
         File structure :
-        ----------------
+        --------------
         # log10k1  log10k2  m   n   gggg gggm ggmm gmgm mmgm mmmm 
           -1e1     -1e1     0   0   .... .... .... .... .... ....
           ...      ...      ... ... .... .... .... .... .... ....
@@ -5423,14 +5423,14 @@ class FileInput:
         The code will search for extensions '_redshift' with a given
         filename.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
 
         File structure :
-        ----------------
+        --------------
         # log10k1  log10k2  m   n   gggg gggm ggmm gmgm mmgm mmmm 
           -1e1     -1e1     0   0   .... .... .... .... .... ....
           ...      ...      ... ... .... .... .... .... .... ....
@@ -5509,13 +5509,13 @@ class FileInput:
         """
         Reads in ...
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         wfile : string
             Name of the COSEBI kernel file.
 
         File structure :
-        ----------------
+        --------------
         # ln(ell)   Wn_log/lin
         2           0.123456789
         3           0.234567891
@@ -5543,13 +5543,13 @@ class FileInput:
         """
         Reads in ...
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         Tfile : string
             Name of the COSEBI Tn_pm kernel file.
 
         File structure :
-        ----------------
+        --------------
         # theta   Tn_pm
         
         """
@@ -5576,8 +5576,8 @@ class FileInput:
         tomographic bin combination is changed. In such a case, replace
         the two bin number with a '?' each.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config : class
             This class holds all the information specified the config 
             file. It originates from the configparser module.
@@ -5995,13 +5995,13 @@ class FileInput:
         lists all explicitly and implicitly set parameters for future 
         reference.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         config_name : string
             default : 'config.ini'
             Name of the configuration file.
 
-        Returns :
+        Return
         ---------
         a dictionary with the following keys (also a dictionary each)
         'zclust' : dictionary
