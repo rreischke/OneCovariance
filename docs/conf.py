@@ -32,7 +32,8 @@ author = 'Robert Reischke'
 # ones.
 extensions = ['numpydoc', 'sphinx.ext.autosectionlabel']
 numpydoc_show_class_members = False
-autoclass_content = 'init'
+#autoclass_content = 'init'
+sys.path.insert(0, os.path.abspath("./../onecov"))
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
