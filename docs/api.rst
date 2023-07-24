@@ -1,4 +1,4 @@
-This page details the methods and classes provided by the ``nautilus`` module.
+This page details the methods and classes provided by the ``OneCovariance`` module.
 
 ===================
 Top-Level Interface
