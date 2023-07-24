@@ -1,3 +1,6 @@
+import sys
+import os
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -30,7 +33,7 @@ author = 'Robert Reischke'
 extensions = ['numpydoc', 'sphinx.ext.autosectionlabel']
 numpydoc_show_class_members = False
 autoclass_content = 'init'
-
+sys.path.insert(0, os.path.abspath('../..'))
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -46,7 +49,6 @@ exclude_patterns = []
 # a list of builtin themes.
 #
 html_theme = 'sphinx_rtd_theme'
-#html_logo = 'nautilus_text_image_lowres.png'
 html_theme_options = {
     'logo_only': True,
     'display_version': False,
