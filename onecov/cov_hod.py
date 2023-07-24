@@ -115,8 +115,8 @@ class HOD():
         Updates the private variables Mrange and Mbins to a new mass 
         range
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
