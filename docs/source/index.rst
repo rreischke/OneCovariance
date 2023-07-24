@@ -15,5 +15,14 @@ Contents
 --------
 
 .. toctree::
+   :maxdepth: 1
 
-   usage
+   installation
+   tutorials
+   license
+   api
+   changelog
+   contributors
+   developing
+
+
