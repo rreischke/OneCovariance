@@ -9,9 +9,3 @@ Top-Level Interface
     :undoc-members:
     :show-inheritance:
 
-
-.. automodule:: onecov.cov_input
-    :members:
-    :undoc-members:
-    :show-inheritance:
-

@@ -13,9 +13,9 @@ class Input:
     not set explicitly and a fall-back value is inserted, a message will 
     be displayed to inform the user what the value has been set to. 
     Lastly, a new configuration file can be generated that lists all 
-    values used.
+    values used. A full list of all input values is given in the config.ini .
 
-    Private Variables :
+    Attributes :
     -------------------
     ... too many to list >,< but all relevant ones are put into
         dictionaries and explained in the method 'read_input'

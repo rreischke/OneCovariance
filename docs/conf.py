@@ -36,6 +36,10 @@ numpydoc_show_class_members = False
 sys.path.insert(0, os.path.abspath("./../onecov"))
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
+autodoc_default_options = {
+    "members": True,
+    "private-members": True
+}
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
