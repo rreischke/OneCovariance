@@ -4,10 +4,8 @@ This page details the methods and classes provided by the ``OneCovariance`` modu
 Top-Level Interface
 ===================
 
-.. autoclass:: src.cov_input
-    :members: read_input
-    :member-order: bysource
+.. automodule:: src.cov_input
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
-.. autoclass:: src.FileInput
-    :members: read_input
-    :member-order: bysource
