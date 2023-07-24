@@ -9,8 +9,14 @@ Contents
 --------
 
 .. toctree::
-   :maxdepth: 1
+    :maxdepth: 1
+    
+    guides/installation
 
-   guides/installation
 
+.. toctree::
+    :maxdepth: 1
+    :caption: API Documentation
+
+    api
 
