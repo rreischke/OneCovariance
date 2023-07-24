@@ -4,7 +4,7 @@ This page details the methods and classes provided by the ``OneCovariance`` modu
 Top-Level Interface
 ===================
 
-.. automodule:: cov_input
+.. automodule:: ./../onecov/cov_input
     :members:
     :undoc-members:
     :show-inheritance:
