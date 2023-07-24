@@ -3,8 +3,7 @@ Installation
 
 The most recent stable version of ``OneCovariance`` should be installed directly from GitHub.
 
-.. code-block::bash
-
+.. code-block:: bash
     git clone https://github.com/KiDS-WL/covariance
     conda env create -f conda_env.yaml
     pip install .
