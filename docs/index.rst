@@ -1,4 +1,4 @@
-Documentation of the OneCovariance code by KiDS for Adults
+OneCovariance code by KiDS for kids and adults
 ===================================
 
 The OneCovariance code is a python package to calculate covariance matrices
