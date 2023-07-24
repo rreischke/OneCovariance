@@ -2,4 +2,3 @@ nbsphinx
 numpydoc
 pandoc
 astropy
-hmf
