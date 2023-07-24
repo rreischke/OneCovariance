@@ -4,13 +4,13 @@ This page details the methods and classes provided by the ``OneCovariance`` modu
 Top-Level Interface
 ===================
 
-.. automodule:: cov_input
+.. automodule:: Input
     :members:
     :undoc-members:
     :show-inheritance:
 
 
-.. automodule:: onecov.cov_input
+.. automodule:: onecov.Input
     :members:
     :undoc-members:
     :show-inheritance:
