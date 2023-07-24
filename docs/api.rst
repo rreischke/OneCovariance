@@ -4,7 +4,7 @@ This page details the methods and classes provided by the ``OneCovariance`` modu
 Top-Level Interface
 ===================
 
-.. autoclass:: src.Input
+.. autoclass:: src.cov_input
     :members: read_input
     :member-order: bysource
 
