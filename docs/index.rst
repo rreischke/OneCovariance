@@ -10,14 +10,10 @@ Contents
 
 .. toctree::
     :maxdepth: 1
-    
+    :caption: User Guide
+
     guides/installation
 
-
-.. toctree::
-    :maxdepth: 1
-    :caption: API Documentation
-
-    api
-
+Support
+-------
 Here is more stuff
