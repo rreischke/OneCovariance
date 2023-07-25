@@ -1,8 +1,8 @@
 import time
 import numpy as np
-from src.cov_ell_space import CovELLSpace
-from src.cov_discrete import *
-from src.cov_discrete_utils import *
+from cov_ell_space import CovELLSpace
+from cov_discrete import *
+from cov_discrete_utils import *
 from scipy.interpolate import UnivariateSpline
 
 try:
