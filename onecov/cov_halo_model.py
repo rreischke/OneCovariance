@@ -18,8 +18,8 @@ class HaloModel(Setup):
     Inherits the functionality of the Setup class and contains instances 
     of the hmf and hod class.
 
-    Atrributes :
-    ------------
+    Atrributes
+    ----------
     zet : float
         Redshift at which the covariance should be evaluated.
     cosmo_dict : dictionary
@@ -87,8 +87,8 @@ class HaloModel(Setup):
             Look-up table for the occupation number as a function of
             halo mass per galaxy sample (optional).
 
-    Private Variables :
-    -------------------
+    Private Variables
+    -----------------
     see Setup class
     mass_func : class
         This class specifies the mass function. It originates from the 
@@ -114,8 +114,8 @@ class HaloModel(Setup):
         with shape (sample_bins)
         effective bias for tracers assuming an HOD
 
-    Example :
-    ---------
+    Example
+    -------
     from cov_input import Input, FileInput
     from cov_halo_model import HaloModel
     inp = Input()
@@ -164,8 +164,8 @@ class HaloModel(Setup):
         Calculates the mass function from the hmf module for a given 
         cosmology at the redshift 'zet'.
 
-        Parameter 
-        ------------
+        Parameters 
+        ----------
         zet : float
             Redshift at which the covariance should be evaluated.
         cosmo_dict : dictionary
@@ -182,8 +182,8 @@ class HaloModel(Setup):
             includes k-range and spacing. To be passed from the 
             read_input method of the Input class.
 
-        Return
-        ---------
+        Returns
+        -------
             mass_func : class
 
         """
@@ -232,8 +232,8 @@ class HaloModel(Setup):
         description, i.e., the integral of the mass function over the 
         occupation number of satellite and central galaxies.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -241,8 +241,8 @@ class HaloModel(Setup):
             different galaxy populations. To be passed from the 
             read_input method of the Input class.
 
-        Return
-        ---------
+        Returns
+        -------
         nbar : array
             with unit 1 / (Mpc/h)^3
             with shape (sample_bins)
@@ -264,8 +264,8 @@ class HaloModel(Setup):
         an HoD description, i.e., the integral of the mass function over 
         the occupation number of central galaxies.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -273,8 +273,8 @@ class HaloModel(Setup):
             different galaxy populations. To be passed from the 
             read_input method of the Input class.
 
-        Return
-        ---------
+        Returns
+        -------
         nbar_cen : array
             with unit 1 / (Mpc/h)^3
             with shape (sample_bins)
@@ -288,8 +288,8 @@ class HaloModel(Setup):
         given an HoD description, i.e., the integral of the mass 
         function over the occupation number of satellite galaxies.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -297,8 +297,8 @@ class HaloModel(Setup):
             different galaxy populations. To be passed from the 
             read_input method of the Input class.
 
-        Return
-        ---------
+        Returns
+        -------
         nbar_sat : array
             with unit 1 / (Mpc/h)^3
             with shape (sample_bins)
@@ -319,18 +319,18 @@ class HaloModel(Setup):
         Evaluates the fitting function for the bias at the peak height, 
         nu.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         nu : float
             The height of the peak in units of the variance.
 
-        Return
-        ---------
+        Returns
+        -------
         tinker : float
             Fitting function evaluated at nu.
 
-        Reference :
-        -----------
+        References
+        ----------
         Tinker et al. (2010)
 
         """
@@ -361,8 +361,8 @@ class HaloModel(Setup):
         All bias models are normalized, i.e., the integral over the peak 
         height is required to be unity.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -373,8 +373,8 @@ class HaloModel(Setup):
             model. To be passed from the read_input method of the Input 
             class.
 
-        Return
-        ---------
+        Returns
+        -------
         tinker : array
             with shape (M_bins)
 
@@ -417,8 +417,8 @@ class HaloModel(Setup):
         """
         Calculates the effective bias of tracers.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -435,8 +435,8 @@ class HaloModel(Setup):
             model. To be passed from the read_input method of the Input 
             class.
 
-        Return
-        ---------
+        Returns
+        -------
         bias : array
             with shape (sample_bins)
  
@@ -473,13 +473,13 @@ class HaloModel(Setup):
         definition of 'overdensity' (default : 200, can be adjusted in
         [halomodel evaluation]: 'mdef_params'.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         Mc_relation : string
             mass-concentration relation
 
-        Return
-        ---------
+        Returns
+        -------
         u_k : array
             with shape(log10k_bins, M_bins)
 
@@ -507,8 +507,8 @@ class HaloModel(Setup):
         Calculates the virial radius given a halo overdensity 
         definition.
 
-        Return
-        ---------
+        Returns
+        -------
         virial_radius : array
             with shape(M_bins)
 
@@ -528,13 +528,13 @@ class HaloModel(Setup):
             (II) 'flat' : concentration is one
             (ii) all this laziness...
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         Mc_relation : string
             mass-concentration relation
 
-        Return
-        ---------
+        Returns
+        -------
         con : array
             with shape(M_bins)
 
@@ -558,25 +558,20 @@ class HaloModel(Setup):
         Function to exponentially damp the power of the 1-halo term on 
         large scales / small wavenumbers.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         mode : string
             Can be either 'damped' or 'none' for damping and no damping,
             respectively.
 
-        Return
-        ---------
+        Returns
+        -------
         erf(k) : array
             with shape (len(krange))
             for 'damped'
         1(k) : array
             with shape (len(krange))
             for 'none'
-
-
-        Reference :
-        -----------
-        ???
 
         """
         if mode == 'damped':
@@ -595,8 +590,8 @@ class HaloModel(Setup):
         """
         Calculates quantities for the halo model.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -611,13 +606,13 @@ class HaloModel(Setup):
             - 'cen' for centrals (Eq. 24 in reference paper)
             - 'sat' for satellites (Eq. 25 in reference paper)
 
-        Return
-        ---------
+        Returns
+        -------
         hurly_x : array
             with shape (log10k_bins, sample_bins, M_bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Sect 3.1.
             Note: The normalization is different, we use n_gal for all
                   cases.
@@ -658,12 +653,12 @@ class HaloModel(Setup):
         Calculates a spline of log10(k) and the halo model quantity 
         hurly_x which is needed to calculate the trispectrum.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         See documentation of the hurly_x - method.
 
-        Return
-        ---------
+        Returns
+        -------
         hurly_x : nested list of UnivariateSplines
             with shape (sample_bins, M_bins)
 
@@ -689,8 +684,8 @@ class HaloModel(Setup):
         """
         Calculates quantities for the halo model.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -707,19 +702,18 @@ class HaloModel(Setup):
             model. To be passed from the read_input method of the Input 
             class.
         alpha : int
-            ???
+            Auxillary label
         type_x : string
             - "m" for matter
             - "g" for tracers
 
-        Return
-        ---------
+        Returns
+        -------
         halo_model_integral_I_alpha_x : array
             with shape (log10k_bins, sample_bins)
 
-        Reference :
-        -----------
-        Takada ? checkme
+        References
+        ---------
         Dvornik et al. (2018), their Appendix A, Eq. (A15)
 
         """
@@ -768,12 +762,12 @@ class HaloModel(Setup):
         Calculates a spline of log10(k) and the log10 halo model 
         quantity I_alpha_x which is needed to calculate the trispectrum.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         See documentation of the halo_model_integral_I_alpha_x - method.
 
-        Return
-        ---------
+        Returns
+        -------
         integralX_spline : list of UnivariateSplines
             with shape (sample_bins)
 
@@ -805,8 +799,8 @@ class HaloModel(Setup):
         """
         Calculates quantities for the halo model.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -823,7 +817,7 @@ class HaloModel(Setup):
             model. To be passed from the read_input method of the Input 
             class.
         alpha : int
-            ???
+            Auxillary label
         type_x : string
             - "m" for matter
             - "g" for tracers
@@ -831,15 +825,14 @@ class HaloModel(Setup):
             - "m" for matter
             - "g" for tracers
 
-        Return
-        ---------
+        Returns
+        -------
         integral_xy : array
             with shape (log10k_bins, log10k_bins, 
                         sample_bins, sample_bins)
 
-        Reference :
-        -----------
-        Takada ? checkme
+        References
+        ----------
         Dvornik et al. (2018), their Appendix A, Eq. (A15)
 
         """
@@ -922,13 +915,13 @@ class HaloModel(Setup):
         quantity I_alpha_xy which is needed to calculate the 
         trispectrum.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         See documentation of the halo_model_integral_I_alpha_xy - 
         method.
 
-        Return
-        ---------
+        Returns
+        -------
         integralXY_spline : nested list of UnivariateSplines
             with shape (sample_bins, sample_bins)
 
@@ -963,8 +956,8 @@ class HaloModel(Setup):
         Calculates quantities for the halo model which is needed to 
         calculate the trispectrum.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -981,10 +974,10 @@ class HaloModel(Setup):
             model. To be passed from the read_input method of the Input 
             class.
         alpha : int
-            ???
+            Auxillary label
 
-        Return
-        ---------
+        Returns
+        -------
         integral_mmm : array
             with shape (log10k_bins, log10k_bins, sample_bins)
 
@@ -1032,13 +1025,13 @@ class HaloModel(Setup):
         model quantity I_alpha_mmm which is needed to calculate the
         trispectrum.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         See documentation of the halo_model_integral_I_alpha_mmm - 
         method.
 
-        Return
-        ---------
+        Returns
+        -------
         integralmmm_spline : RectBivariateSpline
 
         """
@@ -1053,5 +1046,3 @@ class HaloModel(Setup):
             np.log10(self.mass_func.k),
             integralmmm[:, :, 0],
             kx=1, ky=1, s=0)
-
-# hm = HaloModel(0, cosmo, bias, hod, survey_params, prec, read_in_tables)
