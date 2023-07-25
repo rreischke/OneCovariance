@@ -4,15 +4,7 @@ from cov_ell_space import CovELLSpace
 from cov_discrete import *
 from cov_discrete_utils import *
 from scipy.interpolate import UnivariateSpline
-
-try:
-    import levin
-except ImportError:
-    raise Exception("ImportError: The projection from angular modes ell to " +
-                    "angles theta is done via the levin module, which contains Limber " +
-                    "and non-Limber methods. Please refer to the documentation how to " +
-                    "install this C-based code. " +
-                    "(cd /path_to_covariance/onecov/LevinBessel/ && pip install .")
+#import levin
 
 
 class CovTHETASpace(CovELLSpace):
