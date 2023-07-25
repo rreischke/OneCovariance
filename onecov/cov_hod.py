@@ -6,8 +6,8 @@ class HOD():
     distribution. All quantities are calculated at as a function halo
     mass.
 
-    Atrributes :
-    ------------
+    Atrributes
+    ----------
     bias_dict : dictionary
         Specifies all the information about the bias model. To be passed
         from the read_input method of the Input class.
@@ -16,8 +16,8 @@ class HOD():
         hmf documentation by Steven Murray), this includes mass range 
         and spacing for the mass integrations in the halo model.
 
-    Private Variables :
-    -------------------
+    Private Variables
+    -----------------
     Mrange : array
         with unit M_sun
         with shape (M_bins)
@@ -30,8 +30,8 @@ class HOD():
         [bias_dict['logmass_bins'][:-1], bias_dict['logmass_bins'][1:]],
         returns Mrange if no samples are specified
 
-    Example :
-    ---------
+    Example
+    -------
     from cov_input import Input, FileInput
     from cov_setup import Setup
     from cov_hod import HOD
@@ -75,8 +75,8 @@ class HOD():
         If individual mass-ranges for samples of galaxies are given,
         compute their logaarithmically spaced mass ranges per sample
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -86,6 +86,11 @@ class HOD():
             range and spacing for the mass integrations in the halo 
             model. To be passed from the read_input method of the Input 
             class.
+
+        Returns
+        -------
+        bins : array
+            Returns the mass bins define in hm_prec.
 
         """
         if bias_dict['logmass_bins'][0] == bias_dict['logmass_bins'][1]:
@@ -142,8 +147,8 @@ class HOD():
         Calculates the mass-observable relation for a specified 
         range of halo masses.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -154,8 +159,8 @@ class HOD():
             Is either 'cen' for central galaxies or 'sat' for satellite 
             galaxies.
 
-        Return 
-        ------------
+        Returns
+        -------
         Mobs : array
             with unit M_sun
             with shape (M_bins)
@@ -179,8 +184,8 @@ class HOD():
         for a specified population of galaxies. Follows Eq. (15) of 
         van Uitert et al. (2016)
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -194,8 +199,8 @@ class HOD():
             - "cen" for centrals
             - "sat" for satellites
 
-        Return 
-        ------------
+        Returns
+        -------
         logn : array
             with shape (sample_bins, 100, M_bins)
         """
@@ -217,8 +222,8 @@ class HOD():
         for a specified population of galaxies. Follows Eq. (17) of 
         van Uitert et al. (2016)
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -232,8 +237,8 @@ class HOD():
             - "cen" for centrals
             - "sat" for satellites
 
-        Return 
-        ------------
+        Returns 
+        -------
         schech : array
             with shape (sample_bins, 100, M_bins)
         """
@@ -261,8 +266,8 @@ class HOD():
         Calculates the expected number of objects of a given type of a 
         given mass, < N_cen/sat | M >.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -288,8 +293,8 @@ class HOD():
             halo mass per galaxy sample (optional). To be passed from 
             the read_input method of the FileInput class.
 
-        Return 
-        ------------
+        Returns
+        -------
         occ_num : array
             with shape (sample_bins, M_bins)
         occ_prob : array
@@ -352,8 +357,8 @@ class HOD():
         Calculates the expected number of galaxies of a given mass, 
         < N_gal | M >.
 
-        Parameter
-        ------------
+        Parameters
+        ----------
         hod_dict : dictionary
             Specifies all the information about the halo occupation 
             distribution used. This defines the shot noise level of the 
@@ -376,8 +381,8 @@ class HOD():
             halo mass per galaxy sample (optional). To be passed from 
             the read_input method of the FileInput class.
 
-        Return
-        ------------
+        Returns
+        -------
         occ_num : array
             with shape (sample_bins, M_bins)
         occ_prob : array
