@@ -1,7 +1,7 @@
 This page details the methods and classes provided by the ``OneCovariance`` module.
 
 ===================
-Top-Level Interface
+Full Documentation
 ===================
 
 .. automodule:: cov_input

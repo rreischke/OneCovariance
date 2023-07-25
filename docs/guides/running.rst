@@ -10,3 +10,4 @@ module ``covariance.py``
     python covariance.py my_config_file_name.ini
 
 If no ini file is specified the code will search for the standard ``config.ini`` and run with it.
+We will specify a few example ini files in the

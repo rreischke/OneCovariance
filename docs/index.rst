@@ -18,6 +18,7 @@ Contents
 
     guides/installation
     guides/running
+    guides/examples
 
 .. toctree::
     :maxdepth: 1
