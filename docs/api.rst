@@ -22,4 +22,3 @@ Top-Level Interface
 .. automodule:: cov_halo_model
     :members:
     :undoc-members:
-    :show-inheritance:
