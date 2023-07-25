@@ -53,6 +53,7 @@ exclude_patterns = []
 # a list of builtin themes.
 #
 html_theme = 'sphinx_rtd_theme'
+html_logo = 'Onecov_letter_logo.png'
 html_theme_options = {
     'logo_only': True,
     'display_version': False,
