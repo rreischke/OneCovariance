@@ -74,8 +74,8 @@ class Setup():
             Look-up table for the occupation number as a function of
             halo mass per galaxy sample (optional).
 
-    Private Variables :
-    -------------------
+    Private Variables
+    -----------------
     cosmology : class
         This class specifies the cosmological model and basic relations 
         such as distances. It originates from the 

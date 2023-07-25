@@ -16,8 +16,8 @@ class PolySpectra(HaloModel):
     Spectra for matter and tracer are evaluated at a single redshift. 
     Inherits the functionality of the HaloModel class.
 
-    Parameters :
-    ------------
+    Attributes
+    ----------
     zet : float
         Redshift at which the covariance should be evaluated.
     cov_dict : dictionary
