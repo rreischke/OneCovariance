@@ -28,3 +28,8 @@ Top-Level Interface
     :members:
     :undoc-members:
     :show-inheritance:
+
+.. automodule:: cov_output
+    :members:
+    :undoc-members:
+    :show-inheritance:
