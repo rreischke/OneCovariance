@@ -44,6 +44,16 @@ Top-Level Interface
     :undoc-members:
     :show-inheritance:
 
+.. automodule:: cov_bandpowers
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. automodule:: cov_cosebis
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. automodule:: cov_output
     :members:
     :undoc-members:

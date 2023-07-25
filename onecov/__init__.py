@@ -7,6 +7,8 @@ from .cov_polyspectra import PolySpectra
 from .cov_k_space import CovKSpace
 from .cov_ell_space import CovELLSpace
 from .cov_theta_space import CovTHETASpace
+from .cov_bandpowers import CovBandPowers
+from .cov_cosebis import CovCOSEBI
 from .cov_output import Output
 
 
