@@ -39,6 +39,11 @@ Top-Level Interface
     :undoc-members:
     :show-inheritance:
 
+.. automodule:: cov_theta_space
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. automodule:: cov_output
     :members:
     :undoc-members:
