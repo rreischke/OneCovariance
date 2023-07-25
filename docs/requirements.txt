@@ -2,3 +2,4 @@ nbsphinx
 numpydoc
 pandoc
 astropy
+healpy
