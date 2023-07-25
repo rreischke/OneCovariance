@@ -233,8 +233,8 @@ class PolySpectra(HaloModel):
         matrix elements. The matrix is symmetric in k-space and 
         sample-space.
 
-        Returns :
-        ---------
+        Returns
+        -------
         idxlist : list
             with length 4 indices per trispec_prec['log10k_bins'] \
             *(trispec_prec['log10k_bins']+1)/2 * sample*(sample_dim+1)/2
@@ -262,8 +262,8 @@ class PolySpectra(HaloModel):
         halo mass function object already exists and only the only 
         updated parameter is the redshift.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         zet : float
             Redshift at which the covariance should be evaluated.
         bias_dict : dictionary
@@ -311,8 +311,8 @@ class PolySpectra(HaloModel):
         Calculates the 1-halo contribution of the xy power spectra (with
         x,y either matter 'm', central 'cen', or satellite 'sat').
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -335,14 +335,14 @@ class PolySpectra(HaloModel):
         type_y : string
             same as type_x
 
-        Returns :
-        ---------
+        Returns
+        -------
         integral : array
             with unit ?
             with shape (log10k bins, sample bins)
 
-        Reference :
-        -----------
+        Reference
+        ---------
         Dvornik et al. (2018), their Sect 3.1, where the normalization
         in Eq. (24) and (25) is different, i.e. in their notation n_g.
 
@@ -388,8 +388,8 @@ class PolySpectra(HaloModel):
         Calculates the 2-halo contribution of the xy power spectra (with
         x,y either matter 'm', central 'cen', or satellite 'sat').
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -412,14 +412,14 @@ class PolySpectra(HaloModel):
         type_y : string
             same as type_x
 
-        Returns :
-        ---------
+        Returns
+        -------
         integralXY : array
             with unit ?
             with shape (log10k bins, sample bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Sect 3.1, where the normalization
         in Eq. (24) and (25) is different, i.e. in their notation n_g.
 
@@ -459,8 +459,8 @@ class PolySpectra(HaloModel):
         k-range set in powspec_prec and redshift zet. Returns None, if 
         Pmm is not needed for the Gaussian covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -477,14 +477,14 @@ class PolySpectra(HaloModel):
             model. To be passed from the read_input method of the Input 
             class.
 
-        Returns :
-        ---------
+        Returns
+        -------
         Pmm : array
             with unit (h/Mpc)^3 [so far, needs to be changed]
             with shape (log10k bins, sample bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Sect 3.1.
 
         """
@@ -526,8 +526,8 @@ class PolySpectra(HaloModel):
         k-range set in powspec_prec and redshift zet. Returns None, if 
         Pgm is not needed for the Gaussian or super-sample covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -544,14 +544,14 @@ class PolySpectra(HaloModel):
             model. To be passed from the read_input method of the Input 
             class.
 
-        Returns :
-        ---------
+        Returns
+        -------
         Pgm : array
             with unit ?
             with shape (log10k bins, sample bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Sect 3.1., Eq. (17)
 
         """
@@ -596,8 +596,8 @@ class PolySpectra(HaloModel):
         k-range set in powspec_prec and redshift zet. Returns None, if 
         Pgg is not needed for the Gaussian or super-sample covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -614,14 +614,14 @@ class PolySpectra(HaloModel):
             model. To be passed from the read_input method of the Input 
             class.
 
-        Returns :
-        ---------
+        Returns
+        -------
         Pgg : array
             with unit ?
             with shape (log10k bins, sample bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Sect 3.1., Eq. (16)
 
         """
@@ -670,8 +670,8 @@ class PolySpectra(HaloModel):
         del Pxy (k) / del delta_b. Returns None, if the a response term
         is not needed for the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -688,14 +688,14 @@ class PolySpectra(HaloModel):
             model. To be passed from the read_input method of the Input 
             class.
 
-        Returns :
-        ---------
+        Returns
+        -------
         response_P_gg, response_P_gm, response_P_mm : list of arrays
             with unit ?
             with shape (log10k bins, sample bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Appendix A, Eq. (A12) - (A14)
 
         """
@@ -762,16 +762,16 @@ class PolySpectra(HaloModel):
         necessary, interpolates the trispectra in redshift, 
         extrapolation is not supported.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         tri_tab : dictionary
             Look-up table for the trispectra (for all combinations of 
             matter 'm' and tracer 'g', optional) for different
             wavenumbers and redshifts. To be passed from the read_input 
             method of the FileInput class.
 
-        Returns :
-        ---------
+        Returns
+        -------
         tri_gggg, tri_gggm, tri_ggmm, \
         tri_gmgm, tri_mmgm, tri_mmmm : list of bools
 
@@ -966,8 +966,8 @@ class PolySpectra(HaloModel):
         powspec_prec. Returns None, if a trispectrum term is not needed 
         for the covariance.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         output_dict : dictionary
             Specifies whether a file for the trispectra should be 
             written to save computational time in the future. Gives the
@@ -994,16 +994,16 @@ class PolySpectra(HaloModel):
             wavenumbers and redshifts. To be passed from the read_input 
             method of the FileInput class.
 
-        Returns :
-        ---------
+        Returns
+        -------
         trispec_gggg, trispec_gggm, trispec_ggmm, \
         trispec_gmgm, trispec_mmgm, trispec_mmmm : list of arrays
             with unit ?
             with shape (log10k bins, log10k bins, 
                         sample bins, sample bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Appendix A, Eq. (A21), (A22)
         Pielorz et al. (2010) for the formalism of the 234-halo term
             following and fitting perturbation theory
@@ -1196,15 +1196,15 @@ class PolySpectra(HaloModel):
         EXPLAIN ME
         helpy function
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         lam : int
             ...
         fac : float
             ...
 
-        Returns :
-        ---------
+        Returns
+        -------
         res : float
 
         """
@@ -1231,8 +1231,8 @@ class PolySpectra(HaloModel):
         needed for the covariance or if it is available as a look-up
         table.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -1253,16 +1253,16 @@ class PolySpectra(HaloModel):
             as a look-up table. 'x' is either 'm' for matter or 'g' for 
             tracer.
 
-        Returns :
-        ---------
+        Returns
+        -------
         trispec1h_gggg, trispec1h_gggm, trispec1h_ggmm, \
         trispec1h_gmgm, trispec1h_mmgm, trispec1h_mmmm : list of arrays
             with unit ?
             with shape (tri log10k bins, tri log10k bins,
                         sample bins, sample bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Dvornik et al. (2018), their Appendix A, Eq. (A22)
 
         """
@@ -1495,8 +1495,8 @@ class PolySpectra(HaloModel):
         Calculates the 2-halo term for the trispectra. Is only needed by
         the integration routine in the trispectra_234h method.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         phi : float
             angle between the ki and kj vector
         ki : float
@@ -1533,8 +1533,8 @@ class PolySpectra(HaloModel):
         Calculates the 3-halo term for the trispectra. Is only needed by
         the integration routine in the trispectra_234h method.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         See documentation of the __calc_int_for_trispec_2h - method.
 
         Returns:
@@ -1557,8 +1557,8 @@ class PolySpectra(HaloModel):
         trispectra. Is only needed by the __calc_int_for_trispec_3h
         method.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         mu : float
             cosine of angle between the ki and kj vector
         ki : float
@@ -1599,8 +1599,8 @@ class PolySpectra(HaloModel):
         trispectra. Is only needed by the __bispec_pt and
         __calc_int_for_trispec_4h method.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         See documentation of the __bispec_pt - method.
 
         Returns:
@@ -1618,8 +1618,8 @@ class PolySpectra(HaloModel):
         Calculates the 4-halo term for the trispectra. Is only needed by
         the integration routine in the trispectra_234h method.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         See documentation of the __calc_int_for_trispec_2h - method.
 
         Returns:
@@ -1673,8 +1673,8 @@ class PolySpectra(HaloModel):
         trispectra. Is only needed by the __calc_int_for_trispec_4h 
         method.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         See documentation of the __bispec_pt - method.
 
         Returns:
@@ -1746,8 +1746,8 @@ class PolySpectra(HaloModel):
         trispectra. Is only needed by the __calc_int_for_trispec_4h 
         method.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         See documentation of the __bispec_pt - method.
 
         Returns:
@@ -1766,8 +1766,8 @@ class PolySpectra(HaloModel):
         multiprocessing library to speed up the calculation with all
         available cores.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -1784,14 +1784,14 @@ class PolySpectra(HaloModel):
             model. To be passed from the read_input method of the Input 
             class.
 
-        Returns :
-        ---------
+        Returns
+        -------
         trispec_2h + trispec_3h + trispec_4h : array
             with unit ?
             with shape (tri log10k bins,tri log10k bins)
 
-        Reference :
-        -----------
+        References
+        ----------
         Pielorz et al. (2010) for the formalism of the 234-halo term
             following and fitting perturbation theory
 
@@ -1931,8 +1931,8 @@ class PolySpectra(HaloModel):
         between zmin and zmax with deltaz steps in the k-range specified 
         in trispec_prec.
 
-        Parameters :
-        ------------
+        Parameters
+        ----------
         output_dict : dictionary
             Specifies whether a file for the trispectra should be 
             written to save computational time in the future. Gives the
