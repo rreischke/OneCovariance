@@ -23,3 +23,8 @@ Top-Level Interface
     :members:
     :undoc-members:
     :show-inheritance:
+
+.. automodule:: cov_polyspectra
+    :members:
+    :undoc-members:
+    :show-inheritance:
