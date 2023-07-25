@@ -1,6 +1,9 @@
 import numpy as np
 
 class HOD():
+    def __init__(self, 
+                 bias_dict, 
+                 hm_prec):
     """
     This class provides different models for the halo occupation 
     distribution. All quantities are calculated at as a function halo
@@ -60,10 +63,6 @@ class HOD():
            lognormal
 
     """
-
-    def __init__(self, 
-                 bias_dict, 
-                 hm_prec):
         self.Mrange = np.logspace(
             hm_prec['log10M_min'], hm_prec['log10M_max'], hm_prec['M_bins'])
         self.Mbins = self.mass_bins(bias_dict, hm_prec)
