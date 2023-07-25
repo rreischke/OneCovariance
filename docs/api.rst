@@ -29,6 +29,16 @@ Top-Level Interface
     :undoc-members:
     :show-inheritance:
 
+.. automodule:: cov_k_space
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. automodule:: cov_ell_space
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. automodule:: cov_output
     :members:
     :undoc-members:
