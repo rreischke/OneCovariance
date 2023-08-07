@@ -9,3 +9,7 @@ including photometric galaxy clustering, :math:`w(\theta)`, galaxy-galaxy-lensin
   Of course if a certain probe does not exist it is ignored. Furthermore, galaxy clustering and cosmic shear have :math:`n(n+1)/2` unique observables if :math:`n` is the number of tomographic lens and 
   source bins respectively. Galaxy-galaxy-lensing on the other hand has :math:`n_\mathrm{lens}n_\mathrm{source}` unique observables.
 - A text file in a list format ``covariance.dat`` including all entries of the covariance matrix labeled by probe, tomographic bin combination and projected quantity.
+
+We show an example structure of the order in the ``covariance.mat`` file and the corresponding ``correlation_coefficient.pdf`` plot for :math:`n_\mathrm{lens}=3` and :math:`n_\mathrm{source}=4` below:
+.. image:: /output_example.jpeg
+  :width: 770  
