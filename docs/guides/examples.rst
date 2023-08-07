@@ -11,5 +11,6 @@ including photometric galaxy clustering, :math:`w(\theta)`, galaxy-galaxy-lensin
 - A text file in a list format ``covariance.dat`` including all entries of the covariance matrix labeled by probe, tomographic bin combination and projected quantity.
 
 We show an example structure of the order in the ``covariance.mat`` file and the corresponding ``correlation_coefficient.pdf`` plot for :math:`n_\mathrm{lens}=3` and :math:`n_\mathrm{source}=4` below:
+
 .. image:: /output_example.jpeg
   :width: 770  
