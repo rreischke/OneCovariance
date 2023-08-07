@@ -13,10 +13,15 @@ including photometric galaxy clustering, :math:`w(\theta)`, galaxy-galaxy-lensin
 We show an example structure of the order in the ``covariance.mat`` file and the corresponding ``correlation_coefficient.pdf`` plot for :math:`n_\mathrm{lens}=3` and :math:`n_\mathrm{source}=4` below:
 
 .. image:: output_example.jpeg
-  :width: 770  
+   :width: 770  
 
 Here realspace statistics where used. The order for the Fourier counterparts (bandpowers or C_ells) is, however, the same. If any probe is not required it is just removed from this diagram. In case you want
 to rearrange the order it can be done using the output listed in ``covariance.mat`` or directly the listed values in ``covariance.dat``.
 
 A closer look into the ini-file
 ===============================
+All parameters in the code can be changed in the ``config.ini``. In this section we want to take a closer look at a few of the important ones. For a detailed description of all of them, the ``config.ini`` itself
+provides all the necessary details.
+
+- **Cosmology:** The cosmology is specified in the ``[cosmo]`` section in the ini file. This provides the cosmological parameters (e.g. :math:`\sigma_8,\;h,\;w_0,\;\Omega_{\mathrm{m}0}, ...`) which are used to calculate the covariance matrix.
+- **Covariance Terms:** The ``[covariance terms]`` specifies which terms should be calculated. Note that the individual terms are only saved in the ``covariance.dat`` file. The ``covariance.mat`` file always contains the sum of all the terms which are supposed to be calcualted.
