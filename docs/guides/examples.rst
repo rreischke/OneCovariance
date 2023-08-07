@@ -12,5 +12,11 @@ including photometric galaxy clustering, :math:`w(\theta)`, galaxy-galaxy-lensin
 
 We show an example structure of the order in the ``covariance.mat`` file and the corresponding ``correlation_coefficient.pdf`` plot for :math:`n_\mathrm{lens}=3` and :math:`n_\mathrm{source}=4` below:
 
-.. image:: /output_example.jpeg
+.. image:: output_example.jpeg
   :width: 770  
+
+Here realspace statistics where used. The order for the Fourier counterparts (bandpowers or C_ells) is, however, the same. If any probe is not required it is just removed from this diagram. In case you want
+to rearrange the order it can be done using the output listed in ``covariance.mat`` or directly the listed values in ``covariance.dat``.
+
+A closer look into the ini-file
+===============================
