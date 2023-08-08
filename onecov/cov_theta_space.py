@@ -1,10 +1,10 @@
 import time
 import numpy as np
-from cov_ell_space import CovELLSpace
-from cov_discrete import *
-from cov_discrete_utils import *
+from onecov.cov_ell_space import CovELLSpace
+from onecov.cov_discrete import *
+from onecov.cov_discrete_utils import *
 from scipy.interpolate import UnivariateSpline
-#import levin
+import levin
 
 
 class CovTHETASpace(CovELLSpace):
@@ -267,7 +267,7 @@ class CovTHETASpace(CovELLSpace):
             self.xi_spline["xip"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
             self.xi_spline["xim"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
             for i_theta in range(len(theta_bins)):
-                theta_i = self.thetabins[i_theta] / 60 * np.pi / 180
+                theta_i = theta_bins[i_theta] / 60 * np.pi / 180
                 integrand = Cell_mm_flat*self.ellrange[:, None]
                 lev.init_integral(
                     self.ellrange, integrand, True, True)

@@ -18,6 +18,7 @@ Contents
 
     guides/installation
     guides/running
+    guides/crash
     guides/examples
 
 .. toctree::

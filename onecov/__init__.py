@@ -3,6 +3,7 @@
 from .cov_input import Input, FileInput
 from .cov_setup import Setup
 from .cov_hod import HOD
+from .cov_halo_model import HaloModel
 from .cov_polyspectra import PolySpectra
 from .cov_k_space import CovKSpace
 from .cov_ell_space import CovELLSpace

@@ -1,5 +1,5 @@
-from cov_halo_model import HaloModel
-from cov_output import Output
+from onecov.cov_halo_model import HaloModel
+from onecov.cov_output import Output
 import warnings
 import itertools
 import numpy as np

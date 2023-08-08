@@ -63,6 +63,7 @@ class Input:
         self.save_Cells = None
         self.save_trispecs = None
         self.save_alms = None
+        self.use_tex = None
 
         # for lensing in projected Fourier space
         self.covELLspace_settings = dict()
@@ -1275,6 +1276,8 @@ class Input:
                         config['output settings']['save_alms']
             if type(self.save_alms) is bool and self.save_alms:
                 self.save_alms = 'alms'
+            if 'use tex' in config['output settings']:
+                self.use_tex = config['output settings'].getboolean('use_tex')
         else:
             self.output_style = ['list', 'matrix']
             print("The style of the output file [output settings]: 'style' " +
@@ -1291,6 +1294,7 @@ class Input:
             self.save_Cells = False
             self.save_trispecs = False
             self.save_alms = False
+            self.use_tex = False
 
         if self.output_style and \
            len(self.output_style) != len(self.output_file):
@@ -2961,10 +2965,10 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['directory', 'file', 'style', 'corrmatrix_plot',
-                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms']
+                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex']
         values = [self.output_dir, self.output_file, self.output_style,
                   self.make_plot, self.save_configs, self.save_Cells,
-                  self.save_trispecs, self.save_alms]
+                  self.save_trispecs, self.save_alms, self.use_tex]
         self.output_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         self.output_abr['file'] = \
@@ -3202,7 +3206,7 @@ class Input:
                 'read_mask_clust_lens', 'read_alm_clust_lens',
                 'alm_file_clust_ggl', 'read_mask_clust_ggl',
                 'read_alm_clust_ggl', 'alm_file_lens_ggl',
-                'read_mask_lens_ggl', 'read_alm_lens_ggl', 'save_alms']
+                'read_mask_lens_ggl', 'read_alm_lens_ggl', 'save_alms', 'use_tex']
         if self.mask_file_clust is not None:
             self.mask_file_clust = [path.join(self.mask_dir, mfile)
                                     for mfile in self.mask_file_clust]
@@ -3245,7 +3249,7 @@ class Input:
                   self.alm_file_clust_ggl, self.read_mask_clust_ggl,
                   self.read_alm_clust_ggl, self.alm_file_lens_ggl,
                   self.read_mask_lens_ggl, self.read_alm_lens_ggl,
-                  self.save_alms]
+                  self.save_alms, self.use_tex]
         self.survey_params = dict(zip(keys, values))
 
         keys = ['M_bins', 'log10M_min', 'log10M_max', 'hmf_model',

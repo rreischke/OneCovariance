@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib import rc, rcParams
 # rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 plt.rc('font', family='sans-serif')
-#plt.rc('text', usetex=True)
+#
 rcParams['figure.figsize'] = (8., 6.)
 rcParams['axes.linewidth'] = 2
 rcParams['axes.labelsize'] = 20
@@ -64,6 +64,7 @@ class Output():
         self.plot = output_dict['make_plot']
         self.trispecfile = output_dict['trispec']
         self.Cellfile = output_dict['Cell']
+        self.tex = output_dict
 
     def __check_filetype(self):
         for idx,fn in enumerate(self.filename):
@@ -220,6 +221,8 @@ class Output():
                               sampledim,
                               filename = None):
         ratio = len(covmatrix) / 140
+        if self.tex:
+            plt.rc('text', usetex=True)
         fig, ax = plt.subplots(1, 1, figsize=(12,12))
 
         corr_covmatrix = self.__correlation_matrix(covmatrix)

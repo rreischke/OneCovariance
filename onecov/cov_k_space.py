@@ -1,6 +1,6 @@
 import numpy as np
 
-from cov_polyspectra import PolySpectra
+from onecov.cov_polyspectra import PolySpectra
 
 class CovKSpace(PolySpectra):
     """
