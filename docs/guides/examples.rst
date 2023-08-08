@@ -13,7 +13,7 @@ including photometric galaxy clustering, :math:`w(\theta)`, galaxy-galaxy-lensin
 We show an example structure of the order in the ``covariance.mat`` file and the corresponding ``correlation_coefficient.pdf`` plot for :math:`n_\mathrm{lens}=3` and :math:`n_\mathrm{source}=4` below:
 
 .. image:: output_example.png
-   :width: 600
+   :width: 790
 
 
 Here realspace statistics where used. The order for the Fourier counterparts (bandpowers or C_ells) is, however, the same. If any probe is not required it is just removed from this diagram. In case you want
@@ -36,3 +36,11 @@ provides all the necessary details.
     - ``[survey specs]``: which allows the definition of the survey area, the number density and shape noise properties. 
     - ``[redshift]``: allows the specification of the redshift distribution of sources and lenses. Note that we use zlens and zclust as labels respectively.
 - **Other input files:** It is possible to pass different input files to the code, for example the angular power spectra. In this way the code only carries out the projection to the observable. 
+
+Some examples
+=============
+
+KiDS-1000 covariance
+--------------------
+The standard ``config.ini`` (after you pulled the directory) will run a KiDS-1000 like setup. Not all parameters specified in the ``config.ini`` are used and it is merely used as an explanatory file to explain all the parameters which can be set.
+
