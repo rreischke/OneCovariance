@@ -497,6 +497,63 @@ class CovELLSpace(PolySpectra):
             if mm_tab_bool:
                 Cmm = Cxy_tab['mm']
         return [Cgg, Cgm, Cmm], [gg_tab_bool, gm_tab_bool, mm_tab_bool]
+    
+    def __check_for_tabulated_Tells(self,
+                                    Tuvxy_tab):
+        """
+        Checks wether previously caclulated trispectra are stored in read in files
+        as provided in the input
+
+        Parameters
+        ----------
+        Tuvxy_tab : dictionary
+            default : None
+            Look-up table for the T_ell projected tri-spectra (gggg, gggm, ggmm, gmgm , mmgm, mmmm, optional).
+
+        Returns
+        ----------
+        [Tgggg, Tgggm, Tggmm, Tgmgm, Tmmgm, Tmmmm]: list of arrays
+            Contain the read in files for the Cells
+            as previously specified. If none are specified, returns 'None'
+        """
+        if Tuvxy_tab['ell'] is None:
+            return None
+        if abs(self.ellrange[0] - Tuvxy_tab['ell'][0]) > 1e-3 or \
+           abs(self.ellrange[-1] - Tuvxy_tab['ell'][-1]) > 1e-3 or \
+           len(self.ellrange) != len(Tuvxy_tab['ell']):
+            print("FileInputWarning: The tabulated angular modes (ells) from " +
+                  "the angular power spectra file(s) do not match the ones " +
+                  "currently in use, the ells will now be overwritten to " +
+                  "the tabulated ones.")
+            return None
+        gg_tab_bool, gm_tab_bool, mm_tab_bool = False, False, False
+        if self.gg or self.gm and Cxy_tab['gg'] is not None:
+            gg_tab_bool = True
+        if self.mm or self.gm and Cxy_tab['mm'] is not None:
+            mm_tab_bool = True
+        if (self.gm or (self.gg and self.mm and self.cross_terms)) and \
+           Cxy_tab['gm'] is not None:
+            gm_tab_bool = True
+            if not gg_tab_bool or not mm_tab_bool:
+                print("FileInputWarning: To calculate the cross " +
+                      "galaxy-matter covariance the three angular power " +
+                      "spectra 'galaxy-galaxy', 'galaxy-kappa' and " +
+                      "'kappa-kappa' are needed. The missing C_ells will be " +
+                      "calculated which may cause a biased result.")
+
+        Cgg, Cgm, Cmm = None, None, None
+        if gg_tab_bool:
+            Cgg = Cxy_tab['gg']
+        if mm_tab_bool:
+            Cmm = Cxy_tab['mm']
+        if gm_tab_bool:
+            Cgm = Cxy_tab['gm']
+            if gg_tab_bool:
+                Cgg = Cxy_tab['gg']
+            if mm_tab_bool:
+                Cmm = Cxy_tab['mm']
+        return [Cgg, Cgm, Cmm], [gg_tab_bool, gm_tab_bool, mm_tab_bool]
+
 
     def __update_los_integration_chi(self, chi_min, chi_max, covELLspacesettings):
         """

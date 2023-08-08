@@ -20,11 +20,30 @@ The total covariance is safed in the column ``cov``. If in the ``config.ini`` th
 Finally the last two columns show the non-Gaussian and the super-sample covariance term respecitvely, since they have been switched off in the ini-file they are set to zero.
 
 We can calculate the covariance also for bandpowers and COSEBIs by setting:
+
 ``est_shear = bandpowers``
+
 ``est_shear = cosebi``
+
 in the ini-file. Similarly the non-Gaussian and the super-sample covariance term can be requested by setting
+
 ``nongauss = False``
+
 ``ssc = False``
+
+Using Input :math:`C_\ell`
+--------------------------
+In the directory ``input/Cell`` files for precomputed angular power spectra, :math:`C_\ell`, are provided. They should explain the required structure and can be passed to the code by setting
+
+``Cell_directory = ./input``
+
+``Cgg_file = Cell_gg.ascii``
+
+``Cgm_file = Cell_gkappa.ascii``
+
+``Cmm_file = Cell_kappakappa.ascii``
+
+in the ini-file. In this way one can use the code to produce the covariance of the implemented summary statistic for any tracer for which a harmonic covariance has been calculated. 
 
 
   
