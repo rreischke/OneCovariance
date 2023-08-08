@@ -14,4 +14,17 @@ With the corresponding covariance saved in ``covariance_matrix.mat``. A complete
 .. image:: covariance_list.png
    :width: 790
 
+The first column specifies which combination of observables is considered, in this case :math:`\xi_{+}\xi_{+}`. The second and third column label the combination of the independent spatial variable of the corresponding summary statistic, here this are the two :math:`\theta` bins.
+For bandpowers this would be the multipole bands and for COSEBIS the order. ``s1`` and ``s2`` label the sample bins in mass used (for the evaluation of the halo model integrals). ``tomoi``, ..., `tomol` are the tomographic bin combinations, which start counting at 1.
+The total covariance is safed in the column ``cov``. If in the ``config.ini`` the variable ``split_gauss`` is set to true the Gaussian component of the covariance is split into a sample-variance, shot/shape noise and mix term labeled ``covg_sva``, ``covg_sn`` and ``covg_mix`` respectively.
+Finally the last two columns show the non-Gaussian and the super-sample covariance term respecitvely, since they have been switched off in the ini-file they are set to zero.
+
+We can calculate the covariance also for bandpowers and COSEBIs by setting:
+``est_shear = bandpowers``
+``est_shear = cosebi``
+in the ini-file. Similarly the non-Gaussian and the super-sample covariance term can be requested by setting
+``nongauss = False``
+``ssc = False``
+
+
   
