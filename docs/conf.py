@@ -59,6 +59,8 @@ html_theme_options = {
     'display_version': False,
 }
 
+autodoc_mock_imports = ["levin", "camb"]
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

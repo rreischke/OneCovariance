@@ -14,4 +14,4 @@ With the corresponding covariance saved in ``covariance_matrix.mat``. A complete
 .. image:: covariance_list.png
    :width: 790
 
-   
+  
