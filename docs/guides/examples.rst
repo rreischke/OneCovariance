@@ -12,7 +12,7 @@ including photometric galaxy clustering, :math:`w(\theta)`, galaxy-galaxy-lensin
 
 We show an example structure of the order in the ``covariance.mat`` file and the corresponding ``correlation_coefficient.pdf`` plot for :math:`n_\mathrm{lens}=3` and :math:`n_\mathrm{source}=4` below:
 
-.. image:: get_started_sphinx.png
+.. image:: output_example.png
    :width: 600
 
 
