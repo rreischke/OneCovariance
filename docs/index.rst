@@ -28,3 +28,8 @@ Contents
 
 Support
 -------
+If you are encountering any problem with OneCovariance, please raise an issue on the OneCovariance `GitHub <https://github.com/rreischke/OneCovariance/issues>`_ page, you can also directly send a mail to `reischke@posteo.net <reischke@posteo.net>`.
+
+Acknowlegement
+--------------
+There will be a paper released about the KiDS covariance which should be cited if you use the code.
