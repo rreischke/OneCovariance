@@ -26,12 +26,13 @@ provides all the necessary details.
 
 - **Cosmology:** The cosmology is specified in the ``[cosmo]`` section in the ini file. This provides the cosmological parameters (e.g. :math:`\sigma_8,\;h,\;w_0,\;\Omega_{\mathrm{m}0}, ...`) which are used to calculate the covariance matrix.
 - **Covariance Terms:** The ``[covariance terms]`` section specifies which terms should be calculated. Note that the individual terms are only saved in the ``covariance.dat`` file. The ``covariance.mat`` file always contains the sum of all the terms which are supposed to be calcualted.
-- **Observables:** The ``[observables]`` section specifies the observables for which the covariance should be calculated. E.g. which observable should be used for cosmic shear or clustering. Note that there is a dedicated section for each observable in the ``config.ini``: 
+- **Observables:** The ``[observables]`` section specifies the observables for which the covariance should be calculated. E.g. which observable should be used for cosmic shear or clustering. 
+- Specifying Observables:
     - ``[covELLspace settings]``: options for standard covariance in flat sky spherical harmonic space. Since this forms the basis of the estimator for all of the other observables, these settings are required.
     - ``[covTHETAspace settings]``: options for the real space covariance matrix
     - ``[covCOSEBI settings]``: options for the COSEBI covariance matrix (or any probe with the same integral shape)
     - ``[covbandpowers settings]``: options for the bandpower covariance matrix.
-- **Specifying the Survey:** The survey is specified in multiple sections:
+- Specifying the Survey::
     - ``[survey specs]``: which allows the definition of the survey area, the number density and shape noise properties. 
     - ``[redshift]``: allows the specification of the redshift distribution of sources and lenses. Note that we use zlens and zclust as labels respectively.
 - **Other input files:** It is possible to pass different input files to the code, for example the angular power spectra. In this way the code only carries out the projection to the observable. 
