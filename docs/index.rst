@@ -28,7 +28,8 @@ Contents
 
 Support
 -------
-If you are encountering any problem with OneCovariance, please raise an issue on the OneCovariance `GitHub <https://github.com/rreischke/OneCovariance/issues>`_ page, you can also directly send a mail to `reischke@posteo.net <reischke@posteo.net>`.
+If you are encountering any problem with OneCovariance, please raise an issue on the OneCovariance `GitHub <https://github.com/rreischke/OneCovariance/issues>`_ page, you can also directly send a mail to
+.. reischke@posteo.net <reischke@posteo.net>.
 
 Acknowlegement
 --------------
