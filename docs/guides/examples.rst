@@ -27,9 +27,9 @@ We can calculate the covariance also for bandpowers and COSEBIs by setting:
 
 in the ini-file. Similarly the non-Gaussian and the super-sample covariance term can be requested by setting
 
-``nongauss = False``
+``nongauss = True``
 
-``ssc = False``
+``ssc = True``
 
 Using Input :math:`C_\ell`
 --------------------------
