@@ -20,4 +20,9 @@ git clone https://github.com/KiDS-WL/git@github.com:rreischke/OneCovariance.git
 cd OneCovariance    
 pip install .
 ```
+Once you have installed the external package via ``pip install`` the code simply runs by using the ``config.ini`` where all parameters are stored and explained. Running the script
+```shell
+python covariance.py
+```
+will run the code using the settings in the standard configuration file ``config.ini``. 
 
