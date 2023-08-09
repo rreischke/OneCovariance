@@ -9,6 +9,6 @@
 *.egg
 /LevinBessel/levin.egg-info/
 /LevinBessel/build/
-/__pycache__/
+__pycache__
 levin.egg-info
 .vscode
