@@ -2,12 +2,15 @@ import numpy as np
 import time
 from scipy.interpolate import UnivariateSpline, interp1d, interp2d
 from scipy.special import j1
-
-from onecov.cov_output import Output
-from onecov.cov_polyspectra import PolySpectra
-import levin
 import multiprocessing as mp
 import healpy as hp
+
+#from onecov.cov_output import Output
+#from onecov.cov_polyspectra import PolySpectra
+#import levin
+
+from cov_output import Output
+from cov_polyspectra import PolySpectra
 
 
             

@@ -17,8 +17,8 @@ class Input:
 
     Attributes
     ----------
-    ... too many to list >,< but all relevant ones are put into
-        dictionaries and explained in the method 'read_input'
+    Too many to list, but all relevant ones are put into
+    dictionaries and explained in the method 'read_input'
 
     Example :
     ---------

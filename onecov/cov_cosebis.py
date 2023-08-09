@@ -2,9 +2,11 @@ import time
 import numpy as np
 from scipy.signal import argrelextrema
 from scipy.interpolate import UnivariateSpline
-from onecov.cov_ell_space import CovELLSpace
 
-import levin
+#from onecov.cov_ell_space import CovELLSpace
+#import levin
+
+from cov_ell_space import CovELLSpace
 
 
 class CovCOSEBI(CovELLSpace):
