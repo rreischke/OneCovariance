@@ -191,6 +191,7 @@ class CovELLSpace(PolySpectra):
         self.est_clust = obs_dict['observables']['est_clust']
         self.clustering_z = obs_dict['observables']['clustering_z']
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
+        self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'])
@@ -746,7 +747,7 @@ class CovELLSpace(PolySpectra):
                             global non_limber_k_integral
 
                             def non_limber_k_integral(k_integral):
-                                lev = levin.Levin(1, 16, 64, 1e-6)
+                                lev = levin.Levin(1, 16, 64, 1e-6, self.integration_intervals)
                                 integrand = np.sqrt((10**self.spline_Pgg[i_sample](
                                     np.log10(k_integral), self.los_integration_chi))[:, 0])*self.spline_zclust[tomo_i](
                                     self.los_integration_chi)
@@ -3205,7 +3206,7 @@ class CovELLSpace(PolySpectra):
         
         integral_over_k1 = np.zeros((len(self.ellrange),len(self.mass_func.k),len(self.los_integration_chi), len(self.los_integration_chi)))
 
-        lev = levin.Levin(3, 8, 32, 1e-6)
+        lev = levin.Levin(3, 8, 32, 1e-6, self.integration_intervals)
         t0 = time.time()
         print('Carrying out first integral over two Bessel functions')
         

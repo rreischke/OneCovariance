@@ -231,7 +231,7 @@ class CovTHETASpace(CovELLSpace):
             Cell_gg_flat = np.reshape(
                 self.Cell_gg, (len(self.ellrange), flat_length))
             w_signal_at_thetai_flat = np.zeros(flat_length)
-            lev = levin.Levin(0, 16, 32, self.accuracy)
+            lev = levin.Levin(0, 16, 32, self.accuracy, self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
                 theta_i = self.thetabins[i_theta] / 60 * np.pi / 180
                 integrand = Cell_gg_flat*self.ellrange[:, None]
@@ -262,7 +262,7 @@ class CovTHETASpace(CovELLSpace):
                 self.Cell_mm, (len(self.ellrange), flat_length))
             xip_signal_at_thetai_flat = np.zeros(flat_length)
             xim_signal_at_thetai_flat = np.zeros(flat_length)
-            lev = levin.Levin(0, 16, 32, self.accuracy)
+            lev = levin.Levin(0, 16, 32, self.accuracy, self.integration_intervals)
             self.xi_spline = {}
             self.xi_spline["xip"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
             self.xi_spline["xim"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
@@ -678,7 +678,7 @@ class CovTHETASpace(CovELLSpace):
             gaussELLgggg_mix_flat = np.reshape(gaussELLgggg_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             
-            lev = levin.Levin(2, 16, 32, self.accuracy/2.0)
+            lev = levin.Levin(2, 16, 32, self.accuracy/2.0, self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
             for i_theta in range(len(self.thetabins)):
@@ -760,7 +760,7 @@ class CovTHETASpace(CovELLSpace):
             gaussELLgggm_mix_flat = np.reshape(gaussELLgggm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             
-            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(8.))
+            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(8.), self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
             for i_theta in range(len(self.thetabins)):
@@ -855,7 +855,7 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
             gaussELLggmm_sva_flat = np.reshape(gaussELLggmm_sva, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(12.))
+            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(12.), self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
             for i_theta in range(len(self.thetabins)):
@@ -953,7 +953,7 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             gaussELLgmgm_mix_flat = np.reshape(gaussELLgmgm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            lev = levin.Levin(2, 16, 32, self.accuracy/4.0)
+            lev = levin.Levin(2, 16, 32, self.accuracy/4.0, self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
             for i_theta in range(len(self.thetabins)):
@@ -1110,7 +1110,7 @@ class CovTHETASpace(CovELLSpace):
             gaussELLmmgm_mix_flat = np.reshape(gaussELLmmgm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             
-            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(24.))
+            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(24.), self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
             for i_theta in range(len(self.thetabins)):
@@ -1340,7 +1340,7 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             gaussELLmmmm_mix_flat = np.reshape(gaussELLmmmm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            lev = levin.Levin(2, 16, 32, self.accuracy/6.0)
+            lev = levin.Levin(2, 16, 32, self.accuracy/6.0, self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
             
@@ -1995,7 +1995,7 @@ class CovTHETASpace(CovELLSpace):
             nongaussELLgggg_flat = np.reshape(nongaussELLgggg, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             cov_at_thetaij_flat = np.zeros(flat_length)
-            lev = levin.Levin(0, 16, 32, self.accuracy/6.)
+            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
             for i_theta in range(len(self.thetabins)):
@@ -2064,7 +2064,7 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6.)
+            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
                 for j_theta in range(len(self.thetabins)):
                     theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
@@ -2141,7 +2141,7 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6.)
+            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
                 for j_theta in range(len(self.thetabins)):
                     theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
@@ -2240,7 +2240,7 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6.)
+            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
                 for j_theta in range(len(self.thetabins)):
                     theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
@@ -2322,7 +2322,7 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6.)
+            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
                 for j_theta in range(len(self.thetabins)):
                     theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
@@ -2426,7 +2426,7 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6.)
+            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
                 for j_theta in range(len(self.thetabins)):
                     theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180

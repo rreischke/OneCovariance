@@ -15,8 +15,8 @@ PYBIND11_MODULE(levin, m)
 {
      m.doc() = "Compute integrals with Levin's method.";
      py::class_<Levin>(m, "Levin")
-         .def(py::init<uint, uint, uint, double>(),
-              "type1"_a, "col1"_a, "nsub1"_a, "relative_tol1"_a) // Keyword arguments
+         .def(py::init<uint, uint, uint, double, uint>(),
+              "type1"_a, "col1"_a, "nsub1"_a, "relative_tol1"_a, "n_split_rs1"_a) // Keyword arguments
          .def("update_Levin", &Levin::update_Levin,
               "type1"_a, "col1"_a, "nsub1"_a, "relative_tol1"_a,
               py::call_guard<py::gil_scoped_release>())

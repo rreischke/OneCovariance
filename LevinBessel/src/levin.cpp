@@ -4,7 +4,7 @@ const double Levin::min_interval = 1.e-2;
 const double Levin::tol_abs = 1.0e-200;
 const double Levin::min_sv = 1.0e-10;
 
-Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1)
+Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_split_rs1)
 {
     type = type1;
     col = col1;
@@ -12,6 +12,7 @@ Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1)
     relative_tol = relative_tol1;
     already_called = false;
     number_integrals = 0;
+    n_split_rs = n_split_rs1;
     setup(type);
 }
 
@@ -1033,7 +1034,18 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
             int_ell_single_bessel[tid] = ell;
             int_k_single_bessel[tid] = k;
             int_index_integral[tid] = i;
-            result.at(i) = gslIntegratecquad(single_bessel_integrand, a, b);
+            uint N_sum = uint(n_split_rs/10);
+            if(N_sum < 2)
+            {
+                N_sum = 2;
+            }
+            result.at(i) = 0.0;
+            for (uint j = 0; j < N_sum; j++)
+            {
+                double al = exp(log(a) + (log(b) - log(a)) / (N_sum)*j);
+                double bl = exp(log(a) + (log(b) - log(a)) / (N_sum) * (j + 1));
+                result.at(i) += gslIntegratecquad(single_bessel_integrand, al, bl);
+            }
         }
     }
     delete int_index_integral;
@@ -1097,7 +1109,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
             int_k2_double_bessel[tid] = k2;
             int_index_integral[tid] = i;
             result.at(i) = 0.0;
-            uint N_sum = 50;
+            uint N_sum = n_split_rs;
             for (uint j = 0; j < N_sum; j++)
             {
                 double al = exp(log(a) + (log(b) - log(a)) / (N_sum)*j);
@@ -1234,7 +1246,7 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-//#pragma omp parallel for
+    // #pragma omp parallel for
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();

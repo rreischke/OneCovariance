@@ -1,0 +1,13 @@
+future
+pyyaml
+numpy
+astropy
+healpy
+pip>=20.0
+gsl
+scipy
+matplotlib
+hmf
+
+[test]
+pytest

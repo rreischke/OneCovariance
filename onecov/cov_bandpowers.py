@@ -38,7 +38,7 @@ def call_levin_many_args_WE(ells, ell_up, ell_lo, theta_range, T_of_theta, num_c
     
     global call_levin_WEE
     def call_levin_WEE(i_ell):
-        lev = levin.Levin(2, 16, 32, 1e-6)
+        lev = levin.Levin(2, 16, 32, 1e-6, 50)
         lev.init_integral(theta_range, T_of_theta[:,None], True, False) 
         result = ell_up*np.nan_to_num(lev.double_bessel(
             ells[i_ell], ell_up, 0, 1, theta_range[0], theta_range[-1]))
@@ -62,7 +62,7 @@ def call_levin_many_args_WE(ells, ell_up, ell_lo, theta_range, T_of_theta, num_c
     
     global call_levin_WEB
     def call_levin_WEB(i_ell):
-        lev = levin.Levin(2, 16, 32, 1e-6)
+        lev = levin.Levin(2, 16, 32, 1e-6, 50)
         lev.init_integral(theta_range, T_of_theta[:,None], True, False)
         result = ell_up*np.nan_to_num(lev.double_bessel(
             ells[i_ell], ell_up, 0, 1, theta_range[0], theta_range[-1]))
@@ -86,7 +86,7 @@ def call_levin_many_args_WE(ells, ell_up, ell_lo, theta_range, T_of_theta, num_c
     
     global call_levin_WnE
     def call_levin_WnE(i_ell):
-        lev = levin.Levin(2, 16, 32, 1e-6)
+        lev = levin.Levin(2, 16, 32, 1e-6, 50)
         lev.init_integral(theta_range, T_of_theta[:,None], True, False) 
         result = -ell_up*np.nan_to_num(lev.double_bessel(
             ells[i_ell], ell_up, 2, 1, theta_range[0], theta_range[-1]))
@@ -283,7 +283,7 @@ class CovBandPowers(CovTHETASpace):
         self.__set_multipoles(obs_dict['bandpowers'])
         self.__get_gpm()
         self.__get_norm()
-        self.levin_int = levin.Levin(2, 16, 32, 1e-7)
+        self.levin_int = levin.Levin(2, 16, 32, 1e-7, self.integration_intervals)
         self.delta_theta = self.theta_ul_bins[1:] - self.theta_ul_bins[:-1]
         self.dnpair_gg, self.dnpair_gm, self.dnpair_mm, self.theta_gg, self.theta_gm, self.theta_mm  = self.get_dnpair([self.gg, self.gm, self.mm],
                                                                                                                         self.thetabins,

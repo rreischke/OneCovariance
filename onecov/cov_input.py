@@ -94,6 +94,7 @@ class Input:
         self.xi_mm = None
         self.theta_list = None
         self.theta_acc = None
+        self.integration_intervals = None
         self.mix_term_file_path_catalog = None
         self.mix_term_col_name_weight = None
         self.mix_term_col_name_pos1 = None
@@ -648,6 +649,8 @@ class Input:
                 self.xi_mm = True
             if 'theta_accuracy' in config['covTHETAspace settings']:
                 self.theta_acc = float(config['covTHETAspace settings']['theta_accuracy'])
+            if 'integration_intervals' in config['covTHETAspace settings']:
+                self.integration_intervals = int(config['covTHETAspace settings']['integration_intervals'])
                 
             if 'mix_term_do_mix_for' in config['covTHETAspace settings']:
                 self.mix_term_do_mix_for = config['covTHETAspace settings']['mix_term_do_mix_for'].split(',')
@@ -715,6 +718,11 @@ class Input:
                 print("The accuracy for the theta space covariance " +
                       "[covTHETAspace settings]: 'theta_accuracy' is set to  " +
                       str(self.theta_acc))
+            if self.integration_intervals is None:
+                self.integration_intervals = 50
+                print("The number of integration intervals for the theta space covariance " +
+                      "[covTHETAspace settings]: 'integration_intervals' is set to  " +
+                      str(self.integration_intervals))
             if self.theta_type is None:
                 self.theta_type = 'log'
                 print("The binning type for theta bins " +
@@ -3002,14 +3010,14 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type', 'theta_list', 'xi_pp',
-                'xi_pm', 'xi_mm', 'theta_acc', 'mix_term_file_path_catalog', 'mix_term_col_name_weight',
+                'xi_pm', 'xi_mm', 'theta_acc', 'integration_intervals', 'mix_term_file_path_catalog', 'mix_term_col_name_weight',
                 'mix_term_col_name_pos1', 'mix_term_col_name_pos2', 'mix_term_col_name_zbin',
                 'mix_term_isspherical', 'mix_term_target_patchsize', 'mix_term_do_overlap',
                 'mix_term_do_mix_for', 'mix_term_nbins_phi', 'mix_term_nmax', 'mix_term_dpix_min',
                 'mix_term_do_ec', 'mix_term_file_path_save_triplets', 'mix_term_file_path_load_triplets']
         values = [self.theta_min, self.theta_max, self.theta_bins,
                   self.theta_type, self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc,
-                  self.mix_term_file_path_catalog, self.mix_term_col_name_weight,
+                  self.integration_intervals, self.mix_term_file_path_catalog, self.mix_term_col_name_weight,
                   self.mix_term_col_name_pos1, self.mix_term_col_name_pos2, self.mix_term_col_name_zbin,
                   self.mix_term_isspherical, self.mix_term_target_patchsize, self.mix_term_do_overlap,
                   self.mix_term_do_mix_for, self.mix_term_nbins_phi, self.mix_term_nmax, self.mix_term_dpix_min,
@@ -3602,6 +3610,7 @@ class FileInput:
         self.Cmm_tab = None
         self.Cgm_tab = None
         self.Cgg_tab = None
+        self.Txy_ell = None
 
         # effective bias from files
         self.effbias_tab = dict()
@@ -4824,6 +4833,101 @@ class FileInput:
             self.Cxy_tomo_lens = n_tomo_lens_gm
 
         return True
+    
+    def __read_in_Tell_files(self,
+                             Tfiles):
+        """
+        Reads in one file with a tabulated projected trispectrum 
+        which is used to calculate the covariance.
+
+        Parameters
+        ----------
+        Tfiles : list
+            List of names of the projected trispectrum file.
+
+        File structure :
+        --------------
+        # ell1 ell2   T(ell)[s1] ...  T(ell)[sN]
+        2      2      xxe-x      ...  xxe-x
+        2      ...    xxe-x      ...  xxe-x
+        2      ellmax xxe-x      ...  xxe-x
+        3      2      xxe-x      ...  xxe-x
+        ...    ...    ...        ...  ...
+        ellmax ellmax xxe-x      ...  xxe-x
+
+        s -> galaxy sample bin number (out of N)
+             [currently only one supported]
+        N_unique_tomo_combinations files with one ell column and 
+        N_sampledims Cell columns
+             for kappakappa: M = tomo_lens**2
+             for gkappa:     M = tomo_lens*tomo_clust
+             for gg:         M = tomo_clust**2
+        """
+        if Tfiles is None:
+            return None, None, None, None, None
+        elif len(Tfiles) == 1:
+            try:
+                print("Reading in tabulated T_ells from file " +
+                      path.join(self.Cell_dir, Tfiles[0]) + ".")
+                if (path.exists(path.join(self.Cell_dir, Tfiles[0]))):
+                    data = ascii.read(path.join(self.Cell_dir, Tfiles[0]))
+                    if len(data.colnames) == 3:
+                        Ttab = self.__read_in_Tell_files(Tfiles[0])
+                        Ttab = Ttab[:, :, None, None]
+                        return Ttab, len(self.Txy_ell), len(Ttab[0]), 1, 1
+                    if len(data.colnames) < 5:
+                        print("InputWarning: The file " +
+                              path.join(self.Cell_dir, Tfiles[0]) + " in keyword " +
+                              "'Cxy_file' (gg, gkappa, kappakappa) has less than 4 " +
+                              "columns. The data file should provide the wavenumbers " +
+                              "in the first two columns, and the next four columns should " +
+                              "the tomographic bin combination and the next " +
+                              "column(s) should hold the T_xyuv(ell) values for all " +
+                              "(e.g.) stellar mass samples. This file will be " +
+                              "ignored.")
+                        return None, None, None, None, None
+                    n_tomo_1 = int(max(data[data.colnames[1]]))
+                    n_tomo_2 = int(max(data[data.colnames[2]]))
+                    n_tomo_3 = int(max(data[data.colnames[3]]))
+                    n_tomo_4 = int(max(data[data.colnames[4]]))
+                    if(min(data[data.colnames[1]]) == 0):
+                        n_tomo_1 += 1
+                    if(min(data[data.colnames[2]]) == 0):
+                        n_tomo_2 += 1
+                    if(min(data[data.colnames[3]]) == 0):
+                        n_tomo_3 += 1
+                    if(min(data[data.colnames[4]]) == 0):
+                        n_tomo_4 += 1
+                    elldim = int(len(data) / n_tomo_1 / n_tomo_2)
+                    sampledim = len(data.colnames[3:])
+                    self.Cxy_ell = np.array(
+                        data[data.colnames[0]][::n_tomo_1*n_tomo_2])
+
+                    Ctab = np.array(data[data.colnames[3]])
+                    for colname in data.colnames[4:]:
+                        Ctab = np.vstack([Ctab, data[colname]])
+                    Ctab = Ctab.reshape(sampledim, elldim,
+                                        n_tomo_1, n_tomo_2).swapaxes(0, 1)
+
+                    return Ctab, elldim, sampledim, n_tomo_1, n_tomo_2
+                else:
+                    print("InputWarning: The file " +
+                          path.join(self.Cell_dir, Tfiles[0]) + " in keyword "
+                          "'Cxy_file' (gg, gkappa, kappakappa) or directory does not "
+                          "exist. Will proced calculating the Cells.")
+                    return None, None, None, None, None
+            except TypeError:
+                return None, None, None, None, None
+        else:
+            Ctabs = []
+            for Cfile in Tfiles:
+                Ctab = self.__read_in_Cell_manyfiles(Cfile)
+                if Ctab is not None:
+                    Ctabs.append(Ctab)
+                else:
+                    raise Exception("Something happened with z-files.")
+            Ctabs = np.moveaxis(np.array(Ctabs), 0, -1)
+            return Ctabs, len(self.Cxy_ell), len(Ctab[0]), -1, -1
 
     def __read_in_effbias_files(self,
                                 bfile):
