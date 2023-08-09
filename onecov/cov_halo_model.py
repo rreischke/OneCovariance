@@ -7,6 +7,7 @@ from astropy import units as u
 #from onecov.cov_setup import Setup
 #from onecov.cov_hod import HOD
 
+from cov_setup import Setup
 
 class HaloModel(Setup):
     """
