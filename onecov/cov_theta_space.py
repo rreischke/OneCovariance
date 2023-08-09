@@ -163,13 +163,14 @@ class CovTHETASpace(CovELLSpace):
         self.accuracy = obs_dict['THETAspace']['theta_acc']
         self.thetabins, self.theta_ul_bins = \
             self.__set_theta_bins(obs_dict['THETAspace'])
-        self.npair_gg, self.npair_gm, self.npair_mm = \
-            self.get_npair([self.gg, self.gm, self.mm],
-                           self.theta_ul_bins,
-                           self.thetabins,
-                           survey_params_dict,
-                           read_in_tables['npair'])
-        self.__get_signal_ww()
+        if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
+            self.npair_gg, self.npair_gm, self.npair_mm = \
+                self.get_npair([self.gg, self.gm, self.mm],
+                            self.theta_ul_bins,
+                            self.thetabins,
+                            survey_params_dict,
+                            read_in_tables['npair'])
+        #self.__get_signal_ww()
 
     def __set_theta_bins(self,
                          covTHETAspacesettings):

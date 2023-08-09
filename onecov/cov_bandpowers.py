@@ -386,7 +386,7 @@ class CovBandPowers(CovTHETASpace):
         self.SN_integral_mmmm = np.zeros((len(self.ell_bins), len(self.ell_bins), self.n_tomo_lens, self.n_tomo_lens))
         if self.gg:
             original_shape = (self.n_tomo_clust, self.n_tomo_clust)
-            dnpair_gg_flat = np.reshape(self.dnpair_gg, (len(self.thetabins), self.n_tomo_clust**2))
+            dnpair_gg_flat = np.reshape(self.dnpair_gg, (len(self.theta_gg), self.n_tomo_clust**2))
             for m_mode in range(len(self.ell_bins)):
                 for n_mode in range(len(self.ell_bins)):
                     L1up = self.ell_ul_bins[m_mode + 1]
@@ -394,16 +394,16 @@ class CovBandPowers(CovTHETASpace):
                     L1lo = self.ell_ul_bins[m_mode]
                     L2lo = self.ell_ul_bins[n_mode]
                     integrand = (self.T_of_theta**2)[:,None]/(dnpair_gg_flat* 60*180/np.pi)
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result = L1up*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= L1up*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= L1lo*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += L1lo*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
+                    self.levin_int.init_integral(self.theta_gg/60/180*np.pi, integrand, True, True)
+                    result = L1up*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.theta_gg[0]/60/180*np.pi, self.theta_gg[-1]/60/180*np.pi))
+                    result -= L1up*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.theta_gg[0]/60/180*np.pi, self.theta_gg[-1]/60/180*np.pi))
+                    result -= L1lo*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.theta_gg[0]/60/180*np.pi, self.theta_gg[-1]/60/180*np.pi))
+                    result += L1lo*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.theta_gg[0]/60/180*np.pi, self.theta_gg[-1]/60/180*np.pi))
                     self.SN_integral_gggg[m_mode, n_mode, :, :] = np.reshape(np.array(result), original_shape)
 
         if self.gm:
             original_shape = (self.n_tomo_clust, self.n_tomo_lens)
-            dnpair_gm_flat = np.reshape(self.dnpair_gm, (len(self.thetabins), self.n_tomo_clust*self.n_tomo_lens))
+            dnpair_gm_flat = np.reshape(self.dnpair_gm, (len(self.theta_gm), self.n_tomo_clust*self.n_tomo_lens))
 
             for m_mode in range(len(self.ell_bins)):
                 for n_mode in range(len(self.ell_bins)):
@@ -412,32 +412,32 @@ class CovBandPowers(CovTHETASpace):
                     L1lo = self.ell_ul_bins[m_mode]
                     L2lo = self.ell_ul_bins[n_mode]
                     integrand = (self.T_of_theta**2)[:,None]/(dnpair_gm_flat* 60*180/np.pi)
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result = L1up*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= L1up*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= L1lo*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += L1lo*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    integrand /= self.thetabins[:,None]/60/180*np.pi
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result += 2.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 2.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 0, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 2.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 2.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 0, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 2.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 2.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 0, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 2.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 2.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 0, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    integrand /= self.thetabins[:,None]/60/180*np.pi
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result += 4.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 0, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 4.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 0, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 4.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 0, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 4.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 0, 0, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
+                    self.levin_int.init_integral(self.theta_gm/60/180*np.pi, integrand, True, True)
+                    result = L1up*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= L1up*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= L1lo*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result += L1lo*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    integrand /= self.theta_gm[:,None]/60/180*np.pi
+                    self.levin_int.init_integral(self.theta_gm/60/180*np.pi, integrand, True, True)
+                    result += 2.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result += 2.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 0, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= 2.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= 2.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 0, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= 2.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= 2.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 0, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result += 2.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result += 2.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 0, 1, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    integrand /= self.theta_gm[:,None]/60/180*np.pi
+                    self.levin_int.init_integral(self.theta_gm/60/180*np.pi, integrand, True, True)
+                    result += 4.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 0, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= 4.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 0, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result -= 4.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 0, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
+                    result += 4.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 0, 0, self.theta_gm[0]/60/180*np.pi, self.theta_gm[-1]/60/180*np.pi))
                     self.SN_integral_gmgm[m_mode, n_mode, :, :] = np.reshape(np.array(result), original_shape)
         
         if self.mm:
             original_shape = (self.n_tomo_lens, self.n_tomo_lens)
-            dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.thetabins), self.n_tomo_lens**2))
+            dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.theta_mm), self.n_tomo_lens**2))
             for m_mode in range(len(self.ell_bins)):
                 for n_mode in range(len(self.ell_bins)):
                     L1up = self.ell_ul_bins[m_mode + 1]
@@ -445,48 +445,48 @@ class CovBandPowers(CovTHETASpace):
                     L1lo = self.ell_ul_bins[m_mode]
                     L2lo = self.ell_ul_bins[n_mode]
                     integrand = (self.T_of_theta**2)[:,None]/(dnpair_mm_flat * 60*180/np.pi)
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result = L1up*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= L1up*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= L1lo*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += L1lo*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
+                    self.levin_int.init_integral(self.theta_mm/60/180*np.pi, integrand, True, True)
+                    result = L1up*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= L1up*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= L1lo*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += L1lo*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
                     result *= 2
-                    integrand /= self.thetabins[:,None]/60/180*np.pi
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result -= 8.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 8.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 8.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 8.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 8.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 8.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 8.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 8.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    integrand /= self.thetabins[:,None]/60/180*np.pi
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result -= 8.*(L2up/L1up + L1up/L2up)*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 8.*(L2lo/L1up + L1up/L2lo)*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 8.*(L2up/L1lo + L1lo/L2up)*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 8.*(L2lo/L1lo + L1lo/L2lo)*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 64.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 2, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 2, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 2, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 64.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 2, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    integrand /= self.thetabins[:,None]/60/180*np.pi
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result += 64./L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 64./L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64./L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64./L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64./L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64./L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 64./L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 2, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 64./L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 2, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    integrand /= self.thetabins[:,None]/60/180*np.pi
-                    self.levin_int.init_integral(self.thetabins/60/180*np.pi, integrand, True, True)
-                    result += 64./L1up/L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64./L1up/L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result -= 64./L1lo/L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
-                    result += 64./L1lo/L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.thetabins[0]/60/180*np.pi, self.thetabins[-1]/60/180*np.pi))
+                    integrand /= self.theta_mm[:,None]/60/180*np.pi
+                    self.levin_int.init_integral(self.theta_mm/60/180*np.pi, integrand, True, True)
+                    result -= 8.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 8.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 8.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 8.*L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 8.*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 8.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 8.*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 8.*L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    integrand /= self.theta_mm[:,None]/60/180*np.pi
+                    self.levin_int.init_integral(self.theta_mm/60/180*np.pi, integrand, True, True)
+                    result -= 8.*(L2up/L1up + L1up/L2up)*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 8.*(L2lo/L1up + L1up/L2lo)*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 8.*(L2up/L1lo + L1lo/L2up)*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 8.*(L2lo/L1lo + L1lo/L2lo)*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 64.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 2, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64.*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 2, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 2, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 64.*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 2, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    integrand /= self.theta_mm[:,None]/60/180*np.pi
+                    self.levin_int.init_integral(self.theta_mm/60/180*np.pi, integrand, True, True)
+                    result += 64./L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 64./L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64./L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64./L1up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64./L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64./L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 64./L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 2, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 64./L1lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 2, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    integrand /= self.theta_mm[:,None]/60/180*np.pi
+                    self.levin_int.init_integral(self.theta_mm/60/180*np.pi, integrand, True, True)
+                    result += 64./L1up/L2up*np.nan_to_num(self.levin_int.double_bessel(L1up, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64./L1up/L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result -= 64./L1lo/L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    result += 64./L1lo/L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
                     self.SN_integral_mmmm[m_mode, n_mode, :, :] = np.reshape(np.array(result), original_shape)
                   
 
