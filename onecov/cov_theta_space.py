@@ -2,14 +2,14 @@ import time
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 
-#from onecov.cov_ell_space import CovELLSpace
-#from onecov.cov_discrete import *
-#from onecov.cov_discrete_utils import *
-#import levin
+from onecov.cov_ell_space import CovELLSpace
+from onecov.cov_discrete import *
+from onecov.cov_discrete_utils import *
+import levin
 
-from cov_ell_space import CovELLSpace
-from cov_discrete import *
-from cov_discrete_utils import *
+#from cov_ell_space import CovELLSpace
+#from cov_discrete import *
+#from cov_discrete_utils import *
 
 
 

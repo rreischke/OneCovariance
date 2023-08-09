@@ -1,0 +1,14 @@
+.DS_Store
+../.DS_Store
+*.ipynb
+*.pyc
+*.txt
+*.fits
+*.so
+*.o
+*.egg
+/LevinBessel/levin.egg-info/
+/LevinBessel/build/
+/__pycache__/
+levin.egg-info
+.vscode
