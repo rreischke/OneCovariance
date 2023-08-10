@@ -7,8 +7,6 @@ import multiprocessing as mp
 from onecov.cov_theta_space import CovTHETASpace
 import levin
 
-#from cov_theta_space import CovTHETASpace
-
 
 def call_levin_many_args_WE(ells, ell_up, ell_lo, theta_range, T_of_theta, num_cores):
     """

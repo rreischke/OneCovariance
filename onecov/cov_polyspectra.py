@@ -8,8 +8,6 @@ import multiprocessing as mp
 from onecov.cov_halo_model import HaloModel
 from onecov.cov_output import Output
 
-#from cov_halo_model import HaloModel
-#from cov_output import Output
 
 
 

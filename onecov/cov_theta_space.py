@@ -7,10 +7,6 @@ from onecov.cov_discrete import *
 from onecov.cov_discrete_utils import *
 import levin
 
-#from cov_ell_space import CovELLSpace
-#from cov_discrete import *
-#from cov_discrete_utils import *
-
 
 
 class CovTHETASpace(CovELLSpace):

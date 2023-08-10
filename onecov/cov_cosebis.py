@@ -6,8 +6,6 @@ from scipy.interpolate import UnivariateSpline
 from onecov.cov_ell_space import CovELLSpace
 import levin
 
-#from cov_ell_space import CovELLSpace
-
 
 class CovCOSEBI(CovELLSpace):
     """
