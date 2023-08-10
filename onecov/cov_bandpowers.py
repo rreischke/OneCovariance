@@ -4,9 +4,12 @@ from scipy.special import jv
 from scipy.signal import argrelextrema
 import multiprocessing as mp
 
-from .cov_theta_space import CovTHETASpace
 import levin
 
+try:
+    from onecov.cov_theta_space import CovTHETASpace
+except:
+    from cov_theta_space import CovTHETASpace
 
 def call_levin_many_args_WE(ells, ell_up, ell_lo, theta_range, T_of_theta, num_cores):
     """

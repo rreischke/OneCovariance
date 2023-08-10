@@ -1,7 +1,9 @@
 import numpy as np
 
-from .cov_polyspectra import PolySpectra
-
+try:
+    from onecov.cov_polyspectra import PolySpectra
+except:
+    from cov_polyspectra import PolySpectra
 
 class CovKSpace(PolySpectra):
     """

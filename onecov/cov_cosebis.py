@@ -3,8 +3,12 @@ import numpy as np
 from scipy.signal import argrelextrema
 from scipy.interpolate import UnivariateSpline
 
-from .cov_ell_space import CovELLSpace
 import levin
+
+try:
+    from onecov.cov_ell_space import CovELLSpace
+except:
+    from cov_ell_space import CovELLSpace
 
 
 class CovCOSEBI(CovELLSpace):

@@ -1,12 +1,16 @@
 import time
 import numpy as np
 from scipy.interpolate import UnivariateSpline
-
-from .cov_ell_space import CovELLSpace
-from .cov_discrete import *
-from .cov_discrete_utils import *
 import levin
 
+try:
+    from onecov.cov_ell_space import CovELLSpace
+    from onecov.cov_discrete import *
+    from onecov.cov_discrete_utils import *
+except:
+    from cov_ell_space import CovELLSpace
+    from cov_discrete import *
+    from cov_discrete_utils import *
 
 
 class CovTHETASpace(CovELLSpace):
