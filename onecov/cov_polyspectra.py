@@ -5,11 +5,11 @@ from scipy.integrate import quad, IntegrationWarning
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 import multiprocessing as mp
 
-from onecov.cov_halo_model import HaloModel
-from onecov.cov_output import Output
+#from onecov.cov_halo_model import HaloModel
+#from onecov.cov_output import Output
 
-#from cov_halo_model import HaloModel
-#from cov_output import Output
+from cov_halo_model import HaloModel
+from cov_output import Output
 
 
 
