@@ -4,7 +4,7 @@ from scipy.special import jv
 from scipy.signal import argrelextrema
 import multiprocessing as mp
 
-from onecov.cov_theta_space import CovTHETASpace
+from .cov_theta_space import CovTHETASpace
 import levin
 
 

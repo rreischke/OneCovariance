@@ -4,8 +4,8 @@ from scipy.special import sici, erf
 from astropy import units as u
 
 import hmf
-from onecov.cov_setup import Setup
-from onecov.cov_hod import HOD
+from .cov_setup import Setup
+from .cov_hod import HOD
 
 
 class HaloModel(Setup):

@@ -3,7 +3,7 @@ import numpy as np
 from scipy.signal import argrelextrema
 from scipy.interpolate import UnivariateSpline
 
-from onecov.cov_ell_space import CovELLSpace
+from .cov_ell_space import CovELLSpace
 import levin
 
 

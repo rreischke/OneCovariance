@@ -2,7 +2,7 @@ import sys
 import numpy as np
 from scipy.signal import correlate
 
-from onecov.cov_discrete_utils import *
+from .cov_discrete_utils import *
 
 class TwoDimGrid:
     

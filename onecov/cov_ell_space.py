@@ -5,8 +5,8 @@ from scipy.special import j1
 import multiprocessing as mp
 import healpy as hp
 
-from onecov.cov_output import Output
-from onecov.cov_polyspectra import PolySpectra
+from .cov_output import Output
+from .cov_polyspectra import PolySpectra
 import levin
 
 
