@@ -4,10 +4,11 @@ from scipy.special import sici, erf
 from astropy import units as u
 
 import hmf
-#from .cov_setup import Setup
-#from .cov_hod import HOD
-
-from cov_setup import Setup
+try:
+    from .cov_setup import Setup
+    from .cov_hod import HOD
+except:
+    pass
 
 class HaloModel(Setup):
     """
