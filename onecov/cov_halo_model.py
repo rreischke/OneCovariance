@@ -8,7 +8,9 @@ try:
     from .cov_setup import Setup
     from .cov_hod import HOD
 except:
-    pass
+    from cov_setup import Setup
+    from cov_hod import HOD
+
 
 class HaloModel(Setup):
     """
