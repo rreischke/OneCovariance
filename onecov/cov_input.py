@@ -3544,7 +3544,7 @@ class FileInput:
 
     Attributes
     ----------
-    ... too many to list >,< but all relevant ones are put into
+        too many to list but all relevant ones are put into
         dictionaries and explained in the method 'read_input'
 
     Example :
