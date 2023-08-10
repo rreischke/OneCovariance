@@ -32,12 +32,27 @@ class PolySpectra(HaloModel):
         super-sample covariance) should be calculated. To be passed from 
         the read_input method of the Input class.
     obs_dict : dictionary
-        with the following keys (To be passed from the read_input method 
+        with the following keys (To be passed from the read_input method
         of the Input class.)
         'observables' : dictionary
-            Specifies which observables (cosmic shear, galaxy-galaxy 
-            lensing and/or clustering) should be calculated. Also, 
+            Specifies which observables (cosmic shear, galaxy-galaxy
+            lensing and/or clustering) should be calculated. Also,
             indicates whether cross-terms are evaluated.
+        'ELLspace' : dictionary
+            Specifies the exact details of the projection to ell space.
+            The projection from wavefactor k to angular scale ell is
+            done first, followed by the projection to real space in this
+            class
+        'THETAspace' : dictionary
+            Specifies the exact details of the projection to real space,
+            e.g., theta_min/max and the number of theta bins to be
+            calculated.
+        'COSEBIs' : dictionary
+            Specifies the exact details of the projection to COSEBIs,
+            e.g. the number of modes to be calculated.
+        'bandpowers' : dictionary
+            Specifies the exact details of the projection to bandpowers,
+            e.g. the ell modes and their spacing.
     cosmo_dict : dictionary
         Specifies all cosmological parameters. To be passed from the 
         read_input method of the Input class.

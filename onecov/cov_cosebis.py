@@ -33,10 +33,16 @@ class CovCOSEBI(CovELLSpace):
             The projection from wavefactor k to angular scale ell is
             done first, followed by the projection to real space in this
             class
-        'COSEBIs' : dictionary
-            Specifies the exact details of the COSEBI calculation,
-            e.g., theta_min/max and the number of modes to be
+        'THETAspace' : dictionary
+            Specifies the exact details of the projection to real space,
+            e.g., theta_min/max and the number of theta bins to be
             calculated.
+        'COSEBIs' : dictionary
+            Specifies the exact details of the projection to COSEBIs,
+            e.g. the number of modes to be calculated.
+        'bandpowers' : dictionary
+            Specifies the exact details of the projection to bandpowers,
+            e.g. the ell modes and their spacing.
     cosmo_dict : dictionary
         Specifies all cosmological parameters. To be passed from the
         read_input method of the Input class.
@@ -343,10 +349,16 @@ class CovCOSEBI(CovELLSpace):
                 The projection from wavefactor k to angular scale ell is
                 done first, followed by the projection to real space in this
                 class
-            'COSEBIs' : dictionary
-                Specifies the exact details of the COSEBI calculation,
-                e.g., theta_min/max and the number of modes to be
+            'THETAspace' : dictionary
+                Specifies the exact details of the projection to real space,
+                e.g., theta_min/max and the number of theta bins to be
                 calculated.
+            'COSEBIs' : dictionary
+                Specifies the exact details of the projection to COSEBIs,
+                e.g. the number of modes to be calculated.
+            'bandpowers' : dictionary
+                Specifies the exact details of the projection to bandpowers,
+                e.g. the ell modes and their spacing.
         output_dict : dictionary
             Specifies whether a file for the trispectra should be 
             written to save computational time in the future. Gives the

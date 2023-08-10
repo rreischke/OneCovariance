@@ -29,6 +29,9 @@ rcParams['ytick.labelsize'] = 16
 
 class Output():
     """
+    Class writing the output of the OneCovariance code. Methods of this class collect
+    all the necessary blocks of the covariance matrix.
+
     Parameters:
     -----------
     output_dict : dictionary
@@ -111,7 +114,49 @@ class Output():
                   nongauss,
                   ssc):
         """
-        ...
+        Writes the covariance matrix to a file depending on the specifications in the config.ini.
+
+        Parameters
+        ----------
+        cov_dict : dictionary
+            Specifies which terms of the covariance (Gaussian, non-Gaussian,
+            super-sample covariance) should be calculated. To be passed from
+            the read_input method of the Input class.
+        obs_dict : dictionary
+            with the following keys (To be passed from the read_input method
+            of the Input class.)
+            'observables' : dictionary
+                Specifies which observables (cosmic shear, galaxy-galaxy
+                lensing and/or clustering) should be calculated. Also,
+                indicates whether cross-terms are evaluated.
+            'ELLspace' : dictionary
+                Specifies the exact details of the projection to ell space.
+                The projection from wavefactor k to angular scale ell is
+                done first, followed by the projection to real space in this
+                class
+            'THETAspace' : dictionary
+                Specifies the exact details of the projection to real space,
+                e.g., theta_min/max and the number of theta bins to be
+                calculated.
+            'COSEBIs' : dictionary
+                Specifies the exact details of the projection to COSEBIs,
+                e.g. the number of modes to be calculated.
+            'bandpowers' : dictionary
+                Specifies the exact details of the projection to bandpowers,
+                e.g. the ell modes and their spacing.
+        n_tomo_clust : int
+            Number of clustering (lens) bins
+        n_tomo_lens : int
+            Number of lensing (source) bins
+        proj_quant : array
+            The projected quantity associated with the covariance, e.g. theta, or ell
+        gauss : list of arrays
+            Gaussian covariance split into the different components
+        nongauss : list of arrays
+            Non-Gaussian covariance
+        ssc : list of arrays
+            Supersample covariance
+            
         """
         self.has_gauss, self.has_nongauss, self.has_ssc = cov_dict['gauss'], cov_dict['nongauss'], cov_dict['ssc']
         gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
@@ -220,6 +265,52 @@ class Output():
                               n_tomo_lens,
                               sampledim,
                               filename = None):
+        """
+        Plots the Pearson correlation coefficient of the covariance matrix
+        to a file depending on the specifications in the config.ini.
+
+        Parameters
+        ----------
+        cov_dict : dictionary
+            Specifies which terms of the covariance (Gaussian, non-Gaussian,
+            super-sample covariance) should be calculated. To be passed from
+            the read_input method of the Input class.
+        obs_dict : dictionary
+            with the following keys (To be passed from the read_input method
+            of the Input class.)
+            'observables' : dictionary
+                Specifies which observables (cosmic shear, galaxy-galaxy
+                lensing and/or clustering) should be calculated. Also,
+                indicates whether cross-terms are evaluated.
+            'ELLspace' : dictionary
+                Specifies the exact details of the projection to ell space.
+                The projection from wavefactor k to angular scale ell is
+                done first, followed by the projection to real space in this
+                class
+            'THETAspace' : dictionary
+                Specifies the exact details of the projection to real space,
+                e.g., theta_min/max and the number of theta bins to be
+                calculated.
+            'COSEBIs' : dictionary
+                Specifies the exact details of the projection to COSEBIs,
+                e.g. the number of modes to be calculated.
+            'bandpowers' : dictionary
+                Specifies the exact details of the projection to bandpowers,
+                e.g. the ell modes and their spacing.
+        covmatrix : 2d array
+            The full covariance matrix with all contributions 
+        cov_diag : 2d array
+            The diagonal block part of the covariance matrix
+        n_tomo_clust : int
+            Number of clustering (lens) bins
+        n_tomo_lens : int
+            Number of lensing (source) bins
+        sampledim : int
+            Number of sample bins
+        filename : str
+            Filename of the plot
+        """
+
         ratio = len(covmatrix) / 140
         if self.tex:
             plt.rc('text', usetex=True)
@@ -338,9 +429,6 @@ class Output():
                          nongauss,
                          ssc,
                          fct_args):
-        """
-        ...
-        """
         obslist, obsbool = fct_args
         proj_quant_str = 'x1\tx2\t'
 
@@ -682,10 +770,7 @@ class Output():
                                 nongauss,
                                 ssc,
                                 fct_args):
-        """
-        ...
-        """
-
+        
         obslist, obsbool, obslength, mult, gg, gm, mm, xipp, xipm, ximm = \
             fct_args
         if obslength == 6 and mult == 3:
@@ -900,10 +985,7 @@ class Output():
                            nongauss,
                            ssc,
                            fct_args):
-        """
-        ...
-        """
-
+        
         obslist, obsbool, obslength, mult, gg, gm, mm, xipp, xipm, ximm = \
             fct_args
         if obslength == 6 and mult == 3:
