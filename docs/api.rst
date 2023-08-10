@@ -19,7 +19,7 @@ Full Documentation
     :undoc-members:
     :show-inheritance:
 
-.. automodule:: cov_halo_model
+.. automodule:: onecov.cov_halo_model
     :members:
     :undoc-members:
     :show-inheritance:
