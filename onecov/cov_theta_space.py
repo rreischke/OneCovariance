@@ -1362,7 +1362,6 @@ class CovTHETASpace(CovELLSpace):
                     
                     if self.xi_pp:
                         integrand = np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat)/self.ellrange,0,-1)
-
                         lev.init_integral(
                             self.ellrange, integrand, True, True)
                         cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(

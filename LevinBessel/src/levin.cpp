@@ -1,4 +1,5 @@
 #include "levin.h"
+#include <iomanip>
 
 const double Levin::min_interval = 1.e-2;
 const double Levin::tol_abs = 1.0e-200;
@@ -132,6 +133,8 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
         }
         already_called = true;
     }
+    x.at(0) *= (1 - relative_tol);
+    x.at(number_x_values - 1) *= (1 + relative_tol);
     x_min = x.at(0);
     x_max = x.at(number_x_values - 1);
     // #pragma omp parallel for
@@ -1034,8 +1037,8 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
             int_ell_single_bessel[tid] = ell;
             int_k_single_bessel[tid] = k;
             int_index_integral[tid] = i;
-            uint N_sum = uint(n_split_rs/10);
-            if(N_sum < 2)
+            uint N_sum = uint(n_split_rs / 10);
+            if (N_sum < 2)
             {
                 N_sum = 2;
             }
@@ -1057,7 +1060,7 @@ double Levin::double_bessel_integrand(double x, void *p)
     uint tid = omp_get_thread_num();
     Levin *lp = static_cast<Levin *>(p);
     double result = 0.0;
-    if (lp->logx)
+     if (lp->logx)
     {
         x = log(x);
         result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));

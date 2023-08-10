@@ -129,6 +129,7 @@ class Input:
         self.theta_lo = None
         self.theta_up = None
         self.theta_binning = None
+        self.bandpower_accuracy = None
         self.bp_ell_min = None
         self.bp_ell_max = None
         self.bp_ell_bins = None
@@ -719,7 +720,7 @@ class Input:
                       "[covTHETAspace settings]: 'theta_accuracy' is set to  " +
                       str(self.theta_acc))
             if self.integration_intervals is None:
-                self.integration_intervals = 50
+                self.integration_intervals = 40
                 print("The number of integration intervals for the theta space covariance " +
                       "[covTHETAspace settings]: 'integration_intervals' is set to  " +
                       str(self.integration_intervals))
@@ -955,6 +956,8 @@ class Input:
             if 'theta_binning' in config['covbandpowers settings']:
                 self.theta_binning = \
                     int(config['covbandpowers settings']['theta_binning'])
+            if 'bandpower_accuracy' in config['covbandpowers settings']:
+                self.bandpower_accuracy = float(config['covbandpowers settings']['bandpower_accuracy'])
             if 'ell_min' in config['covbandpowers settings']:
                 self.bp_ell_min = \
                     float(config['covbandpowers settings']['ell_min'])
@@ -991,7 +994,9 @@ class Input:
                                 "but the theta binning to avoid discretisation effects is not set." +
                                 "Must be adjusted in config file " + config_name + ", " +
                                 "[covbandpowers settings]: 'theta_binning = ...'.")
-            
+            if self.bandpower_accuracy is None:
+                self.bandpower_accuracy = 1e-7
+                print("ConfigWarning: The bandpower accuracy has not been specified. Using fallback value of", self.bandpower_accuracy)
             if self.bp_ell_min is None:
                 raise Exception("ConfigError: An estimator is set to 'bandpowers" +
                                 "but the lower multipole limit of the bandpowers is not set. " +
@@ -3037,9 +3042,9 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
         
         keys = ['apodisation_log_width', 'theta_lo', 'theta_up', 'theta_binning', 'ell_min',
-                'ell_max', 'ell_bins', 'ell_type']
+                'ell_max', 'ell_bins', 'ell_type', 'bandpower_accuracy']
         values = [self.apodisation_log_width, self.theta_lo, self.theta_up, self.theta_binning,
-                  self.bp_ell_min, self.bp_ell_max, self.bp_ell_bins, self.bp_ell_type]
+                  self.bp_ell_min, self.bp_ell_max, self.bp_ell_bins, self.bp_ell_type, self.bandpower_accuracy]
         self.covbandpowers_settings = dict(zip(keys,values))
         self.covbandpowers_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})

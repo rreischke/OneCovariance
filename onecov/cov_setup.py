@@ -761,7 +761,7 @@ class Setup():
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
                       "infinity. We, therefore, adjust the minimum ell mode "
-                      "to '[covELLspace settings]: ell_min = 2'.")
+                      "to '[covELLspace settings]: ell_min = 1'.")
                 ellmin = 1
                 update_ellrange = True
             elif ellrange[0] < 1:
@@ -770,7 +770,7 @@ class Setup():
             elif ellrange[0] == 0:
                 print("SetupWarning: Setting to minimum ell mode to 0 is " +
                       "quite brave. For numerical safety reasons, we adjust " +
-                      "it to '[covELLspace settings]: ell_min = 2'.")
+                      "it to '[covELLspace settings]: ell_min = 1'.")
                 ellmin = 1
                 update_ellrange = True
 
