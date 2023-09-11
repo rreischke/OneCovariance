@@ -524,6 +524,8 @@ class Input:
                           "settings]: nz_interpolation_polynom_order' which " +
                           "is not 1, is not recommended and can lead to " +
                           "non-positive values in the splined object.")
+            if 'integration_intervals' in config['covELLspace settings']:
+                self.integration_intervals = int(config['covELLspace settings']['integration_intervals'])
         else:
             ...
 
@@ -599,6 +601,11 @@ class Input:
                       "between bins [covELLspace settings]: " +
                       "'nz_interpolation_polynom_order = 1' (put 0 for a " +
                       "histogram interpretation)")
+            if self.integration_intervals is None:
+                self.integration_intervals = 40
+                print("The number of integration intervals for the theta space covariance " +
+                      "[covTHETAspace settings]: 'integration_intervals' is set to  " +
+                      str(self.integration_intervals))
 
         return True
 
@@ -650,9 +657,6 @@ class Input:
                 self.xi_mm = True
             if 'theta_accuracy' in config['covTHETAspace settings']:
                 self.theta_acc = float(config['covTHETAspace settings']['theta_accuracy'])
-            if 'integration_intervals' in config['covTHETAspace settings']:
-                self.integration_intervals = int(config['covTHETAspace settings']['integration_intervals'])
-                
             if 'mix_term_do_mix_for' in config['covTHETAspace settings']:
                 self.mix_term_do_mix_for = config['covTHETAspace settings']['mix_term_do_mix_for'].split(',')
                 if self.mix_term_do_mix_for[0] == '':
@@ -719,11 +723,6 @@ class Input:
                 print("The accuracy for the theta space covariance " +
                       "[covTHETAspace settings]: 'theta_accuracy' is set to  " +
                       str(self.theta_acc))
-            if self.integration_intervals is None:
-                self.integration_intervals = 40
-                print("The number of integration intervals for the theta space covariance " +
-                      "[covTHETAspace settings]: 'integration_intervals' is set to  " +
-                      str(self.integration_intervals))
             if self.theta_type is None:
                 self.theta_type = 'log'
                 print("The binning type for theta bins " +
@@ -3003,10 +3002,10 @@ class Input:
         self.output = dict(zip(keys, values))
 
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
-                'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias']
+                'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'integration_intervals']
         values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
                   self.delta_z, self.integration_steps, self.nz_polyorder,
-                  self.tri_delta_z, self.multiplicative_shear_bias_uncertainty]
+                  self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.integration_intervals]
         self.covELLspace_settings = dict(zip(keys, values))
         keys = ['ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_interpolation_polynom_order',
@@ -3015,14 +3014,14 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type', 'theta_list', 'xi_pp',
-                'xi_pm', 'xi_mm', 'theta_acc', 'integration_intervals', 'mix_term_file_path_catalog', 'mix_term_col_name_weight',
+                'xi_pm', 'xi_mm', 'theta_acc', 'mix_term_file_path_catalog', 'mix_term_col_name_weight',
                 'mix_term_col_name_pos1', 'mix_term_col_name_pos2', 'mix_term_col_name_zbin',
                 'mix_term_isspherical', 'mix_term_target_patchsize', 'mix_term_do_overlap',
                 'mix_term_do_mix_for', 'mix_term_nbins_phi', 'mix_term_nmax', 'mix_term_dpix_min',
                 'mix_term_do_ec', 'mix_term_file_path_save_triplets', 'mix_term_file_path_load_triplets']
         values = [self.theta_min, self.theta_max, self.theta_bins,
                   self.theta_type, self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc,
-                  self.integration_intervals, self.mix_term_file_path_catalog, self.mix_term_col_name_weight,
+                  self.mix_term_file_path_catalog, self.mix_term_col_name_weight,
                   self.mix_term_col_name_pos1, self.mix_term_col_name_pos2, self.mix_term_col_name_zbin,
                   self.mix_term_isspherical, self.mix_term_target_patchsize, self.mix_term_do_overlap,
                   self.mix_term_do_mix_for, self.mix_term_nbins_phi, self.mix_term_nmax, self.mix_term_dpix_min,

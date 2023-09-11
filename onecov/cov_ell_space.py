@@ -195,7 +195,7 @@ class CovELLSpace(PolySpectra):
         self.est_clust = obs_dict['observables']['est_clust']
         self.clustering_z = obs_dict['observables']['clustering_z']
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
-        self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
+        self.integration_intervals = obs_dict['ELLspace']['integration_intervals']
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'])

@@ -170,6 +170,7 @@ class CovCOSEBI(CovELLSpace):
             limits_at_mode_append[0] = self.wn_ells[0]
             limits_at_mode_append[-1] = self.wn_ells[-1]
             self.ell_limits.append(limits_at_mode_append)
+        self.integration_intervals = obs_dict['ELLspace']['integration_intervals']
         
         self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc']/np.sqrt(len(self.ell_limits[0][:])), self.integration_intervals)
         self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
