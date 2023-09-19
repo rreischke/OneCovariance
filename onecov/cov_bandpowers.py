@@ -287,7 +287,7 @@ class CovBandPowers(CovTHETASpace):
         self.__set_multipoles(obs_dict['bandpowers'])
         self.__get_gpm()
         self.__get_norm()
-        self.levin_int = levin.Levin(2, 16, 32, obs_dict['bandpowers']['bandpower_accuracy'], self.integration_intervals)
+        self.levin_int = levin.Levin(2, 16, 32, obs_dict['bandpowers']['bandpower_accuracy'], 100)
         self.delta_theta = self.theta_ul_bins[1:] - self.theta_ul_bins[:-1]
         self.dnpair_gg, self.dnpair_gm, self.dnpair_mm, self.theta_gg, self.theta_gm, self.theta_mm  = self.get_dnpair([self.gg, self.gm, self.mm],
                                                                                                                         self.thetabins,
