@@ -47,7 +47,7 @@ if ((observables['observables']['est_shear'] == 'xi_pm' and observables['observa
                   covariance_in_theta_space[1],
                   covariance_in_theta_space[2])
 
-if (observables['observables']['est_shear'] == 'cosebi' and observables['observables']['cosmic_shear'] and not observables['observables']['ggl'] and not observables['observables']['clustering']):
+if (observables['observables']['est_shear'] == 'cosebi' and observables['observables']['cosmic_shear'] or observables['observables']['ggl'] == 'cosebi' or observables['observables']['clustering'] == 'cosebi'):
     covcosebis = CovCOSEBI(covterms, observables, output,
                            cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
     covariance_COSEBIS = covcosebis.calc_covCOSEBI(observables, output, bias,  hod, survey_params, prec, read_in_tables)

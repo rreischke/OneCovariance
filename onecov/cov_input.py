@@ -3683,6 +3683,16 @@ class FileInput:
         self.Tn_plus = None
         self.Tn_minus = None
         self.Tn_theta = None
+        self.wn_gg_file = None
+        self.wn_gg = None
+        self.wn_gg_ell = None
+        self.Qn_file = None
+        self.Un_file = None
+        self.Qn = None
+        self.Un = None
+        self.Qn_theta = None
+        self.Un_theta = None
+
 
         # for save_config.ini
         self.zet_input = dict()
@@ -5666,7 +5676,7 @@ class FileInput:
         # theta   Tn_pm
         
         """
-        print("Reading in tabulated Tn_pm kernels for COSEBIs from file " +
+        print("Reading in tabulated real space kernels for COSEBIs from file " +
               path.join(self.cosebi_dir, Tfile) + ".")
         data = np.loadtxt(path.join(self.cosebi_dir, Tfile))
         if len(data[0]) != 2:
@@ -5722,9 +5732,37 @@ class FileInput:
             if 'Tn_minus_file' in config['tabulated inputs files']:
                 self.Tn_minus_file = (config['tabulated inputs files']
                                     ['Tn_minus_file'].replace(" ", "")).split(',')
+            if 'Qn_file' in config['tabulated inputs files']:
+                self.Qn_file = (config['tabulated inputs files']
+                                    ['Qn_file'].replace(" ", "")).split(',')
+            if 'Un_file' in config['tabulated inputs files']:
+                self.Un_file = (config['tabulated inputs files']
+                                    ['Un_file'].replace(" ", "")).split(',')
+            if 'wn_gg_file' in config['tabulated inputs files']:
+                self.wn_gg_file = (config['tabulated inputs files']
+                                    ['wn_gg_file'].replace(" ", "")).split(',')
         else:
             ...
 
+        if self.est_ggl == 'cosebi' or self.est_clust == 'cosebi' and En_modes > 0:
+            if self.wn_gg_file is None:
+                raise Exception("ConfigError: To calculate the COSEBI for clustering or ggl" +
+                                "covariance the W_n_gg kernels must be provided as an " +
+                                "external table. Must be included in [tabulated inputs " +
+                                "files] as 'wn_gg_file' to go on.")
+            if self.est_ggl == 'cosebi':
+                if self.Qn_file is None:
+                    raise Exception("ConfigError: To calculate the COSEBI " +
+                                    "covariance for GGL the Qn kernels must be provided as an " +
+                                    "external table. Must be included in [tabulated inputs " +
+                                    "files] as 'Qn_file' to go on.")
+            if self.est_clust == 'cosebi':
+                if self.Un_file is None:
+                    raise Exception("ConfigError: To calculate the COSEBI " +
+                                    "covariance for GGL the Un kernels must be provided as an " +
+                                    "external table. Must be included in [tabulated inputs " +
+                                    "files] as 'Un_file' to go on.")
+            
         if self.est_shear == 'cosebi' and En_modes > 0:
             if self.wn_log_file is None and \
                self.wn_lin_file is None:
@@ -5738,7 +5776,6 @@ class FileInput:
                                 "external table. Must be included in [tabulated inputs " +
                                 "files] as 'Tn_plus_file' and 'Tn_minus_file' to go on.")
             
-
         if self.wn_log_file is not None and self.est_shear == 'cosebi':
             if '?' in self.wn_log_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
@@ -5767,6 +5804,36 @@ class FileInput:
                 self.wn_log_ell = wn_ell
                 self.wn_log.append(wn)
             self.wn_log = np.array(self.wn_log)
+        
+        if self.wn_gg_file is not None and (self.est_ggl == 'cosebi' or self.est_clust == 'coesbi'):
+            if '?' in self.wn_gg_file[0]:
+                _, _, filenames = next(walk(self.cosebi_dir))
+                file_id = self.wn_gg_file[0][:self.wn_gg_file[0].find('?')]
+                self.wn_gg_file = sorted([fstr for fstr in filenames
+                                           if file_id in fstr])
+            if len(self.wn_gg_file) >= En_modes:
+                self.wn_gg_file = self.wn_gg_file[:En_modes]
+            else:
+                raise Exception("ConfigError: To calculate the COSEBI " +
+                                "covariance the wn_gg kernels must be provided as an " +
+                                "external table. Currently " + str(len(self.wn_gg_file)) +
+                                " (" + str(self.wn_gg_file) + ") files are given, but " +
+                                str(En_modes) + " E_n modes are requested. Must be " +
+                                "included in [tabulated inputs files] as 'wn_gg_file' " +
+                                "to go on.")
+            self.wn_gg, wn_gg_ell = [], None
+            for wfile in self.wn_gg_file:
+                wn_gg_ell, wn_gg = self.__read_in_Wn_files(wfile)
+                if self.wn_gg_ell is not None:
+                    if any(abs(wn_gg_ell - self.wn_gg_ell) > 1e-4):
+                        raise Exception("ConfigError: The angular ell modes " +
+                                        "in file " + path.join(self.cosebi_dir, wfile) +
+                                        " don't match the angular modes of the other "
+                                        "files.")
+                self.wn_gg_ell = wn_gg_ell
+                self.wn_gg.append(wn_gg)
+            self.wn_gg = np.array(self.wn_gg)
+
         if self.Tn_plus_file is not None and self.est_shear == 'cosebi':
             if '?' in self.Tn_plus_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
@@ -5824,6 +5891,64 @@ class FileInput:
                 self.Tn_theta = Tn_theta
                 self.Tn_minus.append(Tn)
             self.Tn_minus = np.array(self.Tn_minus)
+
+        if self.Qn_file is not None and self.est_ggl == 'cosebi':
+            if '?' in self.Qn_file[0]:
+                _, _, filenames = next(walk(self.cosebi_dir))
+                file_id = self.Qn_file[0][:self.Qn_file[0].find('?')]
+                self.Qn_file = sorted([fstr for fstr in filenames
+                                           if file_id in fstr])
+            if len(self.Qn_file) >= En_modes:
+                self.Qn_file = self.Qn_file[:En_modes]
+            else:
+                raise Exception("ConfigError: To calculate the COSEBI " +
+                                "covariance for ggl the Q_n kernels must be provided as an " +
+                                "external table. Currently " + str(len(self.Qn_file)) +
+                                " (" + str(self.Qn_file) + ") files are given, but " +
+                                str(En_modes) + " E_n modes are requested. Must be " +
+                                "included in [tabulated inputs files] as 'Qn_file' " +
+                                "to go on.")
+            self.Qn, Qn_theta = [], None
+            for wfile in self.Qn_file:
+                Qn_theta, Qn = self.__read_in_Tn_pm_files(wfile)
+                if self.Qn_theta is not None:
+                    if any(abs(Qn_theta - self.Qn_theta) > 1e-4):
+                        raise Exception("ConfigError: The angular ell modes " +
+                                        "in file " + path.join(self.cosebi_dir, wfile) +
+                                        " don't match the angles of the other "
+                                        "files.")
+                self.Qn_theta = Qn_theta
+                self.Qn.append(Qn)
+            self.Qn = np.array(self.Qn)
+        
+        if self.Un_file is not None and self.est_ggl == 'cosebi':
+            if '?' in self.Un_file[0]:
+                _, _, filenames = next(walk(self.cosebi_dir))
+                file_id = self.Un_file[0][:self.Un_file[0].find('?')]
+                self.Un_file = sorted([fstr for fstr in filenames
+                                           if file_id in fstr])
+            if len(self.Un_file) >= En_modes:
+                self.Un_file = self.Un_file[:En_modes]
+            else:
+                raise Exception("ConfigError: To calculate the COSEBI " +
+                                "covariance for ggl the U_n kernels must be provided as an " +
+                                "external table. Currently " + str(len(self.Un_file)) +
+                                " (" + str(self.Un_file) + ") files are given, but " +
+                                str(En_modes) + " E_n modes are requested. Must be " +
+                                "included in [tabulated inputs files] as 'Un_file' " +
+                                "to go on.")
+            self.Un, Un_theta = [], None
+            for wfile in self.Un_file:
+                Un_theta, Un = self.__read_in_Tn_pm_files(wfile)
+                if self.Un_theta is not None:
+                    if any(abs(Un_theta - self.Un_theta) > 1e-4):
+                        raise Exception("ConfigError: The angular ell modes " +
+                                        "in file " + path.join(self.cosebi_dir, wfile) +
+                                        " don't match the angles of the other "
+                                        "files.")
+                self.Un_theta = Un_theta
+                self.Un.append(Un)
+            self.Un = np.array(self.Un)
 
         if self.wn_lin_file is not None:
             if '?' in self.wn_lin_file[0]:
@@ -5934,9 +6059,10 @@ class FileInput:
         self.tri_tab = dict(zip(keys, values))
 
         keys = ['wn_log_ell', 'wn_log', 'wn_lin_ell', 'wn_lin', 'norms',
-                'roots','Tn_pm_theta','Tn_p', 'Tn_m']
+                'roots','Tn_pm_theta','Tn_p', 'Tn_m', 'wn_gg_ell', 'wn_gg', 'Qn_theta', 'Un_theta', 'Qn', 'Un']
         values = [self.wn_log_ell, self.wn_log, self.wn_lin_ell, self.wn_lin,
-                  self.norms, self.roots, self.Tn_theta, self.Tn_plus, self.Tn_minus]
+                  self.norms, self.roots, self.Tn_theta, self.Tn_plus, self.Tn_minus, self.wn_gg_ell, self.wn_gg, self.Qn_theta, self.Un_theta,
+                  self.Qn, self.Un]
         self.cosebis = dict(zip(keys, values))
 
         keys = []

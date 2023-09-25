@@ -27,7 +27,7 @@ rcParams['ytick.minor.size'] = 4
 rcParams['ytick.major.width'] = 1.5
 rcParams['ytick.labelsize'] = 16
 
-class Output():
+class Output(): 
     """
     Class writing the output of the OneCovariance code. Methods of this class collect
     all the necessary blocks of the covariance matrix.
@@ -246,6 +246,7 @@ class Output():
 
         if 'terminal' in self.style or 'list' in self.style:
             fct_args = [obslist, obsbool]
+        
             self.__write_cov_list(cov_dict, obs_dict, n_tomo_clust, 
                                   n_tomo_lens, sampledim, proj_quant, 
                                   gauss, nongauss, ssc, fct_args)
@@ -379,7 +380,10 @@ class Output():
                     else:
                         box_lbls.append('$\\mathcal{C}_{B,\\mathrm{mm}}$')
                 elif obs_dict['observables']['est_shear'] == 'cosebi':
-                    box_lbls.append('$E_n$')
+                    if '$E_n$' not in box_lbls:
+                        box_lbls.append('$E_n$')
+                    else:
+                        box_lbls.append('$B_n$')
                 else:
                     box_lbls.append('mm')
                 for t1 in range(n_tomo_lens):
@@ -484,6 +488,28 @@ class Output():
                 obs_copy = 'CE_gmCE_mm'
             if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
                 obs_copy = 'CE_gmCB_mm'
+            
+
+            if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'EEmmmm'
+            if obs == 'xipxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'EBmmmm'
+            if obs == 'ximxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'BBmmmm'
+            if obs == 'gggg' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['clustering'] == True:
+                obs_copy = 'EEgggg'
+            if obs == 'gmgm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEgmgm'
+            if obs == 'gggm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEgggm'
+            if obs == 'ggxip' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEggmm'
+            if obs == 'ggxim' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EBggmm'
+            if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEgmmm'
+            if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EBgmmm'
             
             if not obsbool[oidx]:
                 splitidx += 3

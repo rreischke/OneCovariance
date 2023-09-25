@@ -369,7 +369,8 @@ class CovBandPowers(CovTHETASpace):
         self.Wl_EE = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
         self.Wl_EB = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
         self.Wl_nE = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
-        for i_ell in range(len(self.ell_bins)):    
+        for i_ell in range(len(self.ell_bins)):
+            print(i_ell)
             self.Wl_EE[i_ell, :], self.Wl_EB[i_ell, :], self.Wl_nE[i_ell, :] = call_levin_many_args_WE(self.ell_fourier_integral,
                                                                               self.ell_ul_bins[i_ell+1],
                                                                               self.ell_ul_bins[i_ell],
@@ -647,8 +648,8 @@ class CovBandPowers(CovTHETASpace):
         -------
         gauss, nongauss, ssc : list of arrays
             each with 10 entries for the observables
-                ['ww', 'wgt', 'wxi+', 'wxi-', 'gtgt', 'xi+gt',
-                 'xigt-', 'xi+xi+', 'xi+xi-', 'xi-xi-']
+                ['CEgggg', 'CEgggm', 'CEggmm', 'CBggmm', 'CEgmgm', 'CEmmgm',
+                 'CBmmgm', 'CEEmmmm', 'CEBmmmm', 'CBBmmmm']
             each entry with shape (theta bins, theta bins,
                                    sample bins, sample bins,
                                    no_tomo_clust\lens, no_tomo_clust\lens,
@@ -1105,6 +1106,7 @@ class CovBandPowers(CovTHETASpace):
                                                                             * (survey_params_dict['ellipticity_dispersion']**2)[None, None, :, None, None, None] \
                                                                             * (survey_params_dict['ellipticity_dispersion']**2)[None, None, None, :, None, None]*self.SN_integral_mmmm[m_mode, n_mode, None, None, :, : ,None, None] 
                     gauss_BPBBmmmm_sn[n_mode, m_mode, :, :, :, :, :, :] = gauss_BPEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :]
+                    gauss_BPEBmmmm_sn[n_mode, m_mode, :, :, :, :, :, :] = gauss_BPEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rBand power covariance calculation for the Gaussian '
@@ -1114,7 +1116,7 @@ class CovBandPowers(CovTHETASpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
-            gauss_BPEBmmmm_sn = 0
+            #gauss_BPEBmmmm_sn = 0
             print("")
         else:
             gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn = 0, 0, 0
