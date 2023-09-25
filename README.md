@@ -5,7 +5,7 @@ OneCovariance is python package (with some C++ for the heavy lifting) for the ca
 ## Documentation, Installation and Examples
 The installation steps, documentation and examples are all provided at [onecovariance.readthedocs.io](https://onecovariance.readthedocs.io/en/latest/). For a minimal run you can:
 ```shell
-git clone https://github.com/KiDS-WL/git@github.com:rreischke/OneCovariance.git
+git clone git@github.com:rreischke/OneCovariance.git
 cd OneCovariance
 conda env create -f conda_env.yaml
 conda activate cov20_env
@@ -16,7 +16,7 @@ You can install both via ``conda``:
 ```shell
 conda install -c conda-forge gfortran
 conda install -c conda-forge gsl
-git clone https://github.com/KiDS-WL/git@github.com:rreischke/OneCovariance.git
+git clone git@github.com:rreischke/OneCovariance.git
 cd OneCovariance    
 pip install .
 ```
