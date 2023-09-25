@@ -187,7 +187,7 @@ class CovCOSEBI(CovELLSpace):
             self.wn_kernels = wn_kernels_new
         self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
         
-        self.__get_Tn_pm(obs_dict, read_in_tables['COSEBIs'], obs_dict['COSEBIs']) 
+        self.__get_Tn_pm(read_in_tables['COSEBIs'], obs_dict['COSEBIs'], obs_dict) 
         obs_dict['ELLspace']['ell_min'] = self.wn_ells[0]
         obs_dict['ELLspace']['ell_max'] = self.wn_ells[-1]
         obs_dict['ELLspace']['ell_bins'] = 100
