@@ -187,7 +187,7 @@ class CovCOSEBI(CovELLSpace):
             self.wn_kernels = wn_kernels_new
         self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
         
-        self.__get_Tn_pm(read_in_tables['COSEBIs'], obs_dict['COSEBIs']) 
+        self.__get_Tn_pm(obs_dict, read_in_tables['COSEBIs'], obs_dict['COSEBIs']) 
         obs_dict['ELLspace']['ell_min'] = self.wn_ells[0]
         obs_dict['ELLspace']['ell_max'] = self.wn_ells[-1]
         obs_dict['ELLspace']['ell_bins'] = 100
@@ -236,7 +236,8 @@ class CovCOSEBI(CovELLSpace):
 
     def __get_Tn_pm(self,
                     cosebi_tabs,
-                    covCOSEBIsettings):
+                    covCOSEBIsettings,
+                    obs_dict):
         self.Tn_p = []
         self.Tn_m = []
         self.Qn = []
@@ -254,7 +255,7 @@ class CovCOSEBI(CovELLSpace):
                     str(covCOSEBIsettings['theta_max']) + ", but is only given in " +
                     str(cosebi_tabs['Tn_pm_theta'][0]) + " to " + str(cosebi_tabs['Tn_pm_theta'][-1]) + ".")
         else:
-            if self.mm or self.gm:
+            if obs_dict['observables']['ggl'] or obs_dict['observables']['cosmic_shear']:
                 raise Exception("ConfigError: To calculate the COSEBI " +
                             "covariance the Tn_pm kernels must be provided as an " +
                             "external table. Must be included in [tabulated inputs " +
@@ -271,7 +272,7 @@ class CovCOSEBI(CovELLSpace):
                     str(covCOSEBIsettings['theta_max']) + ", but is only given in " +
                     str(cosebi_tabs['Qn_theta'][0]) + " to " + str(cosebi_tabs['Qn_theta'][-1]) + ".")
         else:
-            if self.gm or (self.mm and self.gg):
+            if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:   
                 raise Exception("ConfigError: To calculate the COSEBI " +
                             "covariance the Qn kernels must be provided as an " +
                             "external table. Must be included in [tabulated inputs " +
@@ -288,7 +289,7 @@ class CovCOSEBI(CovELLSpace):
                     str(covCOSEBIsettings['theta_max']) + ", but is only given in " +
                     str(cosebi_tabs['Un_theta'][0]) + " to " + str(cosebi_tabs['Un_theta'][-1]) + ".")
         else:
-            if self.gg or self.gm:
+            if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']: 
                 raise Exception("ConfigError: To calculate the COSEBI " +
                             "covariance the Un kernels must be provided as an " +
                             "external table. Must be included in [tabulated inputs " +
