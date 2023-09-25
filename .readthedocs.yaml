@@ -11,4 +11,3 @@ python:
     - method: pip
       path: ./docs
     - requirements: ./docs/requirements.txt
-  system_packages: true
