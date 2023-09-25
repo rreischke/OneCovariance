@@ -160,9 +160,10 @@ class CovCOSEBI(CovELLSpace):
                  read_in_tables):
         self.En_modes = obs_dict['COSEBIs']['En_modes']
         self.array_En_modes = np.array([i +1 for i in range(self.En_modes)]).astype(int)
-        self.wn_ells, self.wn_kernels = \
-            self.__get_wn_kernels(read_in_tables['COSEBIs'])
-        if self.gg or self. gm:
+        if self.mm or self.gm:
+            self.wn_ells, self.wn_kernels = \
+                self.__get_wn_kernels(read_in_tables['COSEBIs'])
+        if self.gg or self.gm:
             self.wn_gg_ells, self.wn_gg_kernels = \
                 self.__get_wngg_kernels(read_in_tables['COSEBIs'])
         
