@@ -992,7 +992,6 @@ class CovCOSEBI(CovELLSpace):
                                                                             * (survey_params_dict['ellipticity_dispersion']**2)[None, None, None, :, None, None] \
                                                                             * aux_mm_sn[None, None, :, :, None, None]/2.
                     gaussCOSEBIBBmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :]
-                    gaussCOSEBIEBmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :]
                     print('\rCOSEBI E-mode covariance calculation for the '
                             'mmmm term '
                             + str(round(tcomb/tcombs*100, 1)) + '% in '
