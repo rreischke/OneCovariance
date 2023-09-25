@@ -820,6 +820,10 @@ class Output():
 
         cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(obslength)]
         cov_diag = []
+        if obs_dict['observables']['est_shear'] == 'cosebi':
+            xipm = True
+            ximm = True
+            xipp = True
         if obslength == 6:
             
             # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
@@ -861,7 +865,7 @@ class Output():
                 covariance_mmmm = self.__create_matrix(cov[5],True,True)
                 cov_diag.append(covariance_mmmm)
                 cov2d = covariance_mmmm
-        elif obslength == 10:
+        elif obslength == 10:        
             # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
             # 'ximgt', 'xipxip', 'xipxim', 'ximxim'
             if gg:
