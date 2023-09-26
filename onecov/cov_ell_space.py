@@ -2417,7 +2417,7 @@ class CovELLSpace(PolySpectra):
                                     pool.close()
                                     pool.terminate()
                                     for i_ell in range(len(self.ellrange)):
-                                        nongaussELLmmmm[i_ell, i_ell:, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = np.array(
+                                        nongaussELLmmmm[i_ell, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = np.array(
                                             result[i_ell])
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLmmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
