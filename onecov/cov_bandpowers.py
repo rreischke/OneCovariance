@@ -305,6 +305,7 @@ class CovBandPowers(CovTHETASpace):
             limits_at_mode_append[0] = self.ellrange[0]
             limits_at_mode_append[-1] = self.ellrange[-1]
             self.ell_limits.append(limits_at_mode_append)
+        print(len(self.ell_limits))
         
         
     def __set_multipoles(self,
@@ -361,6 +362,95 @@ class CovBandPowers(CovTHETASpace):
                     self.T_of_theta[i_theta] = 1.0
                 else:
                     self.T_of_theta[i_theta] = np.cos(np.pi/2.*((x - (xup - self.delta_ln_theta/2.))/self.delta_ln_theta))**2.0
+
+    def __call_levin_many_args_WE_non_par(self, ells, ell_up, ell_lo, theta_range, T_of_theta):
+        """
+        Auxillary function for the calculation of the weight functions for the bandpowers.
+        Carries out the integrals over the Bessel functions in parallel for many arguments.
+        
+        Parameter
+        ---------
+        ells : array
+            Fourier multipole (\ell) where the Weights should be evaluated at.
+        ell_up : float
+            Upper limit of the bandpower interval
+        ell_lo : float
+            Lower limit of the bandpower interval
+        theta_range : array
+            Theta range over which the Integration is carried out.
+        T_of_theta : array
+            Window function to select theta range over which the band power is estimated.
+            We use a Hann window by default. Must have the same length as theta_range.
+        num_cores : array
+            Number of cores used for the computation. 
+        
+        Returns
+        -------
+        result_WEE, result_WEB, result_WnE : arrays
+            The 3 weight for bandpower in a single ell_band but at all ells.
+            Have the same length as ells
+
+        """
+        result_WEE = np.zeros(len(ells))
+        result_WEB = np.zeros(len(ells))
+        result_WnE = np.zeros(len(ells))
+
+        for i_ell in range(ells):
+            lev = levin.Levin(2, 16, 32, 1e-6, 50)
+            lev.init_integral(theta_range, T_of_theta[:,None], True, False) 
+            result = ell_up*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 0, 1, theta_range[0], theta_range[-1]))
+            result -=ell_lo*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 0, 1, theta_range[0], theta_range[-1]))
+            result -=ell_lo*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+            result +=ell_up*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
+            lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None], True, False)
+            result -=8.0*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 4, 2, theta_range[0], theta_range[-1]))
+            result +=8.0*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 4, 2, theta_range[0], theta_range[-1]))
+            lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None], True, False)
+            result -=8.0/ell_up*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
+            result +=8.0/ell_lo*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+            result_WEE[i_ell] = result
+
+            lev.init_integral(theta_range, T_of_theta[:,None], True, False)
+            result = ell_up*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 0, 1, theta_range[0], theta_range[-1]))
+            result -=ell_lo*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 0, 1, theta_range[0], theta_range[-1]))
+            result +=ell_lo*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+            result -=ell_up*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
+            lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None], True, True)
+            result +=8.0*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 4, 2, theta_range[0], theta_range[-1]))
+            result -=8.0*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 4, 2, theta_range[0], theta_range[-1]))
+            lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None], True, True)
+            result +=8.0/ell_up*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
+            result -=8.0/ell_lo*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+            result_WEB[i_ell] = result
+
+            lev.init_integral(theta_range, T_of_theta[:,None], True, False) 
+            result = -ell_up*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 2, 1, theta_range[0], theta_range[-1]))
+            result +=ell_lo*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 2, 1, theta_range[0], theta_range[-1]))
+            lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None], True, False)
+            result -=2.0*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_up, 2, 0, theta_range[0], theta_range[-1]))
+            result +=2.0*np.nan_to_num(lev.double_bessel(
+                ells[i_ell], ell_lo, 2, 0, theta_range[0], theta_range[-1]))
+            result_WnE[i_ell] = result
+        return result_WEE, result_WEB, result_WnE
 
     def __get_WXY(self):
         """
@@ -1430,7 +1520,7 @@ class CovBandPowers(CovTHETASpace):
                     inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
                         self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + 2*len(self.ell_bins)][:], n_mode))
+                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode + 2*len(self.ell_bins)))
                     self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
                     nongauss_BPgggm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if connected:
@@ -1465,7 +1555,7 @@ class CovBandPowers(CovTHETASpace):
                     for i_ell in range(len(self.ellrange)):
                         self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
                         inner_integralE[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
-                        inner_integralB[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + len(self.ell_bins)][:], n_mode))
+                        inner_integralB[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode + len(self.ell_bins)))
                     self.levin_int.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
                     nongauss_BPEggmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     self.levin_int.init_integral(self.ellrange, inner_integralB*self.ellrange[:, None], True, True)
@@ -1501,9 +1591,9 @@ class CovBandPowers(CovTHETASpace):
                     inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
                         self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + 2*len(self.ell_bins)][:], n_mode))
+                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode+ 2*len(self.ell_bins)))
                     self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    nongauss_BPgmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode +  2*len(self.ell_bins)][:], m_mode)),original_shape)
+                    nongauss_BPgmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + 2*len(self.ell_bins))),original_shape)
                     if connected:
                         nongauss_BPgmgm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_ggl']) / self.deg2torad2
                     eta = (time.time()-t0) / \
@@ -1538,7 +1628,7 @@ class CovBandPowers(CovTHETASpace):
                         inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + 2*len(self.ell_bins)][:], n_mode))
                     self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
                     nongauss_BPEmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
-                    nongauss_BPBmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode + len(self.ell_bins)][:], m_mode)),original_shape)
+                    nongauss_BPBmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
                     if connected:
                         nongauss_BPEmmgm[m_mode, n_mode, :, :, :, :, :, :] /= (2.*max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
                         nongauss_BPBmmgm[m_mode, n_mode, :, :, :, :, :, :] /= (2.*max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
@@ -1573,12 +1663,12 @@ class CovBandPowers(CovTHETASpace):
                     for i_ell in range(len(self.ellrange)):
                         self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
                         inner_integralE[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
-                        inner_integralB[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + len(self.ell_bins)][:], n_mode))
+                        inner_integralB[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode + len(self.ell_bins)))
                     self.levin_int.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
                     nongauss_BPEEmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
-                    nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode + len(self.ell_bins)][:], m_mode)),original_shape)
+                    nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
                     self.levin_int.init_integral(self.ellrange, inner_integralB*self.ellrange[:, None], True, True)
-                    nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode + len(self.ell_bins)][:], m_mode)),original_shape)
+                    nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
                     if connected:
                         nongauss_BPEEmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (4.*survey_params_dict['survey_area_lens'] / self.deg2torad2)
                         nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (4.*survey_params_dict['survey_area_lens'] / self.deg2torad2)

@@ -970,8 +970,8 @@ class Output():
             print("ALARM: The resulting covariance matrix has negative eigenvalues")
             print("Try to adjust the accuracy settings in the config file:")
             print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
-            print("For bandpower covariance reduce reduce bandpower_accuracy.")
-            print("For COSEBI covariance reduce reduce En_accuracy.")
+            print("For bandpower covariance reduce bandpower_accuracy.")
+            print("For COSEBI covariance reduce En_accuracy.")
         if self.plot:
             self.plot_corrcoeff_matrix(
                 obs_dict, cov2d, cov_diag, proj_quant, n_tomo_clust, 

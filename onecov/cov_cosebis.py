@@ -169,7 +169,7 @@ class CovCOSEBI(CovELLSpace):
         
         self.ell_limits = []
         for mode in range(self.En_modes):
-            limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::20]
+            limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::10]
             limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
             limits_at_mode_append[1:-1] = limits_at_mode
             limits_at_mode_append[0] = self.wn_ells[0]
@@ -1464,7 +1464,7 @@ class CovCOSEBI(CovELLSpace):
             t0, tcomb = time.time(), 1
             tcombs = self.En_modes**2
             for m_mode in range(self.En_modes):
-                for n_mode in range(self.En_modes):
+                for n_mode in range(m_mode, self.En_modes):
                     inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
                         self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
@@ -1473,6 +1473,7 @@ class CovCOSEBI(CovELLSpace):
                     nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if connected:
                         nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                    nongaussCOSEBIEEmmmm[n_mode, m_mode, :, :, :, :, :, :] = nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :]
                     eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
                     print('\rCOSEBI E-mode covariance calculation for the '
