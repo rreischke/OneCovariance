@@ -246,7 +246,6 @@ class Output():
 
         if 'terminal' in self.style or 'list' in self.style:
             fct_args = [obslist, obsbool]
-        
             self.__write_cov_list(cov_dict, obs_dict, n_tomo_clust, 
                                   n_tomo_lens, sampledim, proj_quant, 
                                   gauss, nongauss, ssc, fct_args)
@@ -315,6 +314,8 @@ class Output():
         ratio = len(covmatrix) / 140
         if self.tex:
             plt.rc('text', usetex=True)
+        else:
+            plt.rc('text', usetex=False)
         fig, ax = plt.subplots(1, 1, figsize=(12,12))
 
         corr_covmatrix = self.__correlation_matrix(covmatrix)
@@ -514,7 +515,6 @@ class Output():
             if not obsbool[oidx]:
                 splitidx += 3
                 continue
-            
             if not cov_dict['split_gauss']:
                 if write_header:
                     olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
@@ -1183,7 +1183,7 @@ class Output():
     def __get_obslist(self, 
                       obs_dict,
                       xipm = False):
-
+            
         if not xipm:
             mm = obs_dict['observables']['cosmic_shear'] 
             gm = obs_dict['observables']['ggl']
@@ -1198,6 +1198,10 @@ class Output():
                 xipp = obs_dict['THETAspace']['xi_pp']
                 xipm = obs_dict['THETAspace']['xi_pm']
                 ximm = obs_dict['THETAspace']['xi_mm']
+                if obs_dict['observables']['est_shear'] == "cosebi":
+                    xipp = True
+                    xipm = True
+                    ximm = True
             else:
                 xipp = False
                 xipm = False

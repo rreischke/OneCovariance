@@ -1249,7 +1249,7 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-    // #pragma omp parallel for
+#pragma omp parallel for
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();

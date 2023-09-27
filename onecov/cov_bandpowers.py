@@ -460,7 +460,6 @@ class CovBandPowers(CovTHETASpace):
         self.Wl_EB = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
         self.Wl_nE = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
         for i_ell in range(len(self.ell_bins)):
-            print(i_ell)
             self.Wl_EE[i_ell, :], self.Wl_EB[i_ell, :], self.Wl_nE[i_ell, :] = call_levin_many_args_WE(self.ell_fourier_integral,
                                                                               self.ell_ul_bins[i_ell+1],
                                                                               self.ell_ul_bins[i_ell],
