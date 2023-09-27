@@ -1466,11 +1466,11 @@ class CovCOSEBI(CovELLSpace):
             for m_mode in range(self.En_modes):
                 for n_mode in range(self.En_modes):
                     inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    #for i_ell in range(len(self.ellrange)):
-                    #    self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
-                    #    inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
-                    #self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    #nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    for i_ell in range(len(self.ellrange)):
+                        self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+                    self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
+                    nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if connected:
                         nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
                     eta = (time.time()-t0) / \
