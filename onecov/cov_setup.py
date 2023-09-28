@@ -719,13 +719,17 @@ class Setup():
         update_massfunc, update_ellrange = False, False
         calc_theta = True if 'xi_pm' in obs_dict['observables'].values() \
             else False
-        calc_cosebi = True if 'cosebi' in obs_dict['observables'].values() \
-            else False
+        calc_cosebi = False
+        if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'cosebi':
+            calc_cosebi = True
+        if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'cosebi':
+            calc_cosebi = True
+        if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'cosebi':
+            calc_cosebi = True
         calc_ell = True if 'C_ell' in obs_dict['observables'].values() \
             else False
         calc_ell = True if calc_theta else False
         calc_ell = True if calc_cosebi else calc_ell
-
         ellmin, ellmax = ellrange[0], ellrange[-1]
         if calc_cosebi:
             if ellrange[0] > 1:
