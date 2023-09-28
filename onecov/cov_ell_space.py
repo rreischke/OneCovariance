@@ -1145,7 +1145,7 @@ class CovELLSpace(PolySpectra):
         """
 
         print("Calculating covariance for angular power spectra (C_ell's).")
-
+        print(survey_params_dict)
         if not self.cov_dict['split_gauss']:
             gaussgggg, gaussgggm, gaussggmm, \
                 gaussgmgm, gaussmmgm, gaussmmmm, \
@@ -1165,12 +1165,12 @@ class CovELLSpace(PolySpectra):
                                             hod_dict,
                                             prec,
                                             read_in_tables['tri'])
-        nongauss[0] /= (survey_params_dict['area_clust']/self.arcmin2torad2)
-        nongauss[1] /= (np.max(survey_params_dict['area_clust'],survey_params_dict['area_ggl'])/self.arcmin2torad2)
-        nongauss[2] /= (np.max(survey_params_dict['area_clust'],survey_params_dict['area_lens'])/self.arcmin2torad2)
-        nongauss[3] /= (survey_params_dict['area_ggl']/self.arcmin2torad2)
-        nongauss[4] /= (np.max(survey_params_dict['area_lens'],survey_params_dict['area_ggl'])/self.arcmin2torad2)
-        nongauss[5] /= (survey_params_dict['area_lens']/self.arcmin2torad2)
+        nongauss[0] /= (survey_params_dict['survey_area_clust']/self.arcmin2torad2)
+        nongauss[1] /= (np.max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.arcmin2torad2)
+        nongauss[2] /= (np.max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.arcmin2torad2)
+        nongauss[3] /= (survey_params_dict['survey_area_ggl']/self.arcmin2torad2)
+        nongauss[4] /= (np.max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.arcmin2torad2)
+        nongauss[5] /= (survey_params_dict['survey_area_lens']/self.arcmin2torad2)
         
         ssc = self.covELL_ssc(bias_dict,
                               hod_dict,
