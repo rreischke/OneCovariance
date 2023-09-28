@@ -1165,7 +1165,13 @@ class CovELLSpace(PolySpectra):
                                             hod_dict,
                                             prec,
                                             read_in_tables['tri'])
-
+        nongauss[0] /= (survey_params_dict['area_clust']/self.arcmin2torad2)
+        nongauss[1] /= (np.max(survey_params_dict['area_clust'],survey_params_dict['area_ggl'])/self.arcmin2torad2)
+        nongauss[2] /= (np.max(survey_params_dict['area_clust'],survey_params_dict['area_lens'])/self.arcmin2torad2)
+        nongauss[3] /= (survey_params_dict['area_ggl']/self.arcmin2torad2)
+        nongauss[4] /= (np.max(survey_params_dict['area_lens'],survey_params_dict['area_ggl'])/self.arcmin2torad2)
+        nongauss[5] /= (survey_params_dict['area_lens']/self.arcmin2torad2)
+        
         ssc = self.covELL_ssc(bias_dict,
                               hod_dict,
                               prec,
@@ -1674,7 +1680,7 @@ class CovELLSpace(PolySpectra):
                           np.log10(self.ellrange[-1]) + logdelta)
             delta_ellrange = 10**ell_ul_range[1:] - 10**ell_ul_range[:-1]
         full_sky_angle = 4*np.pi * self.deg2torad2
-        prefac_noarea = full_sky_angle / 2 / self.ellrange / delta_ellrange
+        prefac_noarea = full_sky_angle / 2 / (self.ellrange + 1)/ delta_ellrange
 
         prefac = None
         if len(survey_area) == 1:
@@ -1979,14 +1985,14 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
                         for i_k in range(len(self.mass_func.k)):
-                            for j_k in range(i_k, len(self.mass_func.k)):
+                            for j_k in range(len(self.mass_func.k)):
                                 aux_gggg[i_k, j_k] = np.log(
                                     splines_gggg[i_k][j_k][i_sample][j_sample](self.los_integration_chi[i_chi]))
                                 aux_gggg[j_k, i_k] = aux_gggg[i_k, j_k]
                         spline_2d_gggg = interp2d(
                             np.log(self.mass_func.k), np.log(self.mass_func.k), aux_gggg)
                         for i_ell in range(len(self.ellrange)):
-                            for j_ell in range(i_ell, len(self.ellrange)):
+                            for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
                                     (self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
                                 kj = np.log(
@@ -2011,14 +2017,14 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
                         for i_k in range(len(self.mass_func.k)):
-                            for j_k in range(i_k, len(self.mass_func.k)):
+                            for j_k in range(len(self.mass_func.k)):
                                 aux_gggm[i_k, j_k] = np.log(
                                     splines_gggm[i_k][j_k][i_sample][j_sample](self.los_integration_chi[i_chi]))
                                 aux_gggm[j_k, i_k] = aux_gggm[i_k, j_k]
                         spline_2d_gggm = interp2d(
                             np.log(self.mass_func.k), np.log(self.mass_func.k), aux_gggm)
                         for i_ell in range(len(self.ellrange)):
-                            for j_ell in range(i_ell, len(self.ellrange)):
+                            for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
                                     (self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
                                 kj = np.log(
@@ -2043,14 +2049,14 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
                         for i_k in range(len(self.mass_func.k)):
-                            for j_k in range(i_k, len(self.mass_func.k)):
+                            for j_k in range(len(self.mass_func.k)):
                                 aux_ggmm[i_k, j_k] = np.log(
                                     splines_ggmm[i_k][j_k][i_sample][j_sample](self.los_integration_chi[i_chi]))
                                 aux_ggmm[j_k, i_k] = aux_ggmm[i_k, j_k]
                         spline_2d_ggmm = interp2d(
                             np.log(self.mass_func.k), np.log(self.mass_func.k), aux_ggmm)
                         for i_ell in range(len(self.ellrange)):
-                            for j_ell in range(i_ell, len(self.ellrange)):
+                            for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
                                     (self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
                                 kj = np.log(
@@ -2075,14 +2081,14 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
                         for i_k in range(len(self.mass_func.k)):
-                            for j_k in range(i_k, len(self.mass_func.k)):
+                            for j_k in range(len(self.mass_func.k)):
                                 aux_gmgm[i_k, j_k] = np.log(
                                     splines_gmgm[i_k][j_k][i_sample][j_sample](self.los_integration_chi[i_chi]))
                                 aux_gmgm[j_k, i_k] = aux_gmgm[i_k, j_k]
                         spline_2d_gmgm = interp2d(
                             np.log(self.mass_func.k), np.log(self.mass_func.k), aux_gmgm)
                         for i_ell in range(len(self.ellrange)):
-                            for j_ell in range(i_ell, len(self.ellrange)):
+                            for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
                                     (self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
                                 kj = np.log(
@@ -2107,14 +2113,14 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
                         for i_k in range(len(self.mass_func.k)):
-                            for j_k in range(i_k, len(self.mass_func.k)):
+                            for j_k in range(len(self.mass_func.k)):
                                 aux_mmgm[i_k, j_k] = np.log(
                                     splines_mmgm[i_k][j_k][i_sample][j_sample](self.los_integration_chi[i_chi]))
                                 aux_mmgm[j_k, i_k] = aux_mmgm[i_k, j_k]
                         spline_2d_mmgm = interp2d(
                             np.log(self.mass_func.k), np.log(self.mass_func.k), aux_mmgm)
                         for i_ell in range(len(self.ellrange)):
-                            for j_ell in range(i_ell, len(self.ellrange)):
+                            for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
                                     (self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
                                 kj = np.log(
@@ -2139,14 +2145,13 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
                         for i_k in range(len(self.mass_func.k)):
-                            for j_k in range(i_k, len(self.mass_func.k)):
+                            for j_k in range(len(self.mass_func.k)):
                                 aux_mmmm[i_k, j_k] = np.log(
                                     splines_mmmm[i_k][j_k][i_sample][j_sample](self.los_integration_chi[i_chi]))
-                                aux_mmmm[j_k, i_k] = aux_mmmm[i_k, j_k]
                         spline_2d_mmmm = interp2d(
                             np.log(self.mass_func.k), np.log(self.mass_func.k), aux_mmmm)
                         for i_ell in range(len(self.ellrange)):
-                            for j_ell in range(i_ell, len(self.ellrange)):
+                            for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
                                     (self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
                                 kj = np.log(
@@ -2926,7 +2931,7 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
                         for i_ell in range(len(self.ellrange)):
-                            for j_ell in range(i_ell, len(self.ellrange)):
+                            for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
                                 (self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
                                 kj = np.log(

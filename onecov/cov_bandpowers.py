@@ -293,9 +293,8 @@ class CovBandPowers(CovTHETASpace):
                                                                                                                         self.thetabins,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
-        
-        self.__get_shotnoise_integrals()
         self.__get_WXY()
+        self.__get_shotnoise_integrals()
         self.levin_int.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
         self.ell_limits = []
         for mode in range(len(self.ell_bins)):
@@ -394,8 +393,7 @@ class CovBandPowers(CovTHETASpace):
         result_WEE = np.zeros(len(ells))
         result_WEB = np.zeros(len(ells))
         result_WnE = np.zeros(len(ells))
-
-        for i_ell in range(ells):
+        for i_ell in range(len(ells)):
             lev = levin.Levin(2, 16, 32, 1e-6, 50)
             lev.init_integral(theta_range, T_of_theta[:,None], True, False) 
             result = ell_up*np.nan_to_num(lev.double_bessel(
@@ -460,12 +458,17 @@ class CovBandPowers(CovTHETASpace):
         self.Wl_EB = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
         self.Wl_nE = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
         for i_ell in range(len(self.ell_bins)):
-            self.Wl_EE[i_ell, :], self.Wl_EB[i_ell, :], self.Wl_nE[i_ell, :] = call_levin_many_args_WE(self.ell_fourier_integral,
+            '''self.Wl_EE[i_ell, :], self.Wl_EB[i_ell, :], self.Wl_nE[i_ell, :] = call_levin_many_args_WE(self.ell_fourier_integral,
                                                                               self.ell_ul_bins[i_ell+1],
                                                                               self.ell_ul_bins[i_ell],
                                                                               self.thetabins/60/180*np.pi,
                                                                               self.T_of_theta,
-                                                                              self.num_cores)
+                                                                              self.num_cores)'''
+            self.Wl_EE[i_ell, :], self.Wl_EB[i_ell, :], self.Wl_nE[i_ell, :] = self.__call_levin_many_args_WE_non_par(self.ell_fourier_integral,
+                                                                              self.ell_ul_bins[i_ell+1],
+                                                                              self.ell_ul_bins[i_ell],
+                                                                              self.thetabins/60/180*np.pi,
+                                                                              self.T_of_theta)
         self.WXY_stack = np.zeros((3*len(self.ell_bins), len(self.ell_fourier_integral)))
         self.WXY_stack[:len(self.ell_bins), : ] = self.Wl_EE
         self.WXY_stack[len(self.ell_bins):2*len(self.ell_bins), : ] = self.Wl_EB
