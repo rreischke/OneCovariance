@@ -1165,12 +1165,18 @@ class CovELLSpace(PolySpectra):
                                             prec,
                                             read_in_tables['tri'])
         if self.cov_dict['nongauss']:
-            nongauss[0] /= (survey_params_dict['survey_area_clust']/self.arcmin2torad2)
-            nongauss[1] /= (np.max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.arcmin2torad2)
-            nongauss[2] /= (np.max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.arcmin2torad2)
-            nongauss[3] /= (survey_params_dict['survey_area_ggl']/self.arcmin2torad2)
-            nongauss[4] /= (np.max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.arcmin2torad2)
-            nongauss[5] /= (survey_params_dict['survey_area_lens']/self.arcmin2torad2)
+            if self.gg:
+                nongauss[0][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[0][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_clust']/self.deg2torad2)
+            if self.gg and self.mm and self.cross_terms:
+                nongauss[1] *= np.ones_like(nongauss[1][:, :, :, :, :, :, :, :])/(np.max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+            if self.gg and self.mm and self.cross_terms:
+                nongauss[2] *= np.ones_like(nongauss[2][:, :, :, :, :, :, :, :])/(np.max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.deg2torad2)
+            if self.gm:
+                nongauss[3] *= np.ones_like(nongauss[3][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_ggl']/self.deg2torad2)
+            if self.mm and self.gm and self.cross_terms:           
+                nongauss[4] *= np.ones_like(nongauss[4][:, :, :, :, :, :, :, :])/(np.max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+            if self.mm:
+                nongauss[5] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
             
         ssc = self.covELL_ssc(bias_dict,
                               hod_dict,
@@ -2187,7 +2193,11 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo], self.chi_max_clust[k_tomo], self.chi_max_clust[l_tomo])
                                     if chi_low >= chi_high or (self.clustering_z and (i_tomo >= 2 or k_tomo >= 2)):
                                         continue
-                        
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     global nongaussELLgggg_aux
 
                                     def nongaussELLgggg_aux(i_ell):
@@ -2232,6 +2242,11 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo], self.chi_max_clust[k_tomo])
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     
                                     global nongaussELLgggm_aux
 
@@ -2277,6 +2292,10 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
                                     
                                     global nongaussELLggmm_aux
 
@@ -2322,6 +2341,11 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[k_tomo])
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     
                                     global nongaussELLgmgm_aux
 
@@ -2365,6 +2389,11 @@ class CovELLSpace(PolySpectra):
                                     chi_high = self.chi_max_clust[k_tomo]
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     
                                     global nongaussELLmmgm_aux
 
@@ -2700,6 +2729,11 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo], self.chi_max_clust[k_tomo], self.chi_max_clust[l_tomo])
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
                                     survey_variance = np.array(
@@ -2758,6 +2792,11 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo], self.chi_max_clust[k_tomo])
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
                                     survey_variance = np.array(
@@ -2816,6 +2855,11 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
                                     survey_variance = np.array(
@@ -2874,6 +2918,11 @@ class CovELLSpace(PolySpectra):
                                         self.chi_max_clust[i_tomo], self.chi_max_clust[k_tomo])
                                     if chi_low >= chi_high:
                                         continue
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
                                     survey_variance = np.array(
@@ -3007,6 +3056,11 @@ class CovELLSpace(PolySpectra):
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = self.chi_min_clust[k_tomo]
                                     chi_high = self.chi_max_clust[k_tomo]
+                                    if chi_low < self.los_integration_chi[0]:
+                                        chi_low = self.los_integration_chi[0]
+                                    if chi_high > self.los_integration_chi[-1]:
+                                        chi_high = self.los_integration_chi[-1]
+                                    
                                     if chi_low >= chi_high:
                                         continue
                                     self.__update_los_integration_chi(
