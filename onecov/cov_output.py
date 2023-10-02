@@ -68,6 +68,7 @@ class Output():
         self.trispecfile = output_dict['trispec']
         self.Cellfile = output_dict['Cell']
         self.tex = output_dict
+        self.list_style_spatial_first = output_dict['list_style_spatial_first']
 
     def __check_filetype(self):
         for idx,fn in enumerate(self.filename):
@@ -246,9 +247,14 @@ class Output():
 
         if 'terminal' in self.style or 'list' in self.style:
             fct_args = [obslist, obsbool]
-            self.__write_cov_list(cov_dict, obs_dict, n_tomo_clust, 
-                                  n_tomo_lens, sampledim, proj_quant, 
-                                  gauss, nongauss, ssc, fct_args)
+            if self.list_style_spatial_first:
+                self.__write_cov_list_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
+                                    n_tomo_lens, sampledim, proj_quant, 
+                                    gauss, nongauss, ssc, fct_args)
+            else:
+                self.__write_cov_list(cov_dict, obs_dict, n_tomo_clust, 
+                                    n_tomo_lens, sampledim, proj_quant, 
+                                    gauss, nongauss, ssc, fct_args)
         if 'matrix' in self.style or self.plot:
             fct_args = [obslist, obsbool, obslength, mult, 
                         gg, gm, mm, xipp, xipm, ximm]
@@ -737,6 +743,300 @@ class Output():
                 for ostr in olist:
                     file.write("%s\n" % ostr)
         return True
+    
+    def __write_cov_list_cosmosis_style(self,
+                                        cov_dict,
+                                        obs_dict,
+                                        n_tomo_clust,
+                                        n_tomo_lens,
+                                        sampledim,
+                                        proj_quant,
+                                        gauss,
+                                        nongauss,
+                                        ssc,
+                                        fct_args):
+        obslist, obsbool = fct_args
+        proj_quant_str = 'x1\tx2\t'
+
+        if ('C_ell' in obs_dict['observables'].values() or \
+            'bandpowers' in obs_dict['observables'].values()):
+            proj_quant_str = 'ell1\tell2\t'
+        elif (obs_dict['observables']['est_shear'] == 'xi_pm' or \
+              obs_dict['observables']['est_ggl'] == 'gamma_t' or \
+              obs_dict['observables']['est_clust'] == 'w'):
+            proj_quant_str = 'theta1\ttheta2\t'
+        elif 'k_space' in obs_dict['observables'].values():
+            proj_quant_str = 'log10k1\t\tlog10k2'
+        elif 'cosebis' in obs_dict['observables'].values():
+            proj_quant_str = 'n1\t\tn2'
+        if not cov_dict['split_gauss']:
+            if n_tomo_clust is None and n_tomo_lens is None:
+                tomo_str = ''
+                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e'
+            else:
+                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e'
+        else:
+            if n_tomo_clust is None and n_tomo_lens is None:
+                tomo_str = ''
+                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+            else:
+                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+
+        idxlist = self.__get_idxlist(proj_quant, sampledim)
+        olist = []
+        splitidx = 0
+        write_header = True
+        for oidx, obs in enumerate(obslist):
+            obs_copy = np.copy(obs)
+            if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'CE_mmCE_mm'
+            if obs == 'xipxim' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'CE_mmCB_mm'
+            if obs == 'ximxim' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'CB_mmCB_mm'
+            if obs == 'gggg' and obs_dict['observables']['est_clust'] == 'bandpowers' and obs_dict['observables']['clustering'] == True:
+                obs_copy = 'CE_ggCE_gg'
+            if obs == 'gmgm' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'CE_gmCE_gm'
+            if obs == 'gggm' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_clust'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'CE_ggCE_gm'
+            if obs == 'ggxip' and obs_dict['observables']['est_clust'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'CE_ggCE_mm'
+            if obs == 'ggxim' and obs_dict['observables']['est_clust'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'CE_ggCB_mm'
+            if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'CE_gmCE_mm'
+            if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'CE_gmCB_mm'
+            
+
+            if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'EEmmmm'
+            if obs == 'xipxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'EBmmmm'
+            if obs == 'ximxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                obs_copy = 'BBmmmm'
+            if obs == 'gggg' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['clustering'] == True:
+                obs_copy = 'EEgggg'
+            if obs == 'gmgm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEgmgm'
+            if obs == 'gggm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEgggm'
+            if obs == 'ggxip' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEggmm'
+            if obs == 'ggxim' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EBggmm'
+            if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EEgmmm'
+            if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
+                obs_copy = 'EBgmmm'
+            
+            if not obsbool[oidx]:
+                splitidx += 3
+                continue
+            if not cov_dict['split_gauss']:
+                if write_header:
+                    olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
+                                 tomo_str + 'cov\t\t\tcovg\t\tcovng\t\tcovssc')
+                    write_header = False
+                if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                    tomo1 = gauss[oidx].shape[4]
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo1):
+                                for t4 in range(t3, tomo1):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1, t2, t3, t4)
+                                        cov = gauss[oidx][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                            s1, s2, t1+1, t2+1, t3+1, t4+1, 
+                                            cov, 
+                                            gauss[oidx][idxs],
+                                            nongauss[oidx][idxs],
+                                            ssc[oidx][idxs])
+                                        olist.append(ostr)
+                elif obs == 'gmgm':
+                    tomo1 = gauss[oidx].shape[4]
+                    tomo2 = gauss[oidx].shape[5]
+                    for t1_1 in range(tomo1):
+                        for t2_1 in range(tomo2):
+                            for t1_2 in range(tomo1):
+                                for t2_2 in range(tomo2):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1_1, t2_1, t1_2, t2_2)
+                                        cov = gauss[oidx][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                            s1, s2, t1_1+1, t2_1+1, t1_2+1, t2_2+1, 
+                                            cov, 
+                                            gauss[oidx][idxs],
+                                            nongauss[oidx][idxs],
+                                            ssc[oidx][idxs])
+                                        olist.append(ostr)
+                elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                    tomo1 = gauss[oidx].shape[4]
+                    tomo3 = gauss[oidx].shape[6]
+                    tomo4 = gauss[oidx].shape[7]
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo3):
+                                for t4 in range(tomo4):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1, t2, t3, t4)
+                                        cov = gauss[oidx][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                                s1, s2, t1+1, t2+1, t3+1, t4+1, 
+                                                cov, 
+                                                gauss[oidx][idxs],
+                                                nongauss[oidx][idxs],
+                                                ssc[oidx][idxs])
+                                        olist.append(ostr)
+                elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                    tomo1 = gauss[oidx].shape[4]
+                    tomo2 = gauss[oidx].shape[6]
+                    for t1_1 in range(tomo1):
+                        for t1_2 in range(t1_1, tomo1):
+                            for t2_1 in range(tomo2):
+                                for t2_2 in range(t2_1, tomo2):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1_1, t1_2, t2_1, t2_2)
+                                        cov = gauss[oidx][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                                s1, s2, t1_1+1, t1_2+1, t2_1+1, t2_2+1, 
+                                                cov, 
+                                                gauss[oidx][idxs],
+                                                nongauss[oidx][idxs],
+                                                ssc[oidx][idxs])
+                                        olist.append(ostr)
+            else:
+                if write_header:
+                    olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
+                                 tomo_str + 'cov\t\t\tcovg sva\tcovg mix' +
+                                 '\tcovg sn\t\tcovng\t\tcovssc')
+                    write_header = False
+                if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                    tomo1 = gauss[splitidx].shape[4]
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo1):
+                                for t4 in range(t3, tomo1):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1, t2, t3, t4)
+                                        cov = gauss[splitidx][idxs] \
+                                            + gauss[splitidx+1][idxs] \
+                                            + gauss[splitidx+2][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                            s1, s2, t1+1, t2+1, t3+1, t4+1, 
+                                            cov, 
+                                            gauss[splitidx][idxs],
+                                            gauss[splitidx+1][idxs],
+                                            gauss[splitidx+2][idxs],
+                                            nongauss[oidx][idxs],
+                                            ssc[oidx][idxs])
+                                        olist.append(ostr)
+                elif obs == 'gmgm':
+                    tomo1 = gauss[splitidx].shape[4]
+                    tomo2 = gauss[splitidx].shape[5]
+                    for t1_1 in range(tomo1):
+                        for t2_1 in range(tomo2):
+                            for t1_2 in range(tomo1):
+                                for t2_2 in range(tomo2):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1_1, t2_1, t1_2, t2_2)
+                                        cov = gauss[splitidx][idxs] \
+                                            + gauss[splitidx+1][idxs] \
+                                            + gauss[splitidx+2][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                            s1, s2, t1_1+1, t2_1+1, t1_2+1, t2_2+1, 
+                                            cov, 
+                                            gauss[splitidx][idxs],
+                                            gauss[splitidx+1][idxs],
+                                            gauss[splitidx+2][idxs],
+                                            nongauss[oidx][idxs],
+                                            ssc[oidx][idxs])
+                                    olist.append(ostr)
+                elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                    tomo1 = gauss[splitidx].shape[4]
+                    tomo3 = gauss[splitidx].shape[6]
+                    tomo4 = gauss[splitidx].shape[7]
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo3):
+                                for t4 in range(tomo4):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1, t2, t3, t4)
+                                        cov = gauss[splitidx][idxs] \
+                                            + gauss[splitidx+1][idxs] \
+                                            + gauss[splitidx+2][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                                s1, s2, t1+1, t2+1, t3+1, t4+1, 
+                                                cov, 
+                                                gauss[splitidx][idxs],
+                                                gauss[splitidx+1][idxs],
+                                                gauss[splitidx+2][idxs],
+                                                nongauss[oidx][idxs],
+                                                ssc[oidx][idxs])
+                                        olist.append(ostr)
+                elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                    tomo1 = gauss[splitidx].shape[4]
+                    tomo2 = gauss[splitidx].shape[6]
+                    for t1_1 in range(tomo1):
+                        for t1_2 in range(t1_1, tomo1):
+                            for t2_1 in range(tomo2):
+                                for t2_2 in range(t2_1, tomo2):
+                                    for idxi, ri, idxj, rj, s1, s2 in idxlist:
+                                        idxs = (idxi, idxj, s1, s2, t1_1, t1_2, t2_1, t2_2)
+                                        cov = gauss[splitidx][idxs] \
+                                            + gauss[splitidx+1][idxs] \
+                                            + gauss[splitidx+2][idxs] \
+                                            + nongauss[oidx][idxs] \
+                                            + ssc[oidx][idxs]
+                                        ostr = ostr_format \
+                                            % (obs_copy,  ri, rj, 
+                                                s1, s2, t1_1+1, t1_2+1, t2_1+1, t2_2+1, 
+                                                cov, 
+                                                gauss[splitidx][idxs],
+                                                gauss[splitidx+1][idxs],
+                                                gauss[splitidx+2][idxs],
+                                                nongauss[oidx][idxs],
+                                                ssc[oidx][idxs])
+                                        olist.append(ostr)
+                splitidx += 3
+
+        if 'terminal' in self.style:
+            print("Writing result to terminal. (Brace yourself...).'")
+            for ostr in olist:
+                print(ostr)
+        elif 'list' in self.style:
+            fn = self.filename[self.style.index('list')]
+            with open(fn, 'w') as file:
+                print("Writing '" + fn + "'.")
+                for ostr in olist:
+                    file.write("%s\n" % ostr)
+        return True
+    
     
     def __create_matrix(self,covlist, is_i_smaller_j, is_m_smaller_n):
         if is_i_smaller_j and is_m_smaller_n:

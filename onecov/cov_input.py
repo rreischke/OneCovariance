@@ -64,6 +64,7 @@ class Input:
         self.save_trispecs = None
         self.save_alms = None
         self.use_tex = None
+        self.list_style_spatial_first = None
 
         # for lensing in projected Fourier space
         self.covELLspace_settings = dict()
@@ -1193,6 +1194,11 @@ class Input:
                 self.output_style = ['list']
                 print("The style of the output file [output settings]: " +
                       "'style' will be 'list'.")
+                
+            if 'list_style_spatial_first' in in config['output settings']:
+                self.list_style_spatial_first = config['output settings'].getboolean('filist_style_spatial_firstle')
+            else:
+                self.list_style_spatial_first = False
 
             self.output_file = False
             if 'list' in self.output_style or 'matrix' in self.output_style:
@@ -1308,6 +1314,7 @@ class Input:
             self.save_trispecs = False
             self.save_alms = False
             self.use_tex = False
+            self.list_style_spatial_first = False
 
         if self.output_style and \
            len(self.output_style) != len(self.output_file):
@@ -2978,10 +2985,10 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['directory', 'file', 'style', 'corrmatrix_plot',
-                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex']
+                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first']
         values = [self.output_dir, self.output_file, self.output_style,
                   self.make_plot, self.save_configs, self.save_Cells,
-                  self.save_trispecs, self.save_alms, self.use_tex]
+                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first]
         self.output_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         self.output_abr['file'] = \
@@ -6326,4 +6333,3 @@ class FileInput:
                 'tri': self.tri_tab,
                 'COSEBIs': self.cosebis}
 
-# fi = FileInput()
