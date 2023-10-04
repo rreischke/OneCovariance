@@ -190,6 +190,8 @@ class CovELLSpace(PolySpectra):
                              survey_params_dict,
                              prec,
                              read_in_tables)
+        self.ellrange_spec = None
+        self.ellrange_photo = None
         self.est_shear = obs_dict['observables']['est_shear']
         self.est_ggl = obs_dict['observables']['est_ggl']
         self.est_clust = obs_dict['observables']['est_clust']
@@ -293,7 +295,9 @@ class CovELLSpace(PolySpectra):
     def __set_multipoles(self,
                          covELLspacesettings):
         """
-        Calculates the multioples at which the covariance is calculated
+        Calculates the multioples at which the covariance is calculated.
+        Also sets the multipoles for the binned ell-space covariance for
+        the spectroscopic and photometric samples.
 
         Parameters
         ----------
@@ -307,6 +311,27 @@ class CovELLSpace(PolySpectra):
             with shape (ell bins)
 
         """
+        if covELLspacesettings['n_spec'] is not None or covELLspacesettings['n_spec'] != 0:
+            if covELLspacesettings['ell_spec_type'] == 'lin':
+                self.ellrange_spec_ul = np.linspace(
+                    covELLspacesettings['ell_spec_min'],
+                    covELLspacesettings['ell_spec_max'],
+                    covELLspacesettings['ell_spec_bins'] + 1)
+                self.ellrange_spec = .5 * (self.ellrange_spec_ul[1:] + self.ellrange_spec_ul[:-1])
+            else:
+                self.ellrange_spec_ul = np.geomspace(covELLspacesettings['ell_spec_min'], covELLspacesettings['ell_spec_max'], covELLspacesettings['ell_spec_bins'] + 1)
+                self.ellrange_spec = np.exp(.5 * (np.log(self.ellrange_spec_ul[1:])
+                                    + np.log(self.ellrange_spec_ul[:-1])))
+            if covELLspacesettings['ell_photo_type'] == 'lin':
+                self.ellrange_photo_ul = np.linspace(
+                    covELLspacesettings['ell_photo_min'],
+                    covELLspacesettings['ell_photo_max'],
+                    covELLspacesettings['ell_photo_bins'] + 1)
+                self.ellrange_photo = .5 * (self.ellrange_photo_ul[1:] + self.ellrange_photo_ul[:-1])
+            else:
+                self.ellrange_photo_ul = np.geomspace(covELLspacesettings['ell_photo_min'], covELLspacesettings['ell_photo_max'], covELLspacesettings['ell_photo_bins'] + 1)
+                self.ellrange_photo = np.exp(.5 * (np.log(self.ellrange_photo_ul[1:])
+                                    + np.log(self.ellrange_photo_ul[:-1])))
 
         if covELLspacesettings['ell_type'] == 'lin':
             return np.linspace(
@@ -318,6 +343,7 @@ class CovELLSpace(PolySpectra):
                 return np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins'])
             else:
                 return np.unique(np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins']).astype(int)).astype(float)
+        
 
     def __set_redshift_distribution_splines(self,
                                             covELLspacesettings):
@@ -1266,8 +1292,10 @@ class CovELLSpace(PolySpectra):
             gaussELLmmmm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_sn  *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
-            
         
+       # if self.ellrange_photo is not None:
+
+
         if not self.cov_dict['split_gauss']:
             gaussELLgggg = gaussELLgggg_sva + gaussELLgggg_mix
             gaussELLgggm = gaussELLgggm_sva + gaussELLgggm_mix

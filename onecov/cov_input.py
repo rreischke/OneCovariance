@@ -609,7 +609,7 @@ class Input:
                                 "[covELLspace settings]: 'ell_type = " +
                                 config['covELLspace settings']['ell_type'] + "' is not " +
                                 "recognised. Must be either 'lin' or 'log'.")
-            if self.n_spec is not None:
+            if self.n_spec is not None or self.n_spec != 0:
                 if self.ell_spec_min is None:
                     raise Exception("ConfigError: An estimator is " +
                                 "'C_ell' but no minimum ell for the spectroscopic projection is " +
@@ -648,6 +648,15 @@ class Input:
                     self.ell_photo_type = 'log'
                     print("The binning type for photometric ell bins " +
                         "[covELLspace settings]: 'ell_photo_type' is set to 'log'.")
+                if self.ell_spec_min < self.ell_min:
+                    self.ell_min = self.ell_spec_min
+                if self.ell_photo_min < self.ell_min:
+                    self.ell_min = self.ell_photo_min
+                if self.ell_photo_max > self.ell_max:
+                    self.ell_max = self.ell_spec_max
+                if self.ell_photo_max > self.ell_max:
+                    self.ell_max = self.ell_photo_max
+                
             if self.delta_z is None:
                 self.delta_z = 0.02
                 print("The redshift spacing for the C_ell covariance l.o.s. " +
@@ -3076,13 +3085,14 @@ class Input:
             self.save_Cells = path.join(self.output_dir, self.save_Cells)
         if self.save_trispecs and self.output_dir is not None:
             self.save_trispecs = path.join(self.output_dir, self.save_trispecs)
-        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec']
+        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first']
         values = [self.output_file, self.output_style, self.make_plot,
-                  self.save_Cells, self.save_trispecs]
+                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first]
         self.output = dict(zip(keys, values))
 
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
-                'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias']
+                'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
+                'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type']
         values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
                   self.delta_z, self.integration_steps, self.nz_polyorder,
                   self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.n_spec,
