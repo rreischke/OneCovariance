@@ -448,17 +448,6 @@ class Setup():
             elif len(survey_params_dict['survey_area_lens']) != 1:
                 raise Exception("shouldnt happen, no specz shapes")
 
-        else:
-            if survey_params_dict['survey_area_clust'] is not None:
-                if len(survey_params_dict['survey_area_clust']) != 1:
-                    raise Exception("shouldnt happen, just one clust area")
-            if survey_params_dict['survey_area_ggl'] is not None:
-                if len(survey_params_dict['survey_area_ggl']) != 1:
-                    raise Exception("shouldnt happen, just one ggl area")
-            if survey_params_dict['survey_area_lens'] is not None:
-                if len(survey_params_dict['survey_area_lens']) != 1:
-                    raise Exception("shouldnt happen, just one lens area")
-
         return tomos_6x2pt_clust[0]
 
     def __consistency_checks_for_k_support_in_tabs(self,

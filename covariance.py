@@ -6,6 +6,22 @@ from onecov.cov_cosebis import CovCOSEBI
 from onecov.cov_bandpowers import CovBandPowers
 import sys
 
+from scipy.interpolate import RegularGridInterpolator
+import numpy as np
+
+
+x = np.linspace(1,5,100)
+y = np.linspace(1,5,50)
+f = (x**2)[:,None]*y[None,:]
+
+interp = RegularGridInterpolator((x,y),f)
+X,Y  = np.meshgrid(x,x)
+print(X)
+print(Y)
+resu = interp(((X,Y)))
+print(resu.shape)
+
+
 
 inp = Input()
 

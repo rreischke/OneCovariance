@@ -2104,6 +2104,8 @@ class Input:
                 if 'survey_area_clust_in_deg2' in config['survey specs']:
                     self.survey_area_clust = np.array(config['survey specs']
                                                       ['survey_area_clust_in_deg2'].split(','))
+                    if self.n_spec is not None and len(self.survey_area_clust) < 2:
+                        self.survey_area_clust = np.append(self.survey_area_clust,self.survey_area_clust[0])
                     try:
                         self.survey_area_clust = \
                             (self.survey_area_clust).astype(float)
@@ -2215,7 +2217,8 @@ class Input:
                                         "file " + config_name + ".")
                 else:
                     self.survey_area_ggl = None
-
+            if self.n_spec is not None and len(self.survey_area_ggl) < 2 and len(self.survey_area_ggl) > 0:
+                self.survey_area_ggl = np.append(self.survey_area_ggl,self.survey_area_ggl[0])
             self.mask_file_ggl = []
             if 'mask_file_ggl_specz' in config['survey specs']:
                 self.mask_file_ggl.append(
