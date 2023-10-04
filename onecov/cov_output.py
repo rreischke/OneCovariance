@@ -166,6 +166,7 @@ class Output():
         gg, gm, mm = obsbool[0], obsbool[3], obsbool[5]
         xipp, xipm, ximm = None, None, None
         mult = 1
+        print(len(gauss))
         if len(gauss) == obslength:
             ...
         elif len(gauss) == obslength+3:
