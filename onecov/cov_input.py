@@ -82,6 +82,16 @@ class Input:
         self.multiplicative_shear_bias_uncertainty = None
         self.pixelised_cell = None
         self.pixel_Nside = None
+        self.n_spec = None
+        self.ell_spec_min = None
+        self.ell_spec_max = None
+        self.ell_spec_bins = None
+        self.ell_spec_type = None
+        self.ell_photo_min = None
+        self.ell_photo_max = None
+        self.ell_photo_bins = None
+        self.ell_photo_type = None
+        
 
         # for cosmic shear in projected real space
         self.covTHETAspace_settings = dict()
@@ -525,6 +535,30 @@ class Input:
                           "settings]: nz_interpolation_polynom_order' which " +
                           "is not 1, is not recommended and can lead to " +
                           "non-positive values in the splined object.")
+            if 'n_spec' in config['covELLspace settings']:
+                self.n_spec = int(config['covELLspace settings']['n_spec'])
+                if 'ell_spec_min' in config['covELLspace settings']:
+                    self.ell_spec_min = float(
+                        config['covELLspace settings']['ell_spec_min'])
+                if 'ell_spec_max' in config['covELLspace settings']:
+                    self.ell_spec_max = float(
+                        config['covELLspace settings']['ell_spec_max'])
+                if 'ell_spec_bins' in config['covELLspace settings']:
+                    self.ell_spec_bins = int(
+                        config['covELLspace settings']['ell_spec_bins'])
+                if 'ell_spec_type' in config['covELLspace settings']:
+                    self.ell_spec_type = config['covELLspace settings']['ell_spec_type']
+                if 'ell_photo_min' in config['covELLspace settings']:
+                    self.ell_photo_min = float(
+                        config['covELLspace settings']['ell_photo_min'])
+                if 'ell_photo_max' in config['covELLspace settings']:
+                    self.ell_photo_max = float(
+                        config['covELLspace settings']['ell_photo_max'])
+                if 'ell_photo_bins' in config['covELLspace settings']:
+                    self.ell_photo_bins = int(
+                        config['covELLspace settings']['ell_photo_bins'])
+                if 'ell_photo_type' in config['covELLspace settings']:
+                    self.ell_photo_type = config['covELLspace settings']['ell_photo_type']
         else:
             ...
 
@@ -575,7 +609,45 @@ class Input:
                                 "[covELLspace settings]: 'ell_type = " +
                                 config['covELLspace settings']['ell_type'] + "' is not " +
                                 "recognised. Must be either 'lin' or 'log'.")
-
+            if self.n_spec is not None:
+                if self.ell_spec_min is None:
+                    raise Exception("ConfigError: An estimator is " +
+                                "'C_ell' but no minimum ell for the spectroscopic projection is " +
+                                "specified. Must be adjusted in config file " +
+                                config_name + ", [covELLspace settings]: 'ell_spec_min = 100'.")
+                if self.ell_spec_max is None:
+                    raise Exception("ConfigError: An estimator is " +
+                                "'C_ell' but no maximum ell for the spectroscopic projection is " +
+                                "specified. Must be adjusted in config file " +
+                                config_name + ", [covELLspace settings]: 'ell_spec_max = 2000'.")
+                if self.ell_spec_bins is None:
+                    raise Exception("ConfigError: An estimator is " +
+                                    "'C_ell' but no number of spectroscopic ell bins is specified. Must " +
+                                    "be adjusted in config file " + config_name + ", " +
+                                    "[covELLspace settings]: 'ell_spec_bins = 10'.")
+                if self.ell_spec_type is None:
+                    self.ell_spec_type = 'log'
+                    print("The binning type for spectroscopic ell bins " +
+                        "[covELLspace settings]: 'ell_spec_type' is set to 'log'.")
+                if self.ell_photo_min is None:
+                    raise Exception("ConfigError: An estimator is " +
+                                "'C_ell' but no minimum ell for the photometric projection is " +
+                                "specified. Must be adjusted in config file " +
+                                config_name + ", [covELLspace settings]: 'ell_photo_min = 100'.")
+                if self.ell_photo_max is None:
+                    raise Exception("ConfigError: An estimator is " +
+                                "'C_ell' but no maximum ell for the photometric projection is " +
+                                "specified. Must be adjusted in config file " +
+                                config_name + ", [covELLspace settings]: 'ell_photo_max = 2000'.")
+                if self.ell_photo_bins is None:
+                    raise Exception("ConfigError: An estimator is " +
+                                    "'C_ell' but no number of photometric ell bins is specified. Must " +
+                                    "be adjusted in config file " + config_name + ", " +
+                                    "[covELLspace settings]: 'ell_photo_bins = 10'.")
+                if self.ell_photo_type is None:
+                    self.ell_photo_type = 'log'
+                    print("The binning type for photometric ell bins " +
+                        "[covELLspace settings]: 'ell_photo_type' is set to 'log'.")
             if self.delta_z is None:
                 self.delta_z = 0.02
                 print("The redshift spacing for the C_ell covariance l.o.s. " +
@@ -1195,7 +1267,7 @@ class Input:
                 print("The style of the output file [output settings]: " +
                       "'style' will be 'list'.")
                 
-            if 'list_style_spatial_first' in in config['output settings']:
+            if 'list_style_spatial_first' in config['output settings']:
                 self.list_style_spatial_first = config['output settings'].getboolean('filist_style_spatial_firstle')
             else:
                 self.list_style_spatial_first = False
@@ -3013,7 +3085,9 @@ class Input:
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias']
         values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
                   self.delta_z, self.integration_steps, self.nz_polyorder,
-                  self.tri_delta_z, self.multiplicative_shear_bias_uncertainty]
+                  self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.n_spec,
+                  self.ell_spec_min, self.ell_spec_max, self.ell_spec_bins, self.ell_spec_type,
+                  self.ell_photo_min, self.ell_photo_max, self.ell_photo_bins, self.ell_photo_type,]
         self.covELLspace_settings = dict(zip(keys, values))
         keys = ['ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_interpolation_polynom_order',
