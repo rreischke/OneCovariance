@@ -53,6 +53,7 @@ setup(
         'pip>=20.0',
         'gsl',
         'scipy',
+        'wget',
         'matplotlib',
         'hmf']
 )

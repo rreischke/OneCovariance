@@ -182,7 +182,7 @@ class CovTHETASpace(CovELLSpace):
                             self.thetabins,
                             survey_params_dict,
                             read_in_tables['npair'])
-        #self.__get_signal_ww()
+        self.__get_signal_ww()
 
     def __set_theta_bins(self,
                          covTHETAspacesettings):
@@ -297,11 +297,10 @@ class CovTHETASpace(CovELLSpace):
             flat_idx = 0
             for i_tomo in range(self.n_tomo_lens):
                 for j_tomo in range(i_tomo, self.n_tomo_lens):
-                    self.xi_spline["xip"][flat_idx] = UnivariateSpline(np.log(theta_bins),np.log(self.xip[:,0,i_tomo, j_tomo]), s=0)
-                    self.xi_spline["xim"][flat_idx] = UnivariateSpline(np.log(theta_bins),np.log(self.xim[:,0,i_tomo, j_tomo]), s=0)
+                    self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0)
+                    self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0)
                     flat_idx += 1
             
-
     def __get_triplet_mix_term(self,
                                CovTHETASpace_settings,
                                survey_params_dict):

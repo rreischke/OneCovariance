@@ -148,7 +148,6 @@ def cyg2disc(run, basepath="/cosma6/data/dp004/dc-port3/KiDS/cygnus_mocks/", fpa
     ngal = np.zeros(6)
     
     for zind in range(6):
-        print(zind)
         nextbit = Table.read(basepath+"galCat_run_%i_1_kids1000like_sample0_type%i.fits"%(run,4+2*zind))
         ra = np.append(ra, nextbit["ALPHA_J2000"])
         dec = np.append(dec, nextbit["DELTA_J2000"])
