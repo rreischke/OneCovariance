@@ -4103,6 +4103,8 @@ class FileInput:
 
         self.zet_clust_nz = np.array([])
         try:  # ascii
+            save_zet_clust_z = []
+            save_zet_clust_nz = []
             for fidx, file in enumerate(self.zet_clust_file):
                 print("Reading in redshift distributions for clustering " +
                       "from file " + path.join(self.zet_clust_dir, file) + ".")
@@ -4114,23 +4116,48 @@ class FileInput:
                           "column and the redshift distribution in the " +
                           "second. This file will be ignored.")
                     continue
-
+                different_redshifts = False
                 if fidx == 0:
                     self.zet_clust_z = np.array(data[data.colnames[0]])
+                    save_zet_clust_z.append(self.zet_clust_z)
                     self.zet_clust_nz = np.array(data[data.colnames[1]])
+                    save_zet_clust_nz.append(self.zet_clust_nz)
                     for colname in data.colnames[2:]:
                         self.zet_clust_nz = \
                             np.vstack([self.zet_clust_nz, data[colname]])
+                        save_zet_clust_nz.append(data[colname])
                 else:
-                    if np.any(self.zet_clust_z !=
-                              np.array(data[data.colnames[0]])):
-                        raise Exception("ConfigError: The redshifts in the " +
-                                        "first column of zclust_file " + file + " are " +
-                                        "not the exact same as in the first listed " +
-                                        "zclust_file. Must be adjusted to go on.")
-                    for colname in data.colnames[1:]:
-                        self.zet_clust_nz = \
-                            np.vstack([self.zet_clust_nz, data[colname]])
+                    save_zet_clust_z.append(np.array(data[data.colnames[0]]))
+                    if len(np.array(data[data.colnames[0]])) != len(self.zet_clust_z):
+                        redshift_increment = min(self.zet_clust_z[1]- self.zet_clust_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
+                        redshift_max = max(np.max(min(self.zet_clust_z)),np.max(np.array(data[data.colnames[0]])))
+                        redshift_min = min(np.min(min(self.zet_clust_z)),np.min(np.array(data[data.colnames[0]])))
+                        self.zet_clust_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
+                        different_redshifts = True         
+                        print("ConfigWarning: Adjusting the redshift range in the zclust_files due to different redshift ranges in clustering redshift distribution")
+                    if not different_redshifts:
+                        for colname in data.colnames[1:]:
+                            self.zet_clust_nz = \
+                                np.vstack([self.zet_clust_nz, data[colname]])
+                            save_zet_clust_nz.append(data[colname])
+                    else:
+                        for colname in data.colnames[1:]:
+                            save_zet_clust_nz.append(data[colname])
+            if different_redshifts:
+                self.zet_clust_nz = np.array([])
+                for i_z in range(len(save_zet_clust_nz)):
+                    if i_z == 0:
+                        self.zet_clust_nz = np.interp(self.zet_clust_z,
+                                                        save_zet_clust_z[i_z],
+                                                        save_zet_clust_nz[i_z],
+                                                        left = 0,
+                                                        right = 0)
+                    else:
+                        self.zet_clust_nz = np.vstack([self.zet_clust_nz, np.interp(self.zet_clust_z,
+                                                                                    save_zet_clust_z[i_z],
+                                                                                    save_zet_clust_nz[i_z],
+                                                                                    left = 0,
+                                                                                    right = 0)])
         except TypeError:
             self.zet_clust_nz = None
         except UnicodeDecodeError:  # fits
@@ -4163,6 +4190,8 @@ class FileInput:
 
         self.zet_lens_photoz = np.array([])
         try:
+            save_zet_lens_z = []
+            save_zet_lens_nz = []
             for fidx, file in enumerate(self.zet_lens_file):
                 print("Reading in redshift distributions for lensing from " +
                       "file " + path.join(self.zet_lens_dir, file) + ".")
@@ -4174,23 +4203,48 @@ class FileInput:
                           "column and the redshift distribution in the " +
                           "second. This file will be ignored.")
                     continue
-
+                different_redshifts = False
                 if fidx == 0:
                     self.zet_lens_z = np.array(data[data.colnames[0]])
+                    save_zet_lens_z.append(self.zet_lens_z)
                     self.zet_lens_photoz = np.array(data[data.colnames[1]])
+                    save_zet_lens_nz.append(self.zet_lens_photoz)
                     for colname in data.colnames[2:]:
                         self.zet_lens_photoz = \
                             np.vstack([self.zet_lens_photoz, data[colname]])
+                        save_zet_lens_nz.append(data[colname])
                 else:
-                    if np.any(self.zet_lens_z !=
-                              np.array(data[data.colnames[0]])):
-                        raise Exception("ConfigError: The redshifts in the " +
-                                        "first column of zlens_file " + file + " are " +
-                                        "not the exact same as in the first listed " +
-                                        "zlens_file. Must be adjusted to go on.")
-                    for colname in data.colnames[1:]:
-                        self.zet_lens_photoz = \
-                            np.vstack([self.zet_lens_photoz, data[colname]])
+                    save_zet_lens_z.append(np.array(data[data.colnames[0]]))
+                    if len(np.array(data[data.colnames[0]])) != len(self.zet_lens_z):
+                        redshift_increment = min(self.zet_lens_z[1]- self.zet_lens_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
+                        redshift_max = max(np.max(min(self.zet_lens_z)),np.max(np.array(data[data.colnames[0]])))
+                        redshift_min = min(np.min(min(self.zet_lens_z)),np.min(np.array(data[data.colnames[0]])))
+                        self.zet_lens_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
+                        different_redshifts = True         
+                        print("ConfigWarning: Adjusting the redshift range in the zlens_files due to different redshift ranges in lensing redshift distribution")
+                    if not different_redshifts:
+                        for colname in data.colnames[1:]:
+                            self.zet_lens_photoz = \
+                                np.vstack([self.zet_lens_photoz, data[colname]])
+                            save_zet_lens_nz.append(data[colname])
+                    else:
+                        for colname in data.colnames[1:]:
+                            save_zet_lens_nz.append(data[colname])
+            if different_redshifts:
+                self.zet_lens_photoz = np.array([])
+                for i_z in range(len(save_zet_lens_nz)):
+                    if i_z == 0:
+                        self.zet_lens_photoz = np.interp(self.zet_lens_z,
+                                                        save_zet_lens_z[i_z],
+                                                        save_zet_lens_nz[i_z],
+                                                        left = 0,
+                                                        right = 0)
+                    else:
+                        self.zet_lens_photoz = np.vstack([self.zet_lens_photoz, np.interp(self.zet_lens_z,
+                                                                                    save_zet_lens_z[i_z],
+                                                                                    save_zet_lens_nz[i_z],
+                                                                                    left = 0,
+                                                                                    right = 0)])
         except TypeError:
             self.zet_lens_photoz = None
         except UnicodeDecodeError:  # fits

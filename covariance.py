@@ -6,7 +6,6 @@ from onecov.cov_cosebis import CovCOSEBI
 from onecov.cov_bandpowers import CovBandPowers
 import sys
 
-
 inp = Input()
 
 if len(sys.argv) > 1:
@@ -19,6 +18,7 @@ else:
     covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input()
     fileinp = FileInput()
     read_in_tables = fileinp.read_input()
+
 
 if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
     covell = CovELLSpace(covterms, observables, output, cosmo, bias, iA,

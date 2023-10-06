@@ -1237,7 +1237,7 @@ class CovELLSpace(PolySpectra):
                 nongauss[4] *= np.ones_like(nongauss[4][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
             if self.mm:
                 nongauss[5] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
-        if self.cov_dict['nongauss'] and self.ellrange_photo is not None:
+        if self.ellrange_photo is not None:
             nongaussELLgggg_ssss_new = 0
             nongaussELLgggg_sssp_new = 0
             nongaussELLgggg_sspp_new = 0
@@ -1265,231 +1265,232 @@ class CovELLSpace(PolySpectra):
             nongaussELLmmgm_mmpm_new = 0
 
             nongaussELLmmmm_mmmm_new = 0
-            if self.gg:
-                nongaussELLgggg_ssss_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[0],
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            'clust',
-                                                            'clust',
-                                                            True
-                                                            )
-                nongaussELLgggg_sssp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[0],
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            True
-                                                            )
-                nongaussELLgggg_sspp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[0],
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            True
-                                                            )
-                nongaussELLgggg_spsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[0],
-                                                            True,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            True
-                                                            )
-                nongaussELLgggg_ppsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[0],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            True
-                                                            )
-                nongaussELLgggg_pppp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[0],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'clust',True
-                                                            )
-            if self.gm and self.gg:
-                nongaussELLgggm_sssm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[1],
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgggm_sspm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[1],
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgggm_spsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[1],
-                                                            True,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgggm_sppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[1],
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgggm_ppsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[1],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgggm_pppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[1],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            True
-                                                            )
-            if self.mm and self.gg:
-                nongaussELLggmm_ssmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[2],
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'lens',
-                                                            True
-                                                            )
-                nongaussELLggmm_spmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[2],
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'lens',
-                                                            True
-                                                            )
-                nongaussELLggmm_ppmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[2],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'lens',
-                                                            True
-                                                            )
-            if self.gm:
-                nongaussELLgmgm_smsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[3],
-                                                            True,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgmgm_smpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[3],
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgmgm_pmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[3],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLgmgm_pmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[3],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            True
-                                                            )
-            if self.mm and self.gm:
-                nongaussELLmmgm_mmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[4],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'lens',
-                                                            'ggl',
-                                                            True
-                                                            )
-                nongaussELLmmgm_mmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[4],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'lens',
-                                                            'ggl',
-                                                            True
-                                                            )
-            if self.mm:
-                nongaussELLmmmm_mmmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            nongauss[5],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'lens',
-                                                            'lens',
-                                                            True
-                                                            )
+            if self.cov_dict['nongauss']:
+                if self.gg:
+                    nongaussELLgggg_ssss_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[0],
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                'clust',
+                                                                'clust',
+                                                                True
+                                                                )
+                    nongaussELLgggg_sssp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[0],
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                True
+                                                                )
+                    nongaussELLgggg_sspp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[0],
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                True
+                                                                )
+                    nongaussELLgggg_spsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[0],
+                                                                True,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                True
+                                                                )
+                    nongaussELLgggg_ppsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[0],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                True
+                                                                )
+                    nongaussELLgggg_pppp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[0],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'clust',True
+                                                                )
+                if self.gm and self.gg:
+                    nongaussELLgggm_sssm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[1],
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgggm_sspm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[1],
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgggm_spsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[1],
+                                                                True,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgggm_sppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[1],
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgggm_ppsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[1],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgggm_pppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[1],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                True
+                                                                )
+                if self.mm and self.gg:
+                    nongaussELLggmm_ssmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[2],
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'lens',
+                                                                True
+                                                                )
+                    nongaussELLggmm_spmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[2],
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'lens',
+                                                                True
+                                                                )
+                    nongaussELLggmm_ppmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[2],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'lens',
+                                                                True
+                                                                )
+                if self.gm:
+                    nongaussELLgmgm_smsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[3],
+                                                                True,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgmgm_smpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[3],
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgmgm_pmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[3],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLgmgm_pmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[3],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                True
+                                                                )
+                if self.mm and self.gm:
+                    nongaussELLmmgm_mmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[4],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'lens',
+                                                                'ggl',
+                                                                True
+                                                                )
+                    nongaussELLmmgm_mmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[4],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'lens',
+                                                                'ggl',
+                                                                True
+                                                                )
+                if self.mm:
+                    nongaussELLmmmm_mmmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                nongauss[5],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'lens',
+                                                                'lens',
+                                                                True
+                                                                )
             nongauss = nongaussELLgggg_ssss_new, nongaussELLgggg_sssp_new, nongaussELLgggg_sspp_new, \
                 nongaussELLgggg_spsp_new, nongaussELLgggg_ppsp_new, nongaussELLgggg_pppp_new, \
                 nongaussELLgggm_sssm_new, nongaussELLgggm_sspm_new, nongaussELLgggm_spsm_new, \
@@ -1505,7 +1506,7 @@ class CovELLSpace(PolySpectra):
                               survey_params_dict,
                               obs_dict['ELLspace'])
         
-        if self.cov_dict['ssc'] and self.ellrange_photo is not None:
+        if self.ellrange_photo is not None:
             sscELLgggg_ssss_new = 0
             sscELLgggg_sssp_new = 0
             sscELLgggg_sspp_new = 0
@@ -1533,232 +1534,233 @@ class CovELLSpace(PolySpectra):
             sscELLmmgm_mmpm_new = 0
 
             sscELLmmmm_mmmm_new = 0
-            if self.gg:
-                sscELLgggg_ssss_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[0],
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            'clust',
-                                                            'clust',
-                                                            False
-                                                            )
-                sscELLgggg_sssp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[0],
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            False
-                                                            )
-                sscELLgggg_sspp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[0],
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            False
-                                                            )
-                sscELLgggg_spsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[0],
-                                                            True,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            False
-                                                            )
-                sscELLgggg_ppsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[0],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            False
-                                                            )
-                sscELLgggg_pppp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[0],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'clust',
-                                                            False
-                                                            )
-            if self.gm and self.gg:
-                sscELLgggm_sssm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[1],
-                                                            True,
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgggm_sspm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[1],
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgggm_spsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[1],
-                                                            True,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgggm_sppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[1],
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgggm_ppsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[1],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgggm_pppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[1],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'ggl',
-                                                            False
-                                                            )
-            if self.mm and self.gg:
-                sscELLggmm_ssmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[2],
-                                                            True,
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'lens',
-                                                            False
-                                                            )
-                sscELLggmm_spmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[2],
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'lens',
-                                                            False
-                                                            )
-                sscELLggmm_ppmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[2],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'clust',
-                                                            'lens',
-                                                            False
-                                                            )
-            if self.gm:
-                sscELLgmgm_smsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[3],
-                                                            True,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgmgm_smpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[3],
-                                                            True,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgmgm_pmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[3],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLgmgm_pmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[3],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'ggl',
-                                                            'ggl',
-                                                            False
-                                                            )
-            if self.mm and self.gm:
-                sscELLmmgm_mmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[4],
-                                                            False,
-                                                            False,
-                                                            True,
-                                                            False,
-                                                            'lens',
-                                                            'ggl',
-                                                            False
-                                                            )
-                sscELLmmgm_mmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[4],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'lens',
-                                                            'ggl',
-                                                            False
-                                                            )
-            if self.mm:
-                sscELLmmmm_mmmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
-                                                            ssc[5],
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            False,
-                                                            'lens',
-                                                            'lens',
-                                                            False
-                                                            )
+            if self.cov_dict['ssc']:
+                if self.gg:
+                    sscELLgggg_ssss_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[0],
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                'clust',
+                                                                'clust',
+                                                                False
+                                                                )
+                    sscELLgggg_sssp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[0],
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                False
+                                                                )
+                    sscELLgggg_sspp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[0],
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                False
+                                                                )
+                    sscELLgggg_spsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[0],
+                                                                True,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                False
+                                                                )
+                    sscELLgggg_ppsp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[0],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                False
+                                                                )
+                    sscELLgggg_pppp_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[0],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'clust',
+                                                                False
+                                                                )
+                if self.gm and self.gg:
+                    sscELLgggm_sssm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[1],
+                                                                True,
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgggm_sspm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[1],
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgggm_spsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[1],
+                                                                True,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgggm_sppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[1],
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgggm_ppsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[1],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgggm_pppm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[1],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'ggl',
+                                                                False
+                                                                )
+                if self.mm and self.gg:
+                    sscELLggmm_ssmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[2],
+                                                                True,
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'lens',
+                                                                False
+                                                                )
+                    sscELLggmm_spmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[2],
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'lens',
+                                                                False
+                                                                )
+                    sscELLggmm_ppmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[2],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'clust',
+                                                                'lens',
+                                                                False
+                                                                )
+                if self.gm:
+                    sscELLgmgm_smsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[3],
+                                                                True,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgmgm_smpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[3],
+                                                                True,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgmgm_pmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[3],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLgmgm_pmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[3],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'ggl',
+                                                                'ggl',
+                                                                False
+                                                                )
+                if self.mm and self.gm:
+                    sscELLmmgm_mmsm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[4],
+                                                                False,
+                                                                False,
+                                                                True,
+                                                                False,
+                                                                'lens',
+                                                                'ggl',
+                                                                False
+                                                                )
+                    sscELLmmgm_mmpm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[4],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'lens',
+                                                                'ggl',
+                                                                False
+                                                                )
+                if self.mm:
+                    sscELLmmmm_mmmm_new = self.__bin_non_Gaussian(obs_dict['ELLspace'],survey_params_dict,
+                                                                ssc[5],
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                False,
+                                                                'lens',
+                                                                'lens',
+                                                                False
+                                                                )
             ssc = sscELLgggg_ssss_new, sscELLgggg_sssp_new, sscELLgggg_sspp_new, \
                 sscELLgggg_spsp_new, sscELLgggg_ppsp_new, sscELLgggg_pppp_new, \
                 sscELLgggm_sssm_new, sscELLgggm_sspm_new, sscELLgggm_spsm_new, \
@@ -2100,10 +2102,13 @@ class CovELLSpace(PolySpectra):
         
         binned_covariance = np.zeros((len(ellrange_12), len(ellrange_34), self.sample_dim, self.sample_dim, up_limit_1 - lo_limit_1, up_limit_2 - lo_limit_2, up_limit_3 - lo_limit_3, up_limit_4 - lo_limit_4))
             
-        for i_ell in range(len(ellrange_12)):
+        global aux__bin_non_Gaussian
+
+        def aux__bin_non_Gaussian(i_ell):
+            aux_result = np.zeros((len(ellrange_34), self.sample_dim, self.sample_dim, up_limit_1 - lo_limit_1, up_limit_2 - lo_limit_2, up_limit_3 - lo_limit_3, up_limit_4 - lo_limit_4))
             for j_ell in range(len(ellrange_34)):
                 area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]
-                area34_ell = (ellrange_34_ul[i_ell +1] - ellrange_34_ul[i_ell])*ellrange_34[i_ell]
+                area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
                 integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],100)
                 integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],100)
                 ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34)
@@ -2122,7 +2127,15 @@ class CovELLSpace(PolySpectra):
                                     result /= (area12_ell*area34_ell)
                                     if connected:
                                         result *= full_sky_angle / max(area_12,area_34)
-                                    binned_covariance[i_ell, j_ell, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo] = result
+                                    aux_result[ j_ell, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo] = result
+            return aux_result
+        
+        pool = mp.Pool(self.num_cores)
+        binned_covariance = np.array(pool.map(
+            aux__bin_non_Gaussian, [i_ell for i_ell in range(len(ellrange_12))]))
+        pool.close()
+        pool.terminate()
+        print(binned_covariance.shape)
         return binned_covariance
                                     
 
@@ -3174,7 +3187,7 @@ class CovELLSpace(PolySpectra):
                                                                 'lens',
                                                                 'ggl'
                                                                 )
-                if self.Cell_mm:
+                if self.mm:
                     gaussELLmmmm_mmmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
                                                                 gaussELLmmmm_sva,
                                                                 False,
@@ -3288,8 +3301,7 @@ class CovELLSpace(PolySpectra):
             raise Exception("NotDoneYet: The programmers have not figured " +
                             "out the correct (cross)covariance in the presence of more " +
                             "than one stellar mass bin as of yet. So, no splitting in " +
-                            "mass sample bins possible at this point. Please contact " +
-                            "Andrej Dvornik +49 234 3224224 for updates :D.")
+                            "mass sample bins possible at this point.")
         else:
             if self.Cell_gg is not None and type(self.Cell_gg) is not int:
                 self.Cell_gg = self.Cell_gg.squeeze()
@@ -4127,12 +4139,22 @@ class CovELLSpace(PolySpectra):
         if self.gg:
             nongaussELLgggg = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
                                         self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))
+            t0, tomos = time.time(), 0
+            tomos_comb = self.n_tomo_clust*(self.n_tomo_clust + 1)
+            if self.ellrange_photo is not None:
+                tomos_comb = self.n_tomo_clust*self.n_tomo_clust
             for i_sample in range(self.sample_dim):
                 for j_sample in range(j_sample, self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
+                        j_tomo_start = i_tomo
+                        if self.ellrange_photo is not None:
+                            j_tomo_start = 0
+                        for j_tomo in range(j_tomo_start, self.n_tomo_clust):
                             for k_tomo in range(self.n_tomo_clust):
-                                for l_tomo in range(k_tomo, self.n_tomo_clust):
+                                l_tomo_start = k_tomo
+                                if self.ellrange_photo is not None:
+                                    l_tomo_start = 0
+                                for l_tomo in range(l_tomo_start, self.n_tomo_clust):
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo], self.chi_min_clust[k_tomo], self.chi_min_clust[l_tomo])
                                     chi_high = min(
@@ -4168,8 +4190,16 @@ class CovELLSpace(PolySpectra):
                                     for i_ell in range(len(self.ellrange)):
                                         nongaussELLgggg[i_ell, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = np.array(
                                             result[i_ell])
+                            tomos += 1
+                            eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
+                            print('\rProjection for nonGaussian term for the '
+                                'ell-space covariance gggg at ' +
+                                str(round(tomos/tomos_comb*100, 1)) + '% in ' +
+                                str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                                str(round(eta, 1)) + 'min', end="")
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLgggg *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+            print("")
         else:
             nongaussELLgggg = 0
 
@@ -4179,7 +4209,10 @@ class CovELLSpace(PolySpectra):
             for i_sample in range(self.sample_dim):
                 for j_sample in range(j_sample, self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
+                        j_tomo_start = i_tomo
+                        if self.ellrange_photo is not None:
+                            j_tomo_start = 0
+                        for j_tomo in range(j_tomo_start, self.n_tomo_clust):
                             for k_tomo in range(self.n_tomo_clust):
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = max(
@@ -4229,7 +4262,10 @@ class CovELLSpace(PolySpectra):
             for i_sample in range(self.sample_dim):
                 for j_sample in range(j_sample, self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
+                        j_tomo_start = i_tomo
+                        if self.ellrange_photo is not None:
+                            j_tomo_start = 0
+                        for j_tomo in range(j_tomo_start, self.n_tomo_clust):
                             for k_tomo in range(self.n_tomo_lens):
                                 for l_tomo in range(k_tomo, self.n_tomo_lens):
                                     chi_low = max(
@@ -4666,9 +4702,15 @@ class CovELLSpace(PolySpectra):
             for i_sample in range(self.sample_dim):
                 for j_sample in range(i_sample, self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
+                        j_tomo_start = i_tomo
+                        if self.ellrange_photo is not None:
+                            j_tomo_start = 0
+                        for j_tomo in range(j_tomo_start, self.n_tomo_clust):
                             for k_tomo in range(self.n_tomo_clust):
-                                for l_tomo in range(k_tomo, self.n_tomo_clust):
+                                l_tomo_start = k_tomo
+                                if self.ellrange_photo is not None:
+                                    l_tomo_start = 0
+                                for l_tomo in range(l_tomo_start, self.n_tomo_clust):
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo], self.chi_min_clust[k_tomo], self.chi_min_clust[l_tomo])
                                     chi_high = min(
@@ -4729,7 +4771,10 @@ class CovELLSpace(PolySpectra):
             for i_sample in range(self.sample_dim):
                 for j_sample in range(i_sample, self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
+                        j_tomo_start = i_tomo
+                        if self.ellrange_photo is not None:
+                            j_tomo_start = 0
+                        for j_tomo in range(j_tomo_start, self.n_tomo_clust):
                             for k_tomo in range(self.n_tomo_clust):
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = max(
@@ -4792,7 +4837,10 @@ class CovELLSpace(PolySpectra):
             for i_sample in range(self.sample_dim):
                 for j_sample in range(i_sample, self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
+                        j_tomo_start = i_tomo
+                        if self.ellrange_photo is not None:
+                            j_tomo_start = 0
+                        for j_tomo in range(j_tomo_start, self.n_tomo_clust):
                             for k_tomo in range(self.n_tomo_lens):
                                 for l_tomo in range(k_tomo, self.n_tomo_lens):
                                     chi_low = max(
