@@ -3,3 +3,4 @@ numpydoc
 pandoc
 astropy
 healpy
+sphinx-rtd-theme
