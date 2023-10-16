@@ -138,6 +138,7 @@ class Setup():
 
         self.cosmology, self.rho_bg = self.__set_cosmology(cosmo_dict)
         self.sample_dim = len(bias_dict['logmass_bins']) - 1
+        self.bias_dict = bias_dict
 
         self.Pxy_tab = read_in_tables['Pxy']
         self.Cxy_tab = read_in_tables['Cxy']
@@ -706,8 +707,13 @@ class Setup():
                   "might cause a bias.")
 
         update_massfunc, update_ellrange = False, False
-        calc_theta = True if 'xi_pm' in obs_dict['observables'].values() \
-            else False
+        calc_theta = False
+        if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'xipm':
+            calc_theta = True
+        if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'gamma_t':
+            calc_theta = True
+        if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'w':
+            calc_theta = True
         calc_cosebi = False
         if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'cosebi':
             calc_cosebi = True
@@ -715,12 +721,23 @@ class Setup():
             calc_cosebi = True
         if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'cosebi':
             calc_cosebi = True
-        calc_ell = True if 'C_ell' in obs_dict['observables'].values() \
-            else False
+        calc_bandpower = False
+        if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'bandpowers':
+            calc_bandpower = True
+        if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'bandpowers':
+            calc_bandpower = True
+        if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'bandpowers':
+            calc_bandpower = True
+        calc_ell = False
+        for observables in obs_dict['observables'].values():
+            if np.any(observables == 'C_ell'):
+                calc_ell = True
         calc_ell = True if calc_theta else False
         calc_ell = True if calc_cosebi else calc_ell
+        
         ellmin, ellmax = ellrange[0], ellrange[-1]
-        if calc_cosebi:
+        ell_bins = len(ellrange)
+        if calc_cosebi or calc_bandpower:
             if ellrange[0] > 1:
                 print("SetupWarning: The COSEBI covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
@@ -744,10 +761,17 @@ class Setup():
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
                       "infinity. We, therefore, adjust the maximum ell mode "
-                      "to '[covELLspace settings]: ell_max = 1e5'.")
-                ellmax = 1e5
+                      "to '[covELLspace settings]: ell_max = 1e4'.")
+                ellmax = 1e4
                 update_ellrange = True
-
+            if len(ellrange) < 100:
+                print("SetupWarning: The COSEBI covariance is currently " +
+                      "calculated via the projected powerspectra (C_ells), " +
+                      "the projection integral runs formally from 0 to " +
+                      "infinity. We, therefore, adjust the number of ell modes "
+                      "to '[covELLspace settings]: ell_bins = 100'.")
+                ell_bins = 100
+                update_ellrange = True
         if calc_theta:
             if ellrange[0] > 1:
                 print("SetupWarning: The xi_pm covariance is currently " +
@@ -772,8 +796,16 @@ class Setup():
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
                       "infinity. We, therefore, adjust the maximum ell mode "
-                      "to '[covELLspace settings]: ell_max = 1e5'.")
-                ellmax = 1e5
+                      "to '[covELLspace settings]: ell_max = 1e4'.")
+                ellmax = 1e4
+                update_ellrange = True
+            if len(ellrange) < 100:
+                print("SetupWarning: The xi_pm covariance is currently " +
+                      "calculated via the projected powerspectra (C_ells), " +
+                      "the projection integral runs formally from 0 to " +
+                      "infinity. We, therefore, adjust the number of ell modes "
+                      "to '[covELLspace settings]: ell_bins = 100'.")
+                ell_bins = 100
                 update_ellrange = True
 
         kmin, kmax = None, None
@@ -827,7 +859,7 @@ class Setup():
                 powspec_prec['log10k_max'] = kmax
                 self.__consistency_checks_for_k_support_in_tabs(powspec_prec)
 
-        return update_massfunc, update_ellrange, kmin, kmax, ellmin, ellmax
+        return update_massfunc, update_ellrange, kmin, kmax, ellmin, ellmax, ell_bins
 
     def get_unique_elements(self,
                             mode,
@@ -871,30 +903,31 @@ class Setup():
         return covELL_sym
 
     def __rebin_npair(self, npairs, theta_npair, theta_ul_bins, theta_bins):
-        pair_rebinned = np.zeros((len(theta_ul_bins)-1,len(npairs[0,:,0]),len(npairs[0,0,:])))
-        for i_tomo in range(len(npairs[0,:,0])):
-            for j_tomo in range(len(npairs[0,:,0])):
-                for i_theta in range(len(theta_ul_bins)-1):
-                    for j_theta in range(len(theta_npair)):
-                        if theta_npair[j_theta] > theta_ul_bins[i_theta] and theta_npair[j_theta] <= theta_ul_bins[i_theta+1]:
-                            pair_rebinned[i_theta,i_tomo,j_tomo] += npairs[j_theta,i_tomo,j_tomo]
-                        elif theta_npair[j_theta] > theta_ul_bins[i_theta]:
-                            break
-                if np.all(pair_rebinned[:,i_tomo,j_tomo]):
-                    continue
-                else:
-                    i_theta_lo = 0
-                    i_theta_hi = 0
-                    for i_theta in range(len(theta_ul_bins) - 1):
-                        if pair_rebinned[i_theta,i_tomo,j_tomo] != 0:
-                            i_theta_lo = i_theta + 1
-                            break
-                    for i_theta in range(i_theta_lo, len(theta_ul_bins) - 1):
-                        if pair_rebinned[i_theta,i_tomo,j_tomo] == 0:
-                            i_theta_hi = i_theta - 1
-                            break
-                    pair_rebinned_spline = interp1d(theta_bins[i_theta_lo:i_theta_hi],pair_rebinned[i_theta_lo:i_theta_hi,i_tomo, j_tomo], fill_value="extrapolate")
-                    pair_rebinned[:,i_tomo, j_tomo] = pair_rebinned_spline(theta_bins)
+        pair_rebinned = np.zeros((len(theta_ul_bins)-1,len(npairs[0,:,0,0]),len(npairs[0,0,:,0]), len(npairs[0,0,0,:])))
+        for i_sample in range(len(npairs[0,0,0,:])):
+            for i_tomo in range(len(npairs[0,:,0,0])):
+                for j_tomo in range(len(npairs[0,0,:,0])):
+                    for i_theta in range(len(theta_ul_bins)-1):
+                        for j_theta in range(len(theta_npair)):
+                            if theta_npair[j_theta] > theta_ul_bins[i_theta] and theta_npair[j_theta] <= theta_ul_bins[i_theta+1]:
+                                pair_rebinned[i_theta,i_tomo,j_tomo,i_sample] += npairs[j_theta,i_tomo,j_tomo,i_sample]
+                            elif theta_npair[j_theta] > theta_ul_bins[i_theta]:
+                                break
+                    if np.all(pair_rebinned[:,i_tomo,j_tomo,i_sample]):
+                        continue
+                    else:
+                        i_theta_lo = 0
+                        i_theta_hi = 0
+                        for i_theta in range(len(theta_ul_bins) - 1):
+                            if pair_rebinned[i_theta,i_tomo,j_tomo,i_sample] != 0:
+                                i_theta_lo = i_theta + 1
+                                break
+                        for i_theta in range(i_theta_lo, len(theta_ul_bins) - 1):
+                            if pair_rebinned[i_theta,i_tomo,j_tomo,i_sample] == 0:
+                                i_theta_hi = i_theta - 1
+                                break
+                        pair_rebinned_spline = interp1d(theta_bins[i_theta_lo:i_theta_hi],pair_rebinned[i_theta_lo:i_theta_hi,i_tomo, j_tomo,i_sample], fill_value="extrapolate")
+                        pair_rebinned[:,i_tomo, j_tomo,i_sample] = pair_rebinned_spline(theta_bins)
         return pair_rebinned
     
 
@@ -906,7 +939,7 @@ class Setup():
         
         gg, gm, mm = obsbool
         if gg and npair_tab['npair_gg'] is not None:
-            dnpair_gg = (npair_tab['npair_gg'][1:,:,:] + npair_tab['npair_gg'][:-1,:,:])/2./(npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])[:,None,None]
+            dnpair_gg = (npair_tab['npair_gg'][1:,:,:,:] + npair_tab['npair_gg'][:-1,:,:,:])/2./(npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])[:,None,None]
             theta_gg = (npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])/2 + npair_tab['theta_gg'][:-1]
             if theta_ul_bins[0] < npair_tab['theta_gg'][0] or theta_ul_bins[-1] > npair_tab['theta_gg'][-1]:
                 print("Warning: The provided file for the pair counts for the shot noise has a smaller angular range than required. " 
@@ -914,33 +947,36 @@ class Setup():
                     "the pair counts file only provides it from " + str(npair_tab['theta_gm'][0]) + " to " + str(npair_tab['theta_gm'][-1]) +
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
-                dnpair_gg_aux = np.ones((len(theta_ul_bins), len(dnpair_gg[0, 0, :]), len(dnpair_gg[0, :, 0])))
-                for i_tomo in range(len(dnpair_gg[0, :, 0])):
-                    for j_tomo in range(i_tomo, len(dnpair_gg[0, 0, :])):
-                        spline = interp1d(theta_gm, dnpair_gg[:,i_tomo, j_tomo], fill_value="extrapolate")
-                        dnpair_gg_aux[:, i_tomo, j_tomo] = spline(theta_ul_bins)
-                        dnpair_gg_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0], i_tomo, j_tomo] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo] \
-                                                                                                                * survey_params_dict['n_eff_clust'][j_tomo]
-                        dnpair_gg_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0], i_tomo, j_tomo] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo] \
-                                                                                                                * survey_params_dict['n_eff_clust'][j_tomo]
+                dnpair_gg_aux = np.ones((len(theta_ul_bins), len(dnpair_gg[0, 0, :, 0]), len(dnpair_gg[0, :, 0, 0]), len(dnpair_gg[0, 0, 0, :])))
+                for i_sample in range(i_tomo, len(dnpair_gg[0, 0, 0, :])):                
+                    for i_tomo in range(len(dnpair_gg[0, :, 0, 0])):
+                        for j_tomo in range(i_tomo, len(dnpair_gg[0, 0, :, 0])):
+                            spline = interp1d(theta_gm, dnpair_gg[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
+                            dnpair_gg_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
+                            dnpair_gg_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0], i_tomo, j_tomo,i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
+                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+                                                                                                                    * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
+                            dnpair_gg_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
+                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+                                                                                                                * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
                 dnpair_gg = dnpair_gg_aux
                 theta_gg = theta_ul_bins
+            dnpair_gg = dnpair_gg.transpose(0, 3, 1, 2)
         elif gg:
             print("Approximating the clustering real space shot noise " +
                   "contribution with the effective number density.")
-            dnpair_gg = 2.0*np.pi*theta_ul_bins[:, None, None] \
+            dnpair_gg = 2.0*np.pi*theta_ul_bins[:, None, None, None] \
                 * survey_params_dict['survey_area_clust'][0] * 60*60 \
-                * survey_params_dict['n_eff_clust'][None, :, None] \
-                * survey_params_dict['n_eff_clust'][None, None, :]
+                * survey_params_dict['n_eff_clust'][None, :, None, :] \
+                * survey_params_dict['n_eff_clust'][None, None, :, :]
             theta_gg = theta_ul_bins
+            dnpair_gg = dnpair_gg.transpose(0, 3, 1, 2)
         else:
             dnpair_gg = None
             theta_gg = None
         
         if gm and npair_tab['npair_gm'] is not None:
-            dnpair_gm = (npair_tab['npair_gm'][1:,:,:] + npair_tab['npair_gm'][:-1,:,:])/2./(npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])[:,None,None]    
+            dnpair_gm = (npair_tab['npair_gm'][1:,:,:,:] + npair_tab['npair_gm'][:-1,:,:,:])/2./(npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])[:,None,None]    
             theta_gm = (npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])/2 + npair_tab['theta_gm'][:-1]
             if theta_ul_bins[0] < npair_tab['theta_gm'][0] or theta_ul_bins[-1] > npair_tab['theta_gm'][-1]:
                 print("Warning: The provided file for the pair counts for the GGL noise has a smaller angular range than required. " 
@@ -948,34 +984,37 @@ class Setup():
                     "the pair counts file only provides it from " + str(npair_tab['theta_gm'][0]) + " to " + str(npair_tab['theta_gm'][-1]) +
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
-                dnpair_gm_aux = np.ones((len(theta_ul_bins), len(dnpair_gm[0, 0, :]), len(dnpair_gm[0, :, 0])))
-                for i_tomo in range(len(dnpair_gm[0, :, 0])):
-                    for j_tomo in range(len(dnpair_gm[0, 0, :])):
-                        spline = interp1d(theta_gm, dnpair_gm[:,i_tomo, j_tomo], fill_value="extrapolate")
-                        dnpair_gm_aux[:, i_tomo, j_tomo] = spline(theta_ul_bins)
-                        dnpair_gm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0], i_tomo, j_tomo] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo]
-                        dnpair_gm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0], i_tomo, j_tomo] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo]
+                dnpair_gm_aux = np.ones((len(theta_ul_bins), len(dnpair_gm[0, :, 0, 0]), len(dnpair_gm[0, 0, :, 0]), len(dnpair_gm[0, 0, 0, :])))
+                for i_sample in range(i_tomo, len(dnpair_gm[0, 0, 0, :])):                
+                    for i_tomo in range(len(dnpair_gm[0, :, 0, 0])):
+                        for j_tomo in range(len(dnpair_gm[0, 0, :, 0])):
+                            spline = interp1d(theta_gm, dnpair_gm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
+                            dnpair_gm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
+                            dnpair_gm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
+                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
+                            dnpair_gm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
+                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
                 dnpair_gm = dnpair_gm_aux
                 theta_gm = theta_ul_bins
+            dnpair_gm =dnpair_gm.transpose(0, 3, 1, 2)
         elif gm:
             print("Approximating the ggl real space shot noise " +
                   "contribution with the effective number density.")
-            dnpair_gm = 2.0*np.pi*theta_ul_bins[:,None, None] \
+            dnpair_gm = 2.0*np.pi*theta_ul_bins[:,None, None, None] \
                 * survey_params_dict['survey_area_ggl'][0] * 60*60 \
-                * survey_params_dict['n_eff_clust'][None, :, None] \
-                * survey_params_dict['n_eff_lens'][None, None, :]
+                * survey_params_dict['n_eff_clust'][None, :, None, :] \
+                * survey_params_dict['n_eff_lens'][None, None, :, :]
             theta_gm = theta_ul_bins
+            dnpair_gm = dnpair_gm.transpose(0, 3, 1, 2)
         else:
             dnpair_gm = None
             theta_gm = None
 
         
         if mm and npair_tab['npair_mm'] is not None:
-            dnpair_mm = (npair_tab['npair_mm'][1:,:,:] + npair_tab['npair_mm'][:-1,:,:])/2./(npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])[:,None,None]  
+            dnpair_mm = (npair_tab['npair_mm'][1:,:,:,:] + npair_tab['npair_mm'][:-1,:,:,:])/2./(npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])[:,None,None]  
             theta_mm = (npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])/2 + npair_tab['theta_mm'][:-1]
             if theta_ul_bins[0] < npair_tab['theta_mm'][0] or theta_ul_bins[-1] > npair_tab['theta_mm'][-1]:
                 print("Warning: The provided file for the pair counts for the shape noise has a smaller angular range than required. " 
@@ -983,27 +1022,29 @@ class Setup():
                     "the pair counts file only provides it from " + str(npair_tab['theta_mm'][0]) + " to " + str(npair_tab['theta_mm'][-1]) +
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
-                dnpair_mm_aux = np.ones((len(theta_ul_bins), len(dnpair_mm[0, 0, :]), len(dnpair_mm[0, :, 0])))
-                for i_tomo in range(len(dnpair_mm[0, :, 0])):
-                    for j_tomo in range(i_tomo,len(dnpair_mm[0, 0, :])):
-                        spline = interp1d(theta_mm, dnpair_mm[:,i_tomo, j_tomo], fill_value="extrapolate")
-                        dnpair_mm_aux[:, i_tomo, j_tomo] = spline(theta_ul_bins)
-                        dnpair_mm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0], i_tomo, j_tomo] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_lens'][i_tomo] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo]
-                        dnpair_mm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0], i_tomo, j_tomo] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_lens'][i_tomo] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo]
+                dnpair_mm_aux = np.ones((len(theta_ul_bins), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, 0, 0, :])))
+                for i_sample in range(len(dnpair_mm[0, 0, 0, :])):
+                    for i_tomo in range(len(dnpair_mm[0, :, 0, 0])):
+                        for j_tomo in range(i_tomo,len(dnpair_mm[0, 0, :, 0])):
+                            spline = interp1d(theta_mm, dnpair_mm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
+                            dnpair_mm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
+                            dnpair_mm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
+                                                                                                                    * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
+                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
+                            dnpair_mm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
+                                                                                                                    * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
+                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
                 dnpair_mm = dnpair_mm_aux
                 theta_mm = theta_ul_bins
-
+            dnpair_mm =dnpair_mm.transpose(0, 3, 1, 2)
         elif mm:
             print("Approximating the lensing real space shape noise " +
                   "contribution with the effective number density.")
-            dnpair_mm = (2.0*np.pi*theta_ul_bins * survey_params_dict['survey_area_lens'][0] * 60*60) [:, None, None] \
-                * survey_params_dict['n_eff_lens'][None, :, None] \
-                * survey_params_dict['n_eff_lens'][None, None, :]
+            dnpair_mm = (2.0*np.pi*theta_ul_bins * survey_params_dict['survey_area_lens'][0] * 60*60) [:, None, None, None] \
+                * survey_params_dict['n_eff_lens'][None, :, None, :] \
+                * survey_params_dict['n_eff_lens'][None, None, :, :]
             theta_mm = theta_ul_bins
+            dnpair_mm = dnpair_mm.transpose(0, 3, 1, 2)
         else:
             dnpair_mm = None
             theta_mm = None
@@ -1037,15 +1078,17 @@ class Setup():
                                               npair_tab['theta_gg'],
                                               theta_ul_bins,
                                               theta_bins)
+            npair_gg = npair_gg.transpose(0, 3, 1, 2)
         elif gg:
             print("Approximating the clustering real space shot noise " +
                   "contribution with the effective number density.")
             npair_gg = np.pi \
-                * (theta_ul_bins[1:, None, None]**2
-                   - theta_ul_bins[:-1, None, None]**2) \
+                * (theta_ul_bins[1:, None, None, None]**2
+                   - theta_ul_bins[:-1, None, None, None]**2) \
                 * survey_params_dict['survey_area_clust'][0] * 60*60 \
-                * survey_params_dict['n_eff_clust'][None, :, None] \
-                * survey_params_dict['n_eff_clust'][None, None, :]
+                * survey_params_dict['n_eff_clust'][None, :, None, :] \
+                * survey_params_dict['n_eff_clust'][None, None, :, :]
+            npair_gg = npair_gg.transpose(0, 3, 1, 2)
         else:
             npair_gg = None
 
@@ -1065,16 +1108,18 @@ class Setup():
                                               npair_tab['theta_gm'],
                                               theta_ul_bins,
                                               theta_bins)
+            npair_gm = npair_gm.transpose(0, 3, 1, 2)
         elif gm:
             print("Approximating the galaxy-galaxy lensing real space shot " +
                   "noise contribution with the effective number density of " +
                   "lens galaxies.")
             npair_gm = np.pi \
-                * (theta_ul_bins[1:, None, None]**2
-                   - theta_ul_bins[:-1, None, None]**2) \
+                * (theta_ul_bins[1:, None, None, None]**2
+                   - theta_ul_bins[:-1, None, None, None]**2) \
                 * survey_params_dict['survey_area_ggl'][0] * 60*60 \
-                * survey_params_dict['n_eff_clust'][None, :, None] \
-                * survey_params_dict['n_eff_lens'][None, None, :]
+                * survey_params_dict['n_eff_clust'][None, :, None, :] \
+                * survey_params_dict['n_eff_lens'][None, None, :, :]
+            npair_gm = npair_gm.transpose(0, 3, 1, 2)
         else:
             npair_gm = None
 
@@ -1091,16 +1136,18 @@ class Setup():
                                               npair_tab['theta_mm'],
                                               theta_ul_bins,
                                               theta_bins)
+            npair_mm = npair_mm.transpose(0, 3, 1, 2)
         elif mm:
             print("Approximating the cosmic shear real space shot noise " +
                   "contribution with the effective number density of source " +
                   "galaxies.")
             npair_mm = np.pi \
-                * (theta_ul_bins[1:, None, None]**2
-                   - theta_ul_bins[:-1, None, None]**2) \
+                * (theta_ul_bins[1:, None, None, None]**2
+                   - theta_ul_bins[:-1, None, None,  None]**2) \
                 * survey_params_dict['survey_area_lens'][0] * 60*60 \
-                * survey_params_dict['n_eff_lens'][None, :, None] \
-                * survey_params_dict['n_eff_lens'][None, None, :]
+                * survey_params_dict['n_eff_lens'][None, :, None, :] \
+                * survey_params_dict['n_eff_lens'][None, None, :, :]
+            npair_mm = npair_mm.transpose(0, 3, 1, 2)
         else:
             npair_mm = None
 

@@ -272,7 +272,7 @@ class CovELLSpace(PolySpectra):
         True
 
         """
-        update_massfunc, update_ellrange, kmin, kmax, ellmin, ellmax = \
+        update_massfunc, update_ellrange, kmin, kmax, ellmin, ellmax, ellbins = \
             self.consistency_checks_for_Cell_calculation(
                 obs_dict, cosmo_dict, prec['powspec'],
                 self.ellrange, self.los_integration_chi)
@@ -286,10 +286,8 @@ class CovELLSpace(PolySpectra):
         if update_ellrange:
             obs_dict['ELLspace']['ell_min'] = ellmin
             obs_dict['ELLspace']['ell_max'] = ellmax
-            if obs_dict['ELLspace']['ell_type'] == 'lin':
-                delta_ell = self.ellrange[1] - self.ellrange[0]
-                new_num_bins = np.ceil((ellmax-ellmin) / delta_ell)
-                obs_dict['ELLspace']['ell_bins'] = int(new_num_bins)
+            obs_dict['ELLspace']['ell_bins'] = ellbins
+            obs_dict['ELLspace']['ell_type'] = 'log'
             self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
 
         return True
@@ -869,7 +867,7 @@ class CovELLSpace(PolySpectra):
 
         aux_gg = np.zeros((self.los_interpolation_sampling,
                            len(self.mass_func.k),
-                           self.sample_dim))
+                           self.sample_dim, self.sample_dim))
         aux_gm = np.zeros((self.los_interpolation_sampling,
                            len(self.mass_func.k),
                            self.sample_dim))
@@ -882,20 +880,23 @@ class CovELLSpace(PolySpectra):
         self.los_chi = self.cosmology.comoving_distance(
             self.los_z).value * self.cosmology.h
 
+        aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
         t0 = time.time()
         for zet in range(self.los_interpolation_sampling):
             self.update_mass_func(self.los_z[zet], bias_dict, hod_dict, prec)
+            aux_ngal[zet, :] = self.ngal
             for i_sample in range(self.sample_dim):
-                if (self.gg or self.gm) and not tab_bools[0]:
-                    aux_gg[zet, :, i_sample] = self.Pgg[:, i_sample] + 0
-                else:
-                    aux_gg[zet, :, i_sample] = np.ones_like(self.mass_func.k)
-                if self.gm and not tab_bools[1]:
-                    aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample] + 0
+                for j_sample in range(self.sample_dim):
+                    if (self.gg or self.gm) and not tab_bools[0]:
+                        aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
+                    else:
+                        aux_gg[zet, :, i_sample, j_sample] = np.ones_like(self.mass_func.k)
+                if not tab_bools[1] and self.gm or self.mm:
+                    aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
                 else:
                     aux_gm[zet, :, i_sample] = np.ones_like(self.mass_func.k)
             if (self.mm or self.gm) and not tab_bools[2]:
-                aux_mm[zet, :] = self.Pmm[:, 0] + 0
+                aux_mm[zet, :] = self.Pmm[:, 0]
             else:
                 aux_mm[zet, :] = np.ones_like(self.mass_func.k)
             aux_mm_lin[zet, :] = self.mass_func.power[:]
@@ -908,12 +909,19 @@ class CovELLSpace(PolySpectra):
                     + str(round(eta, 1)) + 'sek', end="")
         print(" ")
         self.update_mass_func(0, bias_dict, hod_dict, prec)
-
+        self.Ngal = np.zeros((self.sample_dim, self.n_tomo_clust))
+        
+        for i_sample in range(self.sample_dim):
+            spline_nbar = UnivariateSpline(self.los_chi, aux_ngal[:, i_sample], k=2, s=0, ext=0)
+            for tomo_i in range(self.n_tomo_clust):
+                prob = self.spline_zclust[tomo_i](self.los_integration_chi)*np.append((self.los_integration_chi[1:] -self.los_integration_chi[:-1]),0)
+                self.Ngal[i_sample,tomo_i] = np.trapz(prob*self.los_integration_chi**2*spline_nbar(self.los_integration_chi),self.los_integration_chi)
         spline_Pgg, spline_Pgm = [], []
         for i_sample in range(self.sample_dim):
-            spline_Pgg.append(interp2d(np.log10(self.mass_func.k),
-                                       self.los_chi,
-                                       np.log10(aux_gg[:, :, i_sample])))
+            for j_sample in range(self.sample_dim):
+                spline_Pgg.append(interp2d(np.log10(self.mass_func.k),
+                                        self.los_chi,
+                                        np.log10(aux_gg[:, :, i_sample, j_sample])))
             spline_Pgm.append(interp2d(np.log10(self.mass_func.k),
                                        self.los_chi,
                                        np.log10(aux_gm[:, :, i_sample])))
@@ -932,46 +940,46 @@ class CovELLSpace(PolySpectra):
         print("Calculating angular power spectra (C_ell's).")
 
         if (self.gg or self.gm) and not tab_bools[0]:
-            Cell_gg = np.zeros((len(self.ellrange), self.sample_dim,
+            Cell_gg = np.zeros((len(self.ellrange), self.sample_dim, self.sample_dim,
                                 self.n_tomo_clust, self.n_tomo_clust))
             for i_sample in range(self.sample_dim):
-                for tomo_i in range(self.n_tomo_clust):
-                    for tomo_j in range(tomo_i, self.n_tomo_clust):
-                        chi_low = max(
-                            self.chi_min_clust[tomo_i], self.chi_min_clust[tomo_j])
-                        chi_high = min(
-                            self.chi_max_clust[tomo_i], self.chi_max_clust[tomo_j])
-                        if chi_low >= chi_high:
-                            continue
-                        self.__update_los_integration_chi(
-                            chi_low, chi_high, covELLspacesettings)
+                for j_sample in range(self.sample_dim):
+                    for tomo_i in range(self.n_tomo_clust):
+                        for tomo_j in range(tomo_i, self.n_tomo_clust):
+                            chi_low = max(
+                                self.chi_min_clust[tomo_i], self.chi_min_clust[tomo_j])
+                            chi_high = min(
+                                self.chi_max_clust[tomo_i], self.chi_max_clust[tomo_j])
+                            if chi_low >= chi_high:
+                                continue
+                            self.__update_los_integration_chi(
+                                chi_low, chi_high, covELLspacesettings)
 
-                        global aux_Cell_gg_limber
+                            global aux_Cell_gg_limber
 
-                        def aux_Cell_gg_limber(aux_ell):
-                            exp = np.diagonal(spline_Pgg[i_sample](
-                                np.log10((aux_ell + 0.5) /
-                                         self.los_integration_chi),
-                                self.los_integration_chi)[:, ::-1])
-                            integrand = 10.0**exp \
-                                * self.spline_zclust[tomo_i](
-                                    self.los_integration_chi) \
-                                * self.spline_zclust[tomo_j](
-                                    self.los_integration_chi) \
-                                / self.los_integration_chi
-                            return np.trapz(integrand,
-                                            np.log(self.los_integration_chi))
+                            def aux_Cell_gg_limber(aux_ell):
+                                exp = np.diagonal(spline_Pgg[i_sample*self.sample_dim + j_sample](
+                                    np.log10((aux_ell + 0.5) /
+                                            self.los_integration_chi),
+                                    self.los_integration_chi)[:, ::-1])
+                                integrand = 10.0**exp \
+                                    * self.spline_zclust[tomo_i](
+                                        self.los_integration_chi) \
+                                    * self.spline_zclust[tomo_j](
+                                        self.los_integration_chi) \
+                                    / self.los_integration_chi
+                                return np.trapz(integrand,
+                                                np.log(self.los_integration_chi))
 
-                        pool = mp.Pool(self.num_cores)
-                        Cell_gg[:, i_sample, tomo_i, tomo_j] = np.array(
-                            pool.map(aux_Cell_gg_limber, self.ellrange))
-                        pool.close()
-                        pool.terminate()
-                        Cell_gg[:, i_sample, tomo_j, tomo_i] = \
-                            np.copy(
-                            Cell_gg[:, i_sample, tomo_i, tomo_j])
-                        self.__update_los_integration_chi(
-                            self.chimin, self.chimax, covELLspacesettings)
+                            pool = mp.Pool(self.num_cores)
+                            Cell_gg[:, i_sample, j_sample, tomo_i, tomo_j] = np.array(
+                                pool.map(aux_Cell_gg_limber, self.ellrange))
+                            pool.close()
+                            pool.terminate()
+                            Cell_gg[:, i_sample, j_sample, tomo_j, tomo_i] = \
+                                Cell_gg[:, i_sample, j_sample,  tomo_i, tomo_j]
+                            self.__update_los_integration_chi(
+                                self.chimin, self.chimax, covELLspacesettings)
         elif tab_bools[0]:
             Cell_gg = Cells[0]
         else:
@@ -2135,7 +2143,6 @@ class CovELLSpace(PolySpectra):
             aux__bin_non_Gaussian, [i_ell for i_ell in range(len(ellrange_12))]))
         pool.close()
         pool.terminate()
-        print(binned_covariance.shape)
         return binned_covariance
                                     
 
@@ -2185,9 +2192,6 @@ class CovELLSpace(PolySpectra):
 
         """
 
-        if not self.cov_dict['gauss']:
-            return 0, 0, 0, 0, 0, 0, 0, 0, 0
-
         print("Calculating gaussian covariance for angular power spectra " +
               "(C_ell's).")
 
@@ -2201,7 +2205,6 @@ class CovELLSpace(PolySpectra):
             self.__covELL_split_gaussian(covELLspacesettings,
                                         survey_params_dict,
                                         False)
-        
         if covELLspacesettings['pixelised_cell']:
             
             gaussELLgggg_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
@@ -3296,31 +3299,6 @@ class CovELLSpace(PolySpectra):
 
         if not self.cov_dict['gauss']:
             return 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-
-        if self.sample_dim > 1:
-            raise Exception("NotDoneYet: The programmers have not figured " +
-                            "out the correct (cross)covariance in the presence of more " +
-                            "than one stellar mass bin as of yet. So, no splitting in " +
-                            "mass sample bins possible at this point.")
-        else:
-            if self.Cell_gg is not None and type(self.Cell_gg) is not int:
-                self.Cell_gg = self.Cell_gg.squeeze()
-                if (self.n_tomo_clust == 1):
-                    aux_shape = np.ones((len(self.ellrange),
-                                         self.n_tomo_clust, self.n_tomo_clust))
-                    self.Cell_gg = aux_shape*self.Cell_gg[:, None, None]
-            if self.Cell_gm is not None and type(self.Cell_gm) is not int:
-                self.Cell_gm = self.Cell_gm.squeeze()
-                if (self.n_tomo_clust == 1 and self.n_tomo_lens == 1):
-                    aux_shape = np.ones((len(self.ellrange),
-                                         self.n_tomo_clust, self.n_tomo_lens))
-                    self.Cell_gm = aux_shape*self.Cell_gm[:, None, None]
-            if self.Cell_mm is not None and type(self.Cell_mm) is not int:
-                self.Cell_mm = self.Cell_mm.squeeze()
-                if (self.n_tomo_lens == 1):
-                    aux_shape = np.ones((len(self.ellrange),
-                                         self.n_tomo_lens, self.n_tomo_lens))
-                    self.Cell_mm = aux_shape*self.Cell_mm[:, None, None]
         if self.mm or self.gm:
             if survey_params_dict['n_eff_lens'] is not None:
                 noise_kappa = \
@@ -3332,41 +3310,42 @@ class CovELLSpace(PolySpectra):
 
         
         if self.gg or self.gm:
-            if survey_params_dict['n_eff_clust'] is not None:
-                noise_g = \
-                    np.diag(1 / survey_params_dict['n_eff_clust'] / self.arcmin2torad2)
+            if survey_params_dict['n_eff_clust'] is not None and self.sample_dim <= 1:
+                noise_g =np.zeros((self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust))
+                for i_sample in range(self.sample_dim):
+                    for i_tomo in range(self.n_tomo_clust):
+                        noise_g[i_sample, i_sample, i_tomo, i_tomo] = 1 / survey_params_dict['n_eff_clust'][i_tomo] / self.arcmin2torad2
             else:
-                noise_g = 1 / self.ngal / self.arcmin2torad2 \
-                    * np.eye(self.n_tomo_clust)
-        # reshape_mat = np.ones(
-        #    (len(self.ellrange), self.sample_dim, self.sample_dim))
-
+                noise_g =np.zeros((self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust))
+                for i_sample in range(self.sample_dim):
+                    for i_tomo in range(self.n_tomo_clust):
+                        noise_g[i_sample, i_sample, i_tomo, i_tomo] = 1.0/self.Ngal[i_sample,i_tomo]
+       
         reshape_mat = np.eye(len(self.ellrange))[
-            :, :, None, None, None, None, None, None]
-        
+            :, :, None, None, None, None, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :, None, None, None, None]
         if self.gg:
             # Cov_sva(gg^ij gg^kl) = Cgg^ik Cgg^jl + Cgg^il Cgg^jk
-            gaussELLgggg_sva = self.Cell_gg[:, :, None, :, None] \
-                * self.Cell_gg[:, None, :, None, :] \
-                + self.Cell_gg[:, :, None, None, :] \
-                * self.Cell_gg[:, None, :, :, None]
+            gaussELLgggg_sva = self.Cell_gg[:, :, :, :, None, :, None] \
+                * self.Cell_gg[:, :, :, None, :, None, :] \
+                + self.Cell_gg[:, :, :, :, None, None, :] \
+                * self.Cell_gg[:, :, :, None, :, :, None]
             # Cov_mix(gg^ij gg^kl) = Cgg^ik noise_g^jl + Cgg^jl noise_g^ik
             #                      + Cgg^il noise_g^jk + Cgg^jk noise_g^il
-            gaussELLgggg_mix = self.Cell_gg[:, :, None, :, None] \
-                * noise_g[None, None, :, None, :] \
-                + self.Cell_gg[:, None, :, None, :] \
-                * noise_g[None, :, None, :, None] \
-                + self.Cell_gg[:, :, None, None, :] \
-                * noise_g[None, None, :, :, None] \
-                + self.Cell_gg[:, None, :, :, None] \
-                * noise_g[None, :, None, None, :]
+            gaussELLgggg_mix = self.Cell_gg[:, :, :, :, None, :, None] \
+                * noise_g[None, :, :, None, :, None, :] \
+                + self.Cell_gg[:, :, :, None, :, None, :] \
+                * noise_g[None, :, :, :, None, :, None] \
+                + self.Cell_gg[:, :, :, :, None, None, :]  \
+                * noise_g[None, :, :, None, :, :, None] \
+                + self.Cell_gg[:, :, :, None, :, :, None]\
+                * noise_g[None, :, :, :, None, None, :]
             # Cov_sn(gg^ij gg^kl) = noise_g^ik noise_g^jl
             #                     + noise_g^il noise_g^jk
             gaussELLgggg_sn = \
-                noise_g[:, None, :, None] \
-                * noise_g[None, :, None, :] \
-                + noise_g[:, None, None, :] \
-                * noise_g[None, :, :, None]
+                noise_g[None, :, :, :, None, :, None] \
+                * noise_g[None, :, :, None, :, None, :]  \
+                + noise_g[None, :, :, :, None, None, :] \
+                * noise_g[None, :, :, None, :, :, None]
             if calc_prefac:
                 tomo_shape = [self.n_tomo_clust, self.n_tomo_clust,
                               self.n_tomo_clust, self.n_tomo_clust]
@@ -3377,30 +3356,29 @@ class CovELLSpace(PolySpectra):
                 gaussELLgggg_sva = prefac_gggg * gaussELLgggg_sva
                 gaussELLgggg_mix = prefac_gggg * gaussELLgggg_mix
                 gaussELLgggg_sn = prefac_gggg * \
-                    gaussELLgggg_sn[None, :, :, :, :]
-            else:
-                gaussELLgggg_sn = gaussELLgggg_sn[None, :, :, :, :]
-
-            gaussELLgggg_sva = gaussELLgggg_sva[:, None, None, :, :, :, :] \
+                    gaussELLgggg_sn
+            gaussELLgggg_sva = gaussELLgggg_sva[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLgggg_mix = gaussELLgggg_mix[:, None, None, :, :, :, :] \
+            gaussELLgggg_mix = gaussELLgggg_mix[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLgggg_sn = gaussELLgggg_sn[:, None, None, :, :, :, :] \
+            
+            gaussELLgggg_sn = gaussELLgggg_sn[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
+            
         else:
             gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn = 0, 0, 0
 
         if self.gg and self.gm and self.cross_terms:
             # Cov_sva(gg^ij gm^kl) = Cgg^ik Cgm^jl + Cgg^jk Cgm^il
-            gaussELLgggm_sva = self.Cell_gg[:, :, None, :, None] \
-                * self.Cell_gm[:, None, :, None, :] \
-                + self.Cell_gg[:, None, :, :, None] \
-                * self.Cell_gm[:, :, None, None, :]
+            gaussELLgggm_sva = self.Cell_gg[:, :, :, :, None, :, None] \
+                * self.Cell_gm[:, :, None, None, :, None, :] \
+                + self.Cell_gg[:, :, :, None, :, :, None] \
+                * self.Cell_gm[:, :, None, :, None, None, :]
             # Cov_mix(gg^ij gm^kl) = Cgm^jl noise_g^ik + Cgm^il noise_g^jk
-            gaussELLgggm_mix = self.Cell_gm[:, None, :, None, :] \
-                * noise_g[None, :, None, :, None] \
-                + self.Cell_gm[:, :, None, None, :] \
-                * noise_g[None, None, :, :, None]
+            gaussELLgggm_mix = self.Cell_gm[:, :, None, None, :, None, :] \
+                * noise_g[None,:, :, :, None, :, None] \
+                + self.Cell_gm[:, :, None, :, None, None, :] \
+                * noise_g[None, :, :, None, :, :, None]
             gaussELLgggm_sn = 0
 
             if calc_prefac:
@@ -3414,19 +3392,19 @@ class CovELLSpace(PolySpectra):
                 gaussELLgggm_sva = prefac_gggm * gaussELLgggm_sva
                 gaussELLgggm_mix = prefac_gggm * gaussELLgggm_mix
 
-            gaussELLgggm_sva = gaussELLgggm_sva[:, None, None, :, :, :, :] \
+            gaussELLgggm_sva = gaussELLgggm_sva[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLgggm_mix = gaussELLgggm_mix[:, None, None, :, :, :, :] \
+            gaussELLgggm_mix = gaussELLgggm_mix[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
         else:
             gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn = 0, 0, 0
 
         if self.gg and self.mm and self.cross_terms:
             # Cov_sva(gg^ij mm^kl) = Cgm^ik Cgm^jl + Cgm^il Cgm^jk
-            gaussELLggmm_sva = self.Cell_gm[:, :, None, :, None] \
-                * self.Cell_gm[:, None, :, None, :] \
-                + self.Cell_gm[:, :, None, None, :] \
-                * self.Cell_gm[:, None, :, :, None]
+            gaussELLggmm_sva = self.Cell_gm[:, :, :, None, :, None] \
+                * self.Cell_gm[:, :, None, :, None, :] \
+                + self.Cell_gm[:, :, :, None, None, :] \
+                * self.Cell_gm[:, :, None, :, :, None]
             gaussELLggmm_mix = 0
             gaussELLggmm_sn = 0
 
@@ -3439,27 +3417,26 @@ class CovELLSpace(PolySpectra):
                     survey_params_dict['survey_area_clust'],
                     survey_params_dict['survey_area_lens'])
                 gaussELLggmm_sva = prefac_ggmm * gaussELLggmm_sva
-
-            gaussELLggmm_sva = gaussELLggmm_sva[:, None, None, :, :, :, :] \
+            gaussELLggmm_sva = gaussELLggmm_sva[:, None, :, None, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
+            gaussELLggmm_sva = gaussELLggmm_sva[:, :, :, :1, :, :, :, :]
         else:
             gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn = 0, 0, 0
 
         if self.gm:
             # Cov_sva(gm^ij gm^kl) = Cgg^ik Cmm^jl + Cgm^il Cgm^kj
-            gaussELLgmgm_sva = (self.Cell_gg[:, :, None, :, None]
-                                * self.Cell_mm[:, None, :, None, :]) \
-                + self.Cell_gm[:, :, None, None, :] \
-                * self.Cell_gm.transpose(0, 2, 1)[:, None, :, :, None]
+            gaussELLgmgm_sva = (self.Cell_gg[:, :, :, :, None, :, None]
+                                * self.Cell_mm[:, :, None, None, :, None, :]) \
+                + self.Cell_gm[:, :, None, :, None, None, :] \
+                * self.Cell_gm.transpose(0, 1, 3, 2)[:, None, :, None, :, :, None]
             # Cov_mix(gm^ij gm^kl) = Cgg^ik noise_m^jl + Cmm^jl noise_g^ik
-            gaussELLgmgm_mix = self.Cell_gg[:, :, None, :, None] \
-                * noise_kappa[None, None, :, None, :] \
-                + self.Cell_mm[:, None, :, None, :] \
-                * noise_g[None, :, None, :, None]
+            gaussELLgmgm_mix = self.Cell_gg[:, :, :, :, None, :, None] \
+                * noise_kappa[None, None, None, None, :, None, :] \
+                + self.Cell_mm[:, :, None, None, :, None, :] \
+                * noise_g[None, :, :, :, None, :, None]
             # Cov_sn(gm^ij gm^kl) = noise_g^ik noise_m^jl
-            gaussELLgmgm_sn = noise_g[:, None, :, None] \
-                * noise_kappa[None, :, None, :]
-            
+            gaussELLgmgm_sn = noise_g[None, :, :, :, None, :, None] \
+                * noise_kappa[None, None, None, None, :, None, :]
             if calc_prefac:
                 tomo_shape = [self.n_tomo_clust, self.n_tomo_lens,
                               self.n_tomo_clust, self.n_tomo_lens]
@@ -3471,14 +3448,12 @@ class CovELLSpace(PolySpectra):
                 gaussELLgmgm_mix = prefac_gmgm * gaussELLgmgm_mix
                 gaussELLgmgm_sn = prefac_gmgm * \
                     gaussELLgmgm_sn[None, :, :, :, :]
-            else:
-                gaussELLgmgm_sn = gaussELLgmgm_sn[None, :, :, :, :]
-
-            gaussELLgmgm_sva = gaussELLgmgm_sva[:, None, None, :, :, :, :] \
+            
+            gaussELLgmgm_sva = gaussELLgmgm_sva[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLgmgm_mix = gaussELLgmgm_mix[:, None, None, :, :, :, :] \
+            gaussELLgmgm_mix = gaussELLgmgm_mix[:, None, :, :, :, :, :, :]\
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLgmgm_sn = gaussELLgmgm_sn[:, None, None, :, :, :, :] \
+            gaussELLgmgm_sn = gaussELLgmgm_sn[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
             
         else:
@@ -3486,15 +3461,15 @@ class CovELLSpace(PolySpectra):
 
         if self.mm and self.gm and self.cross_terms:
             # Cov_sva(mm^ij gm^kl) = Cmm^lj Cgm^ki + Cmm^li Cgm^kj
-            gaussELLmmgm_sva = self.Cell_mm.transpose(0, 2, 1)[:, None, :, None, :] \
-                * self.Cell_gm.transpose(0, 2, 1)[:, :, None, :, None] \
-                + self.Cell_mm.transpose(0, 2, 1)[:, :, None, None, :] \
-                * self.Cell_gm.transpose(0, 2, 1)[:, None, :, :, None]
+            gaussELLmmgm_sva = self.Cell_gm.transpose(0, 1, 3, 2)[:, None, :, :, None, :, None] \
+                * self.Cell_mm[:, :, None, None, :, None, :] \
+                + self.Cell_mm[:, :, None, :, None, None, :] \
+                * self.Cell_gm.transpose(0, 1, 3, 2)[:, None, :, None, :, :, None]
             # Cov_mix(mm^ij gm^kl) = Cgm^ki noise_m^lj + Cgm^kj noise_m^li
-            gaussELLmmgm_mix = self.Cell_gm.transpose(0, 2, 1)[:, :, None, :, None] \
-                * noise_kappa[None, None, :, None, :] \
-                + self.Cell_gm.transpose(0, 2, 1)[:, None, :, :, None] \
-                * noise_kappa[None, :, None, None, :]
+            gaussELLmmgm_mix = self.Cell_gm.transpose(0, 1, 3, 2)[:, None, :, :, None, :, None] \
+                * noise_kappa[None, None, None, None, :, None, :] \
+                + self.Cell_gm.transpose(0, 1, 3, 2)[:, None, :, None, :, :, None] \
+                * noise_kappa[None, None, None, :, None, None, :]
             gaussELLmmgm_sn = 0
 
             if calc_prefac:
@@ -3508,30 +3483,31 @@ class CovELLSpace(PolySpectra):
                 gaussELLmmgm_sva = prefac_mmgm * gaussELLmmgm_sva
                 gaussELLmmgm_mix = prefac_mmgm * gaussELLmmgm_mix
 
-            gaussELLmmgm_sva = gaussELLmmgm_sva[:, None, None, :, :, :, :] \
+            gaussELLmmgm_sva = gaussELLmmgm_sva[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLmmgm_mix = gaussELLmmgm_mix[:, None, None, :, :, :, :] \
+            gaussELLmmgm_mix = gaussELLmmgm_mix[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-
+            gaussELLmmgm_sva = gaussELLmmgm_sva[:, :, :1, :, :, :, :, :]
+            gaussELLmmgm_mix = gaussELLmmgm_mix[:, :, :1, :, :, :, :, :]    
         else:
             gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn = 0, 0, 0
 
         if self.mm:
             # Cov_sva(mm^ij mm^kl) = Cmm^ik Cmm^jl + Cmm^il Cmm^jk
-            gaussELLmmmm_sva = self.Cell_mm[:, :, None, :, None] \
-                * self.Cell_mm[:, None, :, None, :] \
-                + self.Cell_mm[:, :, None, None, :] \
-                * self.Cell_mm[:, None, :, :, None]
+            gaussELLmmmm_sva = self.Cell_mm[:, :, None, :, None, :, None] \
+                * self.Cell_mm[:, None, :, None, :, None, :] \
+                + self.Cell_mm[:, :, None, :, None, None, :] \
+                * self.Cell_mm[:, None, :, None, :, :, None]
             # Cov_mix(mm^ij mm^kl) = Cmm^ik noise_m^jl + Cmm^jl noise_m^ik
             #                      + Cmm^il noise_m^jk + Cmm^jk noise_m^il
-            gaussELLmmmm_mix = self.Cell_mm[:, :, None, :, None] \
-                * noise_kappa[None, None, :, None, :] \
-                + self.Cell_mm[:, None, :, None, :] \
-                * noise_kappa[None, :, None, :, None] \
-                + self.Cell_mm[:, :, None, None, :] \
-                * noise_kappa[None, None, :, :, None] \
-                + self.Cell_mm[:, None, :, :, None] \
-                * noise_kappa[None, :, None, None, :]
+            gaussELLmmmm_mix = self.Cell_mm[:, :, :, None, :, None] \
+                * noise_kappa[None, None, None, :, None, :] \
+                + self.Cell_mm[:, :, None, :, None, :] \
+                * noise_kappa[None, None, :, None, :, None] \
+                + self.Cell_mm[:, :, :, None, None, :] \
+                * noise_kappa[None, None, None, :, :, None] \
+                + self.Cell_mm[:, :, None, :, :, None] \
+                * noise_kappa[None, None :, None, None, :]
             # Cov_sn(mm^ij mm^kl) = noise_m^ik noise_m^jl
             #                     + noise_m^il noise_m^jk
             gaussELLmmmm_sn = \
@@ -3551,24 +3527,17 @@ class CovELLSpace(PolySpectra):
                 gaussELLmmmm_mix = prefac_mmmm * gaussELLmmmm_mix
                 gaussELLmmmm_sn = prefac_mmmm * \
                     gaussELLmmmm_sn[None, :, :, :, :]
-            else:
-                gaussELLmmmm_sn = gaussELLmmmm_sn[None, :, :, :, :]
-
-            gaussELLmmmm_sva = gaussELLmmmm_sva[:, None, None, :, :, :, :] \
+            gaussELLmmmm_sva = gaussELLmmmm_sva[:, None, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLmmmm_mix = gaussELLmmmm_mix[:, None, None, :, :, :, :] \
+            gaussELLmmmm_mix = gaussELLmmmm_mix[:, None, None, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLmmmm_sn = gaussELLmmmm_sn[:, None, None, :, :, :, :] \
+            gaussELLmmmm_sn = gaussELLmmmm_sn[None, None, None, None, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
+            gaussELLmmmm_sva = gaussELLmmmm_sva[:, :, :1, :1, :, :, :, :]
+            gaussELLmmmm_mix = gaussELLmmmm_mix[:, :, :1, :1, :, :, :, :]
+            gaussELLmmmm_sn = gaussELLmmmm_sn[:, :, :1, :1, :, :, :, :]            
         else:
             gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = 0, 0, 0
-
-        if self.Cell_gg is not None and type(self.Cell_gg) is not int:
-            self.Cell_gg = self.Cell_gg[:, None, :, :]
-        if self.Cell_gm is not None and type(self.Cell_gm) is not int:
-            self.Cell_gm = self.Cell_gm[:, None, :, :]
-        if self.Cell_mm is not None and type(self.Cell_mm) is not int:
-            self.Cell_mm = self.Cell_mm[:, None, :, :]
 
         if self.mm or self.gm:
             if len(covELLspacesettings['mult_shear_bias']) < self.n_tomo_lens:
@@ -3587,28 +3556,34 @@ class CovELLSpace(PolySpectra):
                     gaussELLgmgm_sva += gaussELLgmgm_sva_mult_shear_bias
                 if self.gm and self.mm and self.cross_terms:
                     gaussELLmmgm_sva_mult_shear_bias = np.zeros_like(gaussELLmmgm_sva)
-                    for i_sample in range(self.sample_dim):
+                    for i_sample in range(1):
                         for j_sample in range(self.sample_dim):
                             for i_tomo in range(self.n_tomo_lens):
                                 for j_tomo in range(self.n_tomo_lens):
                                     for k_tomo in range(self.n_tomo_clust):
                                         for l_tomo in range(self.n_tomo_lens):
-                                            gaussELLmmgm_sva_mult_shear_bias[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = np.diag(self.Cell_mm[:,i_sample, i_tomo,j_tomo]*self.Cell_gm[:,j_sample, k_tomo,l_tomo]*(covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo] + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]))
+                                            gaussELLmmgm_sva_mult_shear_bias[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = np.diag(self.Cell_mm[:,i_sample, i_tomo,j_tomo]*self.Cell_gm[:,j_sample, k_tomo,l_tomo]*
+                                                                                                                                           (covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
+                                                                                                                                            + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]))
                     gaussELLmmgm_sva += gaussELLmmgm_sva_mult_shear_bias
                 if self.mm:
                     gaussELLmmmm_sva_mult_shear_bias = np.zeros_like(gaussELLmmmm_sva)
-                    for i_sample in range(self.sample_dim):
-                        for j_sample in range(self.sample_dim):
+                    for i_sample in range(1):
+                        for j_sample in range(1):
                             for i_tomo in range(self.n_tomo_lens):
                                 for j_tomo in range(self.n_tomo_lens):
                                     for k_tomo in range(self.n_tomo_lens):
                                         for l_tomo in range(self.n_tomo_lens):
-                                            gaussELLmmmm_sva_mult_shear_bias[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = np.diag(self.Cell_mm[:,i_sample, i_tomo,j_tomo]*self.Cell_mm[:,j_sample, k_tomo,l_tomo]*(covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo] + covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo] + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]+ covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo]))
+                                            gaussELLmmmm_sva_mult_shear_bias[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = np.diag(self.Cell_mm[:,i_sample, i_tomo,j_tomo]*self.Cell_mm[:,j_sample, k_tomo,l_tomo]*
+                                                                                                                                           (covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo] 
+                                                                                                                                            + covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
+                                                                                                                                            + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
+                                                                                                                                            + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo]))
                     gaussELLmmmm_sva += gaussELLmmmm_sva_mult_shear_bias
 
         if self.est_shear != "C_ell" and self.mm:
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(self.sample_dim):
+            for i_sample in range(1):
+                for j_sample in range(1):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_lens):
@@ -3616,6 +3591,45 @@ class CovELLSpace(PolySpectra):
                                     if j_tomo < i_tomo or l_tomo < k_tomo:
                                         gaussELLmmmm_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
                                         gaussELLmmmm_mix[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+        if self.est_shear != "C_ell" and self.gg:
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
+                    for i_tomo in range(self.n_tomo_clust):
+                        for j_tomo in range(self.n_tomo_clust):
+                            for k_tomo in range(self.n_tomo_clust):
+                                for l_tomo in range(self.n_tomo_clust):
+                                    if j_tomo < i_tomo or l_tomo < k_tomo:
+                                        gaussELLgggg_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+                                        gaussELLgggg_mix[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+        if self.est_shear != "C_ell" and self.gg and self.mm:
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(1):
+                    for i_tomo in range(self.n_tomo_clust):
+                        for j_tomo in range(self.n_tomo_clust):
+                            for k_tomo in range(self.n_tomo_lens):
+                                for l_tomo in range(self.n_tomo_lens):
+                                    if j_tomo < i_tomo or l_tomo < k_tomo:
+                                        gaussELLggmm_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+        if self.est_shear != "C_ell" and (self.mm and self.gm and self.cross_terms):
+            for i_sample in range(1):
+                for j_sample in range(self.sample_dim):
+                    for i_tomo in range(self.n_tomo_lens):
+                        for j_tomo in range(self.n_tomo_lens):
+                            for k_tomo in range(self.n_tomo_clust):
+                                for l_tomo in range(self.n_tomo_lens):
+                                    if j_tomo < i_tomo:
+                                        gaussELLmmgm_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+                                        gaussELLmmgm_mix[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+        if self.est_shear != "C_ell" and (self.gg and self.gm and self.cross_terms):
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
+                    for i_tomo in range(self.n_tomo_clust):
+                        for j_tomo in range(self.n_tomo_clust):
+                            for k_tomo in range(self.n_tomo_clust):
+                                for l_tomo in range(self.n_tomo_lens):
+                                    if j_tomo < i_tomo:
+                                        gaussELLgggm_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+                                        gaussELLgggm_mix[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
 
         return gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
             gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
@@ -4007,11 +4021,11 @@ class CovELLSpace(PolySpectra):
 
             def aux_spline_tri_ggmm(i_chi):
                 aux_trispec_integrand_ggmm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim))
+                    (len(self.ellrange), len(self.ellrange), self.sample_dim, 1))
                 aux_ggmm = np.zeros(
                     (len(self.mass_func.k), len(self.mass_func.k)))
                 for i_sample in range(self.sample_dim):
-                    for j_sample in range(self.sample_dim):
+                    for j_sample in range(1):
                         for i_k in range(len(self.mass_func.k)):
                             for j_k in range(len(self.mass_func.k)):
                                 aux_ggmm[i_k, j_k] = np.log(
@@ -4071,10 +4085,10 @@ class CovELLSpace(PolySpectra):
 
             def aux_spline_tri_mmgm(i_chi):
                 aux_trispec_integrand_mmgm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim))
+                    (len(self.ellrange), len(self.ellrange), 1, self.sample_dim))
                 aux_mmgm = np.zeros(
                     (len(self.mass_func.k), len(self.mass_func.k)))
-                for i_sample in range(self.sample_dim):
+                for i_sample in range(1):
                     for j_sample in range(self.sample_dim):
                         for i_k in range(len(self.mass_func.k)):
                             for j_k in range(len(self.mass_func.k)):
@@ -4103,11 +4117,11 @@ class CovELLSpace(PolySpectra):
 
             def aux_spline_tri_mmmm(i_chi):
                 aux_trispec_integrand_mmmm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim))
+                    (len(self.ellrange), len(self.ellrange), 1,1))
                 aux_mmmm = np.zeros(
                     (len(self.mass_func.k), len(self.mass_func.k)))
-                for i_sample in range(self.sample_dim):
-                    for j_sample in range(self.sample_dim):
+                for i_sample in range(1):
+                    for j_sample in range(1):
                         for i_k in range(len(self.mass_func.k)):
                             for j_k in range(len(self.mass_func.k)):
                                 aux_mmmm[i_k, j_k] = np.log(
@@ -4257,10 +4271,10 @@ class CovELLSpace(PolySpectra):
             nongaussELLgggm = 0
 
         if self.gg and self.mm and self.cross_terms:
-            nongaussELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
+            nongaussELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, 1, self.n_tomo_clust,
                                         self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))
             for i_sample in range(self.sample_dim):
-                for j_sample in range(j_sample, self.sample_dim):
+                for j_sample in range(1):
                     for i_tomo in range(self.n_tomo_clust):
                         j_tomo_start = i_tomo
                         if self.ellrange_photo is not None:
@@ -4359,10 +4373,10 @@ class CovELLSpace(PolySpectra):
             nongaussELLgmgm = 0
 
         if self.gm and self.mm and self.cross_terms:
-            nongaussELLmmgm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_lens,
+            nongaussELLmmgm = np.zeros((len(self.ellrange), len(self.ellrange), 1, self.sample_dim, self.n_tomo_lens,
                                         self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(j_sample, self.sample_dim):
+            for i_sample in range(1):
+                for j_sample in range(self.sample_dim):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_clust):
@@ -4408,10 +4422,10 @@ class CovELLSpace(PolySpectra):
             nongaussELLmmgm = 0
 
         if self.mm:
-            nongaussELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_lens,
+            nongaussELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), 1, 1, self.n_tomo_lens,
                                         self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(j_sample, self.sample_dim):
+            for i_sample in range(1):
+                for j_sample in range(1):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_lens):
@@ -4684,16 +4698,6 @@ class CovELLSpace(PolySpectra):
             spline_responsePmm.append(interp2d(np.log(self.mass_func.k),
                                                self.los_chi,
                                                (aux_response_mm[:, :, i_sample])))
-        ssc_integrand_gggm = np.zeros((len(self.ellrange), len(self.ellrange), len(
-            self.los_integration_chi), self.sample_dim, self.sample_dim))
-        ssc_integrand_ggmm = np.zeros((len(self.ellrange), len(self.ellrange), len(
-            self.los_integration_chi), self.sample_dim, self.sample_dim))
-        ssc_integrand_gmgm = np.zeros((len(self.ellrange), len(self.ellrange), len(
-            self.los_integration_chi), self.sample_dim, self.sample_dim))
-        ssc_integrand_mmgm = np.zeros((len(self.ellrange), len(self.ellrange), len(
-            self.los_integration_chi), self.sample_dim, self.sample_dim))
-        ssc_integrand_mmmm = np.zeros((len(self.ellrange), len(self.ellrange), len(
-            self.los_integration_chi), self.sample_dim, self.sample_dim))
         print("")
         print("Calculating SSC contribution in ell space")
         if self.gg:
@@ -4832,10 +4836,10 @@ class CovELLSpace(PolySpectra):
             SSCELLgggm = 0
 
         if self.gg and self.mm and self.cross_terms:
-            SSCELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
+            SSCELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, 1, self.n_tomo_clust,
                                    self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))
             for i_sample in range(self.sample_dim):
-                for j_sample in range(i_sample, self.sample_dim):
+                for j_sample in range(1):
                     for i_tomo in range(self.n_tomo_clust):
                         j_tomo_start = i_tomo
                         if self.ellrange_photo is not None:
@@ -4961,7 +4965,7 @@ class CovELLSpace(PolySpectra):
             SSCELLgmgm = 0
 
         if self.mm:
-            SSCELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_lens,
+            SSCELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), 1, 1, self.n_tomo_lens,
                                   self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
             
             survey_variance = np.array(self.survey_variance_mmmm_spline(self.los_integration_chi))
@@ -4971,8 +4975,8 @@ class CovELLSpace(PolySpectra):
             def aux_spline_ssc_mmmm(i_chi):
                 aux_ssc_integrand_mmmm = np.zeros(
                     (len(self.ellrange), len(self.ellrange),self.sample_dim,self.sample_dim))
-                for i_sample in range(self.sample_dim):
-                    for j_sample in range(self.sample_dim):
+                for i_sample in range(1):
+                    for j_sample in range(1):
                         for i_ell in range(len(self.ellrange)):
                             for j_ell in range(len(self.ellrange)):
                                 ki = np.log(
@@ -4995,9 +4999,9 @@ class CovELLSpace(PolySpectra):
                                                 
 
             t0, flat_tomo = time.time(), 0
-            tomo_comb = self.sample_dim*(self.sample_dim+1)/2*(self.n_tomo_lens*(self.n_tomo_lens+1)/2)**2
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(i_sample, self.sample_dim):
+            tomo_comb = (self.n_tomo_lens*(self.n_tomo_lens+1)/2)**2
+            for i_sample in range(1):
+                for j_sample in range(1):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_lens):
@@ -5040,9 +5044,9 @@ class CovELLSpace(PolySpectra):
             SSCELLmmmm = 0
 
         if self.gm and self.mm and self.cross_terms:
-            SSCELLmmgm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_lens,
+            SSCELLmmgm = np.zeros((len(self.ellrange), len(self.ellrange), 1, self.sample_dim, self.n_tomo_lens,
                                    self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
-            for i_sample in range(self.sample_dim):
+            for i_sample in range(1):
                 for j_sample in range(j_sample, self.sample_dim):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
@@ -5292,3 +5296,9 @@ class CovELLSpace(PolySpectra):
         
         return nongaussELLgggg
  
+    
+    def cov_csmf_SN(self,
+                    mass_binssmf):
+        return 1
+        
+

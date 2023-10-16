@@ -25,7 +25,7 @@ class HOD():
         [hm_prec['log10M_min'], hm_prec['log10M_max']]
     Mbins : array
         with unit M_sun
-        with shape (sample_dims, 100)
+        with shape (sample_dims, 300)
         logarithmically spaced masses in the range 
         [bias_dict['logmass_bins'][:-1], bias_dict['logmass_bins'][1:]],
         returns Mrange if no samples are specified
@@ -56,7 +56,7 @@ class HOD():
            (M_bins) as does, e.g., the function double_powerlaw
       2.3) your scattering relation can be called at L303 (and L290) 
            occ_prob = ..., make sure you provide an array with shape 
-           (sample bins, 100, M_bins) as does, e.g., the function 
+           (sample bins, 300, M_bins) as does, e.g., the function 
            lognormal
 
     """
@@ -67,7 +67,7 @@ class HOD():
         self.Mrange = np.logspace(
             hm_prec['log10M_min'], hm_prec['log10M_max'], hm_prec['M_bins'])
         self.Mbins = self.mass_bins(bias_dict, hm_prec)
-
+        
     def mass_bins(self, 
                   bias_dict,
                   hm_prec):
@@ -100,7 +100,7 @@ class HOD():
                 bins =  np.logspace(
                     bias_dict['logmass_bins'][:-1], 
                     bias_dict['logmass_bins'][1:], 
-                    100, endpoint='False').T
+                    300, endpoint='False').T
             # for Python 3.6 or earlier
             except ValueError:
                 bins = np.array([])
@@ -108,8 +108,8 @@ class HOD():
                     bins = np.concatenate((bins, np.logspace(
                                 bias_dict['logmass_bins'][mbin], 
                                 bias_dict['logmass_bins'][mbin+1], 
-                                100, endpoint='False')))
-                bins = bins.reshape(3,100)
+                                300, endpoint='False')))
+                bins = bins.reshape(3,300)
 
         return bins
 
@@ -165,7 +165,6 @@ class HOD():
             with unit M_sun
             with shape (M_bins)
         """
-
         mrange = self.Mrange / 10**hod_dict['dpow_logM1_'+pop]
         Mobs = \
               np.log10(hod_dict['dpow_norm_'+pop]) \
@@ -202,16 +201,13 @@ class HOD():
         Returns
         -------
         logn : array
-            with shape (sample_bins, 100, M_bins)
+            with shape (sample_bins, 300, M_bins)
         """
 
-        logMbinsMobs = np.log10(self.Mbins[:, None]/Mobs[:, None])
-        logn = \
-              np.exp(- logMbinsMobs**2.0 \
-            / (2 * hod_dict['logn_sigma_c_'+pop]**2.0)) \
-            / (np.sqrt(2*np.pi) * hod_dict['logn_sigma_c_'+pop] \
-            * self.Mbins[:, None] * np.log(10))
-        return np.swapaxes(logn, 1, 2)
+
+
+        logMbinsMobs = np.log10(self.Mbins[:, :, None]/Mobs[None, None, :])
+        return 1.0/np.sqrt(2.*np.pi)/np.log(10)/hod_dict['logn_sigma_c_'+pop]/Mobs[None, None, :]*np.exp(-logMbinsMobs**2./2/hod_dict['logn_sigma_c_'+pop]**2.)
 
     def modschechter(self, 
                      hod_dict, 
@@ -240,20 +236,13 @@ class HOD():
         Returns 
         -------
         schech : array
-            with shape (sample_bins, 100, M_bins)
+            with shape (sample_bins, 300, M_bins)
         """
+        MbinsMobs = self.Mbins[:, :, None]/Mobs[None, None, :]
+        phi_s = 10**(-hod_dict['modsch_b_'+pop][0] + hod_dict['modsch_b_'+pop][1]   *np.log10(self.Mrange/10**hod_dict['modsch_logMref_'+pop]))
+        return (phi_s/Mobs)[None, None, :]*(MbinsMobs**hod_dict['modsch_alpha_s_'+pop]*np.exp(-MbinsMobs**2.0))[:,:,:]
 
-        MbinsMobs = self.Mbins[:, None]/Mobs[:, None]
-
-        logMphi = np.log10(self.Mrange) - hod_dict['modsch_logMref_'+pop]
-        phi_s = 10**sum(bi * logMphi**i 
-            for i, bi in enumerate(hod_dict['modsch_b_'+pop]))
-
-        schech = (phi_s / Mobs)[:, None] \
-            * (MbinsMobs**hod_dict['modsch_alpha_s_'+pop]) \
-            * np.exp(-MbinsMobs**2.0)
-
-        return np.swapaxes(schech, 1, 2)
+    
 
     # Expected number of 
     def occ_num_and_prob_per_pop(self, 
@@ -298,12 +287,12 @@ class HOD():
         occ_num : array
             with shape (sample_bins, M_bins)
         occ_prob : array
-            with shape (sample_bins, 100, M_bins) [Note1]
+            with shape (sample_bins, 300, M_bins) [Note1]
             
         [Note1] If the occupation number is given as a look-up table,
         then occ_prob will be NoneType
         """
-
+        
         if pop != 'cen' and pop != 'sat':
             raise Exception(
                 "InputError: The galaxy population for the mass-observable "
@@ -335,7 +324,6 @@ class HOD():
             occ_num = np.trapz(occ_prob, self.Mbins[:, :, None], axis=1)
 
         else:
-            # Mobs = 10**self.double_powerlaw(hod_dict, pop)
             Mobs = 10**eval(hod_dict['model_mor_'+pop])(hod_dict, pop)
             occ_prob = \
                 eval(hod_dict['model_scatter_'+pop])(hod_dict, Mobs, pop)
@@ -386,7 +374,7 @@ class HOD():
         occ_num : array
             with shape (sample_bins, M_bins)
         occ_prob : array
-            with shape (sample_bins, 100, M_bins)
+            with shape (sample_bins, 300, M_bins)
         """
 
         occ_num_cen, occ_prob_cen = \

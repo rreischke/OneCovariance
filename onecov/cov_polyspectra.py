@@ -362,7 +362,7 @@ class PolySpectra(HaloModel):
         -------
         integral : array
             with unit ?
-            with shape (log10k bins, sample bins)
+            with shape (log10k bins, sample bins, sample bins)
 
         Reference
         ---------
@@ -396,7 +396,7 @@ class PolySpectra(HaloModel):
         else:
             hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
             hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
-            integral = np.trapz(hurlyX*hurlyY*self.mass_func.dndm,
+            integral = np.trapz(hurlyX[:,:,None,:]*hurlyY[:,None,:,:]*self.mass_func.dndm,
                                 self.mass_func.m)
 
         return integral
@@ -571,28 +571,27 @@ class PolySpectra(HaloModel):
         -------
         Pgm : array
             with unit ?
-            with shape (log10k bins, sample bins)
+            with shape (log10k bins, sample bins,  sample bins)
 
         References
         ----------
         Dvornik et al. (2018), their Sect 3.1., Eq. (17)
 
         """
-        if self.gm and (self.cov_dict['gauss'] or self.cov_dict['ssc']):
+        if self.gm or (self.mm and self.gg) and (self.cov_dict['gauss'] or self.cov_dict['ssc']):
             if self.Pxy_tab['gm'] is None:
                 if self.unbiased_clustering:
                     Pgm = self.mass_func.nonlinear_power[:, None] \
                         * np.ones(self.sample_dim)
                 else:
                     Pgm = \
-                        (self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'sat')
-                        + self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'cen')
-                        ) \
+                        np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'sat'), axis1 = 1, axis2 = 2) \
+                        + np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'cen'), axis1 = 1, axis2 = 2) \
                         * self.small_k_damping(
                             hm_prec['small_k_damping'],
                             self.mass_func.k)[:, None] \
                         + self.mass_func.power[:, None] \
-                        * self.effective_bias * bias_dict['bias_2h']
+                        * self.effective_bias[None, :] * bias_dict['bias_2h']
 
             else:
                 Pgm = np.zeros((len(self.mass_func.k), self.sample_dim))
@@ -641,7 +640,7 @@ class PolySpectra(HaloModel):
         -------
         Pgg : array
             with unit ?
-            with shape (log10k bins, sample bins)
+            with shape (log10k bins, sample bins, sample bins)
 
         References
         ----------
@@ -653,8 +652,8 @@ class PolySpectra(HaloModel):
 
             if self.Pxy_tab['gg'] is None:
                 if self.unbiased_clustering:
-                    Pgg = self.mass_func.nonlinear_power[:, None] \
-                        * np.ones(self.sample_dim)
+                    Pgg = self.mass_func.nonlinear_power[:, None, None] \
+                        * np.ones(self.sample_dim, self.sample_dim)
                 else:
                     Pgg = (2 *
                         self.__P_xy_1h(bias_dict, hod_dict,
@@ -664,9 +663,9 @@ class PolySpectra(HaloModel):
                         ) \
                         * self.small_k_damping(
                             hm_prec['small_k_damping'],
-                            self.mass_func.k)[:, None] \
-                        + self.mass_func.power[:, None] \
-                        * (bias_dict['bias_2h'] * self.effective_bias)**2.0
+                            self.mass_func.k)[:, None, None] \
+                        + self.mass_func.power[:, None, None] \
+                        * (bias_dict['bias_2h'])**2.0* self.effective_bias[None,:,None]* self.effective_bias[None,None,:]
                     
 
             else:
@@ -1211,6 +1210,58 @@ class PolySpectra(HaloModel):
         else:
             return trispec_gggg, trispec_gggm, trispec_ggmm, \
                 trispec_gmgm, trispec_mmgm, trispec_mmmm
+        
+    def count_matter_bispectrum(self,
+                                bias_dict,
+                                hod_dict,
+                                hm_prec):
+        """
+        Calculates the three dimensional count-matter density cross-bispectrum
+        for a collapsed triange at the wavenumbers specified in log10kbins
+        and redshift specified in the class. This is used for later computation
+        of the cross-correlation between the conditional stellar mass function and
+        2pt statistics
+
+        Parameters
+        ----------
+        bias_dict : dictionary
+            Specifies all the information about the bias model. To be 
+            passed from the read_input method of the Input class.
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation 
+            distribution used. This defines the shot noise level of the 
+            covariance and includes the mass bin definition of the 
+            different galaxy populations. To be passed from the 
+            read_input method of the Input class.
+        hm_prec : dictionary
+            Contains precision information about the HaloModel (also, 
+            see hmf documentation by Steven Murray), this includes mass 
+            range and spacing for the mass integrations in the halo 
+            model. To be passed from the read_input method of the Input 
+            class.
+
+        Returns
+        -------
+        nBcmm_mu : array
+            with shape (log10k bins, 
+                        sample bins, sample bins)
+
+        References
+        ----------
+        Takada and Bridle 2007,  New Journal of Physics, 9, 446
+
+        """
+        halo_profile = self.uk(bias_dict['Mc_relation_cen'])
+        halo_bias = self.bias(bias_dict,hm_prec)
+        csmf = self.conditional_galaxy_stellar_mf('cen')
+        term1 = self.mass_func.dndm[None, None,:]*csmf[None, :, :]*(self.mass_func.m**2)[None, None,:]/self.rho_bg**2*(halo_profile**2)[:, None, :]
+        term2 = self.mass_func.dndm[None, None,:]*csmf[None, :, :]*(self.mass_func.m)[None, None,:]/self.rho_bg*(halo_profile)[:, None, :]*halo_bias[None,None,:]
+        term3 = self.mass_func.dndm[None,:]*(self.mass_func.m)[None,:]/self.rho_bg*(halo_profile)[:, :]*halo_bias[None,:]
+
+        I1 = np.trapz(term1, self.mass_func.m, axis=-1)
+        I2 = np.trapz(term2, self.mass_func.m, axis=-1) * np.trapz(term3, self.mass_func.m, axis=-1)[:, None]
+
+        return I1 + 2.0 * self.mass_func.power[:, None] * I2
 
     def __poisson(self,
                   lam,

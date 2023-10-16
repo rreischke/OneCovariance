@@ -11,14 +11,13 @@ inp = Input()
 if len(sys.argv) > 1:
     config = str(sys.argv[1])
     covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(config)
-    fileinp = FileInput()
+    fileinp = FileInput(bias)
     read_in_tables = fileinp.read_input(config)
 
 else:
     covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input()
-    fileinp = FileInput()
+    fileinp = FileInput(bias)
     read_in_tables = fileinp.read_input()
-
 
 if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
     covell = CovELLSpace(covterms, observables, output, cosmo, bias, iA,
@@ -44,8 +43,7 @@ if ((observables['observables']['est_shear'] == 'xi_pm' and observables['observa
                   covariance_in_theta_space[0],
                   covariance_in_theta_space[1],
                   covariance_in_theta_space[2])
-
-if (observables['observables']['est_shear'] == 'cosebi' and observables['observables']['cosmic_shear'] or observables['observables']['ggl'] == 'cosebi' or observables['observables']['clustering'] == 'cosebi'):
+if (observables['observables']['est_shear'] == 'cosebi' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'cosebi' and observables['observables']['ggl']) or (observables['observables']['est_clust'] == 'cosebi' and observables['observables']['clustering']):
     covcosebis = CovCOSEBI(covterms, observables, output,
                            cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
     covariance_COSEBIS = covcosebis.calc_covCOSEBI(observables, output, bias,  hod, survey_params, prec, read_in_tables)

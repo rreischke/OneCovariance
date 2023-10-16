@@ -52,6 +52,14 @@ class Input:
         self.clustering_z = None
         self.unbiased_clustering = None
 
+        # Conditional stellar mass function
+        self.cstellar_mf = None
+        self.csmf_log10Mmin = None
+        self.csmf_log10Mmax = None
+        self.csmf_N_log10M_bin = None
+        self.csmf_log10M_bins = None
+
+
         # output settings
         self.output = dict()
         self.output_abr = dict()
@@ -414,12 +422,35 @@ class Input:
                     config['observables'].getboolean('cross_terms')
             else:
                 self.cross_terms = True
+            if 'cstellar_mf' in config['observables']:
+                self.cstellar_mf = config['observables'].getboolean('cstellar_mf')
+            else:
+                self.cstellar_mf = False
+            
         else:
             raise Exception("ConfigError: The section [observables] is " +
                             "missing in config file " + config_name + ". Compulsory " +
                             "inputs are either 'cosmic_shear', 'ggl', or 'clustering' " +
                             "and at least one specified estimator.")
-
+        
+        if 'csmf settings' in config and self.cstellar_mf:
+            if 'csmf_log10M_bins' in config['csmf settings']:
+                self.csmf_log10M_bins = np.array(config['csmf settings']['csmf_log10M_bins'].split(',')).astype(float)
+            if not isinstance(self.csmf_log10M_bins, np.ndarray):
+                if 'csmf_log10Mmin' in config['csmf settings']:
+                    self.csmf_log10Mmin = float(config['csmf settings']['csmf_log10Mmin'])
+                if 'csmf_log10Mmax' in config['csmf settings']:
+                    self.csmf_log10Mmax = float(config['csmf settings']['csmf_log10Mmax'])
+                if 'csmf_N_log10M_bin' in config['csmf settings']:
+                    self.csmf_N_log10M_bin = int(config['csmf settings']['csmf_N_log10M_bin'])
+                if self.csmf_N_log10M_bin is not None and self.csmf_log10Mmax is not None and self.csmf_log10Mmin is not None:
+                    self.csmf_log10M_bins = np.linspace(self.csmf_log10Mmin, self.csmf_log10Mmax, self.csmf_N_log10M_bin + 1)
+            if self.csmf_log10M_bins is None:
+                raise Exception("ConfigError: You requested the stellar mass function as an observable, "+
+                                "but did not specify the mass bins. Please adjust "
+                                + config_name + " in the [csmf settings] section ")
+        else:
+            self.cstellar_mf = False
         if not self.cosmicshear and \
            not self.ggl and \
            not self.clustering:
@@ -609,7 +640,7 @@ class Input:
                                 "[covELLspace settings]: 'ell_type = " +
                                 config['covELLspace settings']['ell_type'] + "' is not " +
                                 "recognised. Must be either 'lin' or 'log'.")
-            if self.n_spec is not None or self.n_spec != 0:
+            if self.n_spec is not None and self.n_spec != 0:
                 if self.ell_spec_min is None:
                     raise Exception("ConfigError: An estimator is " +
                                 "'C_ell' but no minimum ell for the spectroscopic projection is " +
@@ -2010,15 +2041,6 @@ class Input:
                                 "bins is " + str(self.sampledim) + " but 'modsch_b_cen' " +
                                 "has " + str(len(self.modsch_b_cen)) + " entries. Must " +
                                 "be adjusted to go on.")
-        if self.modsch_b_sat is not None and self.sampledim is not None:
-            if len(self.modsch_b_sat) == 1:
-                self.modsch_b_sat = \
-                    np.ones(self.sampledim) * self.modsch_b_sat[0]
-            if len(self.modsch_b_sat) != self.sampledim:
-                raise Exception("ConfigError: The number of galaxy sample " +
-                                "bins is " + str(self.sampledim) + " but 'modsch_b_sat' " +
-                                "has " + str(len(self.modsch_b_sat)) + " entries. Must " +
-                                "be adjusted to go on.")
 
         return True
 
@@ -2104,7 +2126,7 @@ class Input:
                 if 'survey_area_clust_in_deg2' in config['survey specs']:
                     self.survey_area_clust = np.array(config['survey specs']
                                                       ['survey_area_clust_in_deg2'].split(','))
-                    if self.n_spec is not None and len(self.survey_area_clust) < 2:
+                    if self.n_spec is not None and len(self.survey_area_clust) < 2 and self.n_spec != 0 :
                         self.survey_area_clust = np.append(self.survey_area_clust,self.survey_area_clust[0])
                     try:
                         self.survey_area_clust = \
@@ -2217,7 +2239,7 @@ class Input:
                                         "file " + config_name + ".")
                 else:
                     self.survey_area_ggl = None
-            if self.n_spec is not None and len(self.survey_area_ggl) < 2 and len(self.survey_area_ggl) > 0:
+            if self.n_spec is not None and self.n_spec != 0 and len(self.survey_area_ggl) < 2 and len(self.survey_area_ggl) > 0:
                 self.survey_area_ggl = np.append(self.survey_area_ggl,self.survey_area_ggl[0])
             self.mask_file_ggl = []
             if 'mask_file_ggl_specz' in config['survey specs']:
@@ -3061,9 +3083,10 @@ class Input:
         self.covterms = dict(zip(keys, values))
 
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
-                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering']
+                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins']
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
-                  self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering]
+                  self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
+                  self.cstellar_mf, self.csmf_log10M_bins]
         self.observables = dict(zip(keys, values))
         self.observables_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
@@ -3644,13 +3667,16 @@ class FileInput:
     Example :
     ---------
     from cov_input import FileInput
-    fileinp = FileInput()
-    read_in_tables = fileinp.read_input()
+    fileinp = FileInput(bias)
+    read_in_tables = fileinp.read_input(bias)
 
     """
 
-    def __init__(self):
+    def __init__(self,
+                 bias_dict):
 
+        self.bias_dict = bias_dict
+        
         # clustering redshift bins
         self.zet_clust = dict()
         self.zet_clust_dir = None
@@ -4376,93 +4402,196 @@ class FileInput:
             ...
 
         if self.clustering and self.npair_gg_file is not None:
-            if '?' in self.npair_gg_file[0]:
-                loc_pt1 = self.npair_gg_file[0].find('?')
-                fn_pt1 = self.npair_gg_file[0][:loc_pt1]
-                loc_pt2 = self.npair_gg_file[0][loc_pt1+1:].find('?')
-                if loc_pt2 == -1:
-                    raise Exception("ConfigError: Cannot auto-insert the " +
-                                    str(self.n_tomo_clust) + "*(" + str(self.n_tomo_clust) +
-                                    "+1) bin combinations into the filename " +
-                                    self.npair_gg_file[0] + ". Auto-insertion requires " +
-                                    "a filename with two '?' which the code replaces " +
-                                    "with bin combinations (1,1), (1,2), ...")
-                fn_pt2 = self.npair_gg_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
-                fn_pt3 = self.npair_gg_file[0][loc_pt1+loc_pt2+2:]
-                self.npair_gg_file = []
+            if len(self.bias_dict['logmass_bins']) <= 2:
+                if '?' in self.npair_gg_file[0]:
+                    loc_pt1 = self.npair_gg_file[0].find('?')
+                    fn_pt1 = self.npair_gg_file[0][:loc_pt1]
+                    loc_pt2 = self.npair_gg_file[0][loc_pt1+1:].find('?')
+                    if loc_pt2 == -1:
+                        raise Exception("ConfigError: Cannot auto-insert the " +
+                                        str(self.n_tomo_clust) + "*(" + str(self.n_tomo_clust) +
+                                        "+1) bin combinations into the filename " +
+                                        self.npair_gg_file[0] + ". Auto-insertion requires " +
+                                        "a filename with two '?' which the code replaces " +
+                                        "with bin combinations (1,1), (1,2), ...")
+                    fn_pt2 = self.npair_gg_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
+                    fn_pt3 = self.npair_gg_file[0][loc_pt1+loc_pt2+2:]
+                    self.npair_gg_file = []
+                    for bin1 in range(self.n_tomo_clust):
+                        for bin2 in range(bin1, self.n_tomo_clust):
+                            self.npair_gg_file.append(
+                                fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
+                fidx = 0
                 for bin1 in range(self.n_tomo_clust):
                     for bin2 in range(bin1, self.n_tomo_clust):
-                        self.npair_gg_file.append(
-                            fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
-            fidx = 0
-            for bin1 in range(self.n_tomo_clust):
-                for bin2 in range(bin1, self.n_tomo_clust):
-                    nfile = self.npair_gg_file[fidx]
-                    theta_npair_gg, npair_gg = self.__read_in_npair_files(
-                        nfile)
-                    if type(npair_gg) == bool:
-                        self.theta_npair_gg = None
-                        self.npair_gg = None
-                        break
-                    if self.theta_npair_gg is not None:
-                        if all(abs(theta_npair_gg - self.theta_npair_gg) > 1e-4):
-                            raise Exception("ConfigError: The angular bins " +
-                                            "in file " + path.join(self.npair_dir, nfile) +
-                                            " don't match the angular bins of the other " +
-                                            "files.")
-                    if self.npair_gg is None:
-                        self.npair_gg = np.zeros((len(npair_gg),
-                                                  self.n_tomo_clust,
-                                                  self.n_tomo_clust))
-                    self.theta_npair_gg = theta_npair_gg
-                    self.npair_gg[:, bin1, bin2] = npair_gg
-                    self.npair_gg[:, bin2, bin1] = npair_gg
+                        nfile = self.npair_gg_file[fidx]
+                        theta_npair_gg, npair_gg = self.__read_in_npair_files(
+                            nfile)
+                        if type(npair_gg) == bool:
+                            self.theta_npair_gg = None
+                            self.npair_gg = None
+                            break
+                        if self.theta_npair_gg is not None:
+                            if all(abs(theta_npair_gg - self.theta_npair_gg) > 1e-4):
+                                raise Exception("ConfigError: The angular bins " +
+                                                "in file " + path.join(self.npair_dir, nfile) +
+                                                " don't match the angular bins of the other " +
+                                                "files.")
+                        if self.npair_gg is None:
+                            self.npair_gg = np.zeros((len(npair_gg),
+                                                    self.n_tomo_clust,
+                                                    self.n_tomo_clust))
+                        self.theta_npair_gg = theta_npair_gg
+                        self.npair_gg[:, bin1, bin2] = npair_gg
+                        self.npair_gg[:, bin2, bin1] = npair_gg
+                        self.npair_gg = self.npair_gg[:,:,:,None]
+                        fidx += 1
+            else:
+                if '?' in self.npair_gg_file[0]:
+                    loc_pt1 = self.npair_gg_file[0].find('?')
+                    fn_pt1 = self.npair_gg_file[0][:loc_pt1]
+                    loc_pt2 = self.npair_gg_file[0][loc_pt1+1:].find('?')
+                    fn_pt2 = self.npair_gg_file[0][:loc_pt2]
+                    loc_pt3 = self.npair_gg_file[0][loc_pt2+1:].find('?')
+                    if loc_pt3 == -1:
+                        raise Exception("ConfigError: Cannot auto-insert the " +
+                                        str(self.n_tomo_clust) + "*(" + str(self.n_tomo_clust) +
+                                        "+1)/2*" + str(len(self.bias_dict['logmass_bins']))+ " bin combinations into the filename " +
+                                        self.npair_gg_file[0] + ". Auto-insertion requires " +
+                                        "a filename with three '?' which the code replaces " +
+                                        "with bin combinations (1,1,1), (1,2,1), ...,("+str(self.n_tomo_clust+1) + "," + str(self.n_tomo_clust + 1)  + "),...")
+                    fn_pt2 = self.npair_gg_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
+                    fn_pt3 = self.npair_gg_file[0][loc_pt1+loc_pt2+2:loc_pt3+1]
+                    fn_pt4 = self.npair_gg_file[0][loc_pt1+loc_pt3+3:]
+                    
+                    self.npair_gg_file = []
+                    for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
+                        for bin1 in range(self.n_tomo_clust):
+                            for bin2 in range(bin1, self.n_tomo_clust):
+                                self.npair_gg_file.append(
+                                    fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3 + str(bin_sample + 1) + fn_pt4)
+                fidx = 0
+                for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
+                    for bin1 in range(self.n_tomo_clust):
+                        for bin2 in range(bin1, self.n_tomo_clust):
+                            nfile = self.npair_gg_file[fidx]
+                            theta_npair_gg, npair_gg = self.__read_in_npair_files(
+                                nfile)
+                            if type(npair_gg) == bool:
+                                self.theta_npair_gg = None
+                                self.npair_gg = None
+                                break
+                            if self.theta_npair_gg is not None:
+                                if all(abs(theta_npair_gg - self.theta_npair_gg) > 1e-4):
+                                    raise Exception("ConfigError: The angular bins " +
+                                                    "in file " + path.join(self.npair_dir, nfile) +
+                                                    " don't match the angular bins of the other " +
+                                                    "files.")
+                            if self.npair_gg is None:
+                                self.npair_gg = np.zeros(len(npair_gg),
+                                                        self.n_tomo_clust,
+                                                        self.n_tomo_clust,
+                                                        len(self.bias_dict['logmass_bins']) - 1)
+                            self.theta_npair_gg = theta_npair_gg
+                            self.npair_gg[:, bin1, bin2, bin_sample] = npair_gg
+                            self.npair_gg[:, bin2, bin1, bin_sample] = npair_gg
 
-                    fidx += 1
+                            fidx += 1
 
         if self.ggl and self.npair_gm_file is not None:
-            if '?' in self.npair_gm_file[0]:
-                loc_pt1 = self.npair_gm_file[0].find('?')
-                fn_pt1 = self.npair_gm_file[0][:loc_pt1]
-                loc_pt2 = self.npair_gm_file[0][loc_pt1+1:].find('?')
-                if loc_pt2 == -1:
-                    raise Exception("ConfigError: Cannot auto-insert the " +
-                                    str(self.n_tomo_clust) + "*" + str(self.n_tomo_lens) +
-                                    ") bin combinations into the filename " +
-                                    self.npair_gm_file[0] + ". Auto-insertion requires " +
-                                    "a filename with two '?' which the code replaces " +
-                                    "with bin combinations (1,1), (1,2), ...")
-                fn_pt2 = self.npair_gm_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
-                fn_pt3 = self.npair_gm_file[0][loc_pt1+loc_pt2+2:]
-                self.npair_gm_file = []
+            if len(self.bias_dict['logmass_bins']) <= 2:
+                if '?' in self.npair_gm_file[0]:
+                    loc_pt1 = self.npair_gm_file[0].find('?')
+                    fn_pt1 = self.npair_gm_file[0][:loc_pt1]
+                    loc_pt2 = self.npair_gm_file[0][loc_pt1+1:].find('?')
+                    if loc_pt2 == -1:
+                        raise Exception("ConfigError: Cannot auto-insert the " +
+                                        str(self.n_tomo_clust) + "*" + str(self.n_tomo_lens) +
+                                        ") bin combinations into the filename " +
+                                        self.npair_gm_file[0] + ". Auto-insertion requires " +
+                                        "a filename with two '?' which the code replaces " +
+                                        "with bin combinations (1,1), (1,2), ...")
+                    fn_pt2 = self.npair_gm_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
+                    fn_pt3 = self.npair_gm_file[0][loc_pt1+loc_pt2+2:]
+                    self.npair_gm_file = []
+                    for bin1 in range(self.n_tomo_clust):
+                        for bin2 in range(self.n_tomo_lens):
+                            self.npair_gm_file.append(
+                                fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
+                fidx = 0
                 for bin1 in range(self.n_tomo_clust):
                     for bin2 in range(self.n_tomo_lens):
-                        self.npair_gm_file.append(
-                            fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
-            fidx = 0
-            for bin1 in range(self.n_tomo_clust):
-                for bin2 in range(self.n_tomo_lens):
-                    nfile = self.npair_gm_file[fidx]
-                    theta_npair_gm, npair_gm = self.__read_in_npair_files(
-                        nfile)
-                    if type(npair_gm) == bool:
-                        self.theta_npair_gm = None
-                        self.npair_gm = None
-                        break
-                    if self.theta_npair_gm is not None:
-                        if all(abs(theta_npair_gm - self.theta_npair_gm) > 1e-4):
-                            raise Exception("ConfigError: The angular bins " +
-                                            "in file " + path.join(self.npair_dir, nfile) +
-                                            " don't match the angular bins of the other " +
-                                            "files.")
-                    if self.npair_gm is None:
-                        self.npair_gm = np.zeros((len(npair_gm),
-                                                  self.n_tomo_clust,
-                                                  self.n_tomo_lens))
-                    self.theta_npair_gm = theta_npair_gm
-                    self.npair_gm[:, bin1, bin2] = npair_gm
-
-                    fidx += 1
+                        nfile = self.npair_gm_file[fidx]
+                        theta_npair_gm, npair_gm = self.__read_in_npair_files(
+                            nfile)
+                        if type(npair_gm) == bool:
+                            self.theta_npair_gm = None
+                            self.npair_gm = None
+                            break
+                        if self.theta_npair_gm is not None:
+                            if all(abs(theta_npair_gm - self.theta_npair_gm) > 1e-4):
+                                raise Exception("ConfigError: The angular bins " +
+                                                "in file " + path.join(self.npair_dir, nfile) +
+                                                " don't match the angular bins of the other " +
+                                                "files.")
+                        if self.npair_gm is None:
+                            self.npair_gm = np.zeros((len(npair_gm),
+                                                    self.n_tomo_clust,
+                                                    self.n_tomo_lens))
+                        self.theta_npair_gm = theta_npair_gm
+                        self.npair_gm[:, bin1, bin2] = npair_gm
+                        self.npair_gm = self.npair_gm[:,:,:,None]
+                        fidx += 1
+            else: 
+                if '?' in self.npair_gm_file[0]:
+                    loc_pt1 = self.npair_gm_file[0].find('?')
+                    fn_pt1 = self.npair_gm_file[0][:loc_pt1]
+                    loc_pt2 = self.npair_gm_file[0][loc_pt1+1:].find('?')
+                    fn_pt2 = self.npair_gm_file[0][:loc_pt2]
+                    loc_pt3 = self.npair_gm_file[0][loc_pt2+1:].find('?')
+                    if loc_pt3 == -1:
+                        raise Exception("ConfigError: Cannot auto-insert the " +
+                                        str(self.n_tomo_clust) + "*(" + str(self.n_tomo_lens) +
+                                        "+1)/2*" + str(len(self.bias_dict['logmass_bins']))+ " bin combinations into the filename " +
+                                        self.npair_gm_file[0] + ". Auto-insertion requires " +
+                                        "a filename with three '?' which the code replaces " +
+                                        "with bin combinations (1,1,1), (1,2,1), ...,(" +str(self.n_tomo_clust + 1) + "," + str(self.n_tomo_lens + 1)  + ",...")
+                    fn_pt2 = self.npair_gm_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
+                    fn_pt3 = self.npair_gm_file[0][loc_pt1+loc_pt2+2:loc_pt3+1]
+                    fn_pt4 = self.npair_gm_file[0][loc_pt1+loc_pt3+3:]
+                    
+                    self.npair_gm_file = []
+                    for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
+                        for bin1 in range(self.n_tomo_clust):
+                            for bin2 in range(self.n_tomo_lens):
+                                self.npair_gm_file.append(
+                                    fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3 + str(bin_sample + 1) + fn_pt4)
+                fidx = 0
+                for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
+                    for bin1 in range(self.n_tomo_clust):
+                        for bin2 in range(self.n_tomo_lens):
+                            nfile = self.npair_gm_file[fidx]
+                            theta_npair_gm, npair_gm = self.__read_in_npair_files(
+                                nfile)
+                            if type(npair_gm) == bool:
+                                self.theta_npair_gm = None
+                                self.npair_gm = None
+                                break
+                            if self.theta_npair_gm is not None:
+                                if all(abs(theta_npair_gm - self.theta_npair_gm) > 1e-4):
+                                    raise Exception("ConfigError: The angular bins " +
+                                                    "in file " + path.join(self.npair_dir, nfile) +
+                                                    " don't match the angular bins of the other " +
+                                                    "files.")
+                            if self.npair_gm is None:
+                                self.npair_gm = np.zeros(len(npair_gm),
+                                                        self.n_tomo_clust,
+                                                        self.n_tomo_lens,
+                                                        len(self.bias_dict['logmass_bins']) - 1)
+                            self.theta_npair_gm = theta_npair_gm
+                            self.npair_gm[:, bin1, bin2, bin_sample] = npair_gm
+                            
+                            fidx += 1
 
         if self.cosmicshear and self.npair_mm_file is not None:
             if '?' in self.npair_mm_file[0]:
@@ -4506,7 +4635,7 @@ class FileInput:
                     self.theta_npair_mm = theta_npair_mm
                     self.npair_mm[:, bin1, bin2] = npair_mm
                     self.npair_mm[:, bin2, bin1] = npair_mm
-
+                    self.npair_mm = self.npair_mm[:,:,:,None]
                     fidx += 1
 
     def __read_in_powspec_files(self,
@@ -5924,7 +6053,7 @@ class FileInput:
                                 "external table. Must be included in [tabulated inputs " +
                                 "files] as 'Tn_plus_file' and 'Tn_minus_file' to go on.")
             
-        if self.wn_log_file is not None and self.est_shear == 'cosebi':
+        if self.wn_log_file is not None and self.est_shear == 'cosebi' and self.cosmicshear:
             if '?' in self.wn_log_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.wn_log_file[0][:self.wn_log_file[0].find('?')]
@@ -5953,7 +6082,7 @@ class FileInput:
                 self.wn_log.append(wn)
             self.wn_log = np.array(self.wn_log)
         
-        if self.wn_gg_file is not None and (self.est_ggl == 'cosebi' or self.est_clust == 'coesbi'):
+        if self.wn_gg_file is not None and (self.est_ggl == 'cosebi' or self.est_clust == 'coesbi') and (self.cosmicshear or self.clustering):
             if '?' in self.wn_gg_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.wn_gg_file[0][:self.wn_gg_file[0].find('?')]
@@ -6040,7 +6169,7 @@ class FileInput:
                 self.Tn_minus.append(Tn)
             self.Tn_minus = np.array(self.Tn_minus)
 
-        if self.Qn_file is not None and self.est_ggl == 'cosebi':
+        if self.Qn_file is not None and self.est_ggl == 'cosebi' and self.ggl or self.clustering:
             if '?' in self.Qn_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Qn_file[0][:self.Qn_file[0].find('?')]
@@ -6069,7 +6198,7 @@ class FileInput:
                 self.Qn.append(Qn)
             self.Qn = np.array(self.Qn)
         
-        if self.Un_file is not None and self.est_ggl == 'cosebi':
+        if self.Un_file is not None and self.est_ggl == 'cosebi' and self.ggl or self.clustering:
             if '?' in self.Un_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Un_file[0][:self.Un_file[0].find('?')]

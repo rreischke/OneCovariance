@@ -465,7 +465,6 @@ class HaloModel(Setup):
                     self.effbias_tab['z'],
                     self.effbias_tab['bias'][mbin, :], k=2, s=0)
                 bias[mbin] = bias_2dspline(self.mass_func.z)
-
         return bias
 
     def uk(self,
@@ -1049,3 +1048,77 @@ class HaloModel(Setup):
             np.log10(self.mass_func.k),
             integralmmm[:, :, 0],
             kx=1, ky=1, s=0)
+
+    def galaxy_stellar_mf(self,
+                          hod_dict,
+                          type):
+        """
+        Calculates the stellar mass function for centrals and satellites
+        
+        Parameters
+        ----------
+        type : string
+            can be 'sat' or 'cen' for satellites and centrals respectively
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation 
+            distribution used. This defines the shot noise level of the 
+            covariance and includes the mass bin definition of the 
+            different galaxy populations. To be passed from the 
+            read_input method of the Input class.
+        
+        Returns
+        -------
+        csmf_type : array 
+            the galaxy stellar mass with shape (300)
+
+        """
+        if type == 'sat':
+            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+                                                         'sat',
+                                                         self.mor_tab,
+                                                         self.occprob_tab,
+                                                         self.occnum_tab)[1]
+            return np.trapz(self.mass_func.dndm[0, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+        if type == 'cen':
+            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+                                                         'cen',
+                                                         self.mor_tab,
+                                                         self.occprob_tab,
+                                                         self.occnum_tab)[1]
+            return np.trapz(self.mass_func.dndm[0, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+        
+    def conditional_galaxy_stellar_mf(self,
+                                      hod_dict,
+                                      type):
+        """
+        Calculates the conditional stellar mass function for centrals and satellites
+        
+        Parameters
+        ----------
+        type : string
+            can be 'sat' or 'cen' for satellites and centrals respectively
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation 
+            distribution used. This defines the shot noise level of the 
+            covariance and includes the mass bin definition of the 
+            different galaxy populations. To be passed from the 
+            read_input method of the Input class.
+        
+        Returns
+        -------
+        csmf_type : array 
+            the galaxy stellar mass with shape (300, M_bins)
+
+        """
+        if type == 'sat':
+            return self.hod.occ_num_and_prob_per_pop(hod_dict,
+                                                     'sat',
+                                                      self.mor_tab,
+                                                      self.occprob_tab,
+                                                      self.occnum_tab)[1][0,:,:]
+        if type == 'cen':
+            return self.hod.occ_num_and_prob_per_pop(hod_dict,
+                                                     'cen',
+                                                      self.mor_tab,
+                                                      self.occprob_tab,
+                                                      self.occnum_tab)[1][0,:,:]

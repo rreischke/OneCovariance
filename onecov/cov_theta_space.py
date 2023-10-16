@@ -176,12 +176,22 @@ class CovTHETASpace(CovELLSpace):
         self.thetabins, self.theta_ul_bins = \
             self.__set_theta_bins(obs_dict['THETAspace'])
         if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
+            save_n_eff_clust = survey_params_dict['n_eff_clust']
+            save_n_eff_lens = survey_params_dict['n_eff_lens']
+            if self.sample_dim > 1:
+                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
+            else:
+                survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
+                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
             self.npair_gg, self.npair_gm, self.npair_mm = \
                 self.get_npair([self.gg, self.gm, self.mm],
                             self.theta_ul_bins,
                             self.thetabins,
                             survey_params_dict,
                             read_in_tables['npair'])
+            survey_params_dict['n_eff_clust'] = save_n_eff_clust
+            survey_params_dict['n_eff_lens'] = save_n_eff_lens
         self.__get_signal_ww()
 
     def __set_theta_bins(self,
@@ -237,10 +247,11 @@ class CovTHETASpace(CovELLSpace):
         if self.gg:
             w_signal_shape = (len(self.thetabins),
                               self.sample_dim,
+                              self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_clust)
-            original_shape = self.Cell_gg[0, :, :, :].shape
+            original_shape = self.Cell_gg[0, :, :, :, :].shape
             w_signal = np.zeros(w_signal_shape)
-            flat_length = self.sample_dim*self.n_tomo_clust**2
+            flat_length = self.sample_dim**2*self.n_tomo_clust**2
             Cell_gg_flat = np.reshape(
                 self.Cell_gg, (len(self.ellrange), flat_length))
             w_signal_at_thetai_flat = np.zeros(flat_length)
@@ -252,7 +263,7 @@ class CovTHETASpace(CovELLSpace):
                     self.ellrange, integrand, True, True)
                 w_signal_at_thetai_flat = lev.single_bessel(
                     theta_i, 0, self.ellrange[0], self.ellrange[-1])
-                w_signal[i_theta, :, :, :] = np.reshape(
+                w_signal[i_theta, :, :, :, :] = np.reshape(
                     w_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.w_gg = w_signal
         
@@ -671,15 +682,18 @@ class CovTHETASpace(CovELLSpace):
         
         if self.gg or self.gm:
             kron_delta_tomo_clust = np.diag(np.ones(self.n_tomo_clust))
+            kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
         if self.mm or self.gm:
             kron_delta_tomo_lens = np.diag(np.ones(self.n_tomo_lens))
+            kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
+        
 
         if self.gg:
             print("")
             original_shape = gaussELLgggg_sva[0, 0, :, :, :, :, :, :].shape
             if calc_prefac:
                 prefac_ww = self.__calc_prefac_covreal(
-                    survey_params_dict['survey_area_clust'])
+                    survey_params_dict['survey_area_clust'][0])
             else:
                 prefac_ww = np.ones((len(self.thetabins), len(self.thetabins)))
             prefac_ww = prefac_ww[:, :, None, None, None, None, None, None]
@@ -743,13 +757,14 @@ class CovTHETASpace(CovELLSpace):
             gauss_ww_sva *= prefac_ww
             gauss_ww_mix *= prefac_ww
             gauss_ww_sn = \
-                (kron_delta_tomo_clust[None, :, None, :, None]
-                 * kron_delta_tomo_clust[None, None, :, None, :]
-                 + kron_delta_tomo_clust[None, :, None, None, :]
-                 * kron_delta_tomo_clust[None, None, :, :, None]) \
-                / self.npair_gg[:, :, :, None, None]
+                (kron_delta_tomo_clust[None, None, None, :, None, :, None]
+                 * kron_delta_tomo_clust[None, None, None, None, :, None, :]
+                 + kron_delta_tomo_clust[None, None, None, :, None, None, :]
+                 * kron_delta_tomo_clust[None, None, None, None, :, :, None]) \
+                 * kron_delta_mass_bins[None, :, :, None, None, None, None] \
+                / self.npair_gg[:, :, None, :, :, None, None]
             gauss_ww_sn = \
-                gauss_ww_sn[:, None, None, :, :, :, :] \
+                gauss_ww_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.thetabins))[:, :, None, None, None, None, None, None]
         else:
             gauss_ww_sva, gauss_ww_mix, gauss_ww_sn = 0, 0 , 0
@@ -865,12 +880,12 @@ class CovTHETASpace(CovELLSpace):
                                         None, None, None, None, None, None]
 
             covwxipm_shape_sva = (len(self.thetabins), len(self.thetabins),
-                                  self.sample_dim, self.sample_dim,
+                                  self.sample_dim, 1,
                                   self.n_tomo_clust, self.n_tomo_clust,
                                   self.n_tomo_lens, self.n_tomo_lens)
             gauss_wxip_sva = np.zeros(covwxipm_shape_sva) if self.xi_pp else 0
             gauss_wxim_sva = np.zeros(covwxipm_shape_sva) if self.xi_mm else 0
-            flat_length = self.sample_dim*self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
+            flat_length = self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
             gaussELLggmm_sva_flat = np.reshape(gaussELLggmm_sva, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(12.), self.integration_intervals)
@@ -1085,15 +1100,18 @@ class CovTHETASpace(CovELLSpace):
 
             gauss_gtgt_sva *= prefac_gtgt
             gauss_gtgt_mix *= prefac_gtgt
-    
+
             gauss_gtgt_sn = \
-                kron_delta_tomo_clust[None, :, None, :, None] \
-                * kron_delta_tomo_lens[None, None, :, None, :] \
-                / self.npair_gm[:, :, :, None, None]  \
-                * survey_params_dict['ellipticity_dispersion'][None, None, :, None, None]**2
+                kron_delta_tomo_clust[None, None, None, :, None, :, None] \
+                * kron_delta_tomo_lens[None, None, None, None, :, None, :] \
+                * kron_delta_mass_bins[None, :, :, None, None, None, None] \
+                / self.npair_gm[:, :, None, :, :, None, None]  \
+                * survey_params_dict['ellipticity_dispersion'][None, None, None, None, :, None, None]**2
             gauss_gtgt_sn = \
-                gauss_gtgt_sn[:, None, None, :, :, :, :] \
+                gauss_gtgt_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.thetabins))[:, :, None, None, None, None, None, None]
+        
+
         else:
             gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn = 0, 0, 0
 
@@ -1111,7 +1129,7 @@ class CovTHETASpace(CovELLSpace):
                                           None, None, None, None, None, None]
 
             covxipmgt_shape_sva = (len(self.thetabins), len(self.thetabins),
-                                   self.sample_dim, self.sample_dim,
+                                   1, self.sample_dim,
                                    self.n_tomo_lens, self.n_tomo_lens,
                                    self.n_tomo_clust, self.n_tomo_lens)
             gauss_xipgt_sva = \
@@ -1122,7 +1140,7 @@ class CovTHETASpace(CovELLSpace):
                 np.zeros(covxipmgt_shape_sva) if self.xi_pp else 0
             gauss_ximgt_mix = \
                 np.zeros(covxipmgt_shape_sva) if self.xi_mm else 0
-            flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust*self.n_tomo_lens**3
+            flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens**3
             gaussELLmmgm_sva_flat = np.reshape(gaussELLmmgm_sva, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             gaussELLmmgm_mix_flat = np.reshape(gaussELLmmgm_mix, (len(self.ellrange), len(
@@ -1344,7 +1362,7 @@ class CovTHETASpace(CovELLSpace):
             prefac_xipm = prefac_xipm[:, :, None, None, None, None, None, None]
 
             covxipm_shape_sva = (len(self.thetabins), len(self.thetabins),
-                                 self.sample_dim, self.sample_dim,
+                                 1, 1,
                                  self.n_tomo_lens, self.n_tomo_lens,
                                  self.n_tomo_lens, self.n_tomo_lens)
             gauss_xipxip_sva = np.zeros(covxipm_shape_sva) if self.xi_pp else 0
@@ -1353,7 +1371,7 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipxip_mix = np.zeros(covxipm_shape_sva) if self.xi_pp else 0
             gauss_xipxim_mix = np.zeros(covxipm_shape_sva) if self.xi_pm else 0
             gauss_ximxim_mix = np.zeros(covxipm_shape_sva) if self.xi_mm else 0
-            flat_length = self.sample_dim*self.sample_dim*self.n_tomo_lens**4
+            flat_length = self.n_tomo_lens**4
             gaussELLmmmm_sva_flat = np.reshape(gaussELLmmmm_sva, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             gaussELLmmmm_mix_flat = np.reshape(gaussELLmmmm_mix, (len(self.ellrange), len(
@@ -1664,14 +1682,14 @@ class CovTHETASpace(CovELLSpace):
             gauss_ximxim_sva *= prefac_xipm                
             gauss_ximxim_mix *= prefac_xipm                
             gauss_xipm_sn = \
-                (kron_delta_tomo_lens[None, :, None, :, None]
-                 * kron_delta_tomo_lens[None, None, :, None, :]
-                 + kron_delta_tomo_lens[None, :, None, None, :]
-                 * kron_delta_tomo_lens[None, None, :, :, None]) \
-                / self.npair_mm[:, :, :, None, None] / 0.5 \
-                * survey_params_dict['ellipticity_dispersion'][None, None, :, None, None]**4 
+                (kron_delta_tomo_lens[None, None, None, :, None, :, None]
+                 * kron_delta_tomo_lens[None, None, None, None, :, None, :]
+                 + kron_delta_tomo_lens[None, None, None, :, None, None, :]
+                 * kron_delta_tomo_lens[None, None, None, None, :, :, None]) \
+                / self.npair_mm[:, :, None, :, :, None, None] / 0.5 \
+                * survey_params_dict['ellipticity_dispersion'][None, None, None, None, :, None, None]**4 
             gauss_xipm_sn = \
-                gauss_xipm_sn[:, None, None, :, :, :, :] \
+                gauss_xipm_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.thetabins))[:, :, None, None, None, None, None, None]
 
            
@@ -1719,7 +1737,6 @@ class CovTHETASpace(CovELLSpace):
         prefac : array
             Prefactor of shape (theta_bins, theta bins)
         """
-
         prefac = 1 / 2 / np.pi / Amax * self.deg2torad2 \
             * (2 / (self.theta_ul_bins[1:]**2
                     - self.theta_ul_bins[:-1]**2)[:, None]) \
@@ -2142,16 +2159,16 @@ class CovTHETASpace(CovELLSpace):
                                         None, None, None, None, None, None]
 
             covwxip_shape_nongauss = (len(self.thetabins), len(self.thetabins),
-                                      self.sample_dim, self.sample_dim,
+                                      self.sample_dim, 1,
                                       self.n_tomo_clust, self.n_tomo_clust,
                                       self.n_tomo_lens, self.n_tomo_lens)
             nongauss_wxip = np.zeros(covwxip_shape_nongauss)
             covwxim_shape_nongauss = (len(self.thetabins), len(self.thetabins),
-                                      self.sample_dim, self.sample_dim,
+                                      self.sample_dim, 1,
                                       self.n_tomo_clust, self.n_tomo_clust,
                                       self.n_tomo_clust, self.n_tomo_clust)
             nongauss_wxim = np.zeros(covwxim_shape_nongauss)
-            flat_length = self.sample_dim*self.sample_dim * \
+            flat_length = self.sample_dim * \
                 self.n_tomo_clust**2*self.n_tomo_lens**2
             nongaussELLggmm_flat = np.reshape(nongaussELLggmm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
@@ -2323,16 +2340,16 @@ class CovTHETASpace(CovELLSpace):
             prefac_xipmgt = prefac_xipmgt[:, :,
                                           None, None, None, None, None, None]
             covxipgt_shape_nongauss = (len(self.thetabins), len(self.thetabins),
-                                       self.sample_dim, self.sample_dim,
+                                       1, self.sample_dim,
                                        self.n_tomo_lens, self.n_tomo_lens,
                                        self.n_tomo_clust, self.n_tomo_lens)
             nongauss_xipgt = np.zeros(covxipgt_shape_nongauss)
             covximgt_shape_nongauss = (len(self.thetabins), len(self.thetabins),
-                                       self.sample_dim, self.sample_dim,
+                                       1, self.sample_dim,
                                        self.n_tomo_lens, self.n_tomo_lens,
                                        self.n_tomo_clust, self.n_tomo_lens)
             nongauss_ximgt = np.zeros(covximgt_shape_nongauss)
-            flat_length = self.sample_dim*self.sample_dim * \
+            flat_length = self.sample_dim * \
                 self.n_tomo_clust*self.n_tomo_lens**3
             nongaussELLmmgm_flat = np.reshape(nongaussELLmmgm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
@@ -2423,21 +2440,21 @@ class CovTHETASpace(CovELLSpace):
                     np.ones((len(self.thetabins), len(self.thetabins)))
             prefac_xipm = prefac_xipm[:, :, None, None, None, None, None, None]
             covxipxip_shape_nongauss = (len(self.thetabins), len(self.thetabins),
-                                        self.sample_dim, self.sample_dim,
+                                        1, 1,
                                         self.n_tomo_lens, self.n_tomo_lens,
                                         self.n_tomo_lens, self.n_tomo_lens)
             nongauss_xipxip = np.zeros(covxipxip_shape_nongauss)
             covxipxim_shape_nongauss = (len(self.thetabins), len(self.thetabins),
-                                        self.sample_dim, self.sample_dim,
+                                        1, 1,
                                         self.n_tomo_lens, self.n_tomo_lens,
                                         self.n_tomo_lens, self.n_tomo_lens)
             nongauss_xipxim = np.zeros(covxipxim_shape_nongauss)
             covximxim_shape_nongauss = (len(self.thetabins), len(self.thetabins),
-                                        self.sample_dim, self.sample_dim,
+                                        1, 1,
                                         self.n_tomo_lens, self.n_tomo_lens,
                                         self.n_tomo_lens, self.n_tomo_lens)
             nongauss_ximxim = np.zeros(covximxim_shape_nongauss)
-            flat_length = self.sample_dim*self.sample_dim * self.n_tomo_lens**4
+            flat_length = self.n_tomo_lens**4
             nongaussELLmmmm_flat = np.reshape(nongaussELLmmmm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             cov_at_thetaij_flat = np.zeros(flat_length)
