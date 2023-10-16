@@ -887,11 +887,11 @@ class CovELLSpace(PolySpectra):
             aux_ngal[zet, :] = self.ngal
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
-                    if (self.gg or self.gm) and not tab_bools[0]:
+                    if self.gg or (self.gg and self.gm) and not tab_bools[0]:
                         aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
                     else:
                         aux_gg[zet, :, i_sample, j_sample] = np.ones_like(self.mass_func.k)
-                if not tab_bools[1] and self.gm or self.mm:
+                if not tab_bools[1] and self.gm or (self.mm and self.gm):
                     aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
                 else:
                     aux_gm[zet, :, i_sample] = np.ones_like(self.mass_func.k)

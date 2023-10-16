@@ -468,7 +468,6 @@ class CovBandPowers(CovTHETASpace):
         self.Wl_nE = np.zeros((len(self.ell_bins), len(self.ell_fourier_integral)))
         t0, tcomb = time.time(), 1
         tcombs = len(self.ell_bins)
-        import matplotlib.pyplot as plt
         
         for i_ell in range(len(self.ell_bins)):
             '''self.Wl_EE[i_ell, :], self.Wl_EB[i_ell, :], self.Wl_nE[i_ell, :] = call_levin_many_args_WE(self.ell_fourier_integral,
@@ -482,8 +481,6 @@ class CovBandPowers(CovTHETASpace):
                                                                               self.ell_ul_bins[i_ell],
                                                                               self.thetabins/60/180*np.pi,
                                                                               self.T_of_theta)
-            plt.semilogx(self.ell_fourier_integral, self.Wl_nE[i_ell, :])
-            plt.show()
             eta = (time.time()-t0) / \
                 60 * (tcombs/tcomb-1)
             print('\rCalculating Fourier weights for bandpower covariance '
