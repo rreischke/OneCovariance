@@ -723,7 +723,7 @@ class CovELLSpace(PolySpectra):
                 Cells = [self.Cell_gg, self.Cell_gm, self.Cell_mm]
                 out.write_Cells(self.ellrange, self.n_tomo_clust, self.n_tomo_lens,
                                 Cells)
-
+                
     def calc_Cells_nonLimber(self,
                              covELLspacesettings,
                              Cxy_tab):

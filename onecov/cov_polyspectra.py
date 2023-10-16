@@ -651,9 +651,8 @@ class PolySpectra(HaloModel):
                 (self.cov_dict['gauss'] or self.cov_dict['ssc']):
 
             if self.Pxy_tab['gg'] is None:
-                if self.unbiased_clustering:
-                    Pgg = self.mass_func.nonlinear_power[:, None, None] \
-                        * np.ones(self.sample_dim, self.sample_dim)
+                if self.unbiased_clustering and self.sample_dim < 2:
+                    Pgg = self.mass_func.nonlinear_power[:, None, None]
                 else:
                     Pgg = (2 *
                         self.__P_xy_1h(bias_dict, hod_dict,

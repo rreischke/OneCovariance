@@ -6052,8 +6052,8 @@ class FileInput:
                                 "covariance the Tn_pm kernels must be provided as an " +
                                 "external table. Must be included in [tabulated inputs " +
                                 "files] as 'Tn_plus_file' and 'Tn_minus_file' to go on.")
-            
-        if self.wn_log_file is not None and self.est_shear == 'cosebi' and self.cosmicshear:
+        
+        if self.wn_log_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
             if '?' in self.wn_log_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.wn_log_file[0][:self.wn_log_file[0].find('?')]
@@ -6082,7 +6082,7 @@ class FileInput:
                 self.wn_log.append(wn)
             self.wn_log = np.array(self.wn_log)
         
-        if self.wn_gg_file is not None and (self.est_ggl == 'cosebi' or self.est_clust == 'coesbi') and (self.cosmicshear or self.clustering):
+        if self.wn_gg_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
             if '?' in self.wn_gg_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.wn_gg_file[0][:self.wn_gg_file[0].find('?')]
@@ -6111,7 +6111,7 @@ class FileInput:
                 self.wn_gg.append(wn_gg)
             self.wn_gg = np.array(self.wn_gg)
 
-        if self.Tn_plus_file is not None and self.est_shear == 'cosebi':
+        if self.Tn_plus_file is not None and (self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True):
             if '?' in self.Tn_plus_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Tn_plus_file[0][:self.Tn_plus_file[0].find('?')]
@@ -6140,7 +6140,7 @@ class FileInput:
                 self.Tn_plus.append(Tn)
             self.Tn_plus = np.array(self.Tn_plus)
 
-        if self.Tn_minus_file is not None and self.est_shear == 'cosebi':
+        if self.Tn_minus_file is not None and (self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True):
             if '?' in self.Tn_minus_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Tn_minus_file[0][:self.Tn_minus_file[0].find('?')]
