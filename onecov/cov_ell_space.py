@@ -3900,6 +3900,7 @@ class CovELLSpace(PolySpectra):
                 zet, bias_dict, hod_dict, prec)
             trispec_at_z.append(self.trispectra(
                 output_dict, bias_dict, hod_dict, prec['hm'], tri_tab))
+        self.update_mass_func(0, bias_dict, hod_dict, prec)
         gggg_z = np.zeros(len(chi_list))
         gggm_z = np.zeros(len(chi_list))
         ggmm_z = np.zeros(len(chi_list))
@@ -4700,6 +4701,7 @@ class CovELLSpace(PolySpectra):
                                                (aux_response_mm[:, :, i_sample])))
         print("")
         print("Calculating SSC contribution in ell space")
+        self.update_mass_func(0, bias_dict, hod_dict, prec)
         if self.gg:
             SSCELLgggg = np.zeros((len(self.ellrange), len(self.ellrange),  self.sample_dim, self.sample_dim, self.n_tomo_clust,
                                    self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))

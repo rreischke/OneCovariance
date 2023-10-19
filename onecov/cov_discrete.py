@@ -63,7 +63,7 @@ class TwoDimGrid:
         loy = (self.npix2//2-npix_rmax)
         hiy = loy+2*npix_rmax
         tmpdist = self.dist[loy:hiy,lox:hix]
-        gn = np.zeros((2*npix_rmax,2*npix_rmax),dtype=np.complex)
+        gn = np.zeros((2*npix_rmax,2*npix_rmax),dtype=complex)
         sel = np.logical_and(tmpdist<rmax,tmpdist>=rmin)
         gn[sel] = 1.
         gn = gn * np.exp(1.0j*n*self.azimuthalAngle[loy:hiy,lox:hix])
@@ -73,7 +73,7 @@ class TwoDimGrid:
         """
         Returns full region
         """
-        gn = np.zeros((self.npix2,self.npix1),dtype=np.complex)
+        gn = np.zeros((self.npix2,self.npix1),dtype=complex)
         sel = np.logical_and(self.dist<rmax,self.dist>=rmin)
         gn[sel] = 1.
         gn = gn * np.exp(1.0j*n*self.azimuthalAngle)
@@ -95,13 +95,13 @@ class DiscreteData:
         self.do_overlap = do_overlap
         self.patchcats = None
         self.npatches = None
-        
         tmpdata = Table.read(self.path_to_data)
         self.weight = tmpdata[self.colname_weight]
         self.pos1 = tmpdata[self.colname_pos1]
         self.pos2 = tmpdata[self.colname_pos2]
         self.zbin = tmpdata[self.colname_zbin]
-        self.nbinsz = 1+int(np.max(self.zbin)-np.min(self.zbin))
+        self.nbinsz = len(sigma2_eps)
+        #self.nbinsz = 1+int(np.max(self.zbin)-np.min(self.zbin))
         
     
     def gen_patches(self, func=cygnus_patches, func_args=None):
@@ -233,6 +233,7 @@ class DiscreteCovTHETASpace:
         nzcombi = int((nbinsz*(nbinsz+1))/2)
         allmixedmeas = np.zeros((nzcombi*nbinsr,nzcombi*nbinsr))
         allshape= np.zeros((nzcombi*nbinsr,nzcombi*nbinsr))
+        allmixed_no_mat = np.zeros((nbinsr,nbinsr,1,1,nbinsz,nbinsz,nbinsz,nbinsz))
         flatz = self.flatz
         for elz1 in range(nbinsz):
             for elz2 in range(elz1,nbinsz):
@@ -241,7 +242,7 @@ class DiscreteCovTHETASpace:
                         start1 = flatz[elz1,elz2]*nbinsr
                         start2 = flatz[elz3,elz4]*nbinsr
                         if elz2==elz4:
-                            tmpxispl = lambda r: np.e**self.xi_spl["xip"][flatz[elz1,elz3]](np.log(r))
+                            tmpxispl = lambda r: self.xi_spl["xip"][flatz[elz1,elz3]](r)
                             nexts, nextmixed = cov_estimate_single(self.bin_edges, 
                                                                    self.bin_centers[elz1], 
                                                                    tmpxispl, sig_eps[elz2],
@@ -251,11 +252,14 @@ class DiscreteCovTHETASpace:
                                                                    self.paircounts[elz3,elz4], 
                                                                    self.paircounts_sq[elz2,elz4])
                             allmixedmeas[start1:start1+nbinsr,start2:start2+nbinsr] += nextmixed
+                            for ir1 in range(nbinsr):
+                                for ir2 in range(nbinsr):
+                                    allmixed_no_mat[ir1,ir2,0,0, elz1, elz2, elz3, elz4] += nextmixed[ir1, ir2] 
                             if elz1==elz3:
                                 allshape[start1:start1+nbinsr,start2:start2+nbinsr] += nexts
 
                         if elz2==elz3:
-                            tmpxispl = lambda r: np.e**self.xi_spl["xip"][flatz[elz1,elz4]](np.log(r))
+                            tmpxispl = lambda r: self.xi_spl["xip"][flatz[elz1,elz4]](r)
                             nexts, nextmixed = cov_estimate_single(self.bin_edges, 
                                                                    self.bin_centers[elz1], 
                                                                    tmpxispl, 
@@ -266,11 +270,14 @@ class DiscreteCovTHETASpace:
                                                                    self.paircounts[elz3,elz4], 
                                                                    self.paircounts_sq[elz2,elz3])
                             allmixedmeas[start1:start1+nbinsr,start2:start2+nbinsr] += nextmixed
+                            for ir1 in range(nbinsr):
+                                for ir2 in range(nbinsr):
+                                    allmixed_no_mat[ir1,ir2,0,0, elz1, elz2, elz3, elz4] += nextmixed[ir1, ir2] 
                             if elz1==elz3:
                                 allshape[start1:start1+nbinsr,start2:start2+nbinsr] += nexts
 
                         if elz1==elz4:
-                            tmpxispl = lambda r: np.e**self.xi_spl["xip"][flatz[elz2,elz3]](np.log(r))
+                            tmpxispl = lambda r: self.xi_spl["xip"][flatz[elz2,elz3]](r)
                             nexts, nextmixed = cov_estimate_single(self.bin_edges, 
                                                                    self.bin_centers[elz2],
                                                                    tmpxispl, 
@@ -281,11 +288,14 @@ class DiscreteCovTHETASpace:
                                                                    self.paircounts[elz3,elz4], 
                                                                    self.paircounts_sq[elz1,elz4])
                             allmixedmeas[start1:start1+nbinsr,start2:start2+nbinsr] += nextmixed
+                            for ir1 in range(nbinsr):
+                                for ir2 in range(nbinsr):
+                                    allmixed_no_mat[ir1,ir2,0,0, elz1, elz2, elz3, elz4] += nextmixed[ir1, ir2] 
                             if elz1==elz3:
                                 allshape[start1:start1+nbinsr,start2:start2+nbinsr] += nexts
 
                         if elz1==elz3:
-                            tmpxispl = lambda r: np.e**self.xi_spl["xip"][flatz[elz2,elz4]](np.log(r))
+                            tmpxispl = lambda r: self.xi_spl["xip"][flatz[elz2,elz4]](r)
                             nexts, nextmixed = cov_estimate_single(self.bin_edges, 
                                                                    self.bin_centers[elz2],
                                                                    tmpxispl,
@@ -296,10 +306,13 @@ class DiscreteCovTHETASpace:
                                                                    self.paircounts[elz3,elz4], 
                                                                    self.paircounts_sq[elz1,elz3])
                             allmixedmeas[start1:start1+nbinsr,start2:start2+nbinsr] += nextmixed
+                            for ir1 in range(nbinsr):
+                                for ir2 in range(nbinsr):
+                                    allmixed_no_mat[ir1,ir2,0,0, elz1, elz2, elz3, elz4] += nextmixed[ir1, ir2] 
                             if elz1==elz3:
                                 allshape[start1:start1+nbinsr,start2:start2+nbinsr] += nexts
 
-        return allmixedmeas, allshape
+        return allmixed_no_mat, allshape
 
     def compute_triplets(self):
         """
@@ -310,15 +323,17 @@ class DiscreteCovTHETASpace:
         
         # Load triplets from file
         # Does not check for correct format etc!
+        triplet_right_format = False
         if self.loadpath_triplets is not None:
             tripletdata = Table.read(self.loadpath_triplets)
             self.bin_centers = tripletdata["bin_centers"]
             self.paircounts = tripletdata["paircounts"] 
             self.paircounts_sq = tripletdata["paircounts_sq"]
             self.tripletcounts = tripletdata["tripletcounts"]
-        
+            if len(self.tripletcounts[:,0,0,0,0,0]) == self.discrete.nbinsz and  len(self.tripletcounts[0,0,0,:,0,0]) == int(len(self.bin_edges)-1):
+                triplet_right_format = True
         # Compute triplets and store
-        else:
+        if not triplet_right_format:
             if self.discrete.npatches is None:
                 patchcats = self.gen_patches()
                 
@@ -365,7 +380,7 @@ class DiscreteCovTHETASpace:
                 tosave["paircounts"] = allpaircounts_ret
                 tosave["paircounts_sq"] = allpaircountssq_ret
                 tosave["tripletcounts"] = alltripletcounts
-                Table.write(tosave, self.savepath_triplets, overwrite=True)
+                tosave.write(self.savepath_triplets, overwrite=True,format='fits')
                 
         
                         
@@ -456,7 +471,7 @@ def tomomultipoles2triplets(multipoles, nphis=100):
     """
     nmax, nbinsz, _, _, nbinsr, _ = multipoles.shape
     phis = np.linspace(-np.pi,np.pi,nphis)
-    triplets = np.zeros((nbinsz, nbinsz, nbinsz, nbinsr, nbinsr, nphis), dtype=np.complex)
+    triplets = np.zeros((nbinsz, nbinsz, nbinsz, nbinsr, nbinsr, nphis), dtype=complex)
     for n in range(nmax):
         for elz1 in range(nbinsz):
             for elz2 in range(nbinsz):
@@ -509,15 +524,15 @@ def edge_correctiontomo(threepcf_n,threepcf_n_norm,ret_matrices=False):
         
     """
     
-    threepcf_n_corr = np.zeros(threepcf_n.shape, dtype=np.complex)
-    nvals, nz, _, _, ntheta, _ = threepcf_n_norm.shape
+    threepcf_n_corr = np.zeros(threepcf_n.shape, dtype=complex)
+    nvals, nbinsz, _, _, ntheta, _ = threepcf_n_norm.shape
     nmax = nvals-1
     
     #(11, 6, 6, 6, 20, 20)
     # Required to perform edge correction over full -nmax,..+nmax range
     # --> Need to explicitly recover the negative entries
-    mirroredthreepcf_n = np.zeros((2*nmax+1, *(threepcf_n.shape)[1:]), dtype=np.complex)
-    mirroredthreepcf_n_norm = np.zeros((2*nmax+1, *(threepcf_n.shape)[1:]), dtype=np.complex)
+    mirroredthreepcf_n = np.zeros((2*nmax+1, *(threepcf_n.shape)[1:]), dtype=complex)
+    mirroredthreepcf_n_norm = np.zeros((2*nmax+1, *(threepcf_n.shape)[1:]), dtype=complex)
     mirroredthreepcf_n[nmax:] = threepcf_n
     mirroredthreepcf_n_norm[nmax:] = threepcf_n_norm
     mirroredthreepcf_n[:nmax] = np.transpose(threepcf_n[1:][::-1], axes=(0,1,3,2,5,4))
@@ -539,7 +554,7 @@ def _gen_M_matrix(thet1,thet2,threepcf_n_norm):
     """
     nvals, ntheta, _ = threepcf_n_norm.shape
     nmax = (nvals-1)//2
-    narr = np.arange(-nmax,nmax+1, dtype=np.int)
+    narr = np.arange(-nmax,nmax+1, dtype=int)
     nextM = np.zeros((nvals,nvals))
     for ind, ell in enumerate(narr):
         lminusn = ell-narr

@@ -156,7 +156,7 @@ class HaloModel(Setup):
         self.norm_bias = -1
         self.effective_bias = self.calc_effective_bias(
             bias_dict, hod_dict, prec['hm'])
-        self.calc_mass_func(0, cosmo_dict, prec['hm'],  prec['powspec'])
+        #self.calc_mass_func(0, cosmo_dict, prec['hm'],  prec['powspec'])
 
     def calc_mass_func(self,
                        zet,
@@ -200,7 +200,8 @@ class HaloModel(Setup):
                        'n': cosmo_dict['ns'],
                        'lnk_min': np.log(10**powspec_prec['log10k_min']),
                        'lnk_max': np.log(10**powspec_prec['log10k_max']),
-                       'dlnk': kstep}
+                       'dlnk': kstep,
+                       'takahashi': False}
 
         prefix = 'hmf.mass_function.fitting_functions.'
         try:
@@ -210,7 +211,7 @@ class HaloModel(Setup):
                             "function " + hm_prec['hmf_model'] + ". Available functions " +
                             "can be found at https://hmf.readthedocs.io/en/latest/" +
                             "_autosummary/hmf.mass_function.fitting_functions.html .")
-
+        
         mass_func = hmf.MassFunction(
             Mmin=hm_prec['log10M_min'],
             Mmax=hm_prec['log10M_max'],

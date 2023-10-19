@@ -173,6 +173,8 @@ class CovTHETASpace(CovELLSpace):
         self.xi_pm = obs_dict['THETAspace']['xi_pm']
         self.xi_mm = obs_dict['THETAspace']['xi_mm']
         self.accuracy = obs_dict['THETAspace']['theta_acc']
+        self.theta_space_dict = obs_dict['THETAspace']
+        
         self.thetabins, self.theta_ul_bins = \
             self.__set_theta_bins(obs_dict['THETAspace'])
         if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
@@ -271,8 +273,8 @@ class CovTHETASpace(CovELLSpace):
         if self.mm:
             theta_ul_bins = np.geomspace(
                 self.theta_ul_bins[0]/5,
-                self.theta_ul_bins[-1]*4,
-                100)
+                self.theta_ul_bins[-1]*40,
+                200)
             theta_bins = np.exp(.5 * (np.log(theta_ul_bins[1:])
                                     + np.log(theta_ul_bins[:-1])))
             xip_signal_shape = (len(theta_bins),
@@ -311,7 +313,9 @@ class CovTHETASpace(CovELLSpace):
                     self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0)
                     self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0)
                     flat_idx += 1
+                    
             
+                      
     def __get_triplet_mix_term(self,
                                CovTHETASpace_settings,
                                survey_params_dict):
@@ -320,8 +324,8 @@ class CovTHETASpace(CovELLSpace):
         accounts for a more accurate prediction, especially at the survey
         edges
         """
-        if CovTHETASpace_settings['mix_term_do_mix_for'] == 'xipxip' or CovTHETASpace_settings['mix_term_do_mix_for'] == 'ximxim':
-            
+        if CovTHETASpace_settings['mix_term_do_mix_for'][0] == 'xipxip' or CovTHETASpace_settings['mix_term_do_mix_for'][1] == 'ximxim':
+            print("Calculating the mixed term from triplet counts")
             thisdata = DiscreteData(path_to_data=CovTHETASpace_settings['mix_term_file_path_catalog'], 
                     colname_weight=CovTHETASpace_settings['mix_term_col_name_weight'], 
                     colname_pos1=CovTHETASpace_settings['mix_term_col_name_pos1'], 
@@ -348,8 +352,8 @@ class CovTHETASpace(CovELLSpace):
                                 dpix_min_force=CovTHETASpace_settings['mix_term_dpix_min'],
                                 terms=CovTHETASpace_settings['mix_term_do_mix_for'])
             disccov.compute_triplets()
-            allmixedmeas, allshape = disccov.mixed_covariance()
-
+            gauxx_xipxip_mixed_reconsidered, allshape = disccov.mixed_covariance()
+            return gauxx_xipxip_mixed_reconsidered
         else:
             return None
         
@@ -588,7 +592,8 @@ class CovTHETASpace(CovELLSpace):
             self.__covTHETA_split_gaussian(covELLspacesettings,
                                            survey_params_dict,
                                            calc_prefac)
-
+        if self.theta_space_dict['mix_term_do_mix_for'][0] =='xipxip':
+            gauss_xipxip_mix = self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict)
         if not self.cov_dict['split_gauss']:
             gauss_ww = gauss_ww_sva + gauss_ww_mix
             gauss_wgt = gauss_wgt_sva + gauss_wgt_mix

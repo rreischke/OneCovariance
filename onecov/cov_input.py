@@ -774,7 +774,7 @@ class Input:
                 self.mix_term_file_path_load_triplets = config['covTHETAspace settings']['mix_term_file_path_load_triplets']
                 if self.mix_term_file_path_load_triplets == '':
                     self.mix_term_file_path_load_triplets = None
-            if self.mix_term_do_mix_for and not self.mix_term_file_path_load_triplets:
+            if self.mix_term_do_mix_for:
                 if 'mix_term_file_path_catalog' in config['covTHETAspace settings']:
                     self.mix_term_file_path_catalog = config['covTHETAspace settings']['mix_term_file_path_catalog']
                 if 'mix_term_col_name_weight' in config['covTHETAspace settings']:
