@@ -19,6 +19,7 @@ else:
     fileinp = FileInput(bias)
     read_in_tables = fileinp.read_input()
 
+
 if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
     covell = CovELLSpace(covterms, observables, output, cosmo, bias, iA,
                          hod, survey_params, prec, read_in_tables)

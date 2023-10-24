@@ -592,7 +592,7 @@ class CovTHETASpace(CovELLSpace):
             self.__covTHETA_split_gaussian(covELLspacesettings,
                                            survey_params_dict,
                                            calc_prefac)
-        if self.theta_space_dict['mix_term_do_mix_for'][0] =='xipxip':
+        if self.theta_space_dict['mix_term_do_mix_for'] is not None:
             gauss_xipxip_mix = self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict)
         if not self.cov_dict['split_gauss']:
             gauss_ww = gauss_ww_sva + gauss_ww_mix

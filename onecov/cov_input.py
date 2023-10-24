@@ -58,7 +58,7 @@ class Input:
         self.csmf_log10Mmax = None
         self.csmf_N_log10M_bin = None
         self.csmf_log10M_bins = None
-
+        
 
         # output settings
         self.output = dict()
@@ -3697,6 +3697,22 @@ class FileInput:
         self.zet_lens_z = None
         self.zet_lens_photoz = None
         self.n_tomo_lens = None
+        
+        self.zet_csmf = dict()
+        self.zet_csmf_dir = None
+        self.zet_csmf_file = None
+        self.zet_csmf_ext = None
+        self.zet_csmf_z = None
+        self.zet_csmf_pz = None
+        self.n_tomo_csmf = None
+        
+        self.csmf = dict()
+        self.csmf_directory = None
+        self.V_max_file = None
+        self.f_tomo_file = None
+        self.V_max = None
+        self.f_tomo = None
+
 
         # number of galaxy pairs per angular bin
         self.npair = dict()
@@ -3822,6 +3838,7 @@ class FileInput:
         self.cosmicshear = None
         self.est_shear = None
         self.ggl = None
+        self.cstellar_mf = None
         self.est_ggl = None
         self.clustering = None
         self.est_clust = None
@@ -3831,6 +3848,7 @@ class FileInput:
         self.sampledim = 1
         self.hod_model_mor_cen = None
         self.hod_model_scatter_cen = None
+        self.csmf_N_log10M_bin = None
 
     def __find_filename_two_inserts(self, fn, n_tomo1, n_tomo2):
         loc_pt1 = fn.find('?')
@@ -3907,6 +3925,8 @@ class FileInput:
                 self.est_clust = config['observables']['est_clust']
             else:
                 self.est_clust = ''
+            if 'cstellar_mf' in config['observables']:
+                self.cstellar_mf = config['observables'].getboolean('cstellar_mf')
         else:
             self.cosmicshear = False
             self.est_shear = ''
@@ -3914,6 +3934,7 @@ class FileInput:
             self.est_ggl = ''
             self.cosmicshear = False
             self.est_clust = ''
+            self.cstellar_mf = False
 
         if 'covRspace settings' in config:  # ask for tomo_clust
             if 'mean_redshift' in config['covRspace settings']:
@@ -3962,6 +3983,13 @@ class FileInput:
                 self.hod_model_scatter_cen = config['hod']['model_scatter_cen']
         else:
             ...
+        
+        if 'csmf settings' in config:
+            if 'csmf_N_log10M_bin' in config['csmf settings']:
+                self.csmf_N_log10M_bin = int(config['csmf settings']['csmf_N_log10M_bin'])
+            if 'csmf_log10M_bins' in config['csmf settings']:
+                self.csmf_N_log10M_bin = int(len(np.array(config['csmf settings']['csmf_log10M_bins'].split(',')).astype(float)) - 1)
+                
 
         return True
 
@@ -4057,6 +4085,27 @@ class FileInput:
                     config['redshift']['value_loc_in_bin']
             else:
                 self.value_loc_in_lensbin = 'mid'
+            if 'zcsmf_file' in config['redshift']:
+                self.zet_csmf_file =  \
+                    (config['redshift']['zcsmf_file'].replace(
+                        " ", "")).split(',')
+            if 'zcsmf_extension' in config['redshift']:
+                self.zet_csmf_ext = \
+                    config['redshift']['zcsmf_extension'].casefold()
+            if 'value_loc_in_csmfbin' in config['redshift']:
+                self.value_loc_in_csmfbin = \
+                    config['redshift']['value_loc_in_csmfbin']
+            elif 'value_loc_in_bin' in config['redshift']:
+                self.value_loc_in_csmfbin = \
+                    config['redshift']['value_loc_in_bin']
+            else:
+                self.value_loc_in_csmfbin = 'mid'
+            if 'zcsmf_directory' in config['redshift']:
+                self.zet_csmf_dir = config['redshift']['zlens_directory']
+            elif 'z_directory' in config['redshift']:
+                self.zet_csmf_dir = config['redshift']['z_directory']
+            
+
         else:
             ...
 
@@ -4115,6 +4164,14 @@ class FileInput:
                                 "specified for the redshift distribution which requires " +
                                 "the name of the extension where to find the n(z). " +
                                 "Please adjust '[redshift]: zlens_extension = ' to go on.")
+        if self.zet_csmf_file is None:
+            if self.cstellar_mf:
+                raise Exception("ConfigError: No file(s) with redshift " +
+                                "distributions for the conditional stellar mass function have been specified. Must " +
+                                "be adjusted in config file " + config_name + ", " +
+                                "[redshift]: 'zcsmf_file = ...' (separated by comma/s).")
+
+
         if (self.ggl and
             self.est_ggl != 'k_space' and
             self.est_ggl != 'projected_real') or \
@@ -4319,7 +4376,165 @@ class FileInput:
                 self.zet_lens_photoz = np.array([self.zet_lens_photoz])
             self.n_tomo_lens = len(self.zet_lens_photoz)
 
+        self.zet_csmf_pz = np.array([])
+        try:
+            save_zet_csmf_z = []
+            save_zet_csmf_nz = []
+            for fidx, file in enumerate(self.zet_csmf_file):
+                print("Reading in redshift distributions for csmf from " +
+                      "file " + path.join(self.zet_csmf_dir, file) + ".")
+                data = ascii.read(path.join(self.zet_csmf_dir, file))
+                if len(data.colnames) < 2:
+                    print("InputWarning: The file " + file + " in keyword " +
+                          "'zcsmf_file' has less than 2 columns. The data " +
+                          "file should provide the redshift on the first " +
+                          "column and the redshift distribution in the " +
+                          "second. This file will be ignored.")
+                    continue
+                different_redshifts = False
+                if fidx == 0:
+                    self.zet_csmf_z = np.array(data[data.colnames[0]])
+                    save_zet_csmf_z.append(self.zet_csmf_z)
+                    self.zet_csmf_pz = np.array(data[data.colnames[1]])
+                    save_zet_csmf_nz.append(self.zet_csmf_pz)
+                    for colname in data.colnames[2:]:
+                        self.zet_csmf_pz = \
+                            np.vstack([self.zet_csmf_pz, data[colname]])
+                        save_zet_csmf_nz.append(data[colname])
+                else:
+                    save_zet_csmf_z.append(np.array(data[data.colnames[0]]))
+                    if len(np.array(data[data.colnames[0]])) != len(self.zet_csmf_z):
+                        redshift_increment = min(self.zet_csmf_z[1]- self.zet_csmf_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
+                        redshift_max = max(np.max(min(self.zet_csmf_z)),np.max(np.array(data[data.colnames[0]])))
+                        redshift_min = min(np.min(min(self.zet_csmf_z)),np.min(np.array(data[data.colnames[0]])))
+                        self.zet_csmf_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
+                        different_redshifts = True         
+                        print("ConfigWarning: Adjusting the redshift range in the zcsmf_files due to different redshift ranges in csmf redshift distribution")
+                    if not different_redshifts:
+                        for colname in data.colnames[1:]:
+                            self.zet_csmf_pz = \
+                                np.vstack([self.zet_csmf_pz, data[colname]])
+                            save_zet_csmf_nz.append(data[colname])
+                    else:
+                        for colname in data.colnames[1:]:
+                            save_zet_csmf_nz.append(data[colname])
+            if different_redshifts:
+                self.zet_csmf_pz = np.array([])
+                for i_z in range(len(save_zet_csmf_nz)):
+                    if i_z == 0:
+                        self.zet_csmf_pz = np.interp(self.zet_csmf_z,
+                                                        save_zet_csmf_z[i_z],
+                                                        save_zet_csmf_nz[i_z],
+                                                        left = 0,
+                                                        right = 0)
+                    else:
+                        self.zet_csmf_pz = np.vstack([self.zet_csmf_pz, np.interp(self.zet_csmf_z,
+                                                                                    save_zet_csmf_z[i_z],
+                                                                                    save_zet_csmf_nz[i_z],
+                                                                                    left = 0,
+                                                                                    right = 0)])
+        except TypeError:
+            self.zet_csmf_pz = None
+        except UnicodeDecodeError:  # fits
+            hdul = fits.open(path.join(self.zet_csmf_dir, file))
+            ext = 1
+            try:
+                while self.zet_csmf_ext != \
+                        hdul[ext].header['EXTNAME'].casefold():
+                    ext += 1
+            except IndexError:
+                raise Exception('ConfigError: The extension name ' +
+                                self.zet_csmf_ext + ' could not be found in the file ' +
+                                path.join(self.zet_csmf_dir, file) + '. Must be adjusted ' +
+                                'to go on.')
+
+            try:
+                self.zet_csmf_z = hdul[ext].data['Z_MID']
+                self.value_loc_in_csmfbin = 'mid'
+            except KeyError:
+                self.zet_csmf_z = hdul[ext].data['Z_LOW']
+                self.value_loc_in_csmfbin = 'left'
+
+            bin_idx = 1
+            while 'BIN'+str(bin_idx) in hdul[ext].data.names:
+                self.zet_csmf_pz = np.concatenate((self.zet_csmf_pz,
+                                                       hdul[ext].data['BIN'+str(bin_idx)]))
+                bin_idx += 1
+            self.zet_csmf_pz = self.zet_csmf_pz.reshape((bin_idx-1,
+                                                                 hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
+
+        if self.zet_clust_z is not None:
+            if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
+                self.zet_clust_z = self.zet_clust_z[1:]
+                if len(self.zet_clust_nz.shape) == 1:
+                    self.zet_clust_nz = self.zet_clust_nz[1:]
+                else:
+                    self.zet_clust_nz = self.zet_clust_nz[:, 1:]
+            if len(self.zet_clust_nz.shape) == 1:
+                self.zet_clust_nz = np.array([self.zet_clust_nz])
+            self.n_tomo_clust = len(self.zet_clust_nz)
+        if self.zet_csmf_z is not None:
+            if self.zet_csmf_z[0] < 1e-2 and self.value_loc_in_csmfbin != 'left':
+                self.zet_csmf_z = self.zet_csmf_z[1:]
+                self.zet_csmf_pz = self.zet_csmf_pz[:, 1:]
+            if len(self.zet_csmf_pz.shape) == 1:
+                self.zet_csmf_pz = np.array([self.zet_csmf_pz])
+            self.n_tomo_csmf = len(self.zet_csmf_pz)
+        if self.zet_lens_z is not None:
+            if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
+                self.zet_lens_z = self.zet_lens_z[1:]
+                self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
+            if len(self.zet_lens_photoz.shape) == 1:
+                self.zet_lens_photoz = np.array([self.zet_lens_photoz])
+            self.n_tomo_lens = len(self.zet_lens_photoz)
+
         return True
+    
+    def __read_in_csmf_files(self, config):
+        """
+        Reads in the files for the conditional stellar mass function
+        """
+        if 'csmf settings' in config:
+            if 'csmf_directory' in config['csmf settings']:
+                self.csmf_directory = \
+                    config['csmf settings']['csmf_directory']
+            else:
+                self.csmf_directory = ''
+        self.V_max = np.zeros((self.csmf_N_log10M_bin,self.n_tomo_csmf))
+        if self.csmf_directory != '':
+            if 'V_max_file' in config['csmf settings']:
+                self.V_max_file = config['csmf settings']['V_max_file']
+                data = ascii.read(path.join(self.csmf_directory, self.V_max_file))
+                if len(data[data.colnames[0]]) != int(self.n_tomo_csmf*self.csmf_N_log10M_bin):
+                    raise Exception("ConfigError: The Vmax file needs to have the dimensions fitting to the number of stellar mass bins "+
+                                    "times the number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
+                for tomo in range(self.n_tomo_csmf):
+                    self.V_max[:, tomo] = np.array(data[data.colnames[1]][tomo**self.csmf_N_log10M_bin:(tomo+1)*self.csmf_N_log10M_bin])
+            else:
+                if self.cstellar_mf:
+                    raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
+                                    "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
+            if 'f_tomo_file' in config['csmf settings']:
+                self.f_tomo_file = config['csmf settings']['f_tomo_file']
+                data = np.array(np.loadtxt(path.join(self.csmf_directory, self.f_tomo_file)))
+                if self.n_tomo_csmf != 1:
+                    if len(data[0]) != int(self.n_tomo_csmf):
+                        raise Exception("ConfigError: The f_tomo file needs to have the dimensions fitting to the "+
+                                        "number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
+                    self.f_tomo = data
+                else:
+                    self.f_tomo = data
+            else:
+                if self.cstellar_mf:
+                    raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
+                                    "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
+        else:
+            if self.cstellar_mf:
+                raise Exception("ConfigError: We require a files for the Vmax estimator if the csmf is to be calculated. "+
+                                "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." +
+                                 "f_tomo_file = ....")
+        return True
+
 
     def __read_in_npair_files(self,
                               nfile):
@@ -4810,7 +5025,8 @@ class FileInput:
         return True
 
     def __read_in_Cell_manyfiles(self,
-                                 Cfile):
+                                 Cfile,
+                                 type):
         """
         Reads in one file with a tabulated projected power spectrum 
         which is used to calculate the covariance.
@@ -4819,20 +5035,43 @@ class FileInput:
         ----------
         Cfile : string
             Name of the projected power spectrum file.
+        type : string
+            Name of the type to read in
 
         File structure :
         --------------
-        # ell   t1  t2    C(ell)[t1, t2, s1] ...  C(ell)[t1, t2, sN]
-        2       1   1     xxe-x              ...  xxe-x
-        2       1   ...   xxe-x              ...  xxe-x
-        2       ... ...   xxe-x              ...  xxe-x 
-        2       max max   xxe-x              ...  xxe-x
-        3       1   1     xxe-x              ...  xxe-x
-        ...     ...       ...                ...  ...
-        1.0e5   max max   xxe-x              ...  xxe-x
+        For gg
+        # ell    C(ell)[s1,s1] ...  C(ell)[sN,sN]
+        2        xxe-x              ...  xxe-x
+        2        xxe-x              ...  xxe-x
+        2        xxe-x              ...  xxe-x 
+        2        xxe-x              ...  xxe-x
+        3        xxe-x              ...  xxe-x
+        ...                     ...  ...
+        1.0e5    xxe-x              ...  xxe-x
+
+        For gkappa
+        # ell    C(ell)[s1] ...  C(ell)[sN]
+        2        xxe-x              ...  xxe-x
+        2        xxe-x              ...  xxe-x
+        2        xxe-x              ...  xxe-x 
+        2        xxe-x              ...  xxe-x
+        3        xxe-x              ...  xxe-x
+        ...              ...  ...
+        1.0e5    xxe-x              ...  xxe-x
+        
+        For kappakappa
+        # ell    C(ell)[s1,s1] 
+        2        xxe-x             
+        2        xxe-x              
+        2        xxe-x             
+        2        xxe-x              
+        3        xxe-x             
+        ...       ...  
+        1.0e5    xxe-x     
 
         s -> galaxy sample bin number (out of N)
-             [currently only one supported]
+             all(!) sample bin combinations required
         t -> all(!) tomographic bin combination (out of T1*T2)
              for kappakappa: M = tomo_lens**2
              for gkappa:     M = tomo_lens*tomo_clust
@@ -4851,22 +5090,31 @@ class FileInput:
                       "C_xy(ell) values. One column per (e.g.) stellar mass " +
                       "sample. This file will be ignored.")
                 return None
-
-            sampledim = len(data.colnames[1:])
-            self.sampledim = max(self.sampledim, sampledim)
-
+            if type == "gg":
+                sampledim = int(np.sqrt(len(data.colnames[1:])))
+                self.sampledim = max(self.sampledim, sampledim)
+            if type == "gm":
+                sampledim = len(data.colnames[1:])
+                self.sampledim = max(self.sampledim, sampledim)
+            if type == "mm":
+                sampledim = 1
             self.Cxy_ell = np.array(data[data.colnames[0]])
             Ctab = np.array(data[data.colnames[1]])
             for colname in data.colnames[3:]:
                 Ctab = np.vstack([Ctab, data[colname]])
-            Ctab = Ctab.reshape((sampledim, len(self.Cxy_ell)))
-            Ctab = np.swapaxes(Ctab, 0, 1)
+            if type == "gg":
+                Ctab = Ctab.reshape((sampledim, sampledim, len(self.Cxy_ell)))
+                Ctab = np.transpose(Ctab, (2, 0,1))
+            if type == "gm":
+                Ctab = Ctab.reshape((sampledim, len(self.Cxy_ell)))
+                Ctab = np.transpose(Ctab, (1,0))
             return Ctab
         except TypeError:
             return None
 
     def __read_in_Cell_files(self,
-                             Cfiles):
+                             Cfiles,
+                             type):
         """
         Reads in one file with a tabulated projected power spectrum 
         which is used to calculate the covariance.
@@ -4875,19 +5123,44 @@ class FileInput:
         ----------
         Cfiles : list
             List of names of the projected power spectrum file.
+        type : string
+            Name of the type to read in
 
         File structure :
         --------------
-        # ell   C(ell)[s1] ...  C(ell)[sN]
-        2       xxe-x      ...  xxe-x
-        3       xxe-x      ...  xxe-x
-        ...     ...        ...  ...
-        1.0e5   xxe-x      ...  xxe-x
+        For gg
+        # ell   t1  t2    C(ell)[t1, t2, s1,s1] ...  C(ell)[t1, t2, sN,sN]
+        2       1   1     xxe-x              ...  xxe-x
+        2       1   ...   xxe-x              ...  xxe-x
+        2       ... ...   xxe-x              ...  xxe-x 
+        2       max max   xxe-x              ...  xxe-x
+        3       1   1     xxe-x              ...  xxe-x
+        ...     ...       ...                ...  ...
+        1.0e5   max max   xxe-x              ...  xxe-x
+
+        For gkappa
+        # ell   t1  t2    C(ell)[t1, t2, s1] ...  C(ell)[t1, t2, sN]
+        2       1   1     xxe-x              ...  xxe-x
+        2       1   ...   xxe-x              ...  xxe-x
+        2       ... ...   xxe-x              ...  xxe-x 
+        2       max max   xxe-x              ...  xxe-x
+        3       1   1     xxe-x              ...  xxe-x
+        ...     ...       ...                ...  ...
+        1.0e5   max max   xxe-x              ...  xxe-x
+        
+        For kappakappa
+        # ell   t1  t2    C(ell)[t1, t2]
+        2       1   1     xxe-x              
+        2       1   ...   xxe-x           
+        2       ... ...   xxe-x        
+        2       max max   xxe-x             
+        3       1   1     xxe-x             
+        ...     ...       ...                
+        1.0e5   max max   xxe-x              
 
         s -> galaxy sample bin number (out of N)
-             [currently only one supported]
-        N_unique_tomo_combinations files with one ell column and 
-        N_sampledims Cell columns
+             all(!) sample bin combinations required
+        t -> all(!) tomographic bin combination (out of T1*T2)
              for kappakappa: M = tomo_lens**2
              for gkappa:     M = tomo_lens*tomo_clust
              for gg:         M = tomo_clust**2
@@ -4901,7 +5174,7 @@ class FileInput:
                 if (path.exists(path.join(self.Cell_dir, Cfiles[0]))):
                     data = ascii.read(path.join(self.Cell_dir, Cfiles[0]))
                     if len(data.colnames) == 2:
-                        Ctab = self.__read_in_Cell_files(Cfiles[0])
+                        Ctab = self.__read_in_Cell_files(Cfiles[0], type)
                         Ctab = Ctab[:, :, None, None]
                         return Ctab, len(self.Cxy_ell), len(Ctab[0]), 1, 1
                     if len(data.colnames) < 4:
@@ -4922,16 +5195,54 @@ class FileInput:
                     if(min(data[data.colnames[2]]) == 0):
                         n_tomo_2 += 1
                     elldim = int(len(data) / n_tomo_1 / n_tomo_2)
-                    sampledim = len(data.colnames[3:])
+                    if type == "gg":
+                        sampledim = int(np.sqrt(len(data.colnames[3:])))
+                        if sampledim > self.sampledim:
+                            self.sampledim = sampledim
+                        else:
+                            sampledim = self.sampledim
+                    if type == "gm":
+                        sampledim = len(data.colnames[3:])
+                        if sampledim > self.sampledim:
+                            self.sampledim = sampledim
+                        else:
+                            sampledim = self.sampledim
+                    if type == "mm":
+                        sampledim = 1
+                        if sampledim > self.sampledim:
+                            self.sampledim = sampledim
+                        else:
+                            sampledim = self.sampledim
                     self.Cxy_ell = np.array(
                         data[data.colnames[0]][::n_tomo_1*n_tomo_2])
-
-                    Ctab = np.array(data[data.colnames[3]])
-                    for colname in data.colnames[4:]:
-                        Ctab = np.vstack([Ctab, data[colname]])
-                    Ctab = Ctab.reshape(sampledim, elldim,
-                                        n_tomo_1, n_tomo_2).swapaxes(0, 1)
-
+                    Ctab = np.array(data[data.colnames[3]].reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2)))
+                    if type == "gg":
+                        Ctab_aux = np.zeros((len(self.Cxy_ell),sampledim,sampledim,n_tomo_1,n_tomo_2))
+                        Ctab_aux[:,0,0,:,:] = Ctab
+                        counter = 4
+                        for i_sample in range(sampledim):
+                            for j_sample in range(sampledim):
+                                if i_sample == 0 and j_sample == 0:
+                                    continue
+                                else:
+                                    Ctab_aux[:,i_sample, j_sample,:,:] = data[data.colnames[counter]].reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2))
+                                    counter +=1
+                    if type == "gm":
+                        Ctab_aux = np.zeros((len(self.Cxy_ell),sampledim,n_tomo_1,n_tomo_2))
+                        Ctab_aux[:,0,:,:] = Ctab
+                        counter = 4
+                        for i_sample in range(sampledim):
+                            if i_sample == 0:
+                                continue
+                            else:
+                                Ctab_aux[:,i_sample,:,:] = data[data.colnames[counter]].reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2))
+                                counter +=1
+                    if type == "gg":
+                        Ctab = Ctab_aux
+                    if type == "gm":
+                        Ctab = Ctab_aux
+                    if type == "mm":
+                        Ctab = Ctab.reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2))[:,None, :,:]*np.ones(sampledim)[None, :, None, None]
                     return Ctab, elldim, sampledim, n_tomo_1, n_tomo_2
                 else:
                     print("InputWarning: The file " +
@@ -4944,7 +5255,13 @@ class FileInput:
         else:
             Ctabs = []
             for Cfile in Cfiles:
-                Ctab = self.__read_in_Cell_manyfiles(Cfile)
+                if 'gg' in Cfile:
+                    type = 'gg'
+                if 'gm' in Cfile:
+                    type = 'gm'
+                if 'mm' in Cfile:
+                    type = 'mm'
+                Ctab = self.__read_in_Cell_manyfiles(Cfile,type)
                 if Ctab is not None:
                     Ctabs.append(Ctab)
                 else:
@@ -5032,7 +5349,7 @@ class FileInput:
                     self.Cmm_file[0], self.n_tomo_lens, self.n_tomo_lens)
 
         self.Cgg_tab, elldim_gg, sampledim_gg, n_tomo_clust_gg, _ = \
-            self.__read_in_Cell_files(self.Cgg_file)
+            self.__read_in_Cell_files(self.Cgg_file, 'gg')
         if n_tomo_clust_gg == -1:
             Cgg_reshape = np.zeros((elldim_gg, sampledim_gg,
                                     self.n_tomo_clust, self.n_tomo_clust))
@@ -5045,7 +5362,7 @@ class FileInput:
             self.Cgg_tab = Cgg_reshape
             n_tomo_clust_gg = self.n_tomo_clust
         self.Cgm_tab, elldim_gm, sampledim_gm, n_tomo_clust_gm, \
-            n_tomo_lens_gm = self.__read_in_Cell_files(self.Cgm_file)
+            n_tomo_lens_gm = self.__read_in_Cell_files(self.Cgm_file, 'gm')
         if n_tomo_clust_gm == -1:
             Cgm_reshape = np.zeros((elldim_gm, sampledim_gm,
                                     self.n_tomo_clust, self.n_tomo_lens))
@@ -5058,7 +5375,7 @@ class FileInput:
             n_tomo_clust_gm = self.n_tomo_clust
             n_tomo_lens_gm = self.n_tomo_lens
         self.Cmm_tab, elldim_mm, sampledim_mm, n_tomo_lens_mm, _ = \
-            self.__read_in_Cell_files(self.Cmm_file)
+            self.__read_in_Cell_files(self.Cmm_file, 'mm')
         if n_tomo_lens_mm == -1:
             Cmm_reshape = np.zeros((elldim_mm, sampledim_mm,
                                     self.n_tomo_lens, self.n_tomo_lens))
@@ -5213,7 +5530,13 @@ class FileInput:
         else:
             Ctabs = []
             for Cfile in Tfiles:
-                Ctab = self.__read_in_Cell_manyfiles(Cfile)
+                if 'gg' in Cfile:
+                    type = 'gg'
+                if 'gm' in Cfile or 'gkappa' in Cfile:
+                    type = 'gm'
+                if 'mm' in Cfile or 'kappakappa' in Cfile:
+                    type = 'mm'
+                Ctab = self.__read_in_Cell_manyfiles(Cfile,type)
                 if Ctab is not None:
                     Ctabs.append(Ctab)
                 else:
@@ -6274,6 +6597,15 @@ class FileInput:
                   self.value_loc_in_lensbin]
         self.zet_lens = dict(zip(keys, values))
 
+        keys = ['z', 'pz']
+        values = [self.zet_csmf_z, self.zet_csmf_pz]
+        self.zet_csmf = dict(zip(keys, values))
+
+        keys = ['V_max', 'f_tomo']
+        values = [self.V_max, self.f_tomo]
+        self.csmf = dict(zip(keys, values))
+
+
         keys = []
         values = []
         if self.zet_clust_file is not None:
@@ -6289,6 +6621,9 @@ class FileInput:
                          'value_loc_in_lensbin'])
             values.extend([self.zet_lens_dir, self.zet_lens_file,
                            self.value_loc_in_lensbin])
+        if self.zet_csmf_file is not None:
+            keys.extend(['zcsmf_directory', 'zcsmf_file'])
+            values.extend([self.zet_csmf_dir, self.zet_csmf_file])
         self.zet_input = dict(zip(keys, values))
         if self.zet_clust_file is not None:
             self.zet_input['zclust_file'] = \
@@ -6296,6 +6631,10 @@ class FileInput:
         if self.zet_lens_file is not None:
             self.zet_input['zlens_file'] = \
                 ', '.join(map(str, self.zet_lens_file))
+        if self.zet_csmf_file is not None:
+            self.zet_input['zcsmf_file'] = \
+                ', '.join(map(str, self.zet_csmf_file))
+
 
         keys = ['theta_mm', 'npair_mm', 'theta_gm', 'npair_gm', 'theta_gg',
                 'npair_gg']
@@ -6579,6 +6918,7 @@ class FileInput:
 
         self.__read_config_for_consistency_checks(config, config_name)
         self.__read_in_z_files(config, config_name)
+        self.__read_in_csmf_files(config)
         self.__get_npair_tabs(config)
         self.__get_powspec_tabs(config)
         self.__get_Cell_tabs(config)
@@ -6593,6 +6933,8 @@ class FileInput:
 
         return {'zclust': self.zet_clust,
                 'zlens': self.zet_lens,
+                'zcsmf': self.zet_csmf,
+                'csmf': self.csmf,
                 'npair': self.npair,
                 'Pxy': self.Pxy_tab,
                 'Cxy': self.Cxy_tab,

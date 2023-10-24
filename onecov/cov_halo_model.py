@@ -156,7 +156,9 @@ class HaloModel(Setup):
         self.norm_bias = -1
         self.effective_bias = self.calc_effective_bias(
             bias_dict, hod_dict, prec['hm'])
-        #self.calc_mass_func(0, cosmo_dict, prec['hm'],  prec['powspec'])
+        self.__set_spline_galaxy_stellar_mf(hod_dict)
+        self.__set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
+        
 
     def calc_mass_func(self,
                        zet,
@@ -1069,8 +1071,8 @@ class HaloModel(Setup):
         
         Returns
         -------
-        csmf_type : array 
-            the galaxy stellar mass with shape (300)
+        smf : array 
+            the galaxy stellar mass with shape (sample bins, 300)
 
         """
         if type == 'sat':
@@ -1079,15 +1081,117 @@ class HaloModel(Setup):
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return np.trapz(self.mass_func.dndm[0, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return np.trapz(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
         if type == 'cen':
             csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'cen',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return np.trapz(self.mass_func.dndm[0, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return np.trapz(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+    
+    def galaxy_stellar_mf_bias(self,
+                               hod_dict,
+                               bias_dict,
+                               hm_prec,
+                               type):
+        """
+        Calculates the stellar mass function for centrals and satellites times
+        the halo bias (phitilde)
         
+        Parameters
+        ----------
+        type : string
+            can be 'sat' or 'cen' for satellites and centrals respectively
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation 
+            distribution used. This defines the shot noise level of the 
+            covariance and includes the mass bin definition of the 
+            different galaxy populations. To be passed from the 
+            read_input method of the Input class.
+        
+        Returns
+        -------
+        smf : array 
+            the galaxy stellar mass with shape (sample bins, 300)
+
+        """
+        if type == 'sat':
+            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+                                                         'sat',
+                                                         self.mor_tab,
+                                                         self.occprob_tab,
+                                                         self.occnum_tab)[1]
+            return np.trapz((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+        if type == 'cen':
+            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+                                                         'cen',
+                                                         self.mor_tab,
+                                                         self.occprob_tab,
+                                                         self.occnum_tab)[1]
+            return np.trapz((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+
+    def __set_spline_galaxy_stellar_mf(self,
+                                       hod_dict):
+        """
+        Sets up the splines for the galaxy stellar mass function as private variables
+        of the halo_model class for both satellites and centrals
+
+        Parameters
+        ----------
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation 
+            distribution used. This defines the shot noise level of the 
+            covariance and includes the mass bin definition of the 
+            different galaxy populations. To be passed from the 
+            read_input method of the Input class.
+        """
+        aux_M = np.zeros((len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]) + len(self.hod.Mbins[0,:]))
+        aux_smf_s = self.galaxy_stellar_mf(hod_dict, 'sat')
+        aux_smf_c = self.galaxy_stellar_mf(hod_dict, 'cen')
+        aux_s = np.zeros_like(aux_M)
+        aux_c = np.zeros_like(aux_M)
+        for i_bins in range(len(self.hod.Mbins[:,0]) - 1):
+            aux_M[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = self.hod.Mbins[i_bins,:-1]
+            aux_c[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = aux_smf_c[i_bins,:-1]
+            aux_s[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = aux_smf_s[i_bins,:-1]
+        aux_M[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = self.hod.Mbins[len(self.hod.Mbins[:,0]) - 1,:]
+        aux_c[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_c[len(self.hod.Mbins[:,0]) - 1,:]
+        aux_s[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_s[len(self.hod.Mbins[:,0]) - 1,:]
+        self.stellar_mass = aux_M
+        self.galaxy_smf_c = UnivariateSpline(np.array(aux_M), np.array(aux_c) , k=2, s=0, ext=0)
+        self.galaxy_smf_s = UnivariateSpline(np.array(aux_M), np.array(aux_s) , k=2, s=0, ext=0)
+
+    def __set_spline_galaxy_stellar_mf_bias(self,
+                                            hod_dict,bias_dict, hm_prec):
+        """
+        Sets up the splines for the galaxy stellar mass function as private variables
+        of the halo_model class for both satellites and centrals
+
+        Parameters
+        ----------
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation 
+            distribution used. This defines the shot noise level of the 
+            covariance and includes the mass bin definition of the 
+            different galaxy populations. To be passed from the 
+            read_input method of the Input class.
+        """
+        aux_M = np.zeros((len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]) + len(self.hod.Mbins[0,:]))
+        aux_smf_s = self.galaxy_stellar_mf_bias(hod_dict,bias_dict, hm_prec, 'sat')
+        aux_smf_c = self.galaxy_stellar_mf_bias(hod_dict,bias_dict, hm_prec, 'cen')
+        aux_s = np.zeros_like(aux_M)
+        aux_c = np.zeros_like(aux_M)
+        for i_bins in range(len(self.hod.Mbins[:,0]) - 1):
+            aux_M[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = self.hod.Mbins[i_bins,:-1]
+            aux_c[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = aux_smf_c[i_bins,:-1]
+            aux_s[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = aux_smf_s[i_bins,:-1]
+        aux_M[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = self.hod.Mbins[len(self.hod.Mbins[:,0]) - 1,:]
+        aux_c[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_c[len(self.hod.Mbins[:,0]) - 1,:]
+        aux_s[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_s[len(self.hod.Mbins[:,0]) - 1,:]
+        self.galaxy_smf_bias_c = UnivariateSpline(np.array(aux_M), np.array(aux_c) , k=2, s=0, ext=0)
+        self.galaxy_smf_bias_s = UnivariateSpline(np.array(aux_M), np.array(aux_s) , k=2, s=0, ext=0)        
+
     def conditional_galaxy_stellar_mf(self,
                                       hod_dict,
                                       type):
@@ -1123,3 +1227,84 @@ class HaloModel(Setup):
                                                       self.mor_tab,
                                                       self.occprob_tab,
                                                       self.occnum_tab)[1][0,:,:]
+        
+    def count_matter_bispectrum(self,
+                                bias_dict,
+                                hm_prec):
+        """
+        Calculates the three dimensional count-matter density cross-bispectrum
+        for a collapsed triange at the wavenumbers specified in log10kbins
+        and redshift specified in the class. This is used for later computation
+        of the cross-correlation between the conditional stellar mass function and
+        2pt statistics
+
+        Parameters
+        ----------
+        bias_dict : dictionary
+            Specifies all the information about the bias model. To be 
+            passed from the read_input method of the Input class.
+        hm_prec : dictionary
+            Contains precision information about the HaloModel (also, 
+            see hmf documentation by Steven Murray), this includes mass 
+            range and spacing for the mass integrations in the halo 
+            model. To be passed from the read_input method of the Input 
+            class.
+
+        Returns
+        -------
+        nBcmm_mu : array
+            with shape (log10k bins, 
+                        sample bins, sample bins)
+
+        References
+        ----------
+        Takada and Bridle 2007,  New Journal of Physics, 9, 446
+
+        """
+        halo_profile = self.uk(bias_dict['Mc_relation_cen'])
+        halo_bias = self.bias(bias_dict,hm_prec)
+        csmf = self.conditional_galaxy_stellar_mf('cen')
+        term1 = self.mass_func.dndm[None, None,:]*csmf[None, :, :]*(self.mass_func.m**2)[None, None,:]/self.rho_bg**2*(halo_profile**2)[:, None, :]
+        term2 = self.mass_func.dndm[None, None,:]*csmf[None, :, :]*(self.mass_func.m)[None, None,:]/self.rho_bg*(halo_profile)[:, None, :]*halo_bias[None,None,:]
+        term3 = self.mass_func.dndm[None,:]*(self.mass_func.m)[None,:]/self.rho_bg*(halo_profile)[:, :]*halo_bias[None,:]
+
+        I1 = np.trapz(term1, self.mass_func.m, axis=-1)
+        I2 = np.trapz(term2, self.mass_func.m, axis=-1) * np.trapz(term3, self.mass_func.m, axis=-1)[:, None]
+
+        return I1 + 2.0 * self.mass_func.power[:, None] * I2
+    
+    def get_count_matter_bispectrum(self,
+                                    bias_dict,
+                                    hm_prec,
+                                    log10csmf_mass_bins):
+        """
+        Sets the splines for the matter count matter bispectrum
+
+        Parameters
+        ----------
+        bias_dict : dictionary
+            Specifies all the information about the bias model. To be 
+            passed from the read_input method of the Input class.
+        hm_prec : dictionary
+            Contains precision information about the HaloModel (also, 
+            see hmf documentation by Steven Murray), this includes mass 
+            range and spacing for the mass integrations in the halo 
+            model. To be passed from the read_input method of the Input 
+            class.
+        obs_dict : dictionary
+            with the following keys (To be passed from the read_input method
+            of the Input class.)
+        """
+
+        aux_M = np.zeros((len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]) + len(self.hod.Mbins[0,:]))
+        aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hm_prec)
+        aux_bispec = np.zeros((len(aux_M)),self.mass_func.k)
+        for i_bins in range(len(self.hod.Mbins[:,0]) - 1):
+            aux_M[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = self.hod.Mbins[i_bins,:-1]
+            aux_bispec[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1]), :] = aux_bispec_count_mm[:, i_bins,:-1]
+        aux_M[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = self.hod.Mbins[len(self.hod.Mbins[:,0]) - 1,:]
+        aux_bispec[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_bispec_count_mm[:, len(self.hod.Mbins[:,0]) - 1,:]
+        count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
+        for i_k in range(len(self.mass_func.k)):
+            count_matter_bispec[i_k, :] = np.exp(np.intep(log10csmf_mass_bins,np.log10(aux_M), np.log(aux_bispec)))
+        return count_matter_bispec

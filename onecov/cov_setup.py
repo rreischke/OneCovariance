@@ -149,8 +149,9 @@ class Setup():
 
         self.zet_clust = read_in_tables['zclust']
         self.zet_lens = read_in_tables['zlens']
+        self.zet_csmf = read_in_tables['zcsmf']
 
-        self.zet_min, self.zet_max, self.n_tomo_clust, self.n_tomo_lens = \
+        self.zet_min, self.zet_max, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_csmf = \
             self.__consistency_checks_for_z_support_in_tabs()
         self.tomos_6x2pt_clust = \
             self.__consistency_checks_for_tomographic_dims(survey_params_dict)
@@ -201,12 +202,12 @@ class Setup():
         warnings or errors if they are incompatible. 
 
         """
-
         try:
             zet_min = min(self.zet_clust['z'][0], self.zet_lens['z'][0])
             zet_max = max(self.zet_clust['z'][-1], self.zet_lens['z'][-1])
             n_tomo_clust = len(self.zet_clust['nz'])
             n_tomo_lens = len(self.zet_lens['photoz'])
+            n_tomo_csmf = len(self.zet_csmf['pz'])
         except TypeError:
             if self.zet_clust['z'] is not None:
                 zet_min = self.zet_clust['z'][0]
@@ -218,7 +219,11 @@ class Setup():
                 zet_max = self.zet_lens['z'][-1]
                 n_tomo_lens = len(self.zet_lens['photoz'])
                 n_tomo_clust = 0
-
+            if self.zet_csmf['z'] is not None:
+                zet_min = self.zet_csmf['z'][0]
+                zet_max = self.zet_csmf['z'][-1]
+                n_tomo_csmf = len(self.zet_csmf['pz'])
+    
         # check for power spectra look-up tables
         if self.Pxy_tab['z'] is not None:
             if self.Pxy_tab['z'][0] > 1e-4:
@@ -252,7 +257,7 @@ class Setup():
                                 " while the redshift distribution requires " +
                                 str(round(zet_max, 4)) + ". Must be " +
                                 "adjusted to go on.")
-        return zet_min, zet_max, n_tomo_clust, n_tomo_lens
+        return zet_min, zet_max, n_tomo_clust, n_tomo_lens, n_tomo_csmf
 
     def __consistency_checks_for_tomographic_dims(self,
                                                   survey_params_dict):

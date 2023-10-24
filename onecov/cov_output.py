@@ -2928,7 +2928,7 @@ class Output():
             else:
                 Cell_str = ''
                 for sm in range(sampledim):
-                    Cell_str += 'Cell_gkappa_' + str(sm+1) + '\t\t\t'
+                    Cell_str += 'Cell_g_'+ str(sm+1) +'kappa_' + '\t\t\t'
             olist_gm = []
             olist_gm.append("#ell\t\ttomo_i\ttomo_j\t"+Cell_str)
             for ellidx, ell in enumerate(ellrange):
@@ -2948,12 +2948,7 @@ class Output():
         if Cell_mm is not None and type(Cell_mm) is not int:
             sampledim = Cell_mm.shape[1]
             ostr_format = '%.10e\t%i\t\t%i\t\t'
-            if sampledim == 1:
-                Cell_str = 'Cell_kappakappa'     
-            else:
-                Cell_str = ''
-                for sm in range(sampledim):
-                    Cell_str += 'Cell_kappakappa_' + str(sm+1) + '\t\t'
+            Cell_str = 'Cell_kappakappa'     
             olist_mm = []
             olist_mm.append("#ell\t\ttomo_i\ttomo_j\t"+Cell_str)
             for ellidx, ell in enumerate(ellrange):
@@ -2961,8 +2956,7 @@ class Output():
                     for tj in range(n_tomo_lens):
                         ostr = ostr_format \
                             % (ell, ti+1, tj+1)
-                        for i_sample in range(sampledim):
-                            ostr += '%10e\t\t\t' % Cell_mm[ellidx, i_sample, ti, tj]
+                        ostr += '%10e\t\t\t' % Cell_mm[ellidx, 0, ti, tj]
                         olist_mm.append(ostr)
             fname = self.__add_string_to_filename('kappakappa', self.Cellfile)
             with open(fname, 'w') as file:
