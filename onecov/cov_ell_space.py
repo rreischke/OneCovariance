@@ -385,15 +385,15 @@ class CovELLSpace(PolySpectra):
         self.spline_zcsmf = []
         self.chi_min_clust = np.zeros(self.n_tomo_clust)
         self.chi_max_clust = np.zeros(self.n_tomo_clust)
-        if self.n_tomo_clust > 0:
+        if self.gm or self.gg:
             dzdchi_clust = self.cosmology.efunc(self.zet_clust['z']) \
                 / self.cosmology.hubble_distance.value  \
                 / self.cosmology.h
-        if self.n_tomo_lens > 0:
+        if self.gm or self.mm:
             dzdchi_lens = self.cosmology.efunc(self.zet_lens['z']) \
                 / self.cosmology.hubble_distance.value  \
                 / self.cosmology.h
-        if self.n_tomo_csmf > 0:
+        if self.csmf:
             dzdchi_csmf= self.cosmology.efunc(self.zet_csmf['z']) \
                 / self.cosmology.hubble_distance.value  \
                 / self.cosmology.h
@@ -535,7 +535,7 @@ class CovELLSpace(PolySpectra):
         gg_tab_bool, gm_tab_bool, mm_tab_bool = False, False, False
         if self.gg or self.gm and Cxy_tab['gg'] is not None:
             gg_tab_bool = True
-        if self.mm or self.gm and Cxy_tab['mm'] is not None:
+        if (self.mm or self.gm) and Cxy_tab['mm'] is not None:
             mm_tab_bool = True
         if (self.gm or (self.gg and self.mm and self.cross_terms)) and \
            Cxy_tab['gm'] is not None:
@@ -546,7 +546,6 @@ class CovELLSpace(PolySpectra):
                       "spectra 'galaxy-galaxy', 'galaxy-kappa' and " +
                       "'kappa-kappa' are needed. The missing C_ells will be " +
                       "calculated which may cause a biased result.")
-
         Cgg, Cgm, Cmm = None, None, None
         if gg_tab_bool:
             Cgg = Cxy_tab['gg']

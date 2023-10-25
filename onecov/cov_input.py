@@ -4560,6 +4560,7 @@ class FileInput:
         """
         print("Reading in tabulated number of galaxy pairs from file " +
               path.join(self.npair_dir, nfile) + ".")
+
         data = ascii.read(path.join(self.npair_dir, nfile))
         if len(data.colnames) < 2:
             print("InputWarning: The file " +
@@ -4605,12 +4606,18 @@ class FileInput:
             if 'npair_gg_file' in config['tabulated inputs files']:
                 self.npair_gg_file = (config['tabulated inputs files']
                                       ['npair_gg_file'].replace(" ", "")).split(',')
+                if self.npair_gg_file[0] == '':
+                    self.npair_gg_file = None
             if 'npair_gm_file' in config['tabulated inputs files']:
                 self.npair_gm_file = (config['tabulated inputs files']
                                       ['npair_gm_file'].replace(" ", "")).split(',')
+                if self.npair_gm_file[0] == '':
+                    self.npair_gm_file = None
             if 'npair_mm_file' in config['tabulated inputs files']:
                 self.npair_mm_file = (config['tabulated inputs files']
                                       ['npair_mm_file'].replace(" ", "")).split(',')
+                if self.npair_mm_file[0] == '':
+                    self.npair_mm_file = None
         else:
             ...
 
@@ -5385,7 +5392,6 @@ class FileInput:
                     tidx += 1
             self.Cmm_tab = Cmm_reshape
             n_tomo_lens_mm = self.n_tomo_lens
-
         if elldim_gg is not None and elldim_gm is not None:
             if elldim_gg != elldim_gm:
                 raise Exception("FileInputError: The number of wavenumber " +
@@ -6919,7 +6925,7 @@ class FileInput:
         self.__read_in_csmf_files(config)
         self.__get_npair_tabs(config)
         self.__get_powspec_tabs(config)
-        self.__get_Cell_tabs(config)
+        self.__get_Cell_tabs(config)  
         self.__get_effbias_tabs(config)
         self.__get_mor_tabs(config)
         self.__get_occprob_tabs(config)

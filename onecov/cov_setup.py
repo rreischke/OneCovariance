@@ -202,6 +202,7 @@ class Setup():
         warnings or errors if they are incompatible. 
 
         """
+        zet_min, zet_max, n_tomo_clust, n_tomo_lens, n_tomo_csmf = None, None, None, None, None
         try:
             zet_min = min(self.zet_clust['z'][0], self.zet_lens['z'][0])
             zet_max = max(self.zet_clust['z'][-1], self.zet_lens['z'][-1])
