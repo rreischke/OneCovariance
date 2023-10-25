@@ -490,6 +490,9 @@ class CovBandPowers(CovTHETASpace):
                     'in ' + str(round(eta, 1)) + 'min', end="")
             tcomb += 1
         print("")
+        np.save("Wl_EE",self.Wl_EE)
+        np.save("Wl_EB",self.Wl_EB)
+        np.save("Wl_nE",self.Wl_nE)
         self.WXY_stack = np.zeros((3*len(self.ell_bins), len(self.ell_fourier_integral)))
         self.WXY_stack[:len(self.ell_bins), : ] = self.Wl_EE
         self.WXY_stack[len(self.ell_bins):2*len(self.ell_bins), : ] = self.Wl_EB
@@ -534,7 +537,7 @@ class CovBandPowers(CovTHETASpace):
         tcombs = len(self.ell_bins)**2
         if self.gm:
             original_shape = (self.sample_dim, self.n_tomo_clust, self.n_tomo_lens)
-            dnpair_gm_flat = np.reshape(self.dnpair_gm, (len(self.theta_gm), self.sample_dim, self.n_tomo_clust*self.n_tomo_lens))
+            dnpair_gm_flat = np.reshape(self.dnpair_gm, (len(self.theta_gm), self.sample_dim*self.n_tomo_clust*self.n_tomo_lens))
 
             for m_mode in range(len(self.ell_bins)):
                 for n_mode in range(len(self.ell_bins)):

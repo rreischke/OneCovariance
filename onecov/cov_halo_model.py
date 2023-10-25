@@ -213,7 +213,6 @@ class HaloModel(Setup):
                             "function " + hm_prec['hmf_model'] + ". Available functions " +
                             "can be found at https://hmf.readthedocs.io/en/latest/" +
                             "_autosummary/hmf.mass_function.fitting_functions.html .")
-        
         mass_func = hmf.MassFunction(
             Mmin=hm_prec['log10M_min'],
             Mmax=hm_prec['log10M_max'],

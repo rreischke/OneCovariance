@@ -3849,7 +3849,7 @@ class FileInput:
         self.hod_model_mor_cen = None
         self.hod_model_scatter_cen = None
         self.csmf_N_log10M_bin = None
-
+        
     def __find_filename_two_inserts(self, fn, n_tomo1, n_tomo2):
         loc_pt1 = fn.find('?')
         fn_pt1 = fn[:loc_pt1]
@@ -4494,45 +4494,43 @@ class FileInput:
         """
         Reads in the files for the conditional stellar mass function
         """
-        if 'csmf settings' in config:
-            if 'csmf_directory' in config['csmf settings']:
-                self.csmf_directory = \
-                    config['csmf settings']['csmf_directory']
-            else:
-                self.csmf_directory = ''
-        self.V_max = np.zeros((self.csmf_N_log10M_bin,self.n_tomo_csmf))
-        if self.csmf_directory != '':
-            if 'V_max_file' in config['csmf settings']:
-                self.V_max_file = config['csmf settings']['V_max_file']
-                data = ascii.read(path.join(self.csmf_directory, self.V_max_file))
-                if len(data[data.colnames[0]]) != int(self.n_tomo_csmf*self.csmf_N_log10M_bin):
-                    raise Exception("ConfigError: The Vmax file needs to have the dimensions fitting to the number of stellar mass bins "+
-                                    "times the number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
-                for tomo in range(self.n_tomo_csmf):
-                    self.V_max[:, tomo] = np.array(data[data.colnames[1]][tomo**self.csmf_N_log10M_bin:(tomo+1)*self.csmf_N_log10M_bin])
-            else:
-                if self.cstellar_mf:
-                    raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
-                                    "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
-            if 'f_tomo_file' in config['csmf settings']:
-                self.f_tomo_file = config['csmf settings']['f_tomo_file']
-                data = np.array(np.loadtxt(path.join(self.csmf_directory, self.f_tomo_file)))
-                if self.n_tomo_csmf != 1:
-                    if len(data[0]) != int(self.n_tomo_csmf):
-                        raise Exception("ConfigError: The f_tomo file needs to have the dimensions fitting to the "+
-                                        "number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
-                    self.f_tomo = data
+        if self.cstellar_mf:
+            if 'csmf settings' in config:
+                if 'csmf_directory' in config['csmf settings']:
+                    self.csmf_directory = \
+                        config['csmf settings']['csmf_directory']
                 else:
-                    self.f_tomo = data
-            else:
-                if self.cstellar_mf:
+                    self.csmf_directory = ''
+            self.V_max = np.zeros((self.csmf_N_log10M_bin,self.n_tomo_csmf))
+            if self.csmf_directory != '':
+                if 'V_max_file' in config['csmf settings']:
+                    self.V_max_file = config['csmf settings']['V_max_file']
+                    data = ascii.read(path.join(self.csmf_directory, self.V_max_file))
+                    if len(data[data.colnames[0]]) != int(self.n_tomo_csmf*self.csmf_N_log10M_bin):
+                        raise Exception("ConfigError: The Vmax file needs to have the dimensions fitting to the number of stellar mass bins "+
+                                        "times the number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
+                    for tomo in range(self.n_tomo_csmf):
+                        self.V_max[:, tomo] = np.array(data[data.colnames[1]][tomo**self.csmf_N_log10M_bin:(tomo+1)*self.csmf_N_log10M_bin])
+                else:
                     raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
                                     "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
-        else:
-            if self.cstellar_mf:
+                if 'f_tomo_file' in config['csmf settings']:
+                    self.f_tomo_file = config['csmf settings']['f_tomo_file']
+                    data = np.array(np.loadtxt(path.join(self.csmf_directory, self.f_tomo_file)))
+                    if self.n_tomo_csmf != 1:
+                        if len(data[0]) != int(self.n_tomo_csmf):
+                            raise Exception("ConfigError: The f_tomo file needs to have the dimensions fitting to the "+
+                                            "number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
+                        self.f_tomo = data
+                    else:
+                        self.f_tomo = data
+                else:
+                    raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
+                                    "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
+            else:
                 raise Exception("ConfigError: We require a files for the Vmax estimator if the csmf is to be calculated. "+
                                 "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." +
-                                 "f_tomo_file = ....")
+                                "f_tomo_file = ....")
         return True
 
 
