@@ -214,16 +214,21 @@ class Setup():
                 zet_min = self.zet_clust['z'][0]
                 zet_max = self.zet_clust['z'][-1]
                 n_tomo_clust = len(self.zet_clust['nz'])
-                n_tomo_lens = 0
+            else:
+                n_tomo_clust = 0
             if self.zet_lens['z'] is not None:
                 zet_min = self.zet_lens['z'][0]
                 zet_max = self.zet_lens['z'][-1]
                 n_tomo_lens = len(self.zet_lens['photoz'])
-                n_tomo_clust = 0
+            else:
+                n_tomo_lens = 0
             if self.zet_csmf['z'] is not None:
                 zet_min = self.zet_csmf['z'][0]
                 zet_max = self.zet_csmf['z'][-1]
                 n_tomo_csmf = len(self.zet_csmf['pz'])
+            else:
+                n_tomo_csmf = 0
+                
     
         # check for power spectra look-up tables
         if self.Pxy_tab['z'] is not None:
@@ -1317,53 +1322,64 @@ class Setup():
             raise Exception("KeyError: The name of the second estimator " +
                             "must be either 'gg' for clustering, 'gm' for galaxy-galaxy " +
                             "lensing or 'mm' for cosmic shear.")
-
         if survey_params_dict['survey_area_'+est1] is None or \
            survey_params_dict['survey_area_'+est2] is None:
             self.calc_survey_area(survey_params_dict)
 
         ell, sum_m_a_lm = [], []
+        failure = False
         if survey_params_dict['read_alm_'+est1+'_'+est2]:
             for afile in survey_params_dict['alm_file_'+est1+'_'+est2]:
-                print("Reading in a_lm file " + afile + ".")
-                data = ascii.read(afile)
-                ell.append(data[data.colnames[0]])
-                sum_m_a_lm.append(data[data.colnames[1]])
+                try:
+                    print("Reading in a_lm file " + afile + ".")
+                    data = ascii.read(afile)
+                    ell.append(data[data.colnames[0]])
+                    sum_m_a_lm.append(data[data.colnames[1]])
+                except:
+                    print("WARNING: a_lm file " + afile + " not found. Will use circular mask for response")
+                    ell, sum_m_a_lm = None, None
+                    failure = True
         elif survey_params_dict['read_mask_'+est1+'_'+est2]:
             for mfile in survey_params_dict['mask_file_'+est1+'_'+est1]:
-                print("Reading in the mask file " + mfile + " to get the " +
-                      "survey area modes.")
-                data = fits.getdata(mfile, 1).field(0)
-                data = data.flatten()
-                data = np.where(data < 1.0, 0, 1)
-                Nside = healpy.npix2nside(len(data))
-                ellmax = 3 * Nside - 1
-                if est1 == est2:
-                    # default range suggested by healpy
-                    aux_ell = np.arange(ellmax)
-                    ell.append(aux_ell)
-                    C_ell = healpy.anafast(data, use_weights=True)
-                    sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-                else:
-                    for mfile2 in \
-                            survey_params_dict['mask_file_'+est1+'_'+est2]:
-                        print("Reading in the second mask file " + mfile +
-                              " to get the cross survey area modes.")
-                        data2 = fits.getdata(mfile2, 1).field(0)
-                        data2 = data2.flatten()
-                        data2 = np.where(data2 < 1.0, 0, 1)
-                        Nside2 = healpy.npix2nside(len(data2))
-                        ellmax2 = 3 * Nside2 - 1
-                        ellmax = ellmax if ellmax < ellmax2 else ellmax2
-
+                try:
+                    print("Reading in the mask file " + mfile + " to get the " +
+                        "survey area modes.")
+                    data = fits.getdata(mfile, 1).field(0)
+                    data = data.flatten()
+                    data = np.where(data < 1.0, 0, 1)
+                    Nside = healpy.npix2nside(len(data))
+                    ellmax = 3 * Nside - 1
+                    if est1 == est2:
+                        # default range suggested by healpy
                         aux_ell = np.arange(ellmax)
                         ell.append(aux_ell)
-                        C_ell = healpy.anafast(data, data2, use_weights=True)
+                        C_ell = healpy.anafast(data, use_weights=True)
                         sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
+                    else:
+                        for mfile2 in \
+                                survey_params_dict['mask_file_'+est1+'_'+est2]:
+                            print("Reading in the second mask file " + mfile +
+                                " to get the cross survey area modes.")
+                            data2 = fits.getdata(mfile2, 1).field(0)
+                            data2 = data2.flatten()
+                            data2 = np.where(data2 < 1.0, 0, 1)
+                            Nside2 = healpy.npix2nside(len(data2))
+                            ellmax2 = 3 * Nside2 - 1
+                            ellmax = ellmax if ellmax < ellmax2 else ellmax2
+
+                            aux_ell = np.arange(ellmax)
+                            ell.append(aux_ell)
+                            C_ell = healpy.anafast(data, data2, use_weights=True)
+                            sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
+                        failure = False
+                except:
+                    print("WARNING: mask file " + mfile + " not found. Will use circular mask for response")
+                    ell, sum_m_a_lm = None, None
+                    failure = True
         else:
             ell, sum_m_a_lm = None, None
 
-        if ell is not None and survey_params_dict['save_alms']:
+        if ell is not None and survey_params_dict['save_alms'] and not failure:
             if est1 == est2:
                 filename = survey_params_dict['save_alms'] + \
                     '_' + est1 + '.ascii'

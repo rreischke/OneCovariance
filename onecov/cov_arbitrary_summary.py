@@ -146,14 +146,31 @@ class CovARBsummary(CovELLSpace):
                              output_dict,
                              cosmo_dict,
                              bias_dict,
-                             iA,
+                             iA_dict,
                              hod_dict,
                              survey_params_dict,
                              prec,
                              read_in_tables)
         
-        
-    def __set_weights(self,
-                      obs_dict):
-        for obs_shear in obs_dict['observables']['est_shear_cross']:
-            if obs_shear == 'bandpowers':
+
+    def __get_fourier_weights(self,
+                              fourier_tabs):
+        """
+        This function reads in the Fourier weights from the input
+        tables and sets them to private variables for later intergration.
+        """
+        self.fourier_ell = []
+        self.fourier_weights = []
+        if self.gg:
+            for gg_summary in fourier_tabs['gg']:
+                self.fourier_ell.append(gg_summary['ell'])
+                self.fourier_weights.append(gg_summary['W_ell'])
+        if self.gm:
+            for gm_summary in fourier_tabs['gm']:
+                self.fourier_ell.append(gm_summary['ell'])
+                self.fourier_weights.append(gm_summary['W_ell'])
+        if self.mm:
+            for mm_summary in fourier_tabs['mm']:
+                self.fourier_ell.append(mm_summary['ell'])
+                self.fourier_weights.append(mm_summary['W_ell'])
+        return True

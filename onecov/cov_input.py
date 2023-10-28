@@ -535,6 +535,8 @@ class Input:
                 self.nglimber = config['covELLspace settings'].getboolean('nglimber')
                 if not self.nglimber:
                     print("Note that the full non-Limber calculation slows down the code significantly.")
+            else:
+                self.nglimber = True
             if 'ell_min' in config['covELLspace settings']:
                 self.ell_min = float(
                     config['covELLspace settings']['ell_min'])
@@ -1409,6 +1411,8 @@ class Input:
                 self.save_alms = 'alms'
             if 'use tex' in config['output settings']:
                 self.use_tex = config['output settings'].getboolean('use_tex')
+            else:
+                self.use_tex = False
         else:
             self.output_style = ['list', 'matrix']
             print("The style of the output file [output settings]: 'style' " +
@@ -3115,7 +3119,6 @@ class Input:
         values = [self.output_file, self.output_style, self.make_plot,
                   self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first]
         self.output = dict(zip(keys, values))
-
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
                 'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type']

@@ -12,4 +12,5 @@ __pycache__
 levin.egg-info
 .vscode
 /input/catalogue_mixed/*
+/config_files/*
 !/input/catalogue_mixed/tmptripletcounts_test.fits

@@ -383,7 +383,6 @@ class HOD():
         occ_num_sat, occ_prob_sat = \
             self.occ_num_and_prob_per_pop(hod_dict, 'sat', 
                 mor_tab, occprob_tab, occnum_tab)
-
         if occ_prob_cen is None or occ_prob_sat is None:
             return occ_num_cen + occ_num_sat, None
 

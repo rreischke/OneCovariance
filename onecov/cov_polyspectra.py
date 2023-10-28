@@ -450,13 +450,13 @@ class PolySpectra(HaloModel):
         hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
         hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
         if type_x == 'sat':
-            hurlyX /= self.uk(bias_dict['scaling_sat'])[:, None]
+            hurlyX /= self.uk(bias_dict['Mc_relation_cen'])[:, None]
         if type_x == 'm':
-            hurlyX /= self.uk(bias_dict['scaling_cen'])[:, None]
+            hurlyX /= self.uk(bias_dict['Mc_relation_cen'])[:, None]
         if type_y == 'sat':
-            hurlyY /= self.uk(bias_dict['scaling_sat'])[:, None]
+            hurlyY /= self.uk(bias_dict['Mc_relation_cen'])[:, None]
         if type_y == 'm':
-            hurlyY /= self.uk(bias_dict['scaling_cen'])[:, None]
+            hurlyY /= self.uk(bias_dict['Mc_relation_cen'])[:, None]
 
         bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']
         bias_fac = 1
@@ -470,7 +470,7 @@ class PolySpectra(HaloModel):
         integralY = bias_fac*np.trapz(self.mass_func.dndm * bias * hurlyY,
                                       self.mass_func.m)
 
-        return integralX*integralY
+        return integralX[:,:,None]*integralY[:,None,:]*self.mass_func.power[:,None,None]
 
     def P_mm(self,
              bias_dict,
@@ -592,7 +592,8 @@ class PolySpectra(HaloModel):
                             self.mass_func.k)[:, None] \
                         + self.mass_func.power[:, None] \
                         * self.effective_bias[None, :] * bias_dict['bias_2h']
-
+                        #+ np.diagonal(self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'m','sat') + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'m','cen'),axis1 = 1, axis2 = 2)
+                        
             else:
                 Pgm = np.zeros((len(self.mass_func.k), self.sample_dim))
                 for mbin in range(self.sample_dim):
@@ -659,12 +660,15 @@ class PolySpectra(HaloModel):
                                         hm_prec, 'sat', 'cen')
                         + self.__P_xy_1h(bias_dict, hod_dict,
                                             hm_prec, 'sat', 'sat')
+                        + self.__P_xy_1h(bias_dict, hod_dict,
+                                        hm_prec, 'cen', 'cen')
                         ) \
                         * self.small_k_damping(
                             hm_prec['small_k_damping'],
                             self.mass_func.k)[:, None, None] \
-                        + self.mass_func.power[:, None, None] \
-                        * (bias_dict['bias_2h'])**2.0* self.effective_bias[None,:,None]* self.effective_bias[None,None,:]
+                        + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'sat','sat') + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'cen','cen') + 2*self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'cen','sat')
+                        #+ self.mass_func.power[:, None, None] \
+                        #* (bias_dict['bias_2h'])**2.0* self.effective_bias[None,:,None]* self.effective_bias[None,None,:]
                     
 
             else:
@@ -772,7 +776,7 @@ class PolySpectra(HaloModel):
             response_P_gg = \
                 (68/21 - deriv_Plin[:, None]/3) \
                 * integral_g**2 * self.mass_func.power[:, None] \
-                + integral_gg - 2 * bias_g[None, :] * self.Pgg
+                + integral_gg - 2 * bias_g[None, :] * np.diagonal(self.Pgg,axis1=-2,axis2=-1)
         else:
             response_P_gg = None
         return response_P_gg, response_P_gm, response_P_mm

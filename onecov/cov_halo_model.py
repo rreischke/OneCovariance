@@ -625,7 +625,7 @@ class HaloModel(Setup):
 
         # if type == 'sat'
         uk = self.uk(bias_dict['Mc_relation_sat'])
-        norm = self.ngal
+        norm = self.nsat
         pop = self.hod.occ_num_and_prob_per_pop(
             hod_dict,
             'sat',
@@ -635,6 +635,7 @@ class HaloModel(Setup):
         )[0]
         if (type_x == 'cen'):
             uk = np.ones_like(uk)
+            norm = self.ncen
             pop = self.hod.occ_num_and_prob_per_pop(
                 hod_dict,
                 'cen',

@@ -194,8 +194,9 @@ class CovTHETASpace(CovELLSpace):
                             read_in_tables['npair'])
             survey_params_dict['n_eff_clust'] = save_n_eff_clust
             survey_params_dict['n_eff_lens'] = save_n_eff_lens
-        self.__get_signal_ww()
-
+        self.__get_signal()
+        
+        
     def __set_theta_bins(self,
                          covTHETAspacesettings):
         """
@@ -233,7 +234,7 @@ class CovTHETASpace(CovELLSpace):
             theta_bins = .5 * (theta_ul_bins[1:] + theta_ul_bins[:-1])
         return theta_bins, theta_ul_bins
 
-    def __get_signal_ww(self):
+    def __get_signal(self):
         """
         Calculates the clustering signal which might be used in the
         clustering-z covariance
@@ -246,7 +247,9 @@ class CovTHETASpace(CovELLSpace):
             Sets private variable self.w_gg with shape 
             (observables['THETAspace']['theta_bins'], sample_dim, n_tomo_clust, n_tomo_clust)
         """
+        self.data_vector_length = 0
         if self.gg:
+            self.data_vector_length += len(self.thetabins)*self.n_tomo_clust*(self.n_tomo_clust+1)/2
             w_signal_shape = (len(self.thetabins),
                               self.sample_dim,
                               self.sample_dim,
@@ -268,9 +271,31 @@ class CovTHETASpace(CovELLSpace):
                 w_signal[i_theta, :, :, :, :] = np.reshape(
                     w_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.w_gg = w_signal
-        
+        if self.gm:
+            self.data_vector_length += len(self.thetabins)*self.n_tomo_clust*self.n_tomo_lens
+            gt_signal_shape = (len(self.thetabins),
+                              self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_lens)
+            original_shape = self.Cell_gm[0, :, :, :].shape
+            gt_signal = np.zeros(gt_signal_shape)
+            flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens
+            Cell_gm_flat = np.reshape(
+                self.Cell_gm, (len(self.ellrange), flat_length))
+            gt_signal_at_thetai_flat = np.zeros(flat_length)
+            lev = levin.Levin(0, 16, 32, self.accuracy, self.integration_intervals)
+            for i_theta in range(len(self.thetabins)):
+                theta_i = self.thetabins[i_theta] / 60 * np.pi / 180
+                integrand = Cell_gm_flat*self.ellrange[:, None]
+                lev.init_integral(
+                    self.ellrange, integrand, True, True)
+                gt_signal_at_thetai_flat = lev.single_bessel(
+                    theta_i, 2, self.ellrange[0], self.ellrange[-1])
+                gt_signal[i_theta, :, :, :] = np.reshape(
+                    gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
+            self.gt = gt_signal
         ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
         if self.mm:
+            self.data_vector_length += len(self.thetabins)*self.n_tomo_lens*(self.n_tomo_lens+1)
             theta_ul_bins = np.geomspace(
                 self.theta_ul_bins[0]/5,
                 self.theta_ul_bins[-1]*40,
@@ -356,6 +381,39 @@ class CovTHETASpace(CovELLSpace):
             return gauxx_xipxip_mixed_reconsidered
         else:
             return None
+        
+    def __plot_signal(self,
+                      output_dict):
+        """
+        Creates a corner plot of the signal
+        
+        Parameters
+        ----------
+        output_dict : dictionary
+            Specifies whether a file for the trispectra should be
+            written to save computational time in the future. Gives the
+            full path and name for the output file. To be passed from
+            the read_input method of the Input class.
+        """
+        if not output_dict['make_plot']:
+            return True
+        else:
+            import matplotlib.pyplot as plt
+            ratio = self.data_vector_length / 140
+            if output_dict['use_tex']:
+                plt.rc('text', usetex=True)
+            else:
+                plt.rc('text', usetex=False)
+            fig, ax = plt.subplots(1, 1, figsize=(12,12))            
+            labels_position = []
+            labels_position_y = []
+            labels_text = []
+            position = 0
+            old_position = 0
+            
+            plt.yticks(labels_position_y, labels_text)
+            plt.xticks(labels_position, labels_text)
+            print("Plotting Signal")
         
     def calc_covTHETA(self,
                       obs_dict,
@@ -2063,19 +2121,17 @@ class CovTHETASpace(CovELLSpace):
                         theta_li, 1, self.ellrange[0], self.ellrange[-1]))
                     nongauss_ww[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
                         cov_at_thetaij_flat, original_shape)
-                    nongauss_ww[j_theta, i_theta, :, :, :, :, :,
-                                :] = nongauss_ww[i_theta, j_theta, :, :, :, :, :, :]
-
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                    
                     print('\rProjection for non-Gaussian term for the '
                           'real-space covariance ww at ' +
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
             nongauss_ww *= prefac_ww
-
         if self.gg and self.gm and self.cross_terms:
+            print("")
             # cov_NG(w^ij(theta1) gt^kl(theta2))
             original_shape = nongaussELLgggm[0, 0, :, :, :, :, :, :].shape
             if calc_prefac:
@@ -2133,8 +2189,10 @@ class CovTHETASpace(CovELLSpace):
                         self.ellrange, integrand, True, True)
                     cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
                         theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
+                    
                     cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
                         theta_li, 1, self.ellrange[0], self.ellrange[-1]))
+                    
                     nongauss_wgt[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
                         cov_at_thetaij_flat, original_shape)
                     theta += 1
@@ -2145,7 +2203,6 @@ class CovTHETASpace(CovELLSpace):
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
             nongauss_wgt *= prefac_wgt
-
         if self.gg and self.mm and self.cross_terms:
             print("")
             original_shape = nongaussELLggmm[0, 0, :, :, :, :, :, :].shape
@@ -2171,7 +2228,7 @@ class CovTHETASpace(CovELLSpace):
             covwxim_shape_nongauss = (len(self.thetabins), len(self.thetabins),
                                       self.sample_dim, 1,
                                       self.n_tomo_clust, self.n_tomo_clust,
-                                      self.n_tomo_clust, self.n_tomo_clust)
+                                      self.n_tomo_lens, self.n_tomo_lens)
             nongauss_wxim = np.zeros(covwxim_shape_nongauss)
             flat_length = self.sample_dim * \
                 self.n_tomo_clust**2*self.n_tomo_lens**2
@@ -2312,6 +2369,8 @@ class CovTHETASpace(CovELLSpace):
                     cov_at_thetaij_flat += theta_li*np.nan_to_num(lev.single_bessel(
                         theta_li, 1, self.ellrange[0], self.ellrange[-1]))
                     integrand = inner_integral/self.ellrange[:, None]
+                    lev.init_integral(
+                        self.ellrange, integrand, True, True)
                     cov_at_thetaij_flat -= 2.*np.nan_to_num(lev.single_bessel(
                         theta_ui, 0, self.ellrange[0], self.ellrange[-1]))
                     cov_at_thetaij_flat += 2.*np.nan_to_num(lev.single_bessel(
@@ -2325,7 +2384,7 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            nongauss_wgt *= prefac_wgt
+            nongauss_gtgt *= prefac_gtgt
 
         if self.mm and self.gm and self.cross_terms:
             print("")

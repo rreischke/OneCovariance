@@ -67,7 +67,7 @@ class Output():
         self.plot = output_dict['make_plot']
         self.trispecfile = output_dict['trispec']
         self.Cellfile = output_dict['Cell']
-        self.tex = output_dict
+        self.tex = output_dict['use_tex']
         self.list_style_spatial_first = output_dict['list_style_spatial_first']
 
     def __check_filetype(self):
@@ -247,7 +247,7 @@ class Output():
                     gauss[gaussidx] = self.__check_for_empty_input(gauss[gaussidx], gauss[gaussidx].shape)
                     gaussidx += 1
             if isinstance(nongauss[idx], np.ndarray):
-                nongauss[idx] = self.__check_for_empty_input(nongauss[idx], nongauss[gaussidx].shape)
+                nongauss[idx] = self.__check_for_empty_input(nongauss[idx], nongauss[idx].shape)
             if isinstance(ssc[idx], np.ndarray):
                 ssc[idx] = self.__check_for_empty_input(ssc[idx], ssc[idx].shape)
 
@@ -328,11 +328,11 @@ class Output():
         ratio = len(covmatrix) / 140
         if self.tex:
             plt.rc('text', usetex=True)
-            plt.rc('image', interpolation='none')
+            #plt.rc('image', interpolation='none')
 
         else:
             plt.rc('text', usetex=False)
-            plt.rc('image', interpolation='none')
+            #plt.rc('image', interpolation='none')
 
         fig, ax = plt.subplots(1, 1, figsize=(12,12))
 
