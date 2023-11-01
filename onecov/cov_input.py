@@ -4858,9 +4858,9 @@ class FileInput:
                     self.theta_npair_mm = theta_npair_mm
                     self.npair_mm[:, bin1, bin2] = npair_mm
                     self.npair_mm[:, bin2, bin1] = npair_mm
-                    self.npair_mm = self.npair_mm[:,:,:,None]
                     fidx += 1
-
+            self.npair_mm = self.npair_mm[:,:,:,None]
+                    
     def __read_in_powspec_files(self,
                                 Pfile):
         """

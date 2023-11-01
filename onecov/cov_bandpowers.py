@@ -1033,7 +1033,7 @@ class CovBandPowers(CovTHETASpace):
             kron_delta_tomo_clust = np.diag(np.ones(self.n_tomo_clust))
             kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
         if self.mm or self.gm:
-            kron_delta_tomo_lens = np.diag(np.ones(self.n_tomo_lens))
+            kron_delta_tomo_lens = np.diag(survey_params_dict['ellipticity_dispersion']**2)
             kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
 
         if self.gg:
@@ -1165,7 +1165,7 @@ class CovBandPowers(CovTHETASpace):
                     gauss_BPgmgm_sn[n_mode, m_mode, :, :, :, :, :, :] = 4*np.pi**2/self.N_ell[m_mode]/self.N_ell[n_mode]*(kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
                                                                             * kron_delta_mass_bins[:, :, None, None, None, None] \
-                                                                            * survey_params_dict['ellipticity_dispersion'][None, :]**2*self.SN_integral_gmgm[m_mode, n_mode, None, :, :, : ,None, None] 
+                                                                            * self.SN_integral_gmgm[m_mode, n_mode, None, :, :, : ,None, None] 
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rBand power covariance calculation for the Gaussian '
@@ -1254,8 +1254,7 @@ class CovBandPowers(CovTHETASpace):
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_lens[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_lens[None, None, None, :, :, None]) \
-                                                                            * (survey_params_dict['ellipticity_dispersion']**2)[None, None, :, None, None, None] \
-                                                                            * (survey_params_dict['ellipticity_dispersion']**2)[None, None, None, :, None, None]*self.SN_integral_mmmm[m_mode, n_mode, None, :, :, : ,None, None] 
+                                                                            * self.SN_integral_mmmm[m_mode, n_mode, None, :, :, : ,None, None] 
                     gauss_BPBBmmmm_sn[n_mode, m_mode, :, :, :, :, :, :] = gauss_BPEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)

@@ -747,7 +747,7 @@ class CovTHETASpace(CovELLSpace):
             kron_delta_tomo_clust = np.diag(np.ones(self.n_tomo_clust))
             kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
         if self.mm or self.gm:
-            kron_delta_tomo_lens = np.diag(np.ones(self.n_tomo_lens))
+            kron_delta_tomo_lens = np.diag(survey_params_dict['ellipticity_dispersion']**2)
             kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
         
 
@@ -1168,8 +1168,7 @@ class CovTHETASpace(CovELLSpace):
                 kron_delta_tomo_clust[None, None, None, :, None, :, None] \
                 * kron_delta_tomo_lens[None, None, None, None, :, None, :] \
                 * kron_delta_mass_bins[None, :, :, None, None, None, None] \
-                / self.npair_gm[:, :, None, :, :, None, None]  \
-                * survey_params_dict['ellipticity_dispersion'][None, None, None, None, :, None, None]**2
+                / self.npair_gm[:, :, None, :, :, None, None] 
             gauss_gtgt_sn = \
                 gauss_gtgt_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.thetabins))[:, :, None, None, None, None, None, None]
@@ -1749,8 +1748,7 @@ class CovTHETASpace(CovELLSpace):
                  * kron_delta_tomo_lens[None, None, None, None, :, None, :]
                  + kron_delta_tomo_lens[None, None, None, :, None, None, :]
                  * kron_delta_tomo_lens[None, None, None, None, :, :, None]) \
-                / self.npair_mm[:, :, None, :, :, None, None] / 0.5 \
-                * survey_params_dict['ellipticity_dispersion'][None, None, None, None, :, None, None]**4 
+                / self.npair_mm[:, :, None, :, :, None, None] / 0.5
             gauss_xipm_sn = \
                 gauss_xipm_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.thetabins))[:, :, None, None, None, None, None, None]

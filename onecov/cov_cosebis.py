@@ -768,7 +768,7 @@ class CovCOSEBI(CovELLSpace):
             kron_delta_tomo_clust = np.diag(np.ones(self.n_tomo_clust))
             kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
         if self.mm or self.gm:
-            kron_delta_tomo_lens = np.diag(np.ones(self.n_tomo_lens))
+            kron_delta_tomo_lens = np.diag(survey_params_dict['ellipticity_dispersion']**2)
             kron_delta_mass_bins = np.diag(np.ones(self.sample_dim))
         if self.gg:
             gaussCOSEBIgggg_sva = np.zeros(
@@ -912,7 +912,7 @@ class CovCOSEBI(CovELLSpace):
                     gaussCOSEBIgmgm_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
                                                                             * kron_delta_mass_bins[:,:, None, None, None, None] \
-                                                                            * (survey_params_dict['ellipticity_dispersion'][None, :]**2*aux_gm_sn)[None, :, :, :, None, None]
+                                                                            * (aux_gm_sn)[None, :, :, :, None, None]
                     
                     print('\rCOSEBI E-mode covariance calculation for the '
                             'gmgm term '
@@ -1004,8 +1004,6 @@ class CovCOSEBI(CovELLSpace):
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_lens[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_lens[None, None, None, :, :, None]) \
-                                                                            * (survey_params_dict['ellipticity_dispersion']**2)[None, None, :, None, None, None] \
-                                                                            * (survey_params_dict['ellipticity_dispersion']**2)[None, None, None, :, None, None] \
                                                                             * aux_mm_sn[None, :, :, :, None, None]/2.
                     gaussCOSEBIBBmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :]
                     print('\rCOSEBI E-mode covariance calculation for the '
