@@ -3,7 +3,7 @@ from scipy.special import jv
 
 N_fourier = int(1e4) # at how many ells should the Bessel functions be evaluated
 fourier_ell = np.geomspace(1,1e5,N_fourier)
- 
+thetabins = 
 
 
 def get_L_bins(L_type, L_min, L_max, nL_bins, L_list_boundary = None):
@@ -36,7 +36,7 @@ def get_L_bins(L_type, L_min, L_max, nL_bins, L_list_boundary = None):
 
     return L_bins, L_ul_bins
 
-def get_Hann_window():
+def get_Hann_window(thetabins, delta_ln_theta, theta_lo, theta_up):
     """
     Precomputes the Hann window for the apodisation, yielding the function
     T(theta).

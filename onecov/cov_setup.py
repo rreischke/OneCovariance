@@ -950,7 +950,7 @@ class Setup():
         
         gg, gm, mm = obsbool
         if gg and npair_tab['npair_gg'] is not None:
-            dnpair_gg = (npair_tab['npair_gg'][1:,:,:,:] + npair_tab['npair_gg'][:-1,:,:,:])/2./(npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])[:,None,None]
+            dnpair_gg = (npair_tab['npair_gg'][1:,:,:,:] + npair_tab['npair_gg'][:-1,:,:,:])/2./(npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])[:,None,None,None]
             theta_gg = (npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])/2 + npair_tab['theta_gg'][:-1]
             if theta_ul_bins[0] < npair_tab['theta_gg'][0] or theta_ul_bins[-1] > npair_tab['theta_gg'][-1]:
                 print("Warning: The provided file for the pair counts for the shot noise has a smaller angular range than required. " 
@@ -987,7 +987,7 @@ class Setup():
             theta_gg = None
         
         if gm and npair_tab['npair_gm'] is not None:
-            dnpair_gm = (npair_tab['npair_gm'][1:,:,:,:] + npair_tab['npair_gm'][:-1,:,:,:])/2./(npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])[:,None,None]    
+            dnpair_gm = (npair_tab['npair_gm'][1:,:,:,:] + npair_tab['npair_gm'][:-1,:,:,:])/2./(npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])[:,None,None,None]    
             theta_gm = (npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])/2 + npair_tab['theta_gm'][:-1]
             if theta_ul_bins[0] < npair_tab['theta_gm'][0] or theta_ul_bins[-1] > npair_tab['theta_gm'][-1]:
                 print("Warning: The provided file for the pair counts for the GGL noise has a smaller angular range than required. " 
@@ -1025,7 +1025,7 @@ class Setup():
 
         
         if mm and npair_tab['npair_mm'] is not None:
-            dnpair_mm = (npair_tab['npair_mm'][1:,:,:,:] + npair_tab['npair_mm'][:-1,:,:,:])/2./(npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])[:,None,None]  
+            dnpair_mm = (npair_tab['npair_mm'][1:,:,:,:] + npair_tab['npair_mm'][:-1,:,:,:])/2./(npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])[:,None,None,None]  
             theta_mm = (npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])/2 + npair_tab['theta_mm'][:-1]
             if theta_ul_bins[0] < npair_tab['theta_mm'][0] or theta_ul_bins[-1] > npair_tab['theta_mm'][-1]:
                 print("Warning: The provided file for the pair counts for the shape noise has a smaller angular range than required. " 

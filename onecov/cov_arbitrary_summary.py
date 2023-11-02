@@ -174,3 +174,25 @@ class CovARBsummary(CovELLSpace):
                 self.fourier_ell.append(mm_summary['ell'])
                 self.fourier_weights.append(mm_summary['W_ell'])
         return True
+    
+    def __get_real_weights(self,
+                           real_tabs):
+        """
+        This function reads in the realspace weights from the input
+        tables and sets them to private variables for later intergration.
+        """
+        self.real_theta = []
+        self.real_weights = []
+        if self.gg:
+            for gg_summary in fourier_tabs['gg']:
+                self.real_theta.append(gg_summary['ell'])
+                self.real_weights.append(gg_summary['W_ell'])
+        if self.gm:
+            for gm_summary in fourier_tabs['gm']:
+                self.real_theta.append(gm_summary['ell'])
+                self.real_weights.append(gm_summary['W_ell'])
+        if self.mm:
+            for mm_summary in fourier_tabs['mm']:
+                self.real_theta.append(mm_summary['ell'])
+                self.real_weights.append(mm_summary['W_ell'])
+        return True
