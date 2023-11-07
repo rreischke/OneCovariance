@@ -1,10 +1,14 @@
 import numpy as np
 from scipy.special import jv
 
-N_fourier = int(1e4) # at how many ells should the Bessel functions be evaluated
+N_fourier = int(1e4) # at how many ells should the Fourier space filter be evaluated
 fourier_ell = np.geomspace(1,1e5,N_fourier) # define the ell, this range is more than enough
+N_real = int(1e4) # at how many theta should the real space filter be evaluated
 
 
+
+def top_hat(x,width, location): 
+    return (np.heaviside(x-location+width/2,1)- np.heaviside(x-location - width/2,1))
 
 def get_theta_bins(theta_type, theta_min, theta_max, ntheta_bins, theta_list_boundary = None):
     '''
@@ -36,9 +40,11 @@ def get_theta_bins(theta_type, theta_min, theta_max, ntheta_bins, theta_list_bou
 
     return theta_bins, theta_ul_bins
 
+
 # Define theta-range for w (i.e. gg)
 theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
-# Get fourier weights for w covariance
+real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
+# Get fourier and real weights for w covariance
 for i_theta in range(len(theta_bins)):
     theta_u = theta_ul_bins[i_theta+1]/60/180*np.pi
     theta_l = theta_ul_bins[i_theta]/60/180*np.pi
@@ -48,10 +54,17 @@ for i_theta in range(len(theta_bins)):
     else:
         filename_gg = "fourier_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
     np.savetxt(filename_gg,np.array([fourier_ell,K_gg]).T)
+    R = top_hat(real_theta,theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta], theta_bins[i_theta])/real_theta
+    if i_theta+1 < 10:
+        filename = "real_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
+    else:
+        filename = "real_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
+    np.savetxt(filename,np.array([real_theta,R]).T)
 
 # Define theta-range for gamma_t (i.e. gm)
 theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
-# Get fourier weights for w covariance
+real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
+# Get fourier and real weights for w covariance
 for i_theta in range(len(theta_bins)):
     theta_u = theta_ul_bins[i_theta+1]/60/180*np.pi
     theta_l = theta_ul_bins[i_theta]/60/180*np.pi
@@ -64,10 +77,17 @@ for i_theta in range(len(theta_bins)):
     else:
         filename_gm = "fourier_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
     np.savetxt(filename_gm,np.array([fourier_ell,K_gm]).T)
+    R = top_hat(real_theta,theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta], theta_bins[i_theta])/real_theta
+    if i_theta+1 < 10:
+        filename = "real_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
+    else:
+        filename = "real_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
+    np.savetxt(filename,np.array([real_theta,R]).T)
 
 # Define theta-range for xip_m (i.e. mm)
 theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
-# Get fourier weights for w covariance
+real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
+# Get fourier and real  weights for w covariance
 for i_theta in range(len(theta_bins)):
     theta_u = theta_ul_bins[i_theta+1]/60/180*np.pi
     theta_l = theta_ul_bins[i_theta]/60/180*np.pi
@@ -85,3 +105,18 @@ for i_theta in range(len(theta_bins)):
     else:
         filename_mm = "fourier_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
     np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T)
+    R = top_hat(real_theta,theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta], theta_bins[i_theta])/real_theta
+    if i_theta+1 < 10:
+        filename = "real_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
+    else:
+        filename = "real_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
+    np.savetxt(filename,np.array([real_theta,R]).T)
+    if i_theta+1 < 10:
+        filename = "real_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
+    else:
+        filename = "real_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
+    np.savetxt(filename,np.array([real_theta,R]).T)
+
+
+
+    

@@ -154,6 +154,12 @@ class Input:
         self.bp_ell_bins = None
         self.bp_ell_type = None
         
+        # for arbitrary summary statistics
+        self.arbitrary_summary_settings = dict()
+        self.arbitrary_summary_settings_abr = dict()
+        self.do_arbitrary_obs = None
+        self.oscillations_straddle = None
+        self.arbitrary_accuracy = None
 
         # for GGL in real space
         self.covRspace_settings = dict()
@@ -1032,7 +1038,7 @@ class Input:
             if self.delta_z is None:
                 self.delta_z = 0.02
             if self.integration_steps is None:
-                self.integration_steps = 1
+                self.integration_steps = 500
             if self.nz_polyorder is None:
                 self.nz_polyorder = 1
             if self.tri_delta_z is None:
@@ -1168,7 +1174,80 @@ class Input:
             if self.delta_z is None:
                 self.delta_z = 0.02
             if self.integration_steps is None:
-                self.integration_steps = 1
+                self.integration_steps = 500
+            if self.nz_polyorder is None:
+                self.nz_polyorder = 1
+            if self.tri_delta_z is None:
+                self.tri_delta_z = 0.5
+
+        return True
+
+    def __read_in_arbitrary_summary_settings(self,
+                                             config,
+                                             config_name):
+        """
+        Reads in further information needed to calculate the covariance 
+        for arbitrary summary statistics. Every value that is not specified 
+        either raises an exception or gets a fall-back value which is 
+        reported to the user.
+
+        Parameters
+        ----------
+        config : class
+            This class holds all the information specified the config 
+            file. It originates from the configparser module.
+        config_name : string
+            Name of the config file. Needed for giving meaningful
+            exception texts.
+
+        """
+
+        if 'arbitrary_summary' in config:
+            if 'do_arbitrary_obs' in config['arbitrary_summary']:
+                self.do_arbitrary_obs = config['arbitrary_summary'].getboolean('do_arbitrary_obs')
+            else:
+                self.do_arbitrary_obs = False
+            if 'oscillations_straddle' in config['arbitrary_summary']:
+                self.oscillations_straddle = int(config['arbitrary_summary']['oscillations_straddle'])
+            else:
+                self.oscillations_straddle = 20
+            if 'arbitrary_accuracy' in config['arbitrary_summary']:
+                self.arbitrary_accuracy = float(config['arbitrary_summary']['arbitrary_accuracy'])
+            else:
+                self.arbitrary_accuracy = 1e-5
+            if self.limber is None:
+                self.limber = True
+
+            if self.nglimber is None:
+                self.nglimber = True
+
+            if self.ell_min is None:
+                self.ell_min = 2
+                print("Arbitrary summary statistics are calculated " +
+                      "from the C_ells but '[covELLspace settings]: " +
+                      "ell_min' is not specified. It is set to '2'.")
+            if self.multiplicative_shear_bias_uncertainty is None:
+                self.multiplicative_shear_bias_uncertainty = 0
+                print("Arbitrary summary statistics are calculated " +
+                      "from the C_ells but '[covELLspace settings]: " +
+                      "mult_shear_bias' is not specified. It is set to '0'.")
+            if self.ell_max is None:
+                self.ell_max = 1e5
+                print("Arbitrary summary statisticss are calculated " +
+                      "from the C_ells but '[covELLspace settings]: " +
+                      "ell_max' is not specified. It is set to '1e5'.")
+            if self.ell_bins is None:
+                self.ell_bins = int(np.log10(self.ell_max)*10)
+                print("Arbitrary summary statistics are calculated " +
+                      "from the C_ells but '[covELLspace settings]: " +
+                      "ell_max' is not specified. It is set to '" +
+                      str(self.ell_bins) + "'.")
+            if self.ell_type is None:
+                self.ell_type = 'log'
+            if self.delta_z is None:
+                self.delta_z = 0.08
+            if self.integration_steps is None:
+                self.integration_steps = 500
             if self.nz_polyorder is None:
                 self.nz_polyorder = 1
             if self.tri_delta_z is None:
@@ -3169,6 +3248,12 @@ class Input:
         self.covbandpowers_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
+        keys = ['do_arbitrary_summary', 'oscillations_straddle', 'arbitrary_accuracy']
+        values = [self.do_arbitrary_obs, self.oscillations_straddle, self.arbitrary_accuracy]
+        self.arbitrary_summary_settings = dict(zip(keys,values))
+        self.arbitrary_summary_settings_abr.update(
+            {k: v for k, v in zip(keys, values) if v is not None})
+
         keys = ['radius_min', 'radius_max',
                 'radius_bins', 'radius_type',
                 'mean_redshift', 'clust_length']
@@ -3451,6 +3536,8 @@ class Input:
             params_used['covbandpowers settings'] = self.covbandpowers_settings_abr
         if len(self.covRspace_settings_abr) > 0:
             params_used['covRspace settings'] = self.covRspace_settings_abr
+        if len(self.arbitrary_summary_settings_abr) > 0:
+            params_used['arbitrary_summary'] = self.arbitrary_summary_settings_abr
         params_used['cosmo'] = self.cosmo_abr
         params_used['bias'] = self.bias_abr
         params_used['IA'] = self.intrinsic_alignments_abr
@@ -3621,6 +3708,7 @@ class Input:
         self.__read_in_covRspace_settings(config, config_name)
         self.__read_in_covCOSEBI_settings(config, config_name)
         self.__read_in_covbandpowers_settings(config, config_name)
+        self.__read_in_arbitrary_summary_settings(config, config_name)
         self.__read_in_output_dict(config)
         self.__read_in_cosmo_dict(config)
         self.__read_in_bias_dict(config, config_name)
@@ -3639,7 +3727,8 @@ class Input:
                        'THETAspace': self.covTHETAspace_settings,
                        'COSEBIs': self.covCOSEBI_settings,
                        'bandpowers': self.covbandpowers_settings,
-                       'Rspace': self.covRspace_settings}
+                       'Rspace': self.covRspace_settings,
+                       'arbitrary_summary': self.arbitrary_summary_settings}
         prec = {'hm': self.hm_prec,
                 'powspec': self.powspec_prec,
                 'trispec': self.trispec_prec,
@@ -3832,6 +3921,26 @@ class FileInput:
         self.Qn_theta = None
         self.Un_theta = None
 
+        self.arbitrary_summary = dict()
+        self.arbitrary_summary_dir = None
+        self.arb_fourier_filter_gg_file = None
+        self.arb_real_filter_gg_file = None
+        self.arb_fourier_filter_gm_file = None
+        self.arb_real_filter_gm_file = None
+        self.arb_fourier_filter_mmE_file = None
+        self.arb_fourier_filter_mmB_file = None
+        self.arb_real_filter_mm_p_file = None
+        self.arb_real_filter_mm_m_file = None
+        self.arb_number_summary_gg = None
+        self.arb_number_summary_gm = None
+        self.arb_number_summary_mm = None
+        self.arb_number_first_summary_gg = None
+        self.arb_number_first_summary_gm = None
+        self.arb_number_first_summary_mm = None
+        self.gg_summary_name = None
+        self.gm_summary_name = None
+        self.mmE_summary_name = None
+        self.mmB_summary_name = None
 
         # for save_config.ini
         self.zet_input = dict()
@@ -3852,7 +3961,8 @@ class FileInput:
         self.hod_model_mor_cen = None
         self.hod_model_scatter_cen = None
         self.csmf_N_log10M_bin = None
-        
+        self.do_arbitrary_obs = None
+
     def __find_filename_two_inserts(self, fn, n_tomo1, n_tomo2):
         loc_pt1 = fn.find('?')
         fn_pt1 = fn[:loc_pt1]
@@ -3992,7 +4102,12 @@ class FileInput:
                 self.csmf_N_log10M_bin = int(config['csmf settings']['csmf_N_log10M_bin'])
             if 'csmf_log10M_bins' in config['csmf settings']:
                 self.csmf_N_log10M_bin = int(len(np.array(config['csmf settings']['csmf_log10M_bins'].split(',')).astype(float)) - 1)
-                
+        if 'arbitrary_summary' in config:
+            if 'do_arbitrary_obs' in config['arbitrary_summary']:
+                self.do_arbitrary_obs = config['arbitrary_summary'].getboolean('do_arbitrary_obs')
+            else:
+                self.do_arbitrary_obs = False
+
 
         return True
 
@@ -6234,6 +6349,78 @@ class FileInput:
 
         return True
 
+    def __read_in_fourier_filter_files(self,
+                                       wfile):
+        """
+        Reads in ...
+
+        Parameters
+        ----------
+        wfile : string
+            Name of the filter file.
+
+        File structure :
+        --------------
+        # ell   Wn_log/lin
+        2       0.123456789
+        3       0.234567891
+        ...         ...
+        100     0.912345678
+
+        """
+        print("Reading in tabulated kernels for arbitrary summary statistics from file " +
+              path.join(self.arbitrary_summary_dir, wfile) + ".")
+        data = np.loadtxt(path.join(self.arbitrary_summary_dir, wfile))
+        if len(data[0]) != 2:
+            raise Exception("FileInputError: The file " +
+                            path.join(self.arbitrary_summary_dir, wfile) +
+                            " has not exactly 2 columns. The data file " +
+                            "should provide the angular modes in the first column, and " +
+                            "the second column should hold the Fourier filter value.")
+        np.seterr(over='ignore')
+        if np.exp(data[-1, 0]) > 1e7:
+            wn_ell = data[:, 0]
+            wn = data[:, 1]
+        else:
+            wn_ell = np.exp(data[:, 0])
+            wn = data[:, 1]
+        np.seterr(over='warn')
+        return wn_ell, wn
+    
+    def __read_in_real_filter_files(self,
+                                    wfile):
+        """
+        Reads in ...
+
+        Parameters
+        ----------
+        wfile : string
+            Name of the filter file.
+
+        File structure :
+        --------------
+        # theta   R(theta)
+        2       0.123456789
+        3       0.234567891
+        ...         ...
+        100     0.912345678
+
+        """
+        print("Reading in tabulated kernels for arbitrary summary statistics from file " +
+              path.join(self.arbitrary_summary_dir, wfile) + ".")
+        data = np.loadtxt(path.join(self.arbitrary_summary_dir, wfile))
+        if len(data[0]) != 2:
+            raise Exception("FileInputError: The file " +
+                            path.join(self.arbitrary_summary_dir, wfile) +
+                            " has not exactly 2 columns. The data file " +
+                            "should provide the angular modes in the first column, and " +
+                            "the second column should hold the Real filter value.")
+
+        wn_ell = data[:, 0]
+        wn = data[:, 1]
+
+        return wn_ell, wn
+
     def __read_in_Wn_files(self,
                            wfile):
         """
@@ -6297,6 +6484,386 @@ class FileInput:
         Tn = data[:, 1]
 
         return Tn_theta, Tn
+
+    def __get_arbitrary_filter_tabs(self,
+                                    config):
+        """
+        Reads in the ... Allows for an auto-generation of filenames if all files
+        are named in the same way and only the numbers for the
+        tomographic bin combination is changed. In such a case, replace
+        the two bin number with a '?' each.
+
+        Parameters
+        ----------
+        config : class
+            This class holds all the information specified the config 
+            file. It originates from the configparser module.
+
+        """
+        if not self.do_arbitrary_obs:
+            return False
+        else:
+            if 'tabulated inputs files' in config:
+                if 'arb_summary_directory' in config['tabulated inputs files']:
+                    self.arbitrary_summary_dir = \
+                        config['tabulated inputs files']['arb_summary_directory']
+                elif 'input_directory' in config['tabulated inputs files']:
+                    self.arbitrary_summary_dir = \
+                        config['tabulated inputs files']['input_directory']
+                else:
+                    self.arbitrary_summary_dir = ''
+                if self.clustering:
+                    if 'arb_fourier_filter_gg_file' in config['tabulated inputs files']:
+                        self.arb_fourier_filter_gg_file =(config['tabulated inputs files']
+                                                            ['arb_fourier_filter_gg_file'].replace(" ", "")).split(',')
+                        self.arb_number_summary_gg = len(self.arb_fourier_filter_gg_file)
+                        if len(self.arb_fourier_filter_gg_file) > 2:
+                            raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for clustering " +
+                                        "Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file")
+                    else:
+                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for clustering, " +
+                                        "files for the corresponding fourier filter must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file")
+                    if 'arb_real_filter_gg_file' in config['tabulated inputs files']:
+                        self.arb_real_filter_gg_file =(config['tabulated inputs files']
+                                                            ['arb_real_filter_gg_file'].replace(" ", "")).split(',')
+                        if self.arb_number_summary_gg != len(self.arb_real_filter_gg_file):
+                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of clustering " +
+                                        "Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file and arb_real_filter_gg_file.")
+                    else:
+                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for clustering, " +
+                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_real_filter_gg_file") 
+                if self.ggl:
+                    if 'arb_fourier_filter_gm_file' in config['tabulated inputs files']:
+                        self.arb_fourier_filter_gm_file =(config['tabulated inputs files']
+                                                            ['arb_fourier_filter_gm_file'].replace(" ", "")).split(',')
+                        self.arb_number_summary_gm = len(self.arb_fourier_filter_gm_file)
+                        if len(self.arb_fourier_filter_gm_file) > 2:
+                            raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
+                                        "Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file")
+                    else:
+                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for GGL, " +
+                                        "files for the corresponding fourier filter must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file")
+                    if 'arb_real_filter_gm_file' in config['tabulated inputs files']:
+                        self.arb_real_filter_gm_file =(config['tabulated inputs files']
+                                                            ['arb_real_filter_gm_file'].replace(" ", "")).split(',')
+                        if self.arb_number_summary_gm != len(self.arb_real_filter_gm_file):
+                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of GGL " +
+                                        "Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file and arb_real_filter_gm_file.")
+                    else:
+                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for GGL, " +
+                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_real_filter_gm_file")
+                if self.cosmicshear:
+                    if 'arb_fourier_filter_mmE_file' in config['tabulated inputs files']:
+                        self.arb_fourier_filter_mmE_file =(config['tabulated inputs files']
+                                                            ['arb_fourier_filter_mmE_file'].replace(" ", "")).split(',')
+                        self.arb_number_summary_mm = len(self.arb_fourier_filter_mmE_file)
+                        if len(self.arb_fourier_filter_mmE_file) > 2:
+                            raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
+                                        "Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and/or arb_fourier_filter_mmB_file")
+                    else:
+                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
+                                        "files for the corresponding fourier filter must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file")
+                    if 'arb_fourier_filter_mmB_file' in config['tabulated inputs files']:
+                        self.arb_fourier_filter_mmB_file =(config['tabulated inputs files']
+                                                            ['arb_fourier_filter_mmB_file'].replace(" ", "")).split(',')
+                        self.arb_fourier_filter_no_B = [False, False]
+                        for i in range(self.arb_number_summary_mm):
+                            if self.arb_fourier_filter_mmB_file[i] == self.arb_fourier_filter_mmE_file[i]:
+                                self.arb_fourier_filter_no_B[i] = True
+                        if self.arb_number_summary_mm != len(self.arb_fourier_filter_mmB_file):
+                            raise Exception("ConfigError: You are passing more B mode filters than E mode filters to the arbitrary summary statistics for lensing " +
+                                            "Please adjust in" +
+                                            "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and/or arb_fourier_filter_mmB_file")
+                    else:
+                        self.arb_fourier_filter_mmB_file = self.arb_fourier_filter_mmE_file
+                        print("ConfigWarning: No B-mode Fourier filter file has been passed for lensing, setting this partto zero")
+                    
+                    if 'arb_real_filter_mm_p_file' in config['tabulated inputs files']:
+                        self.arb_real_filter_mm_p_file =(config['tabulated inputs files']
+                                                            ['arb_real_filter_mm_p_file'].replace(" ", "")).split(',')
+                        if self.arb_number_summary_mm != len(self.arb_real_filter_mm_p_file):
+                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
+                                        "Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and arb_real_filter_mm_p_file.")
+                    else:
+                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
+                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_real_filter_mm_p_file")
+                    if 'arb_real_filter_mm_m_file' in config['tabulated inputs files']:
+                        self.arb_real_filter_mm_m_file =(config['tabulated inputs files']
+                                                            ['arb_real_filter_mm_m_file'].replace(" ", "")).split(',')
+                        if self.arb_number_summary_mm != len(self.arb_real_filter_mm_m_file):
+                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
+                                        "Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and arb_real_filter_mm_m_file.")
+                    else:
+                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
+                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_real_filter_mm_m_file") 
+                if self.clustering:
+                    self.gg_summary_name = []
+                    if '?' in self.arb_fourier_filter_gg_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_gg):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_fourier_filter_gg_file[i][:self.arb_fourier_filter_gg_file[i].find('?')]
+                            self.gg_summary_name.append(file_id)
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            if i == 0:
+                                self.arb_number_first_summary_gg = number_files
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_fourier_filter_gg_file = aux_arb_file
+                        self.WL_gg, self.WL_ell_gg = [], []
+                        for wfile in self.arb_fourier_filter_gg_file:
+                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                            self.WL_ell_gg.append(wn_ell)
+                            self.WL_gg.append(wn)
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for clustering in the desired format")
+                else:
+                    self.WL_gg, self.WL_ell_gg = None, None
+                if self.clustering:
+                    if '?' in self.arb_real_filter_gg_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_gg):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_real_filter_gg_file[i][:self.arb_real_filter_gg_file[i].find('?')]
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_real_filter_gg_file = aux_arb_file
+                        self.RL_gg, self.RL_theta_gg = [], []
+                        for wfile in self.arb_real_filter_gg_file:
+                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                            self.RL_theta_gg.append(wn_ell)
+                            self.RL_gg.append(wn)
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary real space filters for clustering in the desired format")
+                else:
+                    self.RL_gg, self.RL_theta_gg = None, None
+                if self.ggl:
+                    self.gm_summary_name = []
+                    if '?' in self.arb_fourier_filter_gm_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_gm):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_fourier_filter_gm_file[i][:self.arb_fourier_filter_gm_file[i].find('?')]
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            self.gm_summary_name.append(file_id)
+                            if i == 0:
+                                self.arb_number_first_summary_gm = number_files
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_fourier_filter_gm_file = aux_arb_file
+                        self.WL_gm, self.WL_ell_gm = [], []
+                        for wfile in self.arb_fourier_filter_gm_file:
+                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                            self.WL_ell_gm.append(wn_ell)
+                            self.WL_gm.append(wn)
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for GGL in the desired format")
+                else:
+                    self.WL_gm, self.WL_ell_gm = None, None
+                if self.ggl:
+                    if '?' in self.arb_real_filter_gm_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_gm):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_real_filter_gm_file[i][:self.arb_real_filter_gm_file[i].find('?')]
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_real_filter_gm_file = aux_arb_file
+                        self.RL_gm, self.RL_theta_gm = [], []
+                        for wfile in self.arb_real_filter_gm_file:
+                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                            self.RL_theta_gm.append(wn_ell)
+                            self.RL_gm.append(wn)
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary real space filters for GGL in the desired format")
+                else:
+                    self.RL_gm, self.RL_theta_gm = None, None
+                if self.cosmicshear:
+                    self.mmE_summary_name = []
+                    self.mmB_summary_name = []
+                    if '?' in self.arb_fourier_filter_mmE_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_mm):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_fourier_filter_mmE_file[i][:self.arb_fourier_filter_mmE_file[i].find('?')]
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            self.mmE_summary_name.append(file_id)
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_fourier_filter_mmE_file = aux_arb_file
+                        self.WL_mmE, self.WL_ell_mmE = [], []
+                        for wfile in self.arb_fourier_filter_mmE_file:
+                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                            self.WL_ell_mmE.append(wn_ell)
+                            self.WL_mmE.append(wn)
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for lensing in the desired format")
+                else:
+                    self.WL_mmE, self.WL_ell_mmE = None, None
+                if self.cosmicshear:
+                    if '?' in self.arb_fourier_filter_mmB_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_mm):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_fourier_filter_mmB_file[i][:self.arb_fourier_filter_mmB_file[i].find('?')]
+                            self.mmB_summary_name.append(file_id)
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            if i == 0:
+                                self.arb_number_first_summary_mm = number_files
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_fourier_filter_mmB_file = aux_arb_file
+                        self.WL_mmB, self.WL_ell_mmB = [], []
+                        i_counter = 0
+                        for wfile in self.arb_fourier_filter_mmB_file:
+                            if i_counter < self.arb_number_first_summary_mm:
+                                i = 0
+                            else:
+                                i = 1
+                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                            self.WL_ell_mmB.append(wn_ell)
+                            if self.arb_fourier_filter_no_B[i]:
+                                self.WL_mmB.append(np.zeros_like(wn))
+                            else:
+                                self.WL_mmB.append(wn)
+                            i_counter += 1
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for lensing in the desired format")
+                else:
+                    self.WL_mmB, self.WL_ell_mmB = None, None
+                if self.cosmicshear:
+                    if '?' in self.arb_real_filter_mm_p_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_mm):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_real_filter_mm_p_file[i][:self.arb_real_filter_mm_p_file[i].find('?')]
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_real_filter_mm_p_file = aux_arb_file
+                        self.RL_mm_p, self.RL_theta_mm_p = [], []
+                        for wfile in self.arb_real_filter_mm_p_file:
+                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                            self.RL_theta_mm_p.append(wn_ell)
+                            self.RL_mm_p.append(wn)
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary real space filters for lensing in the desired format")
+                else:
+                    self.RL_mm_p, self.RL_theta_mm_p = None, None
+                if self.cosmicshear:
+                    if '?' in self.arb_real_filter_mm_m_file[0]:
+                        aux_arb_file = []
+                        start_index = 0
+                        end_index = 0
+                        for i in range(self.arb_number_summary_mm):
+                            _, _, filenames = next(walk(self.arbitrary_summary_dir))
+                            file_id = self.arb_real_filter_mm_m_file[i][:self.arb_real_filter_mm_m_file[i].find('?')]
+                            number_files = len(sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr]))
+                            for i_files in range(number_files):
+                                aux_arb_file.append(None)
+                                end_index += 1
+
+                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                        if file_id in fstr])
+                            for i_files in range(number_files):
+                                start_index += 1
+                        self.arb_real_filter_mm_m_file = aux_arb_file
+                        self.RL_mm_m, self.RL_theta_mm_m = [], []
+                        for wfile in self.arb_real_filter_mm_m_file:
+                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                            self.RL_theta_mm_m.append(wn_ell)
+                            self.RL_mm_m.append(wn)
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary real space filters for lensing in the desired format")
+                else:
+                    self.RL_mm_m, self.RL_theta_mm_m = None, None
+            else:
+                raise Exception("ConfigError: To calculate the arbitrary summary statistics " +
+                                "covariance for the Filter functions in fourier and real space must be provided in " +
+                                "external table. Must be included in [tabulated inputs " +
+                                "files] as 'arb_fourier_filter_gg_file' etc. to go on.")
+
+
 
     def __get_cosebi_tabs(self,
                           config):
@@ -6687,7 +7254,17 @@ class FileInput:
                   self.norms, self.roots, self.Tn_theta, self.Tn_plus, self.Tn_minus, self.wn_gg_ell, self.wn_gg, self.Qn_theta, self.Un_theta,
                   self.Qn, self.Un]
         self.cosebis = dict(zip(keys, values))
-
+        keys = ['ell_gg', 'WL_gg', 'theta_gg', 'RL_gg', 'ell_gm', 'WL_gm', 'theta_gm', 'RL_gm',
+                'ell_mmE', 'WL_mmE', 'ell_mmB', 'WL_mmB', 'theta_mm_p', 'RL_mm_p', 'theta_mm_m', 'RL_mm_m',
+                'number_summary_gg', 'number_summary_gm', 'number_summary_mm',
+                'arb_number_first_summary_gg', 'arb_number_first_summary_gm', 'arb_number_first_summary_mm',
+                'gg_summary_name', 'gm_summary_name','mmE_summary_name','mmB_summary_name',]
+        values = [self.WL_ell_gg, self.WL_gg, self.RL_theta_gg, self.RL_gg, self.WL_ell_gm, self.WL_gm, self.RL_theta_gm, self.RL_gm,
+                  self.WL_ell_mmE, self.WL_mmE, self.WL_ell_mmB, self.WL_mmB, self.RL_theta_mm_p, self.RL_mm_p, self.RL_theta_mm_m, self.RL_mm_m,
+                  self.arb_number_summary_gg, self.arb_number_summary_gm, self.arb_number_summary_mm, 
+                  self.arb_number_first_summary_gg, self.arb_number_first_summary_gm, self.arb_number_first_summary_mm,
+                  self.gg_summary_name, self.gm_summary_name, self.mmE_summary_name, self.mmB_summary_name]
+        self.arbitrary_summary = dict(zip(keys, values))
         keys = []
         values = []
         if self.npair_gg_file is not None or \
@@ -6935,6 +7512,7 @@ class FileInput:
         self.__get_occnum_tabs(config)
         self.__get_trispec_tabs(config)
         self.__get_cosebi_tabs(config)
+        self.__get_arbitrary_filter_tabs(config)
         self.__zip_to_dicts()
         self.__write_params()
 
@@ -6950,5 +7528,6 @@ class FileInput:
                 'occprob': self.occprob_tab,
                 'occnum': self.occnum_tab,
                 'tri': self.tri_tab,
-                'COSEBIs': self.cosebis}
+                'COSEBIs': self.cosebis,
+                'arb_summary': self.arbitrary_summary}
 

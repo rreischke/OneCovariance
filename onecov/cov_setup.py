@@ -719,33 +719,37 @@ class Setup():
 
         update_massfunc, update_ellrange = False, False
         calc_theta = False
-        if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'xipm':
-            calc_theta = True
-        if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'gamma_t':
-            calc_theta = True
-        if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'w':
-            calc_theta = True
+        if not obs_dict['arbitrary_summary']['do_arbitrary_summary']:
+            if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'xipm':
+                calc_theta = True
+            if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'gamma_t':
+                calc_theta = True
+            if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'w':
+                calc_theta = True
         calc_cosebi = False
-        if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'cosebi':
-            calc_cosebi = True
-        if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'cosebi':
-            calc_cosebi = True
-        if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'cosebi':
-            calc_cosebi = True
+        if not obs_dict['arbitrary_summary']['do_arbitrary_summary']:
+            if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'cosebi':
+                calc_cosebi = True
+            if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'cosebi':
+                calc_cosebi = True
+            if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'cosebi':
+                calc_cosebi = True
         calc_bandpower = False
-        if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'bandpowers':
-            calc_bandpower = True
-        if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'bandpowers':
-            calc_bandpower = True
-        if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'bandpowers':
-            calc_bandpower = True
+        if not obs_dict['arbitrary_summary']['do_arbitrary_summary']:
+            if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'bandpowers':
+                calc_bandpower = True
+            if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'bandpowers':
+                calc_bandpower = True
+            if obs_dict['observables']['clustering'] and obs_dict['observables']['est_clust'] == 'bandpowers':
+                calc_bandpower = True
         calc_ell = False
-        for observables in obs_dict['observables'].values():
-            if np.any(observables == 'C_ell'):
-                calc_ell = True
-        calc_ell = True if calc_theta else False
-        calc_ell = True if calc_cosebi else calc_ell
-        
+        if not obs_dict['arbitrary_summary']['do_arbitrary_summary']:
+            for observables in obs_dict['observables'].values():
+                if np.any(observables == 'C_ell'):
+                    calc_ell = True
+            calc_ell = True if calc_theta else False
+            calc_ell = True if calc_cosebi else calc_ell
+            
         ellmin, ellmax = ellrange[0], ellrange[-1]
         ell_bins = len(ellrange)
         if calc_cosebi or calc_bandpower:
@@ -812,6 +816,41 @@ class Setup():
                 update_ellrange = True
             if len(ellrange) < 100:
                 print("SetupWarning: The xi_pm covariance is currently " +
+                      "calculated via the projected powerspectra (C_ells), " +
+                      "the projection integral runs formally from 0 to " +
+                      "infinity. We, therefore, adjust the number of ell modes "
+                      "to '[covELLspace settings]: ell_bins = 100'.")
+                ell_bins = 100
+                update_ellrange = True
+        if obs_dict['arbitrary_summary']['do_arbitrary_summary']:
+            if ellrange[0] > 1:
+                print("SetupWarning: The arbitrary summary covariance is currently " +
+                      "calculated via the projected powerspectra (C_ells), " +
+                      "the projection integral runs formally from 0 to " +
+                      "infinity. We, therefore, adjust the minimum ell mode "
+                      "to '[covELLspace settings]: ell_min = 1'.")
+                ellmin = 1
+                update_ellrange = True
+            elif ellrange[0] < 1:
+                ellmin = 1
+                update_ellrange = True
+            elif ellrange[0] == 0:
+                print("SetupWarning: Setting to minimum ell mode to 0 is " +
+                      "quite brave. For numerical safety reasons, we adjust " +
+                      "it to '[covELLspace settings]: ell_min = 1'.")
+                ellmin = 1
+                update_ellrange = True
+
+            if ellrange[-1] < 1e4:
+                print("SetupWarning: The arbitrary summary covariance is currently " +
+                      "calculated via the projected powerspectra (C_ells), " +
+                      "the projection integral runs formally from 0 to " +
+                      "infinity. We, therefore, adjust the maximum ell mode "
+                      "to '[covELLspace settings]: ell_max = 1e4'.")
+                ellmax = 1e4
+                update_ellrange = True
+            if len(ellrange) < 100:
+                print("SetupWarning: The arbitrary summary covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
                       "infinity. We, therefore, adjust the number of ell modes "

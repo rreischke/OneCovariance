@@ -105,6 +105,168 @@ class Output():
 
         return fname
 
+    def write_arbitrary_cov(self,
+                            cov_dict,
+                            obs_dict,
+                            n_tomo_clust,
+                            n_tomo_lens,
+                            read_in_tables,
+                            gauss,
+                            nongauss,
+                            ssc):
+        """
+        Writes the covariance matrix to a file depending on the specifications in the config.ini.
+
+        Parameters
+        ----------
+        cov_dict : dictionary
+            Specifies which terms of the covariance (Gaussian, non-Gaussian,
+            super-sample covariance) should be calculated. To be passed from
+            the read_input method of the Input class.
+        obs_dict : dictionary
+            with the following keys (To be passed from the read_input method
+            of the Input class.)
+            'observables' : dictionary
+                Specifies which observables (cosmic shear, galaxy-galaxy
+                lensing and/or clustering) should be calculated. Also,
+                indicates whether cross-terms are evaluated.
+            'ELLspace' : dictionary
+                Specifies the exact details of the projection to ell space.
+                The projection from wavefactor k to angular scale ell is
+                done first, followed by the projection to real space in this
+                class
+            'THETAspace' : dictionary
+                Specifies the exact details of the projection to real space,
+                e.g., theta_min/max and the number of theta bins to be
+                calculated.
+            'COSEBIs' : dictionary
+                Specifies the exact details of the projection to COSEBIs,
+                e.g. the number of modes to be calculated.
+            'bandpowers' : dictionary
+                Specifies the exact details of the projection to bandpowers,
+                e.g. the ell modes and their spacing.
+        n_tomo_clust : int
+            Number of clustering (lens) bins
+        n_tomo_lens : int
+            Number of lensing (source) bins
+        proj_quant : array
+            The projected quantity associated with the covariance, e.g. theta, or ell
+        gauss : list of arrays
+            Gaussian covariance split into the different components
+        nongauss : list of arrays
+            Non-Gaussian covariance
+        ssc : list of arrays
+            Supersample covariance
+        """
+        self.has_gauss, self.has_nongauss, self.has_ssc = cov_dict['gauss'], cov_dict['nongauss'], cov_dict['ssc']
+        gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
+
+        obslist, obsbool, obslength = self.__get_obslist(obs_dict)
+        gg, gm, mm = obsbool[0], obsbool[3], obsbool[5]
+        xipp, xipm, ximm = None, None, None
+        mult = 1
+        if len(gauss) == obslength:
+            ...
+        elif len(gauss) == obslength+3:
+            gauss = [gauss[0]+gauss[6], gauss[1],
+                     gauss[2], gauss[3]+gauss[7],
+                     gauss[4], gauss[5]+gauss[8]]
+        elif len(gauss) == 10:
+            obslist, obsbool, obslength = self.__get_obslist(obs_dict, True)
+            xipp, xipm, ximm = obsbool[7], obsbool[8], obsbool[9]
+        elif len(gauss) == 14:
+            gauss = [gauss[0]+gauss[10], gauss[1], gauss[2], gauss[3],
+                     gauss[4]+gauss[11], gauss[5], gauss[6],
+                     gauss[7]+gauss[12], gauss[8], 
+                     gauss[9]+gauss[13]]
+            obslist, obsbool, obslength = self.__get_obslist(obs_dict, True)
+            xipp, xipm, ximm = obsbool[7], obsbool[8], obsbool[9]
+        elif len(gauss) == obslength*3:
+            mult = 3
+        elif len(gauss) == 30:
+            mult = 3
+            obslist, obsbool, obslength = self.__get_obslist(obs_dict, True)
+            xipp, xipm, ximm = obsbool[7], obsbool[8], obsbool[9]
+        elif len(gauss) == 22 and (obs_dict['ELLspace']['n_spec'] is not None or obs_dict['ELLspace']['n_spec'] != 0):
+            ...
+        elif len(gauss) == 66 and (obs_dict['ELLspace']['n_spec'] is not None or obs_dict['ELLspace']['n_spec'] != 0):
+            mult = 3
+        else:
+            raise Exception("OutputError: The gaussian covariance needs at " +
+                "least 6 entries in the order ['gggg', 'gggm', 'ggmm', " +
+                "'gmgm', 'mmgm', 'mmmm'] or ['gggg', 'gggm', 'ggxip', " +
+                "'ggxim', 'gmgm', 'gmxip', 'gmxim', 'xipxip', 'xi_pm', " +
+                "'xi_mm']. Replacing the respective inputs with 0 or None " +
+                "is supported.")
+        if len(nongauss) != obslength and (obs_dict['ELLspace']['n_spec'] is None or obs_dict['ELLspace']['n_spec'] == 0):
+            raise Exception("OutputError: The nongaussian covariance needs " +
+                "at least 6 entries in the order ['gggg', 'gggm', 'ggmm', " +
+                "'gmgm', 'mmgm', 'mmmm'] or ['gggg', 'gggm', 'ggxip', " +
+                "'ggxim', 'gmgm', 'gmxip', 'gmxim', 'xipxip', 'xi_pm', " +
+                "'xi_mm']. Replacing the respective inputs with 0 or None " +
+                "is supported.")
+        if len(ssc) != obslength and (obs_dict['ELLspace']['n_spec'] is None or obs_dict['ELLspace']['n_spec'] == 0):
+            raise Exception("OutputError: The super-sample covariance needs " +
+                "at least 6 entries in the order ['gggg', 'gggm', 'ggmm', " +
+                "'gmgm', 'mmgm', 'mmmm'] or ['gggg', 'gggm', 'ggxip', " +
+                "'ggxim', 'gmgm', 'gmxip', 'gmxim', 'xipxip', 'xi_pm', " +
+                "'xi_mm']. Replacing the respective inputs with 0 or None " +
+                "is supported.")
+                
+        sampledim = self.__get_sampledim(gauss, nongauss, ssc)
+        gaussidx = 0
+        for idx in range(obslength):
+            gausstest = 0
+            if n_tomo_lens is None and n_tomo_clust is None:
+                shape = [len(sampledim)]*2 + [sampledim]*2
+            else:
+                tomodim = \
+                    self.__get_tomodim(gauss[gaussidx], nongauss[idx], ssc[idx])
+                if tomodim[0] == -1:
+                    for _ in range(mult):
+                        gausstest += gauss[gaussidx]
+                        gaussidx += 1
+                    if type(gausstest+nongauss[idx]+ssc[idx]) == int and \
+                       obsbool[idx]:
+                        obsbool[idx] = False
+                        gg = False if obslist[idx] == 'gggg' else gg
+                        gm = False if obslist[idx] == 'gmgm' else gm
+                        mm = False if obslist[idx] == 'mmmm' else mm
+                        print("OutputWarning: According to the config file " +
+                              "the covariance for " + obslist[idx] + " ('m' " +
+                              "might be 'kappa' in your case) is supposed " +
+                              "to be calculated but neither the Gaussian, " +
+                              "non-Gaussian or super-sample covariance has " +
+                              "any values. This term will be manually set " +
+                              "to False.")
+                    continue
+            for _ in range(mult):
+                if isinstance(gauss[gaussidx], np.ndarray):    
+                    gauss[gaussidx] = self.__check_for_empty_input(gauss[gaussidx], gauss[gaussidx].shape)
+                    gaussidx += 1
+            if isinstance(nongauss[idx], np.ndarray):
+                nongauss[idx] = self.__check_for_empty_input(nongauss[idx], nongauss[idx].shape)
+            if isinstance(ssc[idx], np.ndarray):
+                ssc[idx] = self.__check_for_empty_input(ssc[idx], ssc[idx].shape)
+
+        if 'terminal' in self.style or 'list' in self.style:
+            fct_args = [obslist, obsbool]
+            if self.list_style_spatial_first:
+                self.__write_cov_list_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
+                                    n_tomo_lens, sampledim, read_in_tables, 
+                                    gauss, nongauss, ssc, fct_args)
+            else:
+                self.__write_cov_list_arbitrary_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
+                                    n_tomo_lens, sampledim, read_in_tables, 
+                                    gauss, nongauss, ssc, fct_args)
+        if 'matrix' in self.style or self.plot:
+            fct_args = [obslist, obsbool, obslength, mult, 
+                        gg, gm, mm, xipp, xipm, ximm]
+            self.__write_cov_matrix_arbitrary(obs_dict, cov_dict, n_tomo_clust,
+                                    n_tomo_lens, sampledim, read_in_tables, 
+                                    gauss, nongauss, ssc, fct_args)
+        return True
+
     def write_cov(self,
                   cov_dict,
                   obs_dict,
@@ -456,6 +618,180 @@ class Output():
 
         print("Plotting correlation matrix")
    
+
+    def plot_corrcoeff_matrix_arbitrary(self,
+                                        obs_dict,
+                                        covmatrix, 
+                                        cov_diag,
+                                        summary,
+                                        n_tomo_clust,
+                                        n_tomo_lens,
+                                        sampledim,
+                                        filename = None,
+                                        fct_args = None):
+        """
+        Plots the Pearson correlation coefficient of the covariance matrix
+        to a file depending on the specifications in the config.ini.
+
+        Parameters
+        ----------
+        cov_dict : dictionary
+            Specifies which terms of the covariance (Gaussian, non-Gaussian,
+            super-sample covariance) should be calculated. To be passed from
+            the read_input method of the Input class.
+        obs_dict : dictionary
+            with the following keys (To be passed from the read_input method
+            of the Input class.)
+            'observables' : dictionary
+                Specifies which observables (cosmic shear, galaxy-galaxy
+                lensing and/or clustering) should be calculated. Also,
+                indicates whether cross-terms are evaluated.
+            'ELLspace' : dictionary
+                Specifies the exact details of the projection to ell space.
+                The projection from wavefactor k to angular scale ell is
+                done first, followed by the projection to real space in this
+                class
+            'THETAspace' : dictionary
+                Specifies the exact details of the projection to real space,
+                e.g., theta_min/max and the number of theta bins to be
+                calculated.
+            'COSEBIs' : dictionary
+                Specifies the exact details of the projection to COSEBIs,
+                e.g. the number of modes to be calculated.
+            'bandpowers' : dictionary
+                Specifies the exact details of the projection to bandpowers,
+                e.g. the ell modes and their spacing.
+        covmatrix : 2d array
+            The full covariance matrix with all contributions 
+        cov_diag : 2d array
+            The diagonal block part of the covariance matrix
+        n_tomo_clust : int
+            Number of clustering (lens) bins
+        n_tomo_lens : int
+            Number of lensing (source) bins
+        sampledim : int
+            Number of sample bins
+        filename : str
+            Filename of the plot
+        """
+        obslist, obsbool, obslength, mult, gg, gm, mm, xipp, xipm, ximm = \
+            fct_args
+        ratio = len(covmatrix) / 140
+        if self.tex:
+            plt.rc('text', usetex=True)
+            #plt.rc('image', interpolation='none')
+
+        else:
+            plt.rc('text', usetex=False)
+            #plt.rc('image', interpolation='none')
+
+        fig, ax = plt.subplots(1, 1, figsize=(12,12))
+
+        corr_covmatrix = self.__correlation_matrix(covmatrix)
+        
+        limit = max(-min(corr_covmatrix.flatten()), max(corr_covmatrix.flatten()))
+        cbar = ax.imshow(corr_covmatrix, cmap = 'seismic', 
+                         extent = [0, len(corr_covmatrix), 0, len(corr_covmatrix)],
+                         vmin=-limit, vmax=limit)
+        fig.colorbar(cbar, location='bottom', shrink=.775, aspect=30, pad=0.055).ax.tick_params(axis='x', direction='in')
+        ax.text(len(covmatrix)/2, -6*ratio, 'Correlation coefficients', fontsize=16, ha='center', va='center')
+
+        
+        labels_position = []
+        labels_position_y = []
+        labels_text = []
+        position = 0
+        old_position = 0
+        if gg:
+            gg_summary_length = []
+            gg_summary_length.append(int(summary['arb_number_first_summary_gg']))
+            if summary['number_summary_gg'] > 1:
+                gg_summary_length.append(int(len(summary['WL_gg']) - summary['arb_number_first_summary_gg']))
+            sub_position_tomo = 0
+            for i in range(summary['number_summary_gg']):
+                for sub_tomo in range(int(n_tomo_clust*(n_tomo_clust + 1)/2)):
+                    sub_position_sample = sub_position_tomo
+                    sub_position_tomo += gg_summary_length[i]*sampledim
+                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    for sub_sample in range(sampledim):
+                        sub_position_sample += gg_summary_length[i]
+                        ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
+                        ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
+                position += gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2
+                labels_position.append(position - gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2/2)
+                old_position = position
+                labels_position_y.append(len(covmatrix) - (position - gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2/2))
+                labels_text.append(r'$\mathcal{O}_{\mathrm{gg},p_'+str(i+1)+'}(L)$')
+                ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+                ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        if gm:
+            gm_summary_length = []
+            gm_summary_length.append(int(summary['arb_number_first_summary_gm']))
+            if summary['number_summary_gm'] > 1:
+                gm_summary_length.append(int(len(summary['WL_gm']) - summary['arb_number_first_summary_gm']))
+            sub_position_tomo = old_position
+            for i in range(summary['number_summary_gm']):    
+                for sub_tomo in range(int(n_tomo_clust*n_tomo_lens)):
+                    sub_position_sample = sub_position_tomo
+                    sub_position_tomo += gm_summary_length[i]*sampledim
+                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    for sub_sample in range(sampledim):
+                        sub_position_sample += gm_summary_length[i]
+                        ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
+                        ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
+                position += gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens
+                labels_position.append(position - gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens/2)
+                labels_position_y.append(len(covmatrix) - (position - gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens/2))
+                old_position = position
+                labels_text.append(r'$\mathcal{O}_{\mathrm{gm},p_'+str(i+1)+'}(L)$')
+                ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+                ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        if mm:
+            mm_summary_length = []
+            mm_summary_length.append(int(summary['arb_number_first_summary_mm']))
+            if summary['number_summary_mm'] > 1:
+                mm_summary_length.append(int(len(summary['WL_mmE']) - summary['arb_number_first_summary_mm']))
+            sub_position_tomo = old_position
+            for i in range(summary['number_summary_mm']):
+                for sub_tomo in range(int(n_tomo_lens*(n_tomo_lens + 1)/2)):
+                    sub_position_sample = sub_position_tomo
+                    sub_position_tomo += mm_summary_length[i]
+                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                position += mm_summary_length[i]*n_tomo_lens*(n_tomo_lens + 1)/2
+                labels_position.append(position -  mm_summary_length[i]*n_tomo_lens*(n_tomo_lens + 1)/2/2)
+                labels_position_y.append(len(covmatrix) - (position -  mm_summary_length[i]*n_tomo_lens*(n_tomo_lens + 1)/2/2))
+                old_position = position
+                labels_text.append(r'$\mathcal{O}_{\mathrm{mmE},p_'+str(i+1)+'}(L)$')
+                ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+                ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+                sub_position_tomo = old_position
+    
+            for i in range(summary['number_summary_mm']):
+                for sub_tomo in range(int(n_tomo_lens*(n_tomo_lens + 1)/2)):
+                    sub_position_sample = sub_position_tomo
+                    sub_position_tomo += mm_summary_length[i]
+                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                position += mm_summary_length[i]*n_tomo_lens*(n_tomo_lens + 1)/2
+                labels_text.append(r'$\mathcal{O}_{\mathrm{mmB},p_'+str(i+1)+'}(L)$')
+                labels_position.append(position - mm_summary_length[i]*n_tomo_lens*(n_tomo_lens + 1)/2/2)
+                labels_position_y.append(len(covmatrix) - (position - mm_summary_length[i]*n_tomo_lens*(n_tomo_lens + 1)/2/2))
+                old_position = position
+                ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+                ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        ax.xaxis.tick_top()
+
+        plt.yticks(labels_position_y, labels_text)
+        plt.xticks(labels_position, labels_text, rotation=90)
+
+        if filename is not None:
+            fig.savefig(filename, bbox_inches='tight', pad_inches=0.1)
+
+        print("Plotting correlation matrix")
+
     def __write_cov_list(self,
                          cov_dict,
                          obs_dict,
@@ -1805,7 +2141,882 @@ class Output():
                     for ostr in olist:
                         file.write("%s\n" % ostr)
         return True
+
+    def __write_cov_list_arbitrary(self,
+                                    cov_dict,
+                                    obs_dict,
+                                    n_tomo_clust,
+                                    n_tomo_lens,
+                                    sampledim,
+                                    read_in_tables,
+                                    gauss,
+                                    nongauss,
+                                    ssc,
+                                    fct_args):
+        obslist, obsbool = fct_args
+        proj_quant_str = 'n\tm\t'
+
+        if not cov_dict['split_gauss']:
+            if n_tomo_clust is None and n_tomo_lens is None:
+                tomo_str = ''
+                ostr_format = '%s\t%i\ti\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e'
+            else:
+                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+                ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e'
+        else:
+            if n_tomo_clust is None and n_tomo_lens is None:
+                tomo_str = ''
+                ostr_format = '%s\t%i\t%i\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+            else:
+                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+                ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+
+        olist = []
+        splitidx = 0
+        write_header = True
+
+        olist = []
+        splitidx = 0
+        write_header = True   
+        summary = read_in_tables['arb_summary'] 
+        
+        gg = True
+        if summary['number_summary_gg'] is None:
+            gg = False
+        gm = True
+        if summary['number_summary_gm'] is None:
+            gm = False
+        mm = True
+        if summary['number_summary_mm'] is None:
+            mm = False
+        for oidx, obs in enumerate(obslist):
+            if not obsbool[oidx]:
+                splitidx += 3
+                continue
+            sampledim1 = sampledim
+            sampledim2 = sampledim
+            if not cov_dict['split_gauss']:
+                if write_header:
+                    olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
+                                tomo_str + 'cov\t\t\tcovg\t\tcovng\t\tcovssc')
+                    write_header = False
+                if not isinstance(gauss[oidx], np.ndarray):
+                    continue
+                else:
+                    len_proj_quant1 = len(gauss[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(gauss[oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(nongauss[oidx], np.ndarray):
+                    nongauss[oidx] = np.zeros_like(gauss[oidx])
+                else:
+                    len_proj_quant1 = len(nongauss[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(nongauss[oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(ssc[oidx], np.ndarray):
+                    ssc[oidx] = np.zeros_like(gauss[oidx])
+                else:
+                    len_proj_quant1 = len(ssc[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(ssc[oidx][0,:,0,0,0,0,0,0])
+                for i_r1 in range(len_proj_quant1):
+                    for i_r2 in range(len_proj_quant2):
+                        ri = int(np.copy(i_r1))
+                        rj = int(np.copy(i_r2))
+                        
+                        #label ri 
+                        if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                            obs_copy = str(summary['gg_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gg']:
+                                obs_copy = str(summary['gg_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gg']
+                        if gm and obs in ['gmgm']:
+                            obs_copy = str(summary['gm_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gm']:
+                                obs_copy = str(summary['gm_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gm']
+                        if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                            obs_copy = str(summary['mmE_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                        if mm and obs in ['gmxim', 'ximxim']:
+                            obs_copy = str(summary['mmB_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+
+                        #label rj
+                        if gg and obs in ['gggg']:
+                            if i_r2 >= summary['arb_number_first_summary_gg']:
+                                obs_copy += str(summary['gg_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gg']
+                            else:
+                                obs_copy += str(summary['gg_summary_name'][0])
+                        if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                            if i_r2 >= summary['arb_number_first_summary_gm']:
+                                obs_copy += str(summary['gm_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gm']
+                            else:
+                                obs_copy += str(summary['gm_summary_name'][0])
+                        if mm and obs in ['xipxip']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy = str(summary['mmE_summary_name'][0])
+                        if mm and obs in ['xpxim', 'ximxim']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy += str(summary['mmB_summary_name'][0])
+
+                        if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                            tomo1 = gauss[oidx].shape[4]
+                            if obs == 'gggg':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                                sampledim1 = 1
+                                sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(t3, tomo1):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
+                                                        i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs == 'gmgm':
+                            sampledim1 = sampledim
+                            sampledim2 = sampledim
+                            tomo1 = gauss[oidx].shape[4]
+                            tomo2 = gauss[oidx].shape[5]
+                            for t1 in range(tomo1):
+                                for t2 in range(tomo2):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                            tomo1 = gauss[oidx].shape[4]
+                            tomo3 = gauss[oidx].shape[6]
+                            tomo4 = gauss[oidx].shape[7]
+                            if obs == 'gggm':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in ['mmgm', 'gmxip', 'gmxim']:
+                                sampledim1 = 1
+                                sampledim2 = sampledim
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo3):
+                                        for t4 in range(tomo4):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                            tomo1 = gauss[oidx].shape[4]
+                            tomo2 = gauss[oidx].shape[6]
+                            sampledim1 = sampledim
+                            sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo2):
+                                        for t4 in range(t3, tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+            else:
+                if write_header:
+                    olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
+                                tomo_str + 'cov\t\t\tcovg sva\tcovg mix' +
+                                '\tcovg sn\t\tcovng\t\tcovssc')
+                    write_header = False
+                if not isinstance(gauss[3*oidx], np.ndarray):
+                    continue
+                else:
+                    len_proj_quant1 = len(gauss[3*oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(gauss[3*oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(gauss[3*oidx + 1], np.ndarray):
+                    gauss[3*oidx + 1] = np.zeros_like(gauss[3*oidx])
+                if not isinstance(gauss[3*oidx + 2], np.ndarray):
+                    gauss[3*oidx + 2] = np.zeros_like(gauss[3*oidx])
+                if not isinstance(nongauss[oidx], np.ndarray):
+                    nongauss[oidx] = np.zeros_like(gauss[3*oidx])
+                else:
+                    len_proj_quant1 = len(nongauss[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(nongauss[oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(ssc[oidx], np.ndarray):
+                    ssc[oidx] = np.zeros_like(gauss[3*oidx])
+                else:
+                    len_proj_quant1 = len(ssc[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(ssc[oidx][0,:,0,0,0,0,0,0])
+
+
+
+                for i_r1 in range(len_proj_quant1):
+                    for i_r2 in range(len_proj_quant2):
+                        ri = int(np.copy(i_r1))
+                        rj = int(np.copy(i_r2))
+                        
+                        #label ri 
+                        if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                            obs_copy = str(summary['gg_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gg']:
+                                obs_copy = str(summary['gg_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gg']
+                        if gm and obs in ['gmgm']:
+                            obs_copy = str(summary['gm_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gm']:
+                                obs_copy = str(summary['gm_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gm']
+                        if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                            obs_copy = str(summary['mmE_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                        if mm and obs in ['gmxim', 'ximxim']:
+                            obs_copy = str(summary['mmB_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+
+                        #label rj
+                        if gg and obs in ['gggg']:
+                            if i_r2 >= summary['arb_number_first_summary_gg']:
+                                obs_copy += str(summary['gg_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gg']
+                            else:
+                                obs_copy += str(summary['gg_summary_name'][0])
+                        if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                            if i_r2 >= summary['arb_number_first_summary_gm']:
+                                obs_copy += str(summary['gm_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gm']
+                            else:
+                                obs_copy += str(summary['gm_summary_name'][0])
+                        if mm and obs in ['xipxip']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy = str(summary['mmE_summary_name'][0])
+                        if mm and obs in ['xpxim', 'ximxim']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy += str(summary['mmB_summary_name'][0])
+                        
+                        if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                            tomo1 = gauss[splitidx].shape[4]
+                            if obs == 'gggg':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                                sampledim1 = 1
+                                sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(t3, tomo1):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs == 'gmgm':
+                            sampledim1 = sampledim
+                            sampledim2 = sampledim
+                            tomo1 = gauss[splitidx].shape[4]
+                            tomo2 = gauss[splitidx].shape[5]
+                            for t1 in range(tomo1):
+                                for t2 in range(tomo2):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                            tomo1 = gauss[splitidx].shape[4]
+                            tomo3 = gauss[splitidx].shape[6]
+                            tomo4 = gauss[splitidx].shape[7]
+                            if obs == 'gggm':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in ['mmgm', 'gmxip', 'gmxim']:
+                                sampledim1 = 1
+                                sampledim2 = sampledim
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo3):
+                                        for t4 in range(tomo4):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                            tomo1 = gauss[splitidx].shape[4]
+                            tomo2 = gauss[splitidx].shape[6]
+                            sampledim1 = sampledim
+                            sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo2):
+                                        for t4 in range(t3, tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t1, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                splitidx += 3
+
+        if 'terminal' in self.style:
+            print("Writing result to terminal. (Brace yourself...).'")
+            for ostr in olist:
+                print(ostr)
+        elif 'list' in self.style:
+            fn = self.filename[self.style.index('list')]
+            with open(fn, 'w') as file:
+                print("Writing '" + fn + "'.")
+                for ostr in olist:
+                    file.write("%s\n" % ostr)
+        return True
     
+    def __write_cov_list_arbitrary_cosmosis_style(self,
+                                                    cov_dict,
+                                                    obs_dict,
+                                                    n_tomo_clust,
+                                                    n_tomo_lens,
+                                                    sampledim,
+                                                    read_in_tables,
+                                                    gauss,
+                                                    nongauss,
+                                                    ssc,
+                                                    fct_args):
+        obslist, obsbool = fct_args
+        proj_quant_str = 'n\tm\t'
+
+        if not cov_dict['split_gauss']:
+            if n_tomo_clust is None and n_tomo_lens is None:
+                tomo_str = ''
+                ostr_format = '%s\t%i\ti\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e'
+            else:
+                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+                ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e'
+        else:
+            if n_tomo_clust is None and n_tomo_lens is None:
+                tomo_str = ''
+                ostr_format = '%s\t%i\t%i\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+            else:
+                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+                ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+
+        olist = []
+        splitidx = 0
+        write_header = True
+
+        olist = []
+        splitidx = 0
+        write_header = True   
+        summary = read_in_tables['arb_summary'] 
+        
+        gg = True
+        if summary['number_summary_gg'] is None:
+            gg = False
+        gm = True
+        if summary['number_summary_gm'] is None:
+            gm = False
+        mm = True
+        if summary['number_summary_mm'] is None:
+            mm = False
+        for oidx, obs in enumerate(obslist):
+            if not obsbool[oidx]:
+                splitidx += 3
+                continue
+            sampledim1 = sampledim
+            sampledim2 = sampledim
+            if not cov_dict['split_gauss']:
+                if write_header:
+                    olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
+                                tomo_str + 'cov\t\t\tcovg\t\tcovng\t\tcovssc')
+                    write_header = False
+                if not isinstance(gauss[oidx], np.ndarray):
+                    continue
+                else:
+                    len_proj_quant1 = len(gauss[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(gauss[oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(nongauss[oidx], np.ndarray):
+                    nongauss[oidx] = np.zeros_like(gauss[oidx])
+                else:
+                    len_proj_quant1 = len(nongauss[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(nongauss[oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(ssc[oidx], np.ndarray):
+                    ssc[oidx] = np.zeros_like(gauss[oidx])
+                else:
+                    len_proj_quant1 = len(ssc[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(ssc[oidx][0,:,0,0,0,0,0,0])
+                for i_r1 in range(len_proj_quant1):
+                    for i_r2 in range(len_proj_quant2):
+                        ri = int(np.copy(i_r1))
+                        rj = int(np.copy(i_r2))
+                        
+                        #label ri 
+                        if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                            obs_copy = str(summary['gg_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gg']:
+                                obs_copy = str(summary['gg_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gg']
+                        if gm and obs in ['gmgm']:
+                            obs_copy = str(summary['gm_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gm']:
+                                obs_copy = str(summary['gm_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gm']
+                        if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                            obs_copy = str(summary['mmE_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                        if mm and obs in ['gmxim', 'ximxim']:
+                            obs_copy = str(summary['mmB_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+
+                        #label rj
+                        if gg and obs in ['gggg']:
+                            if i_r2 >= summary['arb_number_first_summary_gg']:
+                                obs_copy += str(summary['gg_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gg']
+                            else:
+                                obs_copy += str(summary['gg_summary_name'][0])
+                        if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                            if i_r2 >= summary['arb_number_first_summary_gm']:
+                                obs_copy += str(summary['gm_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gm']
+                            else:
+                                obs_copy += str(summary['gm_summary_name'][0])
+                        if mm and obs in ['xipxip']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy = str(summary['mmE_summary_name'][0])
+                        if mm and obs in ['xpxim', 'ximxim']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy += str(summary['mmB_summary_name'][0])
+
+                        if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                            tomo1 = gauss[oidx].shape[4]
+                            if obs == 'gggg':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                                sampledim1 = 1
+                                sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(t3, tomo1):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
+                                                        i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs == 'gmgm':
+                            sampledim1 = sampledim
+                            sampledim2 = sampledim
+                            tomo1 = gauss[oidx].shape[4]
+                            tomo2 = gauss[oidx].shape[5]
+                            for t1 in range(tomo1):
+                                for t2 in range(tomo2):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                            tomo1 = gauss[oidx].shape[4]
+                            tomo3 = gauss[oidx].shape[6]
+                            tomo4 = gauss[oidx].shape[7]
+                            if obs == 'gggm':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in ['mmgm', 'gmxip', 'gmxim']:
+                                sampledim1 = 1
+                                sampledim2 = sampledim
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo3):
+                                        for t4 in range(tomo4):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                            tomo1 = gauss[oidx].shape[4]
+                            tomo2 = gauss[oidx].shape[6]
+                            sampledim1 = sampledim
+                            sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo2):
+                                        for t4 in range(t3, tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[oidx][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[oidx][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+            else:
+                if write_header:
+                    olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
+                                tomo_str + 'cov\t\t\tcovg sva\tcovg mix' +
+                                '\tcovg sn\t\tcovng\t\tcovssc')
+                    write_header = False
+                if not isinstance(gauss[3*oidx], np.ndarray):
+                    continue
+                else:
+                    len_proj_quant1 = len(gauss[3*oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(gauss[3*oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(gauss[3*oidx + 1], np.ndarray):
+                    gauss[3*oidx + 1] = np.zeros_like(gauss[3*oidx])
+                if not isinstance(gauss[3*oidx + 2], np.ndarray):
+                    gauss[3*oidx + 2] = np.zeros_like(gauss[3*oidx])
+                if not isinstance(nongauss[oidx], np.ndarray):
+                    nongauss[oidx] = np.zeros_like(gauss[3*oidx])
+                else:
+                    len_proj_quant1 = len(nongauss[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(nongauss[oidx][0,:,0,0,0,0,0,0])
+                if not isinstance(ssc[oidx], np.ndarray):
+                    ssc[oidx] = np.zeros_like(gauss[3*oidx])
+                else:
+                    len_proj_quant1 = len(ssc[oidx][:,0,0,0,0,0,0,0])
+                    len_proj_quant2 = len(ssc[oidx][0,:,0,0,0,0,0,0])
+
+
+
+                for i_r1 in range(len_proj_quant1):
+                    for i_r2 in range(len_proj_quant2):
+                        ri = int(np.copy(i_r1))
+                        rj = int(np.copy(i_r2))
+                        
+                        #label ri 
+                        if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                            obs_copy = str(summary['gg_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gg']:
+                                obs_copy = str(summary['gg_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gg']
+                        if gm and obs in ['gmgm']:
+                            obs_copy = str(summary['gm_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_gm']:
+                                obs_copy = str(summary['gm_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_gm']
+                        if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                            obs_copy = str(summary['mmE_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                        if mm and obs in ['gmxim', 'ximxim']:
+                            obs_copy = str(summary['mmB_summary_name'][0])
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy = str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+
+                        #label rj
+                        if gg and obs in ['gggg']:
+                            if i_r2 >= summary['arb_number_first_summary_gg']:
+                                obs_copy += str(summary['gg_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gg']
+                            else:
+                                obs_copy += str(summary['gg_summary_name'][0])
+                        if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                            if i_r2 >= summary['arb_number_first_summary_gm']:
+                                obs_copy += str(summary['gm_summary_name'][1])
+                                rj -= summary['arb_number_first_summary_gm']
+                            else:
+                                obs_copy += str(summary['gm_summary_name'][0])
+                        if mm and obs in ['xipxip']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmE_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy = str(summary['mmE_summary_name'][0])
+                        if mm and obs in ['xpxim', 'ximxim']:
+                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                                obs_copy += str(summary['mmB_summary_name'][1])
+                                ri -= summary['arb_number_first_summary_mm']
+                            else:
+                                obs_copy += str(summary['mmB_summary_name'][0])
+                        
+                        if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                            tomo1 = gauss[splitidx].shape[4]
+                            if obs == 'gggg':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                                sampledim1 = 1
+                                sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(t3, tomo1):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs == 'gmgm':
+                            sampledim1 = sampledim
+                            sampledim2 = sampledim
+                            tomo1 = gauss[splitidx].shape[4]
+                            tomo2 = gauss[splitidx].shape[5]
+                            for t1 in range(tomo1):
+                                for t2 in range(tomo2):
+                                    for t3 in range(tomo1):
+                                        for t4 in range(tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                            tomo1 = gauss[splitidx].shape[4]
+                            tomo3 = gauss[splitidx].shape[6]
+                            tomo4 = gauss[splitidx].shape[7]
+                            if obs == 'gggm':
+                                sampledim1 = sampledim
+                                sampledim2 = sampledim
+                            if obs in ['mmgm', 'gmxip', 'gmxim']:
+                                sampledim1 = 1
+                                sampledim2 = sampledim
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo3):
+                                        for t4 in range(tomo4):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                        elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                            tomo1 = gauss[splitidx].shape[4]
+                            tomo2 = gauss[splitidx].shape[6]
+                            sampledim1 = sampledim
+                            sampledim2 = 1
+                            for t1 in range(tomo1):
+                                for t2 in range(t1, tomo1):
+                                    for t3 in range(tomo2):
+                                        for t4 in range(t3, tomo2):
+                                            for i_s1 in range(sampledim1):
+                                                for i_s2 in range(sampledim2):
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t1, t3, t4)
+                                                    cov = gauss[splitidx][idxs] \
+                                                        + gauss[splitidx+1][idxs] \
+                                                        + gauss[splitidx+2][idxs] \
+                                                        + nongauss[oidx][idxs] \
+                                                        + ssc[oidx][idxs]
+                                                    ostr = ostr_format \
+                                                        % (obs_copy,  ri, rj, 
+                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        cov, 
+                                                        gauss[splitidx][idxs],
+                                                        gauss[splitidx+1][idxs],
+                                                        gauss[splitidx+2][idxs],
+                                                        nongauss[oidx][idxs],
+                                                        ssc[oidx][idxs])
+                                                    olist.append(ostr)
+                splitidx += 3
+
+        if 'terminal' in self.style:
+            print("Writing result to terminal. (Brace yourself...).'")
+            for ostr in olist:
+                print(ostr)
+        elif 'list' in self.style:
+            fn = self.filename[self.style.index('list')]
+            with open(fn, 'w') as file:
+                print("Writing '" + fn + "'.")
+                for ostr in olist:
+                    file.write("%s\n" % ostr)
+        return True
+
+
     
     def __create_matrix(self,covlist, is_i_smaller_j, is_m_smaller_n):
         if is_i_smaller_j and is_m_smaller_n:
@@ -1952,6 +3163,28 @@ class Output():
                         i += 1
         return covariance
         
+    def __create_matrix_arbitrary(self,covlist, is_i_smaller_j, is_m_smaller_n, probe1, probe2, summary):
+        nprobes_probe_1 = summary['number_summary_'+probe1]
+        nprobes_probe_2 = summary['number_summary_'+probe2]
+        nprobes_firstprobe_probe_1 = summary['arb_number_first_summary_' +probe1]
+        nprobes_firstprobe_probe_2 = summary['arb_number_first_summary_' +probe2]
+        if nprobes_probe_1 is not None and nprobes_probe_2 is not None:
+            covp1p1 = self.__create_matrix(covlist[:nprobes_firstprobe_probe_1,:nprobes_firstprobe_probe_2], is_i_smaller_j, is_m_smaller_n)    
+            result = covp1p1
+            if nprobes_probe_1 > 1:
+                covp2p1 = self.__create_matrix(covlist[nprobes_firstprobe_probe_1:,:nprobes_firstprobe_probe_2], is_i_smaller_j, is_m_smaller_n)   
+                result = np.block([[covp1p1],
+                                    [covp2p1]])
+                if nprobes_probe_2 > 1:
+                    covp2p2 = self.__create_matrix(covlist[nprobes_firstprobe_probe_1:,nprobes_firstprobe_probe_2:], is_i_smaller_j, is_m_smaller_n)
+                    covp1p2 = self.__create_matrix(covlist[:nprobes_firstprobe_probe_1,nprobes_firstprobe_probe_2:], is_i_smaller_j, is_m_smaller_n)
+                    result = np.block([[covp1p1, covp1p2],
+                                    [covp2p1, covp2p2]])
+                    
+            if nprobes_probe_2 > 1 and nprobes_probe_1 == 1 :
+                covp1p2 = self.__create_matrix(covlist[:nprobes_firstprobe_probe_1,nprobes_firstprobe_probe_2:], is_i_smaller_j, is_m_smaller_n)
+                result = np.block([[covp1p1, covp1p2]])
+        return result
     
     def __write_cov_matrix_new(self,
                                 obs_dict,
@@ -2333,6 +3566,194 @@ class Output():
                 fn = self.filename[self.style.index('matrix')]
                 np.savetxt(fn, cov2d, fmt='%.6e', delimiter=' ',
                         newline='\n', header=hdr_str, comments='# ')
+
+    def __write_cov_matrix_arbitrary(self,
+                                obs_dict,
+                                cov_dict,
+                                n_tomo_clust,
+                                n_tomo_lens,
+                                sampledim,
+                                read_in_tables,
+                                gauss,
+                                nongauss,
+                                ssc,
+                                fct_args):
+        obslist, obsbool, obslength, mult, gg, gm, mm, xipp, xipm, ximm = \
+            fct_args
+        gauss = [gauss[0]+gauss[1]+gauss[2], 
+                gauss[3]+gauss[4]+gauss[5],
+                gauss[6]+gauss[7]+gauss[8], 
+                gauss[9]+gauss[10]+gauss[11],
+                gauss[12]+gauss[13]+gauss[14], 
+                gauss[15]+gauss[16]+gauss[17],
+                gauss[18]+gauss[19]+gauss[20], 
+                gauss[21]+gauss[22]+gauss[23], 
+                gauss[24]+gauss[25]+gauss[26], 
+                gauss[27]+gauss[28]+gauss[29]]
+
+        cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(obslength)]
+        cov_diag = []
+        if mm:
+            xipm = True
+            ximm = True
+            xipp = True
+        else:
+            xipm = False,
+            ximm = False
+            xipp = False
+        summary = read_in_tables['arb_summary'] 
+        # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
+        # 'ximgt', 'xipxip', 'xipxim', 'ximxim'
+        
+        if gg:
+            covariance_ww = self.__create_matrix_arbitrary(cov[0],True,True,'gg','gg',summary)
+            cov2d = covariance_ww
+            cov_diag.append(covariance_ww)
+            
+            if gm:
+                covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False,'gm', 'gm', summary)
+                cov_diag.append(covariance_gtgt)
+                covariance_wgt = self.__create_matrix_arbitrary(cov[1],True,False,'gg', 'gm', summary)
+                cov2d = np.block([[covariance_ww, covariance_wgt],
+                                [covariance_wgt.T, covariance_gtgt]])
+                
+                if xipp:
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                    covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
+                    covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                    cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
+                                    [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
+                                    [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                    cov_diag.append(covariance_xipxip)
+                    if ximm:
+                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                        cov_diag.append(covariance_ximxim)
+                        covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                        covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                        cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                        [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                        [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                        [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                        if xipm:
+                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                            cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                            [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                            [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                            [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                
+            elif xipp:
+                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
+                covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
+                cov2d = np.block([[covariance_ww, covariance_wxip],
+                                [covariance_wxip.T, covariance_xipxip]])
+                cov_diag.append(covariance_xipxip)
+                if ximm:
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                    covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                    cov_diag.append(covariance_ximxim)
+                    cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                    [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                    [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                    if xipm:
+                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                        cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                        [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
+                                        [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
+        elif gm:
+            covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False, 'gm', 'gm', summary)
+            cov2d = covariance_gtgt
+            cov_diag.append(covariance_gtgt)        
+            if xipp:
+                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
+                covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
+                                [covariance_xipgt, covariance_xipxip]])
+                cov_diag.append(covariance_xipxip)
+                if ximm:
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                    covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                    cov_diag.append(covariance_ximxim)
+                    cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                    [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                    [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                    if xipm:
+                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                        cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                    [covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                    [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+        elif xipp:
+            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+            cov2d = covariance_xipxip
+            cov_diag.append(covariance_xipxip)
+            if ximm:
+                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                cov_diag.append(covariance_ximxim)
+                if xipm:
+                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                    cov2d = np.block([[covariance_xipxip, covariance_xipxim],
+                                    [covariance_xipxim.T, covariance_ximxim]])
+        elif ximm:
+            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+            cov2d = covariance_xipxip
+            cov_diag.append(covariance_ximxim)
+        elif xipm:
+            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+            cov2d = covariance_xipxim
+                
+        
+        for i in range(len(cov2d[:,0])):
+            for j in range(len(cov2d[:,0])):
+                cov2d[j,i] = cov2d[i,j]
+        if len(np.where(np.linalg.eig(cov2d)[0] < 0)[0]) > 0:
+            print("ALARM: The resulting covariance matrix has negative eigenvalues")
+            print("Try to adjust the accuracy settings in the config file:")
+            print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
+            print("For bandpower covariance reduce bandpower_accuracy.")
+            print("For COSEBI covariance reduce En_accuracy.")
+        if self.plot:
+            self.plot_corrcoeff_matrix_arbitrary(
+                obs_dict, cov2d, cov_diag, summary, n_tomo_clust, 
+                    n_tomo_lens, sampledim, self.plot ,fct_args)
+        if obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
+            obslist[7] = 'CE_mmCE_mm'
+            obslist[9] = 'CB_mmCB_mm'
+        if obs_dict['observables']['est_clust'] == 'bandpowers' and obs_dict['observables']['clustering'] == True:
+            obslist[0] = 'CE_ggCE_gg'
+        if obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
+            obslist[4] = 'CE_gmCE_gm'
+        
+        hdr_str = 'Covariance matrix with the diagonals in the order: '
+        hdr_str += obslist[0]+' ' if obsbool[0] else ''
+        hdr_str += obslist[4]+' ' if obsbool[4] else ''
+        hdr_str += obslist[7]+' ' if obsbool[7] else ''
+        hdr_str += obslist[9]+' ' if obsbool[9] else ''
+        hdr_str += 'with '
+        if n_tomo_clust is not None:
+            hdr_str += str(n_tomo_clust) + ' tomographic clustering bins and '
+        if n_tomo_lens is not None:
+            hdr_str += str(n_tomo_lens) + ' tomographic lensing bins and '
+        if obs_dict['observables']['clustering']:
+            hdr_str += str(len(summary['WL_gg'])) + ' elements per tomographic bin in gg, '
+            hdr_str += str(int(summary['arb_number_first_summary_gg'])) + ' spatial indices for probe 1 '
+            if summary['number_summary_gg'] > 1:
+                hdr_str += 'and ' + str(int( len(summary['WL_gg']) - summary['arb_number_first_summary_gg'])) + ' spatial indices for probe 2. '
+        if obs_dict['observables']['ggl']:
+            hdr_str += str(len(summary['WL_gm'])) + ' elements per tomographic bin in gm ' 
+            hdr_str += str(int(summary['arb_number_first_summary_gm'])) + ' spatial indices for probe 1 '
+            if summary['number_summary_gm'] > 1:
+                hdr_str += 'and ' + str(int( len(summary['WL_gm']) - summary['arb_number_first_summary_gm'])) + ' spatial indices for probe 2. '
+        if obs_dict['observables']['cosmic_shear']:
+            hdr_str += str(len(summary['WL_mmE'])) + ' elements per tomographic bin in mm' 
+            hdr_str += str(int(summary['arb_number_first_summary_mm'])) + ' spatial indices for probe 1 '
+            if summary['number_summary_mm'] > 1:
+                hdr_str += 'and ' + str(int( len(summary['WL_mmE']) - summary['arb_number_first_summary_mm'])) + ' spatial indices for probe 2, both for E and B mode.'
+        if 'matrix' in self.style:
+            print("Writing matrix output file.")
+            fn = self.filename[self.style.index('matrix')]
+            np.savetxt(fn, cov2d, fmt='%.6e', delimiter=' ',
+                    newline='\n', header=hdr_str, comments='# ')
 
     def __write_cov_matrix(self,
                            obs_dict,
