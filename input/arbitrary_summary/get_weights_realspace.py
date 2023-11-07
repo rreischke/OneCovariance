@@ -9,7 +9,6 @@ N_real = int(1e4) # at how many theta should the real space filter be evaluated
 
 def top_hat(x,width, location): 
     return (np.heaviside(x-location+width/2,1)- np.heaviside(x-location - width/2,1))
-
 def get_theta_bins(theta_type, theta_min, theta_max, ntheta_bins, theta_list_boundary = None):
     '''
     This function returns the theta bins and the corresponding bin boundaries

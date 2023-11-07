@@ -7254,17 +7254,20 @@ class FileInput:
                   self.norms, self.roots, self.Tn_theta, self.Tn_plus, self.Tn_minus, self.wn_gg_ell, self.wn_gg, self.Qn_theta, self.Un_theta,
                   self.Qn, self.Un]
         self.cosebis = dict(zip(keys, values))
-        keys = ['ell_gg', 'WL_gg', 'theta_gg', 'RL_gg', 'ell_gm', 'WL_gm', 'theta_gm', 'RL_gm',
-                'ell_mmE', 'WL_mmE', 'ell_mmB', 'WL_mmB', 'theta_mm_p', 'RL_mm_p', 'theta_mm_m', 'RL_mm_m',
-                'number_summary_gg', 'number_summary_gm', 'number_summary_mm',
-                'arb_number_first_summary_gg', 'arb_number_first_summary_gm', 'arb_number_first_summary_mm',
-                'gg_summary_name', 'gm_summary_name','mmE_summary_name','mmB_summary_name',]
-        values = [self.WL_ell_gg, self.WL_gg, self.RL_theta_gg, self.RL_gg, self.WL_ell_gm, self.WL_gm, self.RL_theta_gm, self.RL_gm,
-                  self.WL_ell_mmE, self.WL_mmE, self.WL_ell_mmB, self.WL_mmB, self.RL_theta_mm_p, self.RL_mm_p, self.RL_theta_mm_m, self.RL_mm_m,
-                  self.arb_number_summary_gg, self.arb_number_summary_gm, self.arb_number_summary_mm, 
-                  self.arb_number_first_summary_gg, self.arb_number_first_summary_gm, self.arb_number_first_summary_mm,
-                  self.gg_summary_name, self.gm_summary_name, self.mmE_summary_name, self.mmB_summary_name]
-        self.arbitrary_summary = dict(zip(keys, values))
+        if self.do_arbitrary_obs:
+            keys = ['ell_gg', 'WL_gg', 'theta_gg', 'RL_gg', 'ell_gm', 'WL_gm', 'theta_gm', 'RL_gm',
+                    'ell_mmE', 'WL_mmE', 'ell_mmB', 'WL_mmB', 'theta_mm_p', 'RL_mm_p', 'theta_mm_m', 'RL_mm_m',
+                    'number_summary_gg', 'number_summary_gm', 'number_summary_mm',
+                    'arb_number_first_summary_gg', 'arb_number_first_summary_gm', 'arb_number_first_summary_mm',
+                    'gg_summary_name', 'gm_summary_name','mmE_summary_name','mmB_summary_name',]
+            values = [self.WL_ell_gg, self.WL_gg, self.RL_theta_gg, self.RL_gg, self.WL_ell_gm, self.WL_gm, self.RL_theta_gm, self.RL_gm,
+                    self.WL_ell_mmE, self.WL_mmE, self.WL_ell_mmB, self.WL_mmB, self.RL_theta_mm_p, self.RL_mm_p, self.RL_theta_mm_m, self.RL_mm_m,
+                    self.arb_number_summary_gg, self.arb_number_summary_gm, self.arb_number_summary_mm, 
+                    self.arb_number_first_summary_gg, self.arb_number_first_summary_gm, self.arb_number_first_summary_mm,
+                    self.gg_summary_name, self.gm_summary_name, self.mmE_summary_name, self.mmB_summary_name]
+            self.arbitrary_summary = dict(zip(keys, values))
+        else:
+            self.arbitrary_summary = dict([])
         keys = []
         values = []
         if self.npair_gg_file is not None or \
