@@ -171,6 +171,7 @@ class CovARBsummary(CovELLSpace):
                                                                                                                         read_in_tables['npair'])
         survey_params_dict['n_eff_clust'] = save_n_eff_clust
         survey_params_dict['n_eff_lens'] = save_n_eff_lens
+        
         self.ell_limits = []
         for mode in range(len(self.WXY_stack[:,0])):
             limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::obs_dict['arbitrary_summary']['oscillations_straddle']]
@@ -182,14 +183,24 @@ class CovARBsummary(CovELLSpace):
         self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.ell_limits, key=len))), 50)
         self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
         
+
         self.theta_limits = []
-        import matplotlib.pyplot as plt
         for mode in range(len(self.RXY_stack[:,0])):
             limits_at_mode = np.array(self.theta_real_integral[argrelextrema(self.RXY_stack[mode,:], np.less)[0][:]])[::obs_dict['arbitrary_summary']['oscillations_straddle']]
             limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
             limits_at_mode_append[1:-1] = limits_at_mode
-            limits_at_mode_append[0] = self.theta_real_integral[1]
-            limits_at_mode_append[-1] = self.theta_real_integral[-2]
+            if len(np.where(self.RXY_stack[mode,:]==0)[0]) != 0:
+                if np.where(self.RXY_stack[mode,:]==0)[0][0] == 0 and  np.where(self.RXY_stack[mode,:]==0)[0][1] == 1:
+                    limits_at_mode_append[0] = self.theta_real_integral[np.where(self.RXY_stack[mode,:]!=0)[0][0] -1]
+                else:
+                    limits_at_mode_append[0] = self.theta_real_integral[1]
+                if np.where(self.RXY_stack[mode,:]==0)[0][-2] == len(self.RXY_stack[mode,:])-2 and np.where(self.RXY_stack[mode,:]==0)[0][-1] == len(self.RXY_stack[mode,:])-1:
+                    limits_at_mode_append[-1] = self.theta_real_integral[np.where(self.RXY_stack[mode,:]!=0)[0][-1]]
+                else:
+                    limits_at_mode_append[-1] = self.theta_real_integral[-2]
+            else:
+                limits_at_mode_append[-1] = self.theta_real_integral[-2]
+                limits_at_mode_append[0] = self.theta_real_integral[1]
             self.theta_limits.append(limits_at_mode_append/60/180*np.pi)
         self.levin_int_real = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.theta_limits, key=len))), 50)
         self.levin_int_real.init_w_ell(self.theta_real_integral/60/180*np.pi, self.RXY_stack.T)
@@ -451,6 +462,8 @@ class CovARBsummary(CovELLSpace):
                     local_theta_limit = self.theta_limits[m_mode][:]
                     if len(self.theta_limits[m_mode][:]) < len(self.theta_limits[n_mode][:]):
                         local_theta_limit = self.theta_limits[n_mode][:]
+                    if self.theta_limits[n_mode][0] == self.theta_limits[m_mode][-1] or self.theta_limits[m_mode][0] == self.theta_limits[n_mode][-1]:
+                        continue
                     integrand = 1/(dnpair_gg_flat* 60*180/np.pi)*(self.theta_real_integral[:, None]/60/180*np.pi)**2
                     self.levin_int_real.init_integral(self.theta_real_integral/60/180*np.pi, integrand, True, True)
                     self.SN_integral_gggg[m_mode, n_mode, :, :, :] = np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode, n_mode)), original_shape)
@@ -474,6 +487,8 @@ class CovARBsummary(CovELLSpace):
                     local_theta_limit = self.theta_limits[m_mode][:]
                     if len(self.theta_limits[m_mode][:]) < len(self.theta_limits[n_mode][:]):
                         local_theta_limit = self.theta_limits[n_mode][:]
+                    if self.theta_limits[n_mode][0] == self.theta_limits[m_mode][-1] or self.theta_limits[m_mode][0] == self.theta_limits[n_mode][-1]:
+                        continue
                     integrand = 1/(dnpair_gm_flat* 60*180/np.pi)*(self.theta_real_integral[:, None]/60/180*np.pi)**2
                     self.levin_int_real.init_integral(self.theta_real_integral/60/180*np.pi, integrand, True, True)
                     self.SN_integral_gmgm[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :] = np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode, n_mode)), original_shape)
@@ -489,6 +504,7 @@ class CovARBsummary(CovELLSpace):
         if self.mm:
             t0, tcomb = time.time(), 1
             tcombs = self.mmE_summaries**2
+            import matplotlib.pyplot as plt
             self.SN_integral_mmmm = np.zeros((self.mmE_summaries, self.mmE_summaries,  1, self.n_tomo_lens, self.n_tomo_lens))
             original_shape = (self.sample_dim,self.n_tomo_lens, self.n_tomo_lens)
             dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.theta_real_integral), self.n_tomo_lens*self.n_tomo_lens*self.sample_dim))
@@ -497,9 +513,11 @@ class CovARBsummary(CovELLSpace):
                     local_theta_limit = self.theta_limits[m_mode][:]
                     if len(self.theta_limits[m_mode][:]) < len(self.theta_limits[n_mode][:]):
                         local_theta_limit = self.theta_limits[n_mode][:]
+                    if self.theta_limits[n_mode][0] == self.theta_limits[m_mode][-1] or self.theta_limits[m_mode][0] == self.theta_limits[n_mode][-1]:
+                        continue
                     integrand = 1/(dnpair_mm_flat* 60*180/np.pi)*(self.theta_real_integral[:, None]/60/180*np.pi)**2
                     self.levin_int_real.init_integral(self.theta_real_integral/60/180*np.pi, integrand, True, True)
-                    self.SN_integral_mmmm[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :] = np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)), original_shape)
+                    self.SN_integral_mmmm[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :] = np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode, n_mode)), original_shape)
                     self.SN_integral_mmmm[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :] += np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)), original_shape)
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
@@ -510,7 +528,7 @@ class CovARBsummary(CovELLSpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
             print("")
-        
+            
     
     def calc_covarbsummary(self,
                            obs_dict,
@@ -1104,7 +1122,7 @@ class CovARBsummary(CovELLSpace):
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_lens[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_lens[None, None, None, :, :, None]) \
-                                                                            * self.SN_integral_mmmm[m_mode, n_mode, None, :, :, : ,None, None]/2
+                                                                            * self.SN_integral_mmmm[m_mode, n_mode, None, :, :, : ,None, None]/0.5
                     gauss_ASBBmmmm_sn[n_mode - self.gg_summaries + self.gm_summaries, m_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = gauss_ASEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)

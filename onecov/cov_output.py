@@ -252,7 +252,7 @@ class Output():
         if 'terminal' in self.style or 'list' in self.style:
             fct_args = [obslist, obsbool]
             if self.list_style_spatial_first:
-                self.__write_cov_list_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
+                self.__write_cov_list_arbitrary(cov_dict, obs_dict, n_tomo_clust, 
                                     n_tomo_lens, sampledim, read_in_tables, 
                                     gauss, nongauss, ssc, fct_args)
             else:
@@ -2422,7 +2422,7 @@ class Output():
                             if i_r1 >= summary['arb_number_first_summary_mm']:
                                 obs_copy = str(summary['mmB_summary_name'][1])
                                 ri -= summary['arb_number_first_summary_mm']
-
+                
                         #label rj
                         if gg and obs in ['gggg']:
                             if i_r2 >= summary['arb_number_first_summary_gg']:
@@ -2441,14 +2441,13 @@ class Output():
                                 obs_copy += str(summary['mmE_summary_name'][1])
                                 ri -= summary['arb_number_first_summary_mm']
                             else:
-                                obs_copy = str(summary['mmE_summary_name'][0])
-                        if mm and obs in ['xpxim', 'ximxim']:
+                                obs_copy += str(summary['mmE_summary_name'][0])
+                        if mm and obs in ['xipxim', 'ximxim']:
                             if i_r1 >= summary['arb_number_first_summary_mm']:
                                 obs_copy += str(summary['mmB_summary_name'][1])
                                 ri -= summary['arb_number_first_summary_mm']
                             else:
                                 obs_copy += str(summary['mmB_summary_name'][0])
-                        
                         if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
                             tomo1 = gauss[splitidx].shape[4]
                             if obs == 'gggg':

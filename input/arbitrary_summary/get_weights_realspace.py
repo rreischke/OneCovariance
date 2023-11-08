@@ -4,11 +4,11 @@ from scipy.special import jv
 N_fourier = int(1e4) # at how many ells should the Fourier space filter be evaluated
 fourier_ell = np.geomspace(1,1e5,N_fourier) # define the ell, this range is more than enough
 N_real = int(1e4) # at how many theta should the real space filter be evaluated
+theta_type = 'log'
 
 
-
-def top_hat(x,width, location): 
-    return (np.heaviside(x-location+width/2,1)- np.heaviside(x-location - width/2,1))
+def top_hat(x,width_low, width_high, location):
+    return (np.heaviside(x- (location-width_low),1)- np.heaviside(x-(location + width_high),1))/(width_high + width_low)
 def get_theta_bins(theta_type, theta_min, theta_max, ntheta_bins, theta_list_boundary = None):
     '''
     This function returns the theta bins and the corresponding bin boundaries
@@ -53,7 +53,7 @@ for i_theta in range(len(theta_bins)):
     else:
         filename_gg = "fourier_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
     np.savetxt(filename_gg,np.array([fourier_ell,K_gg]).T)
-    R = top_hat(real_theta,theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta], theta_bins[i_theta])/real_theta
+    R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
     if i_theta+1 < 10:
         filename = "real_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
     else:
@@ -76,7 +76,7 @@ for i_theta in range(len(theta_bins)):
     else:
         filename_gm = "fourier_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
     np.savetxt(filename_gm,np.array([fourier_ell,K_gm]).T)
-    R = top_hat(real_theta,theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta], theta_bins[i_theta])/real_theta
+    R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
     if i_theta+1 < 10:
         filename = "real_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
     else:
@@ -104,7 +104,7 @@ for i_theta in range(len(theta_bins)):
     else:
         filename_mm = "fourier_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
     np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T)
-    R = top_hat(real_theta,theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta], theta_bins[i_theta])/real_theta
+    R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
     if i_theta+1 < 10:
         filename = "real_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
     else:

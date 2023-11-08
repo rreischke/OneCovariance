@@ -1389,7 +1389,7 @@ class Input:
                       "'style' will be 'list'.")
                 
             if 'list_style_spatial_first' in config['output settings']:
-                self.list_style_spatial_first = config['output settings'].getboolean('filist_style_spatial_firstle')
+                self.list_style_spatial_first = config['output settings'].getboolean('list_style_spatial_first')
             else:
                 self.list_style_spatial_first = False
 
