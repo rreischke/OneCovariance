@@ -157,20 +157,28 @@ class CovARBsummary(CovELLSpace):
                              read_in_tables)
         self.__get_fourier_weights(read_in_tables['arb_summary'])
         self.__get_real_weights(read_in_tables['arb_summary'])
-        save_n_eff_clust = survey_params_dict['n_eff_clust']
-        save_n_eff_lens = survey_params_dict['n_eff_lens']
+        if self.gg or self.gm:
+            save_n_eff_clust = survey_params_dict['n_eff_clust']
+        if self.mm or self.gm:
+            save_n_eff_lens = survey_params_dict['n_eff_lens']
         if self.sample_dim > 1:
-            survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
-            survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
+            if self.gg or self.gm:
+                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+            if self.mm or self.gm:
+                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
         else:
-            survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
-            survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]  
+            if self.gg or self.gm:
+                survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
+            if self.mm or self.gm:
+               survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]  
         self.dnpair_gg, self.dnpair_gm, self.dnpair_mm, self.theta_gg, self.theta_gm, self.theta_mm  = self.get_dnpair([self.gg, self.gm, self.mm],
                                                                                                                         self.theta_real_integral,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
-        survey_params_dict['n_eff_clust'] = save_n_eff_clust
-        survey_params_dict['n_eff_lens'] = save_n_eff_lens
+        if self.gg or self.gm:    
+            survey_params_dict['n_eff_clust'] = save_n_eff_clust
+        if self.mm or self.gm:
+            survey_params_dict['n_eff_lens'] = save_n_eff_lens
         
         self.ell_limits = []
         for mode in range(len(self.WXY_stack[:,0])):
@@ -506,8 +514,8 @@ class CovARBsummary(CovELLSpace):
             tcombs = self.mmE_summaries**2
             import matplotlib.pyplot as plt
             self.SN_integral_mmmm = np.zeros((self.mmE_summaries, self.mmE_summaries,  1, self.n_tomo_lens, self.n_tomo_lens))
-            original_shape = (self.sample_dim,self.n_tomo_lens, self.n_tomo_lens)
-            dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.theta_real_integral), self.n_tomo_lens*self.n_tomo_lens*self.sample_dim))
+            original_shape = (1,self.n_tomo_lens, self.n_tomo_lens)
+            dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.theta_real_integral), self.n_tomo_lens*self.n_tomo_lens))
             for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
                 for n_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
                     local_theta_limit = self.theta_limits[m_mode][:]

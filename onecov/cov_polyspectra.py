@@ -584,7 +584,7 @@ class PolySpectra(HaloModel):
                     Pgm = self.mass_func.nonlinear_power[:, None] \
                         * np.ones(self.sample_dim)
                 else:
-                    Pgm = \
+                    '''Pgm = \
                         np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'sat'), axis1 = 1, axis2 = 2) \
                         + np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'cen'), axis1 = 1, axis2 = 2) \
                         * self.small_k_damping(
@@ -593,7 +593,12 @@ class PolySpectra(HaloModel):
                         + self.mass_func.power[:, None] \
                         * self.effective_bias[None, :] * bias_dict['bias_2h']
                         #+ np.diagonal(self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'m','sat') + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'m','cen'),axis1 = 1, axis2 = 2)
-                        
+                    '''
+                    Pcm1h = self.ncen/self.ngal*np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'cen'), axis1 = 1, axis2 = 2)
+                    Pcm2h = self.ncen/self.ngal*np.diagonal(self.__P_xy_2h(bias_dict, hod_dict, hm_prec, 'm', 'cen'), axis1 = 1, axis2 = 2)
+                    Psm1h = self.nsat/self.ngal*np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'sat'), axis1 = 1, axis2 = 2)
+                    Psm2h = self.nsat/self.ngal*np.diagonal(self.__P_xy_2h(bias_dict, hod_dict, hm_prec, 'm', 'sat'), axis1 = 1, axis2 = 2)
+                    Pgm = Pcm1h + Pcm2h + Psm1h + Psm2h
             else:
                 Pgm = np.zeros((len(self.mass_func.k), self.sample_dim))
                 for mbin in range(self.sample_dim):
@@ -655,7 +660,20 @@ class PolySpectra(HaloModel):
                 if self.unbiased_clustering and self.sample_dim < 2:
                     Pgg = self.mass_func.nonlinear_power[:, None, None]
                 else:
-                    Pgg = (2 *
+                    Pcc1h = self.__P_xy_1h(bias_dict, hod_dict,
+                                        hm_prec, 'cen', 'cen')*(self.ncen/self.ngal)**2
+                    Pcs1h = 2*self.__P_xy_1h(bias_dict, hod_dict,
+                                        hm_prec, 'cen', 'sat')*(self.ncen/self.ngal)*(self.nsat/self.ngal)
+                    Pss1h = self.__P_xy_1h(bias_dict, hod_dict,
+                                        hm_prec, 'sat', 'sat')*(self.nsat/self.ngal)**2
+                    Pcc2h = self.__P_xy_2h(bias_dict, hod_dict,
+                                        hm_prec, 'cen', 'cen')*(self.ncen/self.ngal)**2
+                    Pcs2h = 2*self.__P_xy_2h(bias_dict, hod_dict,
+                                        hm_prec, 'cen', 'sat')*(self.ncen/self.ngal)*(self.nsat/self.ngal)
+                    Pss2h = self.__P_xy_2h(bias_dict, hod_dict,
+                                        hm_prec, 'sat', 'sat')*(self.nsat/self.ngal)**2
+                    Pgg = Pcc1h + Pcs1h + Pss1h + Pcc2h + Pcs2h + Pss2h
+                    '''Pgg = (2 *
                         self.__P_xy_1h(bias_dict, hod_dict,
                                         hm_prec, 'sat', 'cen')
                         + self.__P_xy_1h(bias_dict, hod_dict,
@@ -666,10 +684,10 @@ class PolySpectra(HaloModel):
                         * self.small_k_damping(
                             hm_prec['small_k_damping'],
                             self.mass_func.k)[:, None, None] \
-                        + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'sat','sat') + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'cen','cen') + 2*self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'cen','sat')
-                        #+ self.mass_func.power[:, None, None] \
-                        #* (bias_dict['bias_2h'])**2.0* self.effective_bias[None,:,None]* self.effective_bias[None,None,:]
-                    
+                         + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'sat','sat') + self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'cen','cen') + 2*self.__P_xy_2h(bias_dict,hod_dict,hm_prec,'cen','sat')
+                       # + self.mass_func.power[:, None, None] \
+                       # * (bias_dict['bias_2h'])**2.0* self.effective_bias[None,:,None]* self.effective_bias[None,None,:]
+                       '''
 
             else:
                 Pgg = np.zeros((len(self.mass_func.k), self.sample_dim))

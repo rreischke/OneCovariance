@@ -6516,6 +6516,7 @@ class FileInput:
                     if 'arb_fourier_filter_gg_file' in config['tabulated inputs files']:
                         self.arb_fourier_filter_gg_file =(config['tabulated inputs files']
                                                             ['arb_fourier_filter_gg_file'].replace(" ", "")).split(',')
+                        self.arb_fourier_filter_gg_file_save = np.copy(self.arb_fourier_filter_gg_file)
                         self.arb_number_summary_gg = len(self.arb_fourier_filter_gg_file)
                         if len(self.arb_fourier_filter_gg_file) > 2:
                             raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for clustering " +
@@ -6528,6 +6529,7 @@ class FileInput:
                     if 'arb_real_filter_gg_file' in config['tabulated inputs files']:
                         self.arb_real_filter_gg_file =(config['tabulated inputs files']
                                                             ['arb_real_filter_gg_file'].replace(" ", "")).split(',')
+                        self.arb_real_filter_gg_file_save = np.copy(self.arb_real_filter_gg_file)
                         if self.arb_number_summary_gg != len(self.arb_real_filter_gg_file):
                             raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of clustering " +
                                         "Please adjust in" +
@@ -6540,6 +6542,7 @@ class FileInput:
                     if 'arb_fourier_filter_gm_file' in config['tabulated inputs files']:
                         self.arb_fourier_filter_gm_file =(config['tabulated inputs files']
                                                             ['arb_fourier_filter_gm_file'].replace(" ", "")).split(',')
+                        self.arb_fourier_filter_gm_file_save = np.copy(self.arb_fourier_filter_gm_file)
                         self.arb_number_summary_gm = len(self.arb_fourier_filter_gm_file)
                         if len(self.arb_fourier_filter_gm_file) > 2:
                             raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
@@ -6552,6 +6555,7 @@ class FileInput:
                     if 'arb_real_filter_gm_file' in config['tabulated inputs files']:
                         self.arb_real_filter_gm_file =(config['tabulated inputs files']
                                                             ['arb_real_filter_gm_file'].replace(" ", "")).split(',')
+                        self.arb_real_filter_gm_file_save = np.copy(self.arb_real_filter_gm_file)
                         if self.arb_number_summary_gm != len(self.arb_real_filter_gm_file):
                             raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of GGL " +
                                         "Please adjust in" +
@@ -6564,6 +6568,7 @@ class FileInput:
                     if 'arb_fourier_filter_mmE_file' in config['tabulated inputs files']:
                         self.arb_fourier_filter_mmE_file =(config['tabulated inputs files']
                                                             ['arb_fourier_filter_mmE_file'].replace(" ", "")).split(',')
+                        self.arb_fourier_filter_mmE_file_save = np.copy(self.arb_fourier_filter_mmE_file)
                         self.arb_number_summary_mm = len(self.arb_fourier_filter_mmE_file)
                         if len(self.arb_fourier_filter_mmE_file) > 2:
                             raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
@@ -6576,6 +6581,7 @@ class FileInput:
                     if 'arb_fourier_filter_mmB_file' in config['tabulated inputs files']:
                         self.arb_fourier_filter_mmB_file =(config['tabulated inputs files']
                                                             ['arb_fourier_filter_mmB_file'].replace(" ", "")).split(',')
+                        self.arb_fourier_filter_mmB_file_save = np.copy(self.arb_fourier_filter_mmB_file)
                         self.arb_fourier_filter_no_B = [False, False]
                         for i in range(self.arb_number_summary_mm):
                             if self.arb_fourier_filter_mmB_file[i] == self.arb_fourier_filter_mmE_file[i]:
@@ -6591,6 +6597,7 @@ class FileInput:
                     if 'arb_real_filter_mm_p_file' in config['tabulated inputs files']:
                         self.arb_real_filter_mm_p_file =(config['tabulated inputs files']
                                                             ['arb_real_filter_mm_p_file'].replace(" ", "")).split(',')
+                        self.arb_real_filter_mm_p_file_save = np.copy(self.arb_real_filter_mm_p_file)
                         if self.arb_number_summary_mm != len(self.arb_real_filter_mm_p_file):
                             raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
                                         "Please adjust in" +
@@ -6602,6 +6609,7 @@ class FileInput:
                     if 'arb_real_filter_mm_m_file' in config['tabulated inputs files']:
                         self.arb_real_filter_mm_m_file =(config['tabulated inputs files']
                                                             ['arb_real_filter_mm_m_file'].replace(" ", "")).split(',')
+                        self.arb_real_filter_mm_m_file_save = np.copy(self.arb_real_filter_mm_m_file)
                         if self.arb_number_summary_mm != len(self.arb_real_filter_mm_m_file):
                             raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
                                         "Please adjust in" +
@@ -7369,6 +7377,47 @@ class FileInput:
         if self.Tn_minus_file is not None:
             keys.append('Tn_minus_file')
             values.append(self.Tn_minus_file)
+        if self.wn_gg_file is not None:
+            keys.append('wn_gg_file')
+            values.append(', '.join(map(str, self.wn_gg_file)))
+        if self.Qn_file is not None:
+            keys.append('Qn_file')
+            values.append(', '.join(map(str, self.Qn_file)))
+        if self.Un_file is not None:
+            keys.append('Un_file')
+            values.append(', '.join(map(str, self.Un_file)))
+        
+        #', '.join(map(str, self.zet_lens_file
+        
+        if self.arbitrary_summary_dir is not None:
+            keys.append('arbitrary_summary_dir')
+            values.append(self.arbitrary_summary_dir)
+        if self.arb_fourier_filter_gg_file is not None:
+            keys.append('arb_fourier_filter_gg_file')
+            values.append(', '.join(map(str, self.arb_fourier_filter_gg_file_save)))
+        if self.arb_real_filter_gg_file is not None:
+            keys.append('arb_real_filter_gg_file')
+            values.append(', '.join(map(str, self.arb_real_filter_gg_file_save)))
+        if self.arb_fourier_filter_gm_file is not None:
+            keys.append('arb_fourier_filter_gm_file')
+            values.append(', '.join(map(str, self.arb_fourier_filter_gm_file_save)))
+        if self.arb_real_filter_gm_file is not None:
+            keys.append('arb_real_filter_gm_file')
+            values.append(', '.join(map(str, self.arb_real_filter_gm_file_save)))
+        if self.arb_fourier_filter_mmE_file is not None:
+            keys.append('arb_fourier_filter_mmE_file')
+            values.append(', '.join(map(str, self.arb_fourier_filter_mmE_file_save)))
+        if self.arb_fourier_filter_mmE_file is not None:
+            keys.append('arb_fourier_filter_mmB_file')
+            values.append(', '.join(map(str, self.arb_fourier_filter_mmB_file_save)))
+        if self.arb_real_filter_mm_p_file is not None:
+            keys.append('arb_real_filter_mm_p_file')
+            values.append(', '.join(map(str, self.arb_real_filter_mm_p_file_save)))
+        if self.arb_real_filter_mm_m_file is not None:
+            keys.append('arb_real_filter_mm_m_file')
+            values.append(', '.join(map(str, self.arb_real_filter_mm_m_file_save)))
+
+
         self.tab_input = dict(zip(keys, values))
         if self.npair_mm_file is not None:
             self.tab_input['npair_mm_file'] = \

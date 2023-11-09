@@ -289,20 +289,28 @@ class CovBandPowers(CovTHETASpace):
         self.__get_norm()
         self.levin_int = levin.Levin(2, 16, 32, obs_dict['bandpowers']['bandpower_accuracy'], 100)
         self.delta_theta = self.theta_ul_bins[1:] - self.theta_ul_bins[:-1]
-        save_n_eff_clust = survey_params_dict['n_eff_clust']
-        save_n_eff_lens = survey_params_dict['n_eff_lens']
+        if self.gg or self.gm:
+            save_n_eff_clust = survey_params_dict['n_eff_clust']
+        if self.mm or self.gm:
+            save_n_eff_lens = survey_params_dict['n_eff_lens']
         if self.sample_dim > 1:
-            survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
-            survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
+            if self.gg or self.gm:
+                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+            if self.mm or self.gm:
+                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
         else:
-            survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
-            survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]  
+            if self.gg or self.gm:
+                survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
+            if self.mm or self.gm:
+               survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]  
         self.dnpair_gg, self.dnpair_gm, self.dnpair_mm, self.theta_gg, self.theta_gm, self.theta_mm  = self.get_dnpair([self.gg, self.gm, self.mm],
-                                                                                                                        self.thetabins ,
+                                                                                                                        self.theta_real_integral,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
-        survey_params_dict['n_eff_clust'] = save_n_eff_clust
-        survey_params_dict['n_eff_lens'] = save_n_eff_lens
+        if self.gg or self.gm:    
+            survey_params_dict['n_eff_clust'] = save_n_eff_clust
+        if self.mm or self.gm:
+            survey_params_dict['n_eff_lens'] = save_n_eff_lens
         self.__get_WXY()
         self.__get_shotnoise_integrals()
         self.levin_int.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)

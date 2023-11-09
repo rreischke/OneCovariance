@@ -178,22 +178,33 @@ class CovTHETASpace(CovELLSpace):
         self.thetabins, self.theta_ul_bins = \
             self.__set_theta_bins(obs_dict['THETAspace'])
         if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
-            save_n_eff_clust = survey_params_dict['n_eff_clust']
-            save_n_eff_lens = survey_params_dict['n_eff_lens']
+            if self.gg or self.gm:
+                save_n_eff_clust = survey_params_dict['n_eff_clust']
+            if self.mm or self.gm:
+                save_n_eff_lens = survey_params_dict['n_eff_lens']
             if self.sample_dim > 1:
-                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
-                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
+                if self.gg or self.gm:
+                    survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+                if self.mm or self.gm:
+                    survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
             else:
-                survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
-                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
+                if self.gg or self.gm:
+                    survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
+                if self.mm or self.gm:
+                    survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]  
             self.npair_gg, self.npair_gm, self.npair_mm = \
                 self.get_npair([self.gg, self.gm, self.mm],
                             self.theta_ul_bins,
                             self.thetabins,
                             survey_params_dict,
                             read_in_tables['npair'])
-            survey_params_dict['n_eff_clust'] = save_n_eff_clust
-            survey_params_dict['n_eff_lens'] = save_n_eff_lens
+            if self.gg or self.gm:    
+                survey_params_dict['n_eff_clust'] = save_n_eff_clust
+            if self.mm or self.gm:
+                survey_params_dict['n_eff_lens'] = save_n_eff_lens
+            
+                survey_params_dict['n_eff_clust'] = save_n_eff_clust
+                survey_params_dict['n_eff_lens'] = save_n_eff_lens
         self.__get_signal()
         
         
@@ -271,6 +282,7 @@ class CovTHETASpace(CovELLSpace):
                 w_signal[i_theta, :, :, :, :] = np.reshape(
                     w_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.w_gg = w_signal
+
         if self.gm:
             self.data_vector_length += len(self.thetabins)*self.n_tomo_clust*self.n_tomo_lens
             gt_signal_shape = (len(self.thetabins),
@@ -293,6 +305,8 @@ class CovTHETASpace(CovELLSpace):
                 gt_signal[i_theta, :, :, :] = np.reshape(
                     gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.gt = gt_signal
+            
+
         ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
         if self.mm:
             self.data_vector_length += len(self.thetabins)*self.n_tomo_lens*(self.n_tomo_lens+1)
