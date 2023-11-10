@@ -1,7 +1,7 @@
 #include "levin.h"
 #include <iomanip>
 
-const double Levin::min_interval = 1.e-2;
+const double Levin::min_interval = 1.e-4;
 const double Levin::tol_abs = 1.0e-200;
 const double Levin::min_sv = 1.0e-10;
 
@@ -846,9 +846,9 @@ double Levin::iterate_single(double (*function)(double, void *), double A, doubl
             {
                 if (verbose)
                 {
-                    std::cerr << "subintervals too narrow for further bisection!" << std::endl;
-                    return result;
+                    std::cerr << "subintervals too narrow for further bisection!" << std::endl;   
                 }
+                return result;
             }
             if (x_sub[i] - x_sub[i - 1] > min_interval)
             {
