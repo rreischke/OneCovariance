@@ -304,7 +304,7 @@ class CovBandPowers(CovTHETASpace):
             if self.mm or self.gm:
                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]  
         self.dnpair_gg, self.dnpair_gm, self.dnpair_mm, self.theta_gg, self.theta_gm, self.theta_mm  = self.get_dnpair([self.gg, self.gm, self.mm],
-                                                                                                                        self.theta_real_integral,
+                                                                                                                        self.theta_bins,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
         if self.gg or self.gm:    

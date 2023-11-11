@@ -1249,12 +1249,11 @@ class Setup():
                       "the survey area.")
                 data = fits.getdata(mfile, 1).field(0)
                 data = data.flatten()
-                data = np.where(data < 1.0, 0, 1)
+                #data = np.where(data < 1.0, 0, 1)
                 Nside = healpy.npix2nside(len(data))
                 survey_params_dict['survey_area_'+est].append(
-                    np.count_nonzero(data)
+                    np.sum(data)
                     * healpy.nside2pixarea(Nside, degrees=True))
-
         if survey_params_dict['survey_area_lens'] is None and \
            not survey_params_dict['read_mask_lens_lens']:
             if survey_params_dict['mask_file_lens_lens'] == \
@@ -1611,10 +1610,10 @@ class GaussLegendre:
             self.n += 2
             result_np2 = self.__integrate_fixed_order()
             rel_error = np.abs(result_n-result_np2)/result_n
-        if self.n > 150:
-            print("IntegrationWarning: The Gauss-Legendre integrator has " +
-                  "reached its supported accuracy limit (%.2e" % rel_error +
-                  ") which is still above the desired accuracy " +
-                  "(%.2e" % self.rel_acc + ").")
+            if self.n > 150:
+                print("IntegrationWarning: The Gauss-Legendre integrator has " +
+                    "reached its supported accuracy limit (%.2e" % rel_error +
+                    ") which is still above the desired accuracy " +
+                    "(%.2e" % self.rel_acc + ").")
         self.n = self.n_input
         return result_np2

@@ -4691,6 +4691,7 @@ class CovELLSpace(PolySpectra):
                 for i_chi in range(len(self.los_integration_chi)):
                     survey_variance_mmmm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_mmmm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
                                                          * sum_m_a_lm_mmmm[1:])/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
+                #print(survey_variance_mmmm)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     survey_params_dict['survey_area_lens']/self.deg2torad2/np.pi)
@@ -4701,6 +4702,7 @@ class CovELLSpace(PolySpectra):
                 for i_chi in range(len(self.los_integration_chi)):
                     survey_variance_mmmm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
                         np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
+                #print(survey_variance_mmmm) 
             self.survey_variance_mmmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
 

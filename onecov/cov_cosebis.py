@@ -202,7 +202,6 @@ class CovCOSEBI(CovELLSpace):
                              prec,
                              read_in_tables)
         self.theta_integral = np.geomspace(obs_dict['COSEBIs']['theta_min'], obs_dict['COSEBIs']['theta_max'], 1000) 
-        
         if self.gg or self.gm:
             save_n_eff_clust = survey_params_dict['n_eff_clust']
         if self.mm or self.gm:
@@ -218,7 +217,7 @@ class CovCOSEBI(CovELLSpace):
             if self.mm or self.gm:
                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]  
         self.dnpair_gg, self.dnpair_gm, self.dnpair_mm, self.theta_gg, self.theta_gm, self.theta_mm  = self.get_dnpair([self.gg, self.gm, self.mm],
-                                                                                                                        self.theta_real_integral,
+                                                                                                                        self.theta_integral,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
         if self.gg or self.gm:    
