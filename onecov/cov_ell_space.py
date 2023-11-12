@@ -469,8 +469,7 @@ class CovELLSpace(PolySpectra):
             Specifies the redshift spacing used for the line-of-sight
             integration.
         """
-        linear_growth_factor = (10**self.spline_Pmm_lin(0,self.los_integration_chi)/10**self.spline_Pmm_lin(0,self.los_integration_chi[0]))[:,0]**0.5
-        
+        linear_growth_factor = np.interp(self.los_integration_chi,self.los_chi,(self.power_mm_lin_z[:,int(len(self.mass_func.k)/2)]/self.power_mm_lin_z[0,int(len(self.mass_func.k)/2)])**0.5)
         self.spline_lensweight = []
         for tomo in range(self.n_tomo_lens):
             norm = np.trapz(self.spline_zlens[tomo](
@@ -903,7 +902,7 @@ class CovELLSpace(PolySpectra):
                            self.sample_dim))
         aux_mm = np.zeros((self.los_interpolation_sampling,
                            len(self.mass_func.k)))
-        aux_mm_lin = np.zeros_like(aux_mm)
+        self.power_mm_lin_z = np.zeros_like(aux_mm)
 
         self.los_z = np.linspace(
             0, self.zet_max, self.los_interpolation_sampling)
@@ -934,7 +933,7 @@ class CovELLSpace(PolySpectra):
                 aux_mm[zet, :] = self.Pmm[:, 0]
             else:
                 aux_mm[zet, :] = np.ones_like(self.mass_func.k)
-            aux_mm_lin[zet, :] = self.mass_func.power[:]
+            self.power_mm_lin_z[zet, :] = self.mass_func.power[:]
             eta = (time.time()-t0) * \
                 (self.los_interpolation_sampling/(zet+1)-1)
             if self.csmf:
@@ -975,9 +974,6 @@ class CovELLSpace(PolySpectra):
         spline_Pmm = interp2d(np.log10(self.mass_func.k),
                               self.los_chi,
                               np.log10(aux_mm))
-        self.spline_Pmm_lin = interp2d(np.log10(self.mass_func.k),
-                                       self.los_chi,
-                                       np.log10(aux_mm_lin))
         self.__set_lensweight_splines(covELLspacesettings, iA_dict)
         self.spline_Pgg = spline_Pgg
         if Cells is not None:
@@ -4658,135 +4654,168 @@ class CovELLSpace(PolySpectra):
         survey_variance_ggmm = np.ones_like(self.los_integration_chi)
         survey_variance_ell = np.linspace(
             self.ellrange[0], self.ellrange[-1], int(self.ellrange[-1]-self.ellrange[0]))
-        linear_power_for_survey_variance = np.array(10**self.spline_Pmm_lin(np.log10(
-            (survey_variance_ell + 0.5)/self.los_integration_chi[0]), self.los_integration_chi[0]))
-        P_at_chi0 = 10**self.spline_Pmm_lin(np.log10(1.0),
-                                            self.los_integration_chi[0])
         if self.gg:
-            ell_gggg, sum_m_a_lm_gggg = \
+            ell, sum_m_a_lm = \
                 self.calc_a_lm('gg', 'gg', survey_params_dict)
-            if ell_gggg is not None:
-                ell_gggg, sum_m_a_lm_gggg = ell_gggg[0], sum_m_a_lm_gggg[0]
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_gggg[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_gggg[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                         * sum_m_a_lm_gggg[1:])/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+            if ell is not None:
+                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    else:
+                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+                survey_variance_gggg = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     survey_params_dict['survey_area_clust']/self.deg2torad2/np.pi)
-                weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                           survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-                survey_variance_at_chi0 = np.trapz(
-                    survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_gggg[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                        np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        weight_function_squared = 1
+                    else:
+                        weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                                (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                    y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+                survey_variance_gggg = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             self.survey_variance_gggg_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_gggg, k=1, s=0, ext=0)
-
         if self.mm:
-            ell_mmmm, sum_m_a_lm_mmmm = \
+            ell, sum_m_a_lm = \
                 self.calc_a_lm('mm', 'mm', survey_params_dict)
-            if ell_mmmm is not None:
-                ell_mmmm, sum_m_a_lm_mmmm = ell_mmmm[0], sum_m_a_lm_mmmm[0]
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_mmmm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_mmmm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                         * sum_m_a_lm_mmmm[1:])/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
-                #print(survey_variance_mmmm)
+            if ell is not None:
+                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    else:
+                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+                survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     survey_params_dict['survey_area_lens']/self.deg2torad2/np.pi)
-                weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                           survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-                survey_variance_at_chi0 = np.trapz(
-                    survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_mmmm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                        np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
-                #print(survey_variance_mmmm) 
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        weight_function_squared = 1
+                    else:
+                        weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                                (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                    y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+                survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)*self.los_integration_chi**2
             self.survey_variance_mmmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
-
         if self.gm:
-            ell_gmgm, sum_m_a_lm_gmgm = \
+            ell, sum_m_a_lm = \
                 self.calc_a_lm('gm', 'gm', survey_params_dict)
-            if ell_gmgm is not None:
-                ell_gmgm, sum_m_a_lm_gmgm = ell_gmgm[0], sum_m_a_lm_gmgm[0]
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_gmgm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_gmgm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                         * sum_m_a_lm_gmgm[1:])/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
+            if ell is not None:
+                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    else:
+                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
+                survey_variance_gmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     survey_params_dict['survey_area_ggl']/self.deg2torad2/np.pi)
-                weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                           survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-                survey_variance_at_chi0 = np.trapz(
-                    survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_gmgm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                        np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        weight_function_squared = 1
+                    else:
+                        weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                                (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                    y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+                survey_variance_gmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             self.survey_variance_gmgm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_gmgm, k=1, s=0, ext=0)
 
         if self.gg and self.gm and self.cross_terms:
-            ell_gggm, sum_m_a_lm_gggm = \
+            ell, sum_m_a_lm = \
                 self.calc_a_lm('gg', 'gm', survey_params_dict)
-            if ell_gggm is not None:
-                ell_gggm, sum_m_a_lm_gggm = ell_gggm[0], sum_m_a_lm_gggm[0]
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_gggm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_gggm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                         * sum_m_a_lm_gggm[1:])/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_ggl']/self.deg2torad2**2)
+            if ell is not None:
+                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    else:
+                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    y_aux[i_chi] = np.sum(power* sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_ggl']/self.deg2torad2**2)
+                survey_variance_gggm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     min(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_ggl'])/self.deg2torad2/np.pi)
-                weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                           survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-                survey_variance_at_chi0 = np.trapz(
-                    survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_gggm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                        np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        weight_function_squared = 1
+                    else:
+                        weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                                (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                    y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+                survey_variance_gggm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             self.survey_variance_gggm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_gggm, k=1, s=0, ext=0)
-
+            
         if self.gg and self.mm and self.cross_terms:
-            ell_ggmm, sum_m_a_lm_ggmm = \
+            ell, sum_m_a_lm = \
                 self.calc_a_lm('gg', 'mm', survey_params_dict)
-            if ell_ggmm is not None:
-                ell_ggmm, sum_m_a_lm_ggmm = ell_ggmm[0], sum_m_a_lm_ggmm[0]
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_ggmm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_ggmm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                         * sum_m_a_lm_ggmm[1:])/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
+            if ell is not None:
+                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    else:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    y_aux[i_chi] = np.sum(power*sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
+                survey_variance_ggmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     min(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2/np.pi)
-                weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                           survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-                survey_variance_at_chi0 = np.trapz(
-                    survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_ggmm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                        np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        weight_function_squared = 1
+                    else:
+                        weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                                (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                    y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+                survey_variance_ggmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             self.survey_variance_ggmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_ggmm, k=1, s=0, ext=0)
-
         if self.gm and self.mm and self.cross_terms:
-            ell_mmgm, sum_m_a_lm_mmgm = \
+            ell, sum_m_a_lm = \
                 self.calc_a_lm('mm', 'gm', survey_params_dict)
-            if ell_mmgm is not None:
-                ell_mmgm, sum_m_a_lm_mmgm = ell_mmgm[0], sum_m_a_lm_mmgm[0]
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_mmgm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_mmgm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                         * sum_m_a_lm_mmgm[1:])(survey_params_dict['survey_area_ggl']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
+            if ell is not None:
+                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    else:
+                        power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])(survey_params_dict['survey_area_ggl']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
+                survey_variance_mmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     min(survey_params_dict['survey_area_ggl'], survey_params_dict['survey_area_lens'])/self.deg2torad2/np.pi)
-                weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                           survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-                survey_variance_at_chi0 = np.trapz(
-                    survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-                for i_chi in range(len(self.los_integration_chi)):
-                    survey_variance_mmgm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                        np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
+                y_aux = np.zeros_like(self.los_chi)
+                for i_chi in range(len(self.los_chi)):
+                    if i_chi == 0:
+                        weight_function_squared = 1
+                    else:
+                        weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                                (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                    y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+                survey_variance_mmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             self.survey_variance_mmgm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmgm, k=1, s=0, ext=0)
 
@@ -4849,8 +4878,7 @@ class CovELLSpace(PolySpectra):
                                     
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
-                                    survey_variance = np.array(
-                                        self.survey_variance_gggg_spline(self.los_integration_chi))
+                                    survey_variance = self.survey_variance_gggg_spline(self.los_integration_chi)
                                     weight = 1.0/self.los_integration_chi**6.0 * \
                                         self.spline_zclust[i_tomo](self.los_integration_chi) * \
                                         self.spline_zclust[j_tomo](self.los_integration_chi) * \
@@ -4916,8 +4944,7 @@ class CovELLSpace(PolySpectra):
                                     
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
-                                    survey_variance = np.array(
-                                        self.survey_variance_gggm_spline(self.los_integration_chi))
+                                    survey_variance = self.survey_variance_gggm_spline(self.los_integration_chi)
                                     weight = 1.0/self.los_integration_chi**6.0 * \
                                         self.spline_zclust[i_tomo](self.los_integration_chi) * \
                                         self.spline_zclust[j_tomo](self.los_integration_chi) * \
@@ -4983,8 +5010,7 @@ class CovELLSpace(PolySpectra):
                                     
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
-                                    survey_variance = np.array(
-                                        self.survey_variance_ggmm_spline(self.los_integration_chi))
+                                    survey_variance = self.survey_variance_ggmm_spline(self.los_integration_chi)
                                     weight = 1.0/self.los_integration_chi**6.0 * \
                                         self.spline_zclust[i_tomo](self.los_integration_chi) * \
                                         self.spline_zclust[j_tomo](self.los_integration_chi) * \
@@ -5047,8 +5073,7 @@ class CovELLSpace(PolySpectra):
                                     
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
-                                    survey_variance = np.array(
-                                        self.survey_variance_gmgm_spline(self.los_integration_chi))
+                                    survey_variance = self.survey_variance_gmgm_spline(self.los_integration_chi)
                                     weight = 1.0/self.los_integration_chi**6.0 * \
                                         self.spline_zclust[i_tomo](self.los_integration_chi) * \
                                         self.spline_zclust[k_tomo](self.los_integration_chi) * \
@@ -5093,7 +5118,7 @@ class CovELLSpace(PolySpectra):
             SSCELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), 1, 1, self.n_tomo_lens,
                                   self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
             
-            survey_variance = np.array(self.survey_variance_mmmm_spline(self.los_integration_chi))
+            survey_variance = survey_variance_mmmm
                                   
             global aux_spline_ssc_mmmm
 
@@ -5131,8 +5156,6 @@ class CovELLSpace(PolySpectra):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_lens):
                                 for l_tomo in range(k_tomo, self.n_tomo_lens):
-                                    survey_variance = np.array(
-                                        self.survey_variance_mmmm_spline(self.los_integration_chi))
                                     weight = 1.0/self.los_integration_chi**6.0 * \
                                         self.spline_lensweight[i_tomo](self.los_integration_chi) * \
                                         self.spline_lensweight[k_tomo](self.los_integration_chi) * \
@@ -5189,8 +5212,8 @@ class CovELLSpace(PolySpectra):
                                         continue
                                     self.__update_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
-                                    survey_variance = np.array(
-                                        self.survey_variance_mmgm_spline(self.los_integration_chi))
+                                    survey_variance = self.survey_variance_mmgm_spline(self.los_integration_chi)
+                                    
                                     weight = 1.0/self.los_integration_chi**6.0 * \
                                         self.spline_lensweight[i_tomo](self.los_integration_chi) * \
                                         self.spline_zclust[k_tomo](self.los_integration_chi) * \
@@ -5244,7 +5267,7 @@ class CovELLSpace(PolySpectra):
         return np.eye(len(self.log10csmf_mass_bins))[:,:, None, None]*np.eye(self.n_tomo_csmf)[None, None, :, :]*amplitude[:, None, :, None]
 
     def covELL_csmf_SSC(self,
-                       survey_params_dict):
+                        survey_params_dict):
         """
         Calculates the SSC component of the stellar mass function covariance matrix
         
@@ -5253,32 +5276,34 @@ class CovELLSpace(PolySpectra):
         smf_ssc : array
             with shape (csmf_mass_bins, csmf_mass_bins, csmf_tomo_bins, csmf_tomo_bins)
         """
+
         survey_variance_ell = np.linspace(
             self.ellrange[0], self.ellrange[-1], int(self.ellrange[-1]-self.ellrange[0]))
-        linear_power_for_survey_variance = np.array(10**self.spline_Pmm_lin(np.log10(
-            (survey_variance_ell + 0.5)/self.los_integration_chi[0]), self.los_integration_chi[0]))
-        P_at_chi0 = 10**self.spline_Pmm_lin(np.log10(1.0),
-                                            self.los_integration_chi[0])
         survey_variance_mmmm = np.ones_like(self.los_integration_chi)
-        ell_mmmm, sum_m_a_lm_mmmm = \
+        ell, sum_m_a_lm = \
                 self.calc_a_lm('mm', 'mm', survey_params_dict)
-        if ell_mmmm is not None:
-            ell_mmmm, sum_m_a_lm_mmmm = ell_mmmm[0], sum_m_a_lm_mmmm[0]
-            for i_chi in range(len(self.los_integration_chi)):
-                survey_variance_mmmm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_mmmm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                        * sum_m_a_lm_mmmm[1:])/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
+        if ell is not None:
+            ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+            y_aux = np.zeros_like(self.los_chi)
+            for i_chi in range(len(self.los_chi)):
+                if i_chi == 0:
+                    power = np.exp(np.interp(np.log(ell[1:]/self.chi_min),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                else:
+                    power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                y_aux[i_chi] = np.sum(power* sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+            survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
         else:
             angular_scale_of_circular_survey_in_rad = np.sqrt(
-                survey_params_dict['survey_area_lens']/self.deg2torad2/np.pi)
-            weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                        survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-            survey_variance_at_chi0 = np.trapz(
-                survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-            for i_chi in range(len(self.los_integration_chi)):
-                survey_variance_mmmm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                    np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
-        self.survey_variance_mmmm_spline = UnivariateSpline(
-            self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
+                (survey_params_dict['survey_area_clust']**2)/self.deg2torad2/np.pi)
+            y_aux = np.zeros_like(self.los_chi)
+            for i_chi in range(len(self.los_chi)):
+                if i_chi == 0:
+                    weight_function_squared = 1
+                else:
+                    weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                            (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+            survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
         result = np.zeros((len(self.log10csmf_mass_bins), len(self.log10csmf_mass_bins), self.n_tomo_csmf, self.n_tomo_csmf))
         np.seterr(divide='ignore', invalid='ignore')
         for i_tomo in range(self.n_tomo_csmf):
@@ -5286,7 +5311,7 @@ class CovELLSpace(PolySpectra):
                 for i_mass in range(len(self.log10csmf_mass_bins)):
                     for j_mass in range(i_mass, len(self.log10csmf_mass_bins)):
                         integrand = self.spline_zcsmf[i_tomo](self.los_integration_chi)*self.spline_zcsmf[j_tomo](self.los_integration_chi) \
-                            *self.los_integration_chi**2*self.survey_variance_mmmm_spline(self.los_integration_chi)*self.phi_tilde_spline[i_mass](self.los_integration_chi)/self.spline_zcsmf_total(self.los_integration_chi)**2 *self.phi_tilde_spline[j_mass](self.los_integration_chi)
+                            *self.los_integration_chi**2*survey_variance_mmmm*self.phi_tilde_spline[i_mass](self.los_integration_chi)/self.spline_zcsmf_total(self.los_integration_chi)**2 *self.phi_tilde_spline[j_mass](self.los_integration_chi)
                         result[i_mass, j_mass, i_tomo, j_tomo] = survey_params_dict['survey_area_lens']**2/self.deg2torad2**2*self.f_tomo[i_tomo]*self.f_tomo[j_tomo]/self.Vmax[i_mass, i_tomo]/self.Vmax[j_mass, j_tomo]*np.trapz(np.nan_to_num(integrand, nan = 0.0, posinf = 0.0, neginf = 0.0),self.los_integration_chi)
                         result[i_mass, j_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
                         result[j_mass, i_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
@@ -5467,42 +5492,41 @@ class CovELLSpace(PolySpectra):
         covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm : list of arrays
             with shapes (number of ell bins, number of smf bins, sample dims, n_tomo_smf, n_tomo_clust/lens, n_tomo_clust/lens) 
         """
-        survey_variance_mmmm = np.ones_like(self.los_integration_chi)
         survey_variance_ell = np.linspace(
             self.ellrange[0], self.ellrange[-1], int(self.ellrange[-1]-self.ellrange[0]))
-        linear_power_for_survey_variance = np.array(10**self.spline_Pmm_lin(np.log10(
-            (survey_variance_ell + 0.5)/self.los_integration_chi[0]), self.los_integration_chi[0]))
-        P_at_chi0 = 10**self.spline_Pmm_lin(np.log10(1.0),
-                                            self.los_integration_chi[0])
-        
-        ell_mmmm, sum_m_a_lm_mmmm = \
-            self.calc_a_lm('mm', 'mm', survey_params_dict)
-        if ell_mmmm is not None:
-            ell_mmmm, sum_m_a_lm_mmmm = ell_mmmm[0], sum_m_a_lm_mmmm[0]
-            for i_chi in range(len(self.los_integration_chi)):
-                survey_variance_mmmm[i_chi] = np.sum(10.0**self.spline_Pmm_lin(np.log10(ell_mmmm[1:]/self.los_integration_chi[i_chi]), self.los_integration_chi[i_chi])
-                                                        * sum_m_a_lm_mmmm[1:])/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
+        survey_variance_mmmm = np.ones_like(self.los_integration_chi)
+        ell, sum_m_a_lm = \
+                self.calc_a_lm('mm', 'mm', survey_params_dict)
+        if ell is not None:
+            ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+            y_aux = np.zeros_like(self.los_chi)
+            for i_chi in range(len(self.los_chi)):
+                if i_chi == 0:
+                    power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                else:
+                    power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                y_aux[i_chi] = np.sum(power* sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+            survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
         else:
             angular_scale_of_circular_survey_in_rad = np.sqrt(
-                survey_params_dict['survey_area_lens']/self.deg2torad2/np.pi)
-            weight_function_squared = (2.0*j1(survey_variance_ell*angular_scale_of_circular_survey_in_rad) /
-                                        survey_variance_ell*angular_scale_of_circular_survey_in_rad)**2
-            survey_variance_at_chi0 = np.trapz(
-                survey_variance_ell*weight_function_squared*linear_power_for_survey_variance, survey_variance_ell)/(2.0*np.pi)
-            for i_chi in range(len(self.los_integration_chi)):
-                survey_variance_mmmm[i_chi] = survey_variance_at_chi0*10**self.spline_Pmm_lin(
-                    np.log10(1.0), self.los_integration_chi[i_chi])/P_at_chi0
-        self.survey_variance_mmmm_spline = UnivariateSpline(
-            self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
-        
+                (survey_params_dict['survey_area_clust']**2)/self.deg2torad2/np.pi)
+            y_aux = np.zeros_like(self.los_chi)
+            for i_chi in range(len(self.los_chi)):
+                if i_chi == 0:
+                    weight_function_squared = 1
+                else:
+                    weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
+                                            (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
+                y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
+            survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
+        self.survey_variance_mmmm_spline(self.los_integration_chi,survey_variance_mmmm, k=1, s=0, ext=0)
         aux_response_mm = np.zeros((len(self.los_chi),
                                     len(self.mass_func.k),
                                     self.sample_dim))
         t0 = time.time()
         for i_chi in range(self.los_interpolation_sampling):
             self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
-            _, _, aux_response_mm[i_chi,
-                                                                                        :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
+            _, _, aux_response_mm[i_chi, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
             eta = (time.time()-t0) * \
                 (len(self.los_z)/(i_chi+1)-1)
             print('\rPreparations for SSC SMF calculation at '

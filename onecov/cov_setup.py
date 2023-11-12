@@ -1384,7 +1384,7 @@ class Setup():
                         "survey area modes.")
                     data = fits.getdata(mfile, 1).field(0)
                     data = data.flatten()
-                    data = np.where(data < 1.0, 0, 1)
+                    #data = np.where(data > .0, 1, 0)
                     Nside = healpy.npix2nside(len(data))
                     ellmax = 3 * Nside - 1
                     if est1 == est2:
@@ -1400,7 +1400,7 @@ class Setup():
                                 " to get the cross survey area modes.")
                             data2 = fits.getdata(mfile2, 1).field(0)
                             data2 = data2.flatten()
-                            data2 = np.where(data2 < 1.0, 0, 1)
+                            #data2 = np.where(data2 > 0.0, 1, 0)
                             Nside2 = healpy.npix2nside(len(data2))
                             ellmax2 = 3 * Nside2 - 1
                             ellmax = ellmax if ellmax < ellmax2 else ellmax2
@@ -1430,7 +1430,23 @@ class Setup():
                             filename,
                             names=['#ell', 'sum_m_a_lm'],
                             overwrite=True)
-
+        if ell is None:
+            ell, sum_m_a_lm = [], []
+            NSIDE = 512
+            NPIX = healpy.nside2npix(NSIDE)
+            vec = healpy.ang2vec(np.pi / 2, 2*np.pi)
+            survey_area = max(survey_params_dict['survey_area_'+est1][0], survey_params_dict['survey_area_'+est2][0])
+            ipix_disc = healpy.query_disc(nside=NSIDE, vec=vec, radius=np.radians(np.sqrt(survey_area)/np.pi))
+            ipix_fullsky = healpy.query_disc(nside=NSIDE, vec=vec, radius=np.radians(360))
+            m = np.arange(NPIX)
+            m[ipix_fullsky] = 0
+            m[ipix_disc] = 1
+            ellmax = 3 * NSIDE - 1
+            aux_ell = np.arange(ellmax)
+            ell.append(aux_ell)
+            C_ell = healpy.sphtfunc.anafast(m, use_weights=True)
+            sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
+            print("Assuming a spherical mask with size",survey_area,"deg2 for",est1,"and",est2,".")    
         return ell, sum_m_a_lm
 
 
