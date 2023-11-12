@@ -4678,7 +4678,7 @@ class CovELLSpace(PolySpectra):
                         weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
                                                 (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
                     y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
-                survey_variance_gggg = np.interp(self.los_integration_chi, self.los_chi, y_aux)
+                survey_variance_gggg = np.interp(self.los_integration_chi, self.los_chi, y_aux)*self.los_integration_chi**2
             self.survey_variance_gggg_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_gggg, k=1, s=0, ext=0)
         if self.mm:
@@ -4732,7 +4732,7 @@ class CovELLSpace(PolySpectra):
                         weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
                                                 (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
                     y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
-                survey_variance_gmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
+                survey_variance_gmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)*self.los_integration_chi**2
             self.survey_variance_gmgm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_gmgm, k=1, s=0, ext=0)
 
@@ -4760,7 +4760,7 @@ class CovELLSpace(PolySpectra):
                         weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
                                                 (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
                     y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
-                survey_variance_gggm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
+                survey_variance_gggm = np.interp(self.los_integration_chi, self.los_chi, y_aux)*self.los_integration_chi**2
             self.survey_variance_gggm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_gggm, k=1, s=0, ext=0)
             
@@ -4788,7 +4788,7 @@ class CovELLSpace(PolySpectra):
                         weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
                                                 (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
                     y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
-                survey_variance_ggmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
+                survey_variance_ggmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)*self.los_integration_chi**2
             self.survey_variance_ggmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_ggmm, k=1, s=0, ext=0)
         if self.gm and self.mm and self.cross_terms:
@@ -4815,7 +4815,7 @@ class CovELLSpace(PolySpectra):
                         weight_function_squared = (2.0*j1(self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]) /
                                                 (self.mass_func.k*angular_scale_of_circular_survey_in_rad*self.los_chi[i_chi]))**2
                     y_aux[i_chi] = np.trapz(weight_function_squared*self.power_mm_lin_z[i_chi,:]*self.mass_func.k, self.mass_func.k)/(2.0*np.pi)
-                survey_variance_mmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
+                survey_variance_mmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)*self.los_integration_chi**2
             self.survey_variance_mmgm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmgm, k=1, s=0, ext=0)
 
