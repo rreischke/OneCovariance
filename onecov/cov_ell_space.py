@@ -991,9 +991,10 @@ class CovELLSpace(PolySpectra):
             spline_Pgm.append(interp2d(np.log10(self.mass_func.k),
                                        self.los_chi,
                                        np.log10(aux_gm[:, :, i_sample])))
-        spline_Pmm = interp2d(np.log10(self.mass_func.k),
-                              self.los_chi,
-                              np.log10(aux_mm))
+        if (self.mm or self.gm) and not tab_bools[2]:
+            spline_Pmm = interp2d(np.log10(self.mass_func.k),
+                                self.los_chi,
+                                np.log10(aux_mm))
         self.__set_lensweight_splines(covELLspacesettings, iA_dict)
         self.spline_Pgg = spline_Pgg
         if Cells is not None:

@@ -13,4 +13,5 @@ levin.egg-info
 .vscode
 /input/catalogue_mixed/*
 /config_files/*
+!/config_files/config_cz.ini
 !/input/catalogue_mixed/tmptripletcounts_test.fits
