@@ -107,7 +107,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                 covterms["nongauss"] = False
                 #observables["ELLspace"]['limber'] = True
             else:
-                covterms["nongauss"] = False
+                covterms["nongauss"] = True
                 #observables["ELLspace"]['limber'] = False
             
             read_in_tables['zclust']['z'] = zbins
