@@ -893,7 +893,6 @@ class CovELLSpace(PolySpectra):
             (self.zet_max - 0) / covELLspacesettings['delta_z'])
         if (self.los_interpolation_sampling < 3):
             self.los_interpolation_sampling = 3
-
         aux_gg = np.zeros((self.los_interpolation_sampling,
                            len(self.mass_func.k),
                            self.sample_dim, self.sample_dim))
@@ -911,7 +910,6 @@ class CovELLSpace(PolySpectra):
 
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
         t0 = time.time()
-
         if self.csmf:
             aux_stellar_mass_func = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))
             aux_stellar_mass_func_bias = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))

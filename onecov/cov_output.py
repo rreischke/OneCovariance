@@ -1818,7 +1818,8 @@ class Output():
             splitidx = 0
             write_header = True        
             for oidx, obs in enumerate(obslist):
-                obs_copy = np.copy(obs)
+                i_probe = oidx
+                obs_copy = obs
                 if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'CE_mmCE_mm'
                 if obs == 'xipxim' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
@@ -1892,18 +1893,30 @@ class Output():
                                                     for i_r2 in range(len(proj_quant)):
                                                         ri = proj_quant[i_r1]
                                                         rj = proj_quant[i_r2]
-                                                idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
-                                                cov = gauss[oidx][idxs] \
-                                                    + nongauss[oidx][idxs] \
-                                                    + ssc[oidx][idxs]
-                                                ostr = ostr_format \
-                                                    % (obs_copy,  ri, rj, 
-                                                    i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
-                                                    cov, 
-                                                    gauss[oidx][idxs],
-                                                    nongauss[oidx][idxs],
-                                                    ssc[oidx][idxs])
-                                                olist.append(ostr)
+                                                        idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        cov = gauss[oidx][idxs] \
+                                                            + nongauss[oidx][idxs] \
+                                                            + ssc[oidx][idxs]
+                                                        if isinstance(gauss[i_probe], int):
+                                                            gauss_aux = 0.0
+                                                        else:
+                                                            gauss = gauss[i_probe][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]    
+                                                        ostr = ostr_format \
+                                                            % (obs_copy,  ri, rj, 
+                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                            cov, 
+                                                            gauss_aux[oidx][idxs],
+                                                            nongauss_aux[oidx][idxs],
+                                                            ssc_aux[oidx][idxs])
+                                                        olist.append(ostr)
                     elif obs == 'gmgm':
                         sampledim1 = sampledim
                         sampledim2 = sampledim
@@ -1923,13 +1936,25 @@ class Output():
                                                         cov = gauss[oidx][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
+                                                        if isinstance(gauss[i_probe], int):
+                                                            gauss_aux = 0.0
+                                                        else:
+                                                            gauss = gauss[i_probe][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]    
                                                         ostr = ostr_format \
                                                             % (obs_copy,  ri, rj, 
-                                                            i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
-                                                            gauss[oidx][idxs],
-                                                            nongauss[oidx][idxs],
-                                                            ssc[oidx][idxs])
+                                                            gauss_aux[oidx][idxs],
+                                                            nongauss_aux[oidx][idxs],
+                                                            ssc_aux[oidx][idxs])
                                                         olist.append(ostr)
                     elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
                         tomo1 = gauss[oidx].shape[4]
@@ -1955,13 +1980,25 @@ class Output():
                                                         cov = gauss[oidx][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
+                                                        if isinstance(gauss[i_probe], int):
+                                                            gauss_aux = 0.0
+                                                        else:
+                                                            gauss = gauss[i_probe][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]    
                                                         ostr = ostr_format \
                                                             % (obs_copy,  ri, rj, 
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
-                                                            gauss[oidx][idxs],
-                                                            nongauss[oidx][idxs],
-                                                            ssc[oidx][idxs])
+                                                            gauss_aux[oidx][idxs],
+                                                            nongauss_aux[oidx][idxs],
+                                                            ssc_aux[oidx][idxs])
                                                         olist.append(ostr)
                     elif obs in ['ggmm', 'ggxip', 'ggxim']:
                         tomo1 = gauss[oidx].shape[4]
@@ -1982,13 +2019,25 @@ class Output():
                                                         cov = gauss[oidx][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
+                                                        if isinstance(gauss[i_probe], int):
+                                                            gauss_aux = 0.0
+                                                        else:
+                                                            gauss = gauss[i_probe][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]    
                                                         ostr = ostr_format \
                                                             % (obs_copy,  ri, rj, 
-                                                            i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
-                                                            gauss[oidx][idxs],
-                                                            nongauss[oidx][idxs],
-                                                            ssc[oidx][idxs])
+                                                            gauss_aux[oidx][idxs],
+                                                            nongauss_aux[oidx][idxs],
+                                                            ssc_aux[oidx][idxs])
                                                         olist.append(ostr)
                 else:
                     if write_header:
@@ -2012,23 +2061,42 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(len(proj_quant)):
                                                     for i_r2 in range(len(proj_quant)):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
-                                                        cov = gauss[splitidx][idxs] \
-                                                            + gauss[splitidx+1][idxs] \
-                                                            + gauss[splitidx+2][idxs] \
-                                                            + nongauss[oidx][idxs] \
-                                                            + ssc[oidx][idxs]
+                                                        gauss_sva = gauss[3*i_probe]
+                                                        if isinstance(gauss[3*i_probe], int):
+                                                            gauss_sva = 0.0
+                                                        else:
+                                                            gauss_sva = gauss[3*i_probe][idxs]
+                                                        if isinstance(gauss[3*i_probe+1], int):
+                                                            gauss_mix = 0.0
+                                                        else:
+                                                            gauss_mix = gauss[3*i_probe+1][idxs]
+                                                        if isinstance(gauss[3*i_probe+2], int):
+                                                            gauss_sn = 0.0
+                                                        else:
+                                                            gauss_sn = gauss[3*i_probe+2][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]
+                                                        cov = gauss_sva \
+                                                            + gauss_mix \
+                                                            + gauss_sn \
+                                                            + nongauss_aux \
+                                                            + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  ri, rj, 
-                                                            i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
-                                                            gauss[splitidx][idxs],
-                                                            gauss[splitidx+1][idxs],
-                                                            gauss[splitidx+2][idxs],
-                                                            nongauss[oidx][idxs],
-                                                            ssc[oidx][idxs])
+                                                            gauss_sva,
+                                                            gauss_mix,
+                                                            gauss_sn,
+                                                            nongauss_aux,
+                                                            ssc_aux)
                                                         olist.append(ostr)
                     elif obs == 'gmgm':
                         sampledim1 = sampledim
@@ -2043,23 +2111,42 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(len(proj_quant)):
                                                     for i_r2 in range(len(proj_quant)):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
-                                                        cov = gauss[splitidx][idxs] \
-                                                            + gauss[splitidx+1][idxs] \
-                                                            + gauss[splitidx+2][idxs] \
-                                                            + nongauss[oidx][idxs] \
-                                                            + ssc[oidx][idxs]
+                                                        gauss_sva = gauss[3*i_probe]
+                                                        if isinstance(gauss[3*i_probe], int):
+                                                            gauss_sva = 0.0
+                                                        else:
+                                                            gauss_sva = gauss[3*i_probe][idxs]
+                                                        if isinstance(gauss[3*i_probe+1], int):
+                                                            gauss_mix = 0.0
+                                                        else:
+                                                            gauss_mix = gauss[3*i_probe+1][idxs]
+                                                        if isinstance(gauss[3*i_probe+2], int):
+                                                            gauss_sn = 0.0
+                                                        else:
+                                                            gauss_sn = gauss[3*i_probe+2][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]
+                                                        cov = gauss_sva \
+                                                            + gauss_mix \
+                                                            + gauss_sn \
+                                                            + nongauss_aux \
+                                                            + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  ri, rj, 
-                                                            i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
-                                                            gauss[splitidx][idxs],
-                                                            gauss[splitidx+1][idxs],
-                                                            gauss[splitidx+2][idxs],
-                                                            nongauss[oidx][idxs],
-                                                            ssc[oidx][idxs])
+                                                            gauss_sva,
+                                                            gauss_mix,
+                                                            gauss_sn,
+                                                            nongauss_aux,
+                                                            ssc_aux)
                                                         olist.append(ostr)
                     elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
                         tomo1 = gauss[splitidx].shape[4]
@@ -2079,23 +2166,42 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(len(proj_quant)):
                                                     for i_r2 in range(len(proj_quant)):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
-                                                        cov = gauss[splitidx][idxs] \
-                                                            + gauss[splitidx+1][idxs] \
-                                                            + gauss[splitidx+2][idxs] \
-                                                            + nongauss[oidx][idxs] \
-                                                            + ssc[oidx][idxs]
+                                                        gauss_sva = gauss[3*i_probe]
+                                                        if isinstance(gauss[3*i_probe], int):
+                                                            gauss_sva = 0.0
+                                                        else:
+                                                            gauss_sva = gauss[3*i_probe][idxs]
+                                                        if isinstance(gauss[3*i_probe+1], int):
+                                                            gauss_mix = 0.0
+                                                        else:
+                                                            gauss_mix = gauss[3*i_probe+1][idxs]
+                                                        if isinstance(gauss[3*i_probe+2], int):
+                                                            gauss_sn = 0.0
+                                                        else:
+                                                            gauss_sn = gauss[3*i_probe+2][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]
+                                                        cov = gauss_sva \
+                                                            + gauss_mix \
+                                                            + gauss_sn \
+                                                            + nongauss_aux \
+                                                            + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  ri, rj, 
-                                                            i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
-                                                            gauss[splitidx][idxs],
-                                                            gauss[splitidx+1][idxs],
-                                                            gauss[splitidx+2][idxs],
-                                                            nongauss[oidx][idxs],
-                                                            ssc[oidx][idxs])
+                                                            gauss_sva,
+                                                            gauss_mix,
+                                                            gauss_sn,
+                                                            nongauss_aux,
+                                                            ssc_aux)
                                                         olist.append(ostr)
                     elif obs in ['ggmm', 'ggxip', 'ggxim']:
                         tomo1 = gauss[splitidx].shape[4]
@@ -2110,23 +2216,42 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(len(proj_quant)):
                                                     for i_r2 in range(len(proj_quant)):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
-                                                        cov = gauss[splitidx][idxs] \
-                                                            + gauss[splitidx+1][idxs] \
-                                                            + gauss[splitidx+2][idxs] \
-                                                            + nongauss[oidx][idxs] \
-                                                            + ssc[oidx][idxs]
+                                                        gauss_sva = gauss[3*i_probe]
+                                                        if isinstance(gauss[3*i_probe], int):
+                                                            gauss_sva = 0.0
+                                                        else:
+                                                            gauss_sva = gauss[3*i_probe][idxs]
+                                                        if isinstance(gauss[3*i_probe+1], int):
+                                                            gauss_mix = 0.0
+                                                        else:
+                                                            gauss_mix = gauss[3*i_probe+1][idxs]
+                                                        if isinstance(gauss[3*i_probe+2], int):
+                                                            gauss_sn = 0.0
+                                                        else:
+                                                            gauss_sn = gauss[3*i_probe+2][idxs]
+                                                        if isinstance(nongauss[i_probe], int):
+                                                            nongauss_aux = 0.0
+                                                        else:
+                                                            nongauss_aux = nongauss[i_probe][idxs]
+                                                        if isinstance(ssc[i_probe], int):
+                                                            ssc_aux = 0.0
+                                                        else:
+                                                            ssc_aux = ssc[i_probe][idxs]
+                                                        cov = gauss_sva \
+                                                            + gauss_mix \
+                                                            + gauss_sn \
+                                                            + nongauss_aux \
+                                                            + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  ri, rj, 
-                                                            i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
-                                                            gauss[splitidx][idxs],
-                                                            gauss[splitidx+1][idxs],
-                                                            gauss[splitidx+2][idxs],
-                                                            nongauss[oidx][idxs],
-                                                            ssc[oidx][idxs])
+                                                            gauss_sva,
+                                                            gauss_mix,
+                                                            gauss_sn,
+                                                            nongauss_aux,
+                                                            ssc_aux)
                                                         olist.append(ostr)
                     splitidx += 3
 

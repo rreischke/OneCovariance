@@ -150,7 +150,6 @@ class Setup():
         self.zet_clust = read_in_tables['zclust']
         self.zet_lens = read_in_tables['zlens']
         self.zet_csmf = read_in_tables['zcsmf']
-
         self.zet_min, self.zet_max, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_csmf = \
             self.__consistency_checks_for_z_support_in_tabs()
         self.tomos_6x2pt_clust = \
@@ -229,7 +228,6 @@ class Setup():
             else:
                 n_tomo_csmf = 0
                 
-    
         # check for power spectra look-up tables
         if self.Pxy_tab['z'] is not None:
             if self.Pxy_tab['z'][0] > 1e-4:

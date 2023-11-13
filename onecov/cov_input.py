@@ -1220,38 +1220,38 @@ class Input:
 
             if self.nglimber is None:
                 self.nglimber = True
-
-            if self.ell_min is None:
-                self.ell_min = 2
-                print("Arbitrary summary statistics are calculated " +
-                      "from the C_ells but '[covELLspace settings]: " +
-                      "ell_min' is not specified. It is set to '2'.")
-            if self.multiplicative_shear_bias_uncertainty is None:
-                self.multiplicative_shear_bias_uncertainty = 0
-                print("Arbitrary summary statistics are calculated " +
-                      "from the C_ells but '[covELLspace settings]: " +
-                      "mult_shear_bias' is not specified. It is set to '0'.")
-            if self.ell_max is None:
-                self.ell_max = 1e5
-                print("Arbitrary summary statisticss are calculated " +
-                      "from the C_ells but '[covELLspace settings]: " +
-                      "ell_max' is not specified. It is set to '1e5'.")
-            if self.ell_bins is None:
-                self.ell_bins = int(np.log10(self.ell_max)*10)
-                print("Arbitrary summary statistics are calculated " +
-                      "from the C_ells but '[covELLspace settings]: " +
-                      "ell_max' is not specified. It is set to '" +
-                      str(self.ell_bins) + "'.")
-            if self.ell_type is None:
-                self.ell_type = 'log'
-            if self.delta_z is None:
-                self.delta_z = 0.08
-            if self.integration_steps is None:
-                self.integration_steps = 500
-            if self.nz_polyorder is None:
-                self.nz_polyorder = 1
-            if self.tri_delta_z is None:
-                self.tri_delta_z = 0.5
+            if self.do_arbitrary_obs:
+                if self.ell_min is None:
+                    self.ell_min = 2
+                    print("Arbitrary summary statistics are calculated " +
+                        "from the C_ells but '[covELLspace settings]: " +
+                        "ell_min' is not specified. It is set to '2'.")
+                if self.multiplicative_shear_bias_uncertainty is None:
+                    self.multiplicative_shear_bias_uncertainty = 0
+                    print("Arbitrary summary statistics are calculated " +
+                        "from the C_ells but '[covELLspace settings]: " +
+                        "mult_shear_bias' is not specified. It is set to '0'.")
+                if self.ell_max is None:
+                    self.ell_max = 1e5
+                    print("Arbitrary summary statisticss are calculated " +
+                        "from the C_ells but '[covELLspace settings]: " +
+                        "ell_max' is not specified. It is set to '1e5'.")
+                if self.ell_bins is None:
+                    self.ell_bins = int(np.log10(self.ell_max)*10)
+                    print("Arbitrary summary statistics are calculated " +
+                        "from the C_ells but '[covELLspace settings]: " +
+                        "ell_max' is not specified. It is set to '" +
+                        str(self.ell_bins) + "'.")
+                if self.ell_type is None:
+                    self.ell_type = 'log'
+                if self.delta_z is None:
+                    self.delta_z = 0.08
+                if self.integration_steps is None:
+                    self.integration_steps = 500
+                if self.nz_polyorder is None:
+                    self.nz_polyorder = 1
+                if self.tri_delta_z is None:
+                    self.tri_delta_z = 0.5
 
         return True
 
@@ -4203,7 +4203,7 @@ class FileInput:
                     config['redshift']['value_loc_in_bin']
             else:
                 self.value_loc_in_lensbin = 'mid'
-            if 'zcsmf_file' in config['redshift']:
+            if 'zcsmf_file' in config['redshift'] and self.csmf:
                 self.zet_csmf_file =  \
                     (config['redshift']['zcsmf_file'].replace(
                         " ", "")).split(',')
@@ -7016,7 +7016,7 @@ class FileInput:
                 self.wn_gg.append(wn_gg)
             self.wn_gg = np.array(self.wn_gg)
 
-        if self.Tn_plus_file is not None and (self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True):
+        if self.Tn_plus_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
             if '?' in self.Tn_plus_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Tn_plus_file[0][:self.Tn_plus_file[0].find('?')]
@@ -7045,7 +7045,7 @@ class FileInput:
                 self.Tn_plus.append(Tn)
             self.Tn_plus = np.array(self.Tn_plus)
 
-        if self.Tn_minus_file is not None and (self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True):
+        if self.Tn_minus_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
             if '?' in self.Tn_minus_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Tn_minus_file[0][:self.Tn_minus_file[0].find('?')]
@@ -7074,7 +7074,7 @@ class FileInput:
                 self.Tn_minus.append(Tn)
             self.Tn_minus = np.array(self.Tn_minus)
 
-        if self.Qn_file is not None and self.est_ggl == 'cosebi' and self.ggl or self.clustering:
+        if self.Qn_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
             if '?' in self.Qn_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Qn_file[0][:self.Qn_file[0].find('?')]
@@ -7103,7 +7103,7 @@ class FileInput:
                 self.Qn.append(Qn)
             self.Qn = np.array(self.Qn)
         
-        if self.Un_file is not None and self.est_ggl == 'cosebi' and self.ggl or self.clustering:
+        if self.Un_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
             if '?' in self.Un_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Un_file[0][:self.Un_file[0].find('?')]

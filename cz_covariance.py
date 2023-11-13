@@ -1,7 +1,7 @@
 from onecov.cov_input import Input, FileInput
 from onecov.cov_output import Output
 from onecov.cov_theta_space import CovTHETASpace
-from onecov.astropy.cosmology import FlatLambdaCDM, Planck15
+from astropy.cosmology import FlatLambdaCDM, Planck15
 
 import os
 import numpy as np
@@ -9,16 +9,16 @@ import sys
 
 
 
-config = "config_cz_covariance.ini"
-r_low = 0.5 # Scales considered 
-r_hig = 5.0
-path_to_reference_sample = str("./../../clustering-z_covariance/data_JL/cov_test_data/true/nz_reference.dat") # path to the refence sample
-path_to_nz_true = str("./../../clustering-z_covariance/data_JL/cov_test_data/true/nz_true_") # path to the true redshift
+config = "./config_files/config_cz.ini"
+r_low = 0.1 # Scales considered 
+r_hig = 1.0
+path_to_reference_sample = str("./../clustering-z_covariance/data_paper/nz_reference.dat") # path to the refence sample
+path_to_nz_true = str("./../clustering-z_covariance/data_paper/nz_true/nz_true_") # path to the true redshift
 diagonal_only = False # should only be autocorrelations be considered
 
-save_path_cz_covariance = str("./../../clustering-z_covariance/data_onecov/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
-save_path_cross_covariance = str("./../../clustering-z_covariance/data_onecov/cross_covariance_r_" +str(r_low) + "_"+str(r_hig))
-save_path_at_i = str("./../../clustering-z_covariance/data_onecov/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)+ "at_i")
+save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+save_path_cross_covariance = str("./../clustering-z_covariance/data_onecov/cross_covariance_r_" +str(r_low) + "_"+str(r_hig))
+save_path_at_i = str("./../clustering-z_covariance/data_onecov/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)+ "at_i")
 
 
 
@@ -27,7 +27,7 @@ save_path_at_i = str("./../../clustering-z_covariance/data_onecov/cz_covariance_
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
     config)
-fileinp = FileInput()
+fileinp = FileInput(bias)
 read_in_tables = fileinp.read_input(inp.config_name)
 out = Output(output)
 
@@ -64,9 +64,10 @@ nz_interp = np.zeros(n_tomo_source*len(zbins)
                      ).reshape(n_tomo_source, len(zbins))
 
 
+
 neff_phot = np.zeros(n_tomo_source)
 for j in range(n_tomo_source):
-    ndens_phot_file = path_to_nz_true+ str(j+1) +".dat"
+    ndens_phot_file = path_to_nz_true+ str(j+2) +".dat"
     ndens_phot = np.array(np.loadtxt(ndens_phot_file)[:, 2])
     neff_phot[j] = np.sum(ndens_phot)
     neff_phot[j] /= survey_area
@@ -106,7 +107,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                 covterms["nongauss"] = False
                 #observables["ELLspace"]['limber'] = True
             else:
-                covterms["nongauss"] = True
+                covterms["nongauss"] = False
                 #observables["ELLspace"]['limber'] = False
             
             read_in_tables['zclust']['z'] = zbins
@@ -178,14 +179,14 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                                 s_j_theta = 0
                                 if s_j != 0:
                                     s_j_theta = 2
-                                covariance = cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j, p_beta+ n_s]
+                                covariance = np.array(cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j, p_beta+ n_s])
                                 flat_idx_i = s_i + i_z + p_alpha*(len(zbound)-1)
                                 flat_idx_j = s_j + j_z  - 1 + p_beta*(len(zbound)-1)
                                 cross_correlation_covariance[flat_idx_i, flat_idx_j] = covariance
-                                covariance -= .5*signal_w[s_i_theta, 0, s_i, p_alpha + n_s]/signal_w[s_i_theta,0,s_i,s_i]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j, p_beta + n_s]
-                                covariance -= .5*signal_w[s_j_theta,0,s_j, p_beta + n_s]/signal_w[s_j_theta,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j,s_j]
-                                covariance += .25*signal_w[s_i_theta,0,s_i, p_alpha + n_s] * signal_w[s_j_theta,0,s_j, p_beta + n_s]/signal_w[s_i_theta,0,s_i,s_i]/signal_w[s_j_theta,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j]   
-                                covariance /= np.sqrt(signal_w[s_i_theta,0,s_i,s_i]*signal_w[s_j_theta,0,s_j,s_j])
+                                covariance -= .5*signal_w[s_i_theta, 0, 0, s_i, p_alpha + n_s]/signal_w[s_i_theta,0,0,s_i,s_i]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j, p_beta + n_s]
+                                covariance -= .5*signal_w[s_j_theta,0,0,s_j, p_beta + n_s]/signal_w[s_j_theta,0,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j,s_j]
+                                covariance += .25*signal_w[s_i_theta,0,0,s_i, p_alpha + n_s] * signal_w[s_j_theta,0,0,s_j, p_beta + n_s]/signal_w[s_i_theta,0,0,s_i,s_i]/signal_w[s_j_theta,0,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j]   
+                                covariance /= np.sqrt(signal_w[s_i_theta,0,0,s_i,s_i]*signal_w[s_j_theta,0,0,s_j,s_j])
                                 clustering_z_covariance[flat_idx_i, flat_idx_j] = covariance
             else:
                 for p_alpha in range (0, n_tomo_source):
@@ -198,10 +199,10 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                         flat_idx_i = s_i + i_z + p_alpha*(len(zbound)-1)
                         flat_idx_j = s_j + j_z  - 1 + p_beta*(len(zbound)-1)
                         cross_correlation_covariance[flat_idx_i, flat_idx_j] = covariance
-                        covariance -= .5*signal_w[s_i_theta, 0, s_i, p_alpha + n_s]/signal_w[s_i_theta,0,s_i,s_i]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j, p_beta + n_s]
-                        covariance -= .5*signal_w[s_j_theta,0,s_j, p_beta + n_s]/signal_w[s_j_theta,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j,s_j]
-                        covariance += .25*signal_w[s_i_theta,0,s_i, p_alpha + n_s] * signal_w[s_j_theta,0,s_j, p_beta + n_s]/signal_w[s_i_theta,0,s_i,s_i]/signal_w[s_j_theta,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j]   
-                        covariance /= np.sqrt(signal_w[s_i_theta,0,s_i,s_i]*signal_w[s_j_theta,0,s_j,s_j])
+                        covariance -= .5*signal_w[s_i_theta, 0,0, s_i, p_alpha + n_s]/signal_w[s_i_theta,0,0,s_i,s_i]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j, p_beta + n_s]
+                        covariance -= .5*signal_w[s_j_theta,0,0,s_j, p_beta + n_s]/signal_w[s_j_theta,0,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j,s_j]
+                        covariance += .25*signal_w[s_i_theta,0,0,s_i, p_alpha + n_s] * signal_w[s_j_theta,0,0,s_j, p_beta + n_s]/signal_w[s_i_theta,0,0,s_i,s_i]/signal_w[s_j_theta,0,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j]   
+                        covariance /= np.sqrt(signal_w[s_i_theta,0,0,s_i,s_i]*signal_w[s_j_theta,0,0,s_j,s_j])
                         clustering_z_covariance[flat_idx_i, flat_idx_j] = covariance
         file_name_cov_partial = save_path_at_i + str("clustering_z_cov_partial_atz_" + str(i_z) +".dat")
         file_name_cross_partial = save_path_at_i + str("clustering_z_cross_partial_atz_" + str(i_z) +".dat")
@@ -271,13 +272,13 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                 flat_idx_i = s_i + i_z + p_alpha*(len(zbound)-1)
                 flat_idx_j = s_j + j_z + p_beta*(len(zbound)-1)                
                 cross_correlation_covariance[flat_idx_i, flat_idx_j] = covariance
-                covariance -= .5*signal_w[s_i_theta, 0, s_i, p_alpha + n_s]/signal_w[s_i_theta,0,s_i,s_i]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j, p_beta + n_s]
-                covariance -= .5*signal_w[s_j_theta,0,s_j, p_beta + n_s]/signal_w[s_j_theta,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j,s_j]
-                covariance += .25*signal_w[s_i_theta,0,s_i, p_alpha + n_s] * signal_w[s_j_theta,0,s_j, p_beta + n_s]/signal_w[s_i_theta,0,s_i,s_i]/signal_w[s_j_theta,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j]   
-                covariance /= np.sqrt(signal_w[s_i_theta,0,s_i,s_i]*signal_w[s_j_theta,0,s_j,s_j])
+                covariance -= .5*signal_w[s_i_theta, 0,0, s_i, p_alpha + n_s]/signal_w[s_i_theta,0,0,s_i,s_i]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j, p_beta + n_s]
+                covariance -= .5*signal_w[s_j_theta,0,0,s_j, p_beta + n_s]/signal_w[s_j_theta,0,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j,s_j]
+                covariance += .25*signal_w[s_i_theta,0,0,s_i, p_alpha + n_s] * signal_w[s_j_theta,0,0,s_j, p_beta + n_s]/signal_w[s_i_theta,0,0,s_i,s_i]/signal_w[s_j_theta,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j]   
+                covariance /= np.sqrt(signal_w[s_i_theta,0,0,s_i,s_i]*signal_w[s_j_theta,0,0,s_j,s_j])
                 clustering_z_covariance[flat_idx_i, flat_idx_j] = covariance
                 spec_reference_covariance[i_z,j_z] = cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j] 
-                spec_signal[i_z] = signal_w[s_i_theta,0,s_i,s_i]
+                spec_signal[i_z] = signal_w[s_i_theta,0,0,s_i,s_i]
 
 for i_cov in range(len(clustering_z_covariance[:,0])):
     for j_cov in range(i_cov,len(clustering_z_covariance[:,0])):
@@ -289,5 +290,5 @@ if diagonal_only:
     np.savetxt("spec_z_covariance_biased",spec_reference_covariance)
     np.savetxt("spec_z_signal_biased",spec_signal)
 else:
-    np.savetxt("clustering_z_cov_unbiased",clustering_z_covariance)
-    np.savetxt("cross_correlation_cov_unbiased",cross_correlation_covariance)
+    np.savetxt(save_path_cz_covariance,clustering_z_covariance)
+    np.savetxt(save_path_cross_covariance,cross_correlation_covariance)

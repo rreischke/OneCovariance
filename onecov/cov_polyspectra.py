@@ -1325,7 +1325,6 @@ class PolySpectra(HaloModel):
                                    self.sample_dim, self.sample_dim))
         trispec1h_mmmm = np.zeros((k_dim, k_dim,
                                    self.sample_dim, self.sample_dim))
-
         damp_1h = np.sqrt(self.small_k_damping(
             self.trispec_small_k_damping,
             self.krange_tri,

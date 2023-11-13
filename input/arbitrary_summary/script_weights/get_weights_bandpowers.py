@@ -17,6 +17,7 @@ L_min = 100 # Minimum bandpower multipole
 L_max = 1500 # Maximum bandpower multipole
 L_bins = 8 # Number of bandpower multipole bins
 L_type = "log" # type if binning for bandpower multipoles
+
 num_cores = 8
 
 

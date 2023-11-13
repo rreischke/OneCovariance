@@ -206,6 +206,7 @@ class CovTHETASpace(CovELLSpace):
                 survey_params_dict['n_eff_clust'] = save_n_eff_clust
                 survey_params_dict['n_eff_lens'] = save_n_eff_lens
         self.__get_signal()
+
         
         
     def __set_theta_bins(self,
@@ -282,6 +283,7 @@ class CovTHETASpace(CovELLSpace):
                 w_signal[i_theta, :, :, :, :] = np.reshape(
                     w_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.w_gg = w_signal
+            
 
         if self.gm:
             self.data_vector_length += len(self.thetabins)*self.n_tomo_clust*self.n_tomo_lens
