@@ -202,9 +202,6 @@ class CovTHETASpace(CovELLSpace):
                 survey_params_dict['n_eff_clust'] = save_n_eff_clust
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = save_n_eff_lens
-            
-                survey_params_dict['n_eff_clust'] = save_n_eff_clust
-                survey_params_dict['n_eff_lens'] = save_n_eff_lens
         self.__get_signal()
 
         

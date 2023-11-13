@@ -204,6 +204,7 @@ class HaloModel(Setup):
                        'lnk_max': np.log(10**powspec_prec['log10k_max']),
                        'dlnk': kstep,
                        'takahashi': False}
+        self.transfmodel = transfmodel
 
         prefix = 'hmf.mass_function.fitting_functions.'
         try:

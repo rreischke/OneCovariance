@@ -6,3 +6,4 @@ dependencies:
   - gfortran
   - gsl
   - pybind11
+  - gxx_linux-64

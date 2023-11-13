@@ -5,6 +5,9 @@ from scipy.special import j1
 import multiprocessing as mp
 import healpy as hp
 import levin
+import camb
+from camb import model, initialpower
+
 from scipy.interpolate import RegularGridInterpolator
 
 
@@ -909,6 +912,24 @@ class CovELLSpace(PolySpectra):
             self.los_z).value * self.cosmology.h
 
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
+        if (self.mm or self.gm) and not tab_bools[2] and prec['hm']['transfer_model'] == 'CAMB':
+            pars = camb.CAMBparams()
+            pars.set_cosmology(H0=100*self.cosmology.h, 
+                               ombh2=self.cosmology.h**2*self.cosmology.Ob0,
+                               omch2=self.cosmology.h**2*(self.cosmology.Om0- self.cosmology.Ob0),
+                               omk = 0.0)
+            pars.set_dark_energy(w=self.cosmology.w0, wa=self.cosmology.wa, dark_energy_model='fluid') 
+            pars.InitPower.set_params(ns=self.transfmodel['n'],
+                                      As = 1.8e-9*(self.transfmodel['sigma_8']/0.769965784)**2)
+            pars.set_matter_power(redshifts = self.los_z, kmax=self.mass_func.k[-1])
+            pars.NonLinear = model.NonLinear_pk
+            pars.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
+            results = camb.get_results(pars)
+            results.calc_power_spectra(pars)
+            _,_, aux_mm = results.get_matter_power_spectrum(minkh=self.mass_func.k[0],
+                                                            maxkh=self.mass_func.k[-1],
+                                                            npoints = len(self.mass_func.k))
+
         t0 = time.time()
         if self.csmf:
             aux_stellar_mass_func = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))
@@ -927,10 +948,11 @@ class CovELLSpace(PolySpectra):
                     aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
                 else:
                     aux_gm[zet, :, i_sample] = np.ones_like(self.mass_func.k)
-            if (self.mm or self.gm) and not tab_bools[2]:
-                aux_mm[zet, :] = self.Pmm[:, 0]
-            else:
-                aux_mm[zet, :] = np.ones_like(self.mass_func.k)
+            if prec['hm']['transfer_model'] != 'CAMB':
+                if (self.mm or self.gm) and not tab_bools[2]:
+                    aux_mm[zet, :] = self.Pmm[:, 0]
+                else:
+                    aux_mm[zet, :] = np.ones_like(self.mass_func.k)
             self.power_mm_lin_z[zet, :] = self.mass_func.power[:]
             eta = (time.time()-t0) * \
                 (self.los_interpolation_sampling/(zet+1)-1)
@@ -1098,6 +1120,7 @@ class CovELLSpace(PolySpectra):
 
             Cell_mm = Cell_mm[:, None, :, :] \
                 * np.ones(self.sample_dim)[None, :, None, None]
+
         elif tab_bools[2]:
             Cell_mm = Cells[2]
         else:
@@ -3586,7 +3609,7 @@ class CovELLSpace(PolySpectra):
         if self.mm or self.gm:
             if len(covELLspacesettings['mult_shear_bias']) < self.n_tomo_lens:
                 covELLspacesettings['mult_shear_bias'] = np.zeros(self.n_tomo_lens)
-                print("Multiplicative shear bias needs to be given for every tomographic bin.")
+                print("Multiplicative shear bias needs to be given for every tomographic bin. Is set to zero")
             else:
                 if self.gm:
                     gaussELLgmgm_sva_mult_shear_bias = np.zeros_like(gaussELLgmgm_sva)
