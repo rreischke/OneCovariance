@@ -846,7 +846,7 @@ double Levin::iterate_single(double (*function)(double, void *), double A, doubl
             {
                 if (verbose)
                 {
-                    std::cerr << "subintervals too narrow for further bisection!" << std::endl;   
+                    std::cerr << "subintervals too narrow for further bisection!" << std::endl;
                 }
                 return result;
             }
@@ -1016,6 +1016,7 @@ double Levin::single_bessel_integrand(double x, void *p)
 
 std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
 {
+
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
     if (k * b > 1000)
@@ -1030,6 +1031,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
     }
     else
     {
+        gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
 #pragma omp parallel for
         for (uint i = 0; i < number_integrals; i++)
         {
@@ -1050,6 +1052,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
                 result.at(i) += gslIntegratecquad(single_bessel_integrand, al, bl);
             }
         }
+        gsl_set_error_handler(old_handler);
     }
     delete int_index_integral;
     return result;
@@ -1060,7 +1063,7 @@ double Levin::double_bessel_integrand(double x, void *p)
     uint tid = omp_get_thread_num();
     Levin *lp = static_cast<Levin *>(p);
     double result = 0.0;
-     if (lp->logx)
+    if (lp->logx)
     {
         x = log(x);
         result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));

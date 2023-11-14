@@ -6,6 +6,10 @@ import mpmath
 from scipy.interpolate import interp1d
 import multiprocessing as mpi
 from scipy.signal import argrelextrema
+from scipy import pi,sqrt,exp
+from scipy.special.orthogonal import p_roots
+from numpy.polynomial.legendre import legcompanion, legval, legder
+import numpy.linalg as la
 
 
 mpi.set_start_method("fork")
@@ -19,7 +23,7 @@ tmax = 300.0 #theta_max in armin
 ell_min = 1 # Minimum multipole
 ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
-get_W_ell_as_well = True # If true the Well are calculated
+get_W_ell_as_well = False # If true the Well are calculated
 
 #####################
 zmax = mp.log(tmax/tmin)
@@ -144,6 +148,36 @@ def tminus(tmin,tmax,n,norm,root,tp,ntheta=10000):
         #rtminus[i_z, 1] += 4*np.trapz(integrand,y)
     return rtminus
 
+def tminus_integ(y,z,tplus_func):
+    return 4.*tplus_func(y)*(np.exp(2.*(y-z))-3.*np.exp(4.*(y-z)))
+
+# T_minus using Gauss-Legendre integration
+def tminus_GL(tmin,tmax,n,norm,root,tp,ntheta=10000,nG=20):
+    tplus_func=interp1d(np.log(tp[:,0]/tmin),tp[:,1])
+    theta=np.logspace(np.log10(tmin),np.log10(tmax),ntheta)
+    # 
+    tminus=np.zeros((ntheta,2))
+    tminus[:,0]=theta
+    z=np.log(theta/tmin)
+    tminus[:,1]=tplus_func(z)
+    [x,w] = p_roots(nG+1)
+    integ_limits=np.insert(root/tmin,0,0)
+    for iz in range(len(z)):
+        result=0.
+        good_integ=(integ_limits<=z[iz])
+        integ_limits_good=integ_limits[good_integ]
+        for il in range(1,len(integ_limits_good)):
+            delta_limit=integ_limits_good[il]-integ_limits_good[il-1]
+            y_in=0.5*delta_limit*x+0.5*(integ_limits_good[il]+integ_limits_good[il-1])
+            y=y_in[y_in>=0.]
+            result+=delta_limit*0.5*sum(w[y_in>=0.]*tminus_integ(y,z[iz],tplus_func))
+        delta_limit=z[iz]-integ_limits_good[-1]
+        y_in=x*(delta_limit*0.5)+(z[iz]+integ_limits_good[-1])*0.5
+        y=y_in[y_in>=0.]
+        result+=delta_limit*0.5*sum(w[y_in>=0.]*tminus_integ(y,z[iz],tplus_func))
+        tminus[iz,1]+=result
+    return tminus
+
 
 for nn in range(1,Nmax+1):
     print("At mode",nn)
@@ -171,12 +205,18 @@ for nn in range(1,Nmax+1):
                         getWell, ell))
         pool.close()
         pool.terminate()
+    tm_GL = tminus_GL(tmin,tmax,n, Nn[n],np.array(rn[n]), tpn)
+    filenamem = "./../Tminus"+str(nn)+"_0.50-300.00.table"
+    marika_tm = np.loadtxt(filenamem)
+    plt.loglog(tmn[:,0],100*np.abs(tm_GL[:,1]/tmn[:,1]-1), ls = "-", lw = 2)
+    plt.loglog(tmn[:,0],100*np.abs(marika_tm[:,1]/tmn[:,1]-1), ls = "--")
+    plt.loglog(tmn[:,0],np.abs(tmn[:,1]), ls = "-", lw = .5)
+    #plt.semilogx(tmn[:,0],marika_tm/tmn[:,1]-1, ls = ":")
+    plt.show()
+    
+    
     tpn[:,1] /= 2
     tmn[:,1] /= 2 
-    filenamep = "./../Tplus"+str(nn)+"_0.50-300.00.table"
-    filenamem = "./../Tminus"+str(nn)+"_0.50-300.00.table"
-    marika_tp = np.loadtxt(filenamep)
-    marika_tm = np.loadtxt(filenamem)
     if nn < 10:
         file_tpn = "./../Tp_0"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"
         file_tmn = "./../Tm_0"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"

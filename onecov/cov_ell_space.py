@@ -797,45 +797,37 @@ class CovELLSpace(PolySpectra):
         if (self.gg or self.gm) and not tab_bools[0]:
             for eidx, ell in enumerate(self.ellrange):
                 if (int(ell) < 1500):
-                    inner_integral_gg = np.zeros(
-                        (self.n_tomo_clust, len(k_nonlimber)))
                     for i_sample in range(self.sample_dim):
-                        for tomo_i in range(self.n_tomo_clust):
-                            chi_low = self.chi_min_clust[tomo_i]
-                            chi_high = self.chi_max_clust[tomo_i]
-                            self.__update_los_integration_chi(
-                                chi_low, chi_high, covELLspacesettings)
-
+                        for j_sample in range(i_sample,self.sample_dim): 
                             global non_limber_k_integral
 
                             def non_limber_k_integral(k_integral):
-                                lev = levin.Levin(1, 16, 64, 1e-6, self.integration_intervals)
-                                integrand = np.sqrt((10**self.spline_Pgg[i_sample](
-                                    np.log10(k_integral), self.los_integration_chi))[:, 0])*self.spline_zclust[tomo_i](
-                                    self.los_integration_chi)
-                                lev.init_integral(
-                                    self.los_integration_chi, integrand[:, None], True, True)
-                                return float(lev.single_bessel(
-                                    k_integral, int(ell), self.los_integration_chi[0], self.los_integration_chi[-1])[0])*k_integral
-
+                                lev = levin.Levin(1, 16, 32, 1e-6, self.integration_intervals)
+                                esult = np.zeros(self.n_tomo_clust)
+                                for tomo_i in range(self.n_tomo_clust):
+                                    chi_low = self.chi_min_clust[tomo_i]
+                                    chi_high = self.chi_max_clust[tomo_i]
+                                    los_chi = self.__get_updated_los_integration_chi(
+                                        chi_low, chi_high, covELLspacesettings)
+                                    integrand = np.sqrt((10**self.spline_Pgg[i_sample*self.sample_dim +j_sample](
+                                        np.log10(k_integral), los_chi))[:, 0])*self.spline_zclust[tomo_i](
+                                        los_chi)
+                                    lev.init_integral(
+                                        los_chi, integrand[:, None], True, True)
+                                result = np.array(lev.single_bessel(
+                                        k_integral, int(ell), los_chi[0], los_chi[-1]))*k_integral
+                                return result
                             pool = mp.Pool(self.num_cores)
-                            inner_integral_gg[tomo_i, :] = pool.map(
-                                non_limber_k_integral, k_nonlimber)
+                            inner_integral_gg = np.array(pool.map(
+                                non_limber_k_integral, k_nonlimber)).T
                             pool.close()
                             pool.terminate()
 
-                            self.__update_los_integration_chi(
-                                self.chimin, self.chimax, covELLspacesettings)
-                            
-                    for i_sample in range(self.sample_dim):
-                        for tomo_i in range(self.n_tomo_clust):
-                            for tomo_j in range(tomo_i, self.n_tomo_clust):
-                                self.Cell_gg[eidx, i_sample, tomo_i, tomo_i:] = \
-                                    np.trapz(
-                                        inner_integral_gg[tomo_i, :]*inner_integral_gg[tomo_j, :], k_nonlimber)*2.0/np.pi
-                                self.Cell_gg[eidx, i_sample, tomo_j, tomo_i] = \
-                                    np.copy(
-                                        self.Cell_gg[eidx, i_sample, tomo_i, tomo_j])
+
+                            self.Cell_gg[eidx, i_sample, j_sample, :, :] = \
+                                np.trapz(
+                                    inner_integral_gg[:, None, :]*inner_integral_gg[:, None, :], k_nonlimber, axis = -1)*2.0/np.pi
+                            self.Cell_gg[eidx, j_sample, i_sample, :, :] = self.Cell_gg[eidx, i_sample, j_sample, :, :]
         if self.clustering_z:
             self.n_tomo_clust = n_tomo_clust_copy
         elif tab_bools[0]:
@@ -921,7 +913,7 @@ class CovELLSpace(PolySpectra):
             pars.set_dark_energy(w=self.cosmology.w0, wa=self.cosmology.wa, dark_energy_model='fluid') 
             pars.InitPower.set_params(ns=self.transfmodel['n'],
                                       As = 1.8e-9*(self.transfmodel['sigma_8']/0.769965784)**2)
-            pars.set_matter_power(redshifts = self.los_z, kmax=self.mass_func.k[-1])
+            pars.set_matter_power(redshifts = self.los_z[::-1], kmax=self.mass_func.k[-1])
             pars.NonLinear = model.NonLinear_pk
             pars.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
             results = camb.get_results(pars)
@@ -930,6 +922,7 @@ class CovELLSpace(PolySpectra):
                                                             maxkh=self.mass_func.k[-1],
                                                             npoints = len(self.mass_func.k))
 
+        
         t0 = time.time()
         if self.csmf:
             aux_stellar_mass_func = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))
@@ -1121,7 +1114,7 @@ class CovELLSpace(PolySpectra):
 
             Cell_mm = Cell_mm[:, None, :, :] \
                 * np.ones(self.sample_dim)[None, :, None, None]
-
+            
         elif tab_bools[2]:
             Cell_mm = Cells[2]
         else:
