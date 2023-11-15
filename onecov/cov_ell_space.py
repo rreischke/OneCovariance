@@ -788,22 +788,25 @@ class CovELLSpace(PolySpectra):
                 return Cells[0], Cells[1], Cells[2]
 
         print("Calculating non-limber angular power spectra (C_ell's).")
-        k_nonlimber = np.geomspace(
-            self.mass_func.k[0], self.mass_func.k[-1], 3000)
         n_tomo_clust_copy = np.copy(self.n_tomo_clust)
         if self.clustering_z:
-            self.n_tomo_clust = 1
+            self.n_tomo_clust = 2
                     
         if (self.gg or self.gm) and not tab_bools[0]:
             for eidx, ell in enumerate(self.ellrange):
-                if (int(ell) < 1500):
+                if (int(ell) < 1000):
+                    #print(ell)
+                    kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
+                    kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
+                    
+                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 3000)
                     for i_sample in range(self.sample_dim):
                         for j_sample in range(i_sample,self.sample_dim): 
                             global non_limber_k_integral
 
                             def non_limber_k_integral(k_integral):
-                                lev = levin.Levin(1, 16, 32, 1e-6, self.integration_intervals)
-                                esult = np.zeros(self.n_tomo_clust)
+                                lev = levin.Levin(1, 32, 64, 1e-7, self.integration_intervals)
+                                result = np.zeros(self.n_tomo_clust)
                                 for tomo_i in range(self.n_tomo_clust):
                                     chi_low = self.chi_min_clust[tomo_i]
                                     chi_high = self.chi_max_clust[tomo_i]
@@ -823,11 +826,13 @@ class CovELLSpace(PolySpectra):
                             pool.close()
                             pool.terminate()
 
-
                             self.Cell_gg[eidx, i_sample, j_sample, :, :] = \
                                 np.trapz(
-                                    inner_integral_gg[:, None, :]*inner_integral_gg[:, None, :], k_nonlimber, axis = -1)*2.0/np.pi
+                                    inner_integral_gg[:, None, :]*inner_integral_gg[None,:, :], k_nonlimber, axis = -1)*2.0/np.pi
                             self.Cell_gg[eidx, j_sample, i_sample, :, :] = self.Cell_gg[eidx, i_sample, j_sample, :, :]
+            import matplotlib.pyplot as plt
+            plt.loglog(self.ellrange, self.Cell_gg[:,0,0,0,0])
+            plt.show()
         if self.clustering_z:
             self.n_tomo_clust = n_tomo_clust_copy
         elif tab_bools[0]:

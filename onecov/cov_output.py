@@ -2386,7 +2386,7 @@ class Output():
                                 ri -= summary['arb_number_first_summary_mm']
                             else:
                                 obs_copy = str(summary['mmE_summary_name'][0])
-                        if mm and obs in ['xpxim', 'ximxim']:
+                        if mm and obs in ['xipxim', 'ximxim']:
                             if i_r1 >= summary['arb_number_first_summary_mm']:
                                 obs_copy += str(summary['mmB_summary_name'][1])
                                 ri -= summary['arb_number_first_summary_mm']
@@ -2776,73 +2776,74 @@ class Output():
                 else:
                     len_proj_quant1 = len(ssc[oidx][:,0,0,0,0,0,0,0])
                     len_proj_quant2 = len(ssc[oidx][0,:,0,0,0,0,0,0])
-                for i_r1 in range(len_proj_quant1):
-                    for i_r2 in range(len_proj_quant2):
-                        ri = int(np.copy(i_r1))
-                        rj = int(np.copy(i_r2))
-                        
-                        #label ri 
-                        if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
-                            obs_copy = str(summary['gg_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_gg']:
-                                obs_copy = str(summary['gg_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_gg']
-                        if gm and obs in ['gmgm']:
-                            obs_copy = str(summary['gm_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_gm']:
-                                obs_copy = str(summary['gm_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_gm']
-                        if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
-                            obs_copy = str(summary['mmE_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy = str(summary['mmE_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
-                        if mm and obs in ['gmxim', 'ximxim']:
-                            obs_copy = str(summary['mmB_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy = str(summary['mmB_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
+                
 
-                        #label rj
-                        if gg and obs in ['gggg']:
-                            if i_r2 >= summary['arb_number_first_summary_gg']:
-                                obs_copy += str(summary['gg_summary_name'][1])
-                                rj -= summary['arb_number_first_summary_gg']
-                            else:
-                                obs_copy += str(summary['gg_summary_name'][0])
-                        if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
-                            if i_r2 >= summary['arb_number_first_summary_gm']:
-                                obs_copy += str(summary['gm_summary_name'][1])
-                                rj -= summary['arb_number_first_summary_gm']
-                            else:
-                                obs_copy += str(summary['gm_summary_name'][0])
-                        if mm and obs in ['xipxip']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy += str(summary['mmE_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
-                            else:
-                                obs_copy = str(summary['mmE_summary_name'][0])
-                        if mm and obs in ['xpxim', 'ximxim']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy += str(summary['mmB_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
-                            else:
-                                obs_copy += str(summary['mmB_summary_name'][0])
+                if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                    tomo1 = gauss[oidx].shape[4]
+                    if obs == 'gggg':
+                        sampledim1 = sampledim
+                        sampledim2 = sampledim
+                    if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                        sampledim1 = 1
+                        sampledim2 = 1
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo1):
+                                for t4 in range(t3, tomo1):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
 
-                        if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
-                            tomo1 = gauss[oidx].shape[4]
-                            if obs == 'gggg':
-                                sampledim1 = sampledim
-                                sampledim2 = sampledim
-                            if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
-                                sampledim1 = 1
-                                sampledim2 = 1
-                            for t1 in range(tomo1):
-                                for t2 in range(t1, tomo1):
-                                    for t3 in range(tomo1):
-                                        for t4 in range(t3, tomo1):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[oidx][idxs] \
                                                         + nongauss[oidx][idxs] \
@@ -2855,17 +2856,69 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                        elif obs == 'gmgm':
-                            sampledim1 = sampledim
-                            sampledim2 = sampledim
-                            tomo1 = gauss[oidx].shape[4]
-                            tomo2 = gauss[oidx].shape[5]
-                            for t1 in range(tomo1):
-                                for t2 in range(tomo2):
-                                    for t3 in range(tomo1):
-                                        for t4 in range(tomo2):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                elif obs == 'gmgm':
+                    sampledim1 = sampledim
+                    sampledim2 = sampledim
+                    tomo1 = gauss[oidx].shape[4]
+                    tomo2 = gauss[oidx].shape[5]
+                    for t1 in range(tomo1):
+                        for t2 in range(tomo2):
+                            for t3 in range(tomo1):
+                                for t4 in range(tomo2):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[oidx][idxs] \
                                                         + nongauss[oidx][idxs] \
@@ -2878,22 +2931,74 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                        elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
-                            tomo1 = gauss[oidx].shape[4]
-                            tomo3 = gauss[oidx].shape[6]
-                            tomo4 = gauss[oidx].shape[7]
-                            if obs == 'gggm':
-                                sampledim1 = sampledim
-                                sampledim2 = sampledim
-                            if obs in ['mmgm', 'gmxip', 'gmxim']:
-                                sampledim1 = 1
-                                sampledim2 = sampledim
-                            for t1 in range(tomo1):
-                                for t2 in range(t1, tomo1):
-                                    for t3 in range(tomo3):
-                                        for t4 in range(tomo4):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                    tomo1 = gauss[oidx].shape[4]
+                    tomo3 = gauss[oidx].shape[6]
+                    tomo4 = gauss[oidx].shape[7]
+                    if obs == 'gggm':
+                        sampledim1 = sampledim
+                        sampledim2 = sampledim
+                    if obs in ['mmgm', 'gmxip', 'gmxim']:
+                        sampledim1 = 1
+                        sampledim2 = sampledim
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo3):
+                                for t4 in range(tomo4):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[oidx][idxs] \
                                                         + nongauss[oidx][idxs] \
@@ -2906,17 +3011,69 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                        elif obs in ['ggmm', 'ggxip', 'ggxim']:
-                            tomo1 = gauss[oidx].shape[4]
-                            tomo2 = gauss[oidx].shape[6]
-                            sampledim1 = sampledim
-                            sampledim2 = 1
-                            for t1 in range(tomo1):
-                                for t2 in range(t1, tomo1):
-                                    for t3 in range(tomo2):
-                                        for t4 in range(t3, tomo2):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                    tomo1 = gauss[oidx].shape[4]
+                    tomo2 = gauss[oidx].shape[6]
+                    sampledim1 = sampledim
+                    sampledim2 = 1
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo2):
+                                for t4 in range(t3, tomo2):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[oidx][idxs] \
                                                         + nongauss[oidx][idxs] \
@@ -2955,75 +3112,71 @@ class Output():
                     len_proj_quant1 = len(ssc[oidx][:,0,0,0,0,0,0,0])
                     len_proj_quant2 = len(ssc[oidx][0,:,0,0,0,0,0,0])
 
-
-
-                for i_r1 in range(len_proj_quant1):
-                    for i_r2 in range(len_proj_quant2):
-                        ri = int(np.copy(i_r1))
-                        rj = int(np.copy(i_r2))
-                        
-                        #label ri 
-                        if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
-                            obs_copy = str(summary['gg_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_gg']:
-                                obs_copy = str(summary['gg_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_gg']
-                        if gm and obs in ['gmgm']:
-                            obs_copy = str(summary['gm_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_gm']:
-                                obs_copy = str(summary['gm_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_gm']
-                        if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
-                            obs_copy = str(summary['mmE_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy = str(summary['mmE_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
-                        if mm and obs in ['gmxim', 'ximxim']:
-                            obs_copy = str(summary['mmB_summary_name'][0])
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy = str(summary['mmB_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
-
-                        #label rj
-                        if gg and obs in ['gggg']:
-                            if i_r2 >= summary['arb_number_first_summary_gg']:
-                                obs_copy += str(summary['gg_summary_name'][1])
-                                rj -= summary['arb_number_first_summary_gg']
-                            else:
-                                obs_copy += str(summary['gg_summary_name'][0])
-                        if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
-                            if i_r2 >= summary['arb_number_first_summary_gm']:
-                                obs_copy += str(summary['gm_summary_name'][1])
-                                rj -= summary['arb_number_first_summary_gm']
-                            else:
-                                obs_copy += str(summary['gm_summary_name'][0])
-                        if mm and obs in ['xipxip']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy += str(summary['mmE_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
-                            else:
-                                obs_copy = str(summary['mmE_summary_name'][0])
-                        if mm and obs in ['xpxim', 'ximxim']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
-                                obs_copy += str(summary['mmB_summary_name'][1])
-                                ri -= summary['arb_number_first_summary_mm']
-                            else:
-                                obs_copy += str(summary['mmB_summary_name'][0])
-                        
-                        if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
-                            tomo1 = gauss[splitidx].shape[4]
-                            if obs == 'gggg':
-                                sampledim1 = sampledim
-                                sampledim2 = sampledim
-                            if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
-                                sampledim1 = 1
-                                sampledim2 = 1
-                            for t1 in range(tomo1):
-                                for t2 in range(t1, tomo1):
-                                    for t3 in range(tomo1):
-                                        for t4 in range(t3, tomo1):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                    tomo1 = gauss[splitidx].shape[4]
+                    if obs == 'gggg':
+                        sampledim1 = sampledim
+                        sampledim2 = sampledim
+                    if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                        sampledim1 = 1
+                        sampledim2 = 1
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo1):
+                                for t4 in range(t3, tomo1):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[splitidx][idxs] \
                                                         + gauss[splitidx+1][idxs] \
@@ -3040,17 +3193,69 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                        elif obs == 'gmgm':
-                            sampledim1 = sampledim
-                            sampledim2 = sampledim
-                            tomo1 = gauss[splitidx].shape[4]
-                            tomo2 = gauss[splitidx].shape[5]
-                            for t1 in range(tomo1):
-                                for t2 in range(tomo2):
-                                    for t3 in range(tomo1):
-                                        for t4 in range(tomo2):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                elif obs == 'gmgm':
+                    sampledim1 = sampledim
+                    sampledim2 = sampledim
+                    tomo1 = gauss[splitidx].shape[4]
+                    tomo2 = gauss[splitidx].shape[5]
+                    for t1 in range(tomo1):
+                        for t2 in range(tomo2):
+                            for t3 in range(tomo1):
+                                for t4 in range(tomo2):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[splitidx][idxs] \
                                                         + gauss[splitidx+1][idxs] \
@@ -3067,22 +3272,74 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                        elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
-                            tomo1 = gauss[splitidx].shape[4]
-                            tomo3 = gauss[splitidx].shape[6]
-                            tomo4 = gauss[splitidx].shape[7]
-                            if obs == 'gggm':
-                                sampledim1 = sampledim
-                                sampledim2 = sampledim
-                            if obs in ['mmgm', 'gmxip', 'gmxim']:
-                                sampledim1 = 1
-                                sampledim2 = sampledim
-                            for t1 in range(tomo1):
-                                for t2 in range(t1, tomo1):
-                                    for t3 in range(tomo3):
-                                        for t4 in range(tomo4):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                    tomo1 = gauss[splitidx].shape[4]
+                    tomo3 = gauss[splitidx].shape[6]
+                    tomo4 = gauss[splitidx].shape[7]
+                    if obs == 'gggm':
+                        sampledim1 = sampledim
+                        sampledim2 = sampledim
+                    if obs in ['mmgm', 'gmxip', 'gmxim']:
+                        sampledim1 = 1
+                        sampledim2 = sampledim
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo3):
+                                for t4 in range(tomo4):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[splitidx][idxs] \
                                                         + gauss[splitidx+1][idxs] \
@@ -3099,17 +3356,69 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                        elif obs in ['ggmm', 'ggxip', 'ggxim']:
-                            tomo1 = gauss[splitidx].shape[4]
-                            tomo2 = gauss[splitidx].shape[6]
-                            sampledim1 = sampledim
-                            sampledim2 = 1
-                            for t1 in range(tomo1):
-                                for t2 in range(t1, tomo1):
-                                    for t3 in range(tomo2):
-                                        for t4 in range(t3, tomo2):
-                                            for i_s1 in range(sampledim1):
-                                                for i_s2 in range(sampledim2):
+                elif obs in ['ggmm', 'ggxip', 'ggxim']:
+                    tomo1 = gauss[splitidx].shape[4]
+                    tomo2 = gauss[splitidx].shape[6]
+                    sampledim1 = sampledim
+                    sampledim2 = 1
+                    for t1 in range(tomo1):
+                        for t2 in range(t1, tomo1):
+                            for t3 in range(tomo2):
+                                for t4 in range(t3, tomo2):
+                                    for i_s1 in range(sampledim1):
+                                        for i_s2 in range(sampledim2):
+                                            for i_r1 in range(len_proj_quant1):
+                                                for i_r2 in range(len_proj_quant2):
+                                                    ri = int(np.copy(i_r1))
+                                                    rj = int(np.copy(i_r2))
+                                                    
+                                                    #label ri 
+                                                    if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
+                                                        obs_copy = str(summary['gg_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy = str(summary['gg_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gg']
+                                                    if gm and obs in ['gmgm']:
+                                                        obs_copy = str(summary['gm_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy = str(summary['gm_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_gm']
+                                                    if mm and obs in [ 'xipxip', 'xipxim', 'gmxip']:
+                                                        obs_copy = str(summary['mmE_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    if mm and obs in ['gmxim', 'ximxim']:
+                                                        obs_copy = str(summary['mmB_summary_name'][0])
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy = str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                    
+                                                    #label rj
+                                                    if gg and obs in ['gggg']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gg']:
+                                                            obs_copy += str(summary['gg_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gg']
+                                                        else:
+                                                            obs_copy += str(summary['gg_summary_name'][0])
+                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_gm']:
+                                                            obs_copy += str(summary['gm_summary_name'][1])
+                                                            rj -= summary['arb_number_first_summary_gm']
+                                                        else:
+                                                            obs_copy += str(summary['gm_summary_name'][0])
+                                                    if mm and obs in ['xipxip']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmE_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmE_summary_name'][0])
+                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                            obs_copy += str(summary['mmB_summary_name'][1])
+                                                            ri -= summary['arb_number_first_summary_mm']
+                                                        else:
+                                                            obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t1, t3, t4)
                                                     cov = gauss[splitidx][idxs] \
                                                         + gauss[splitidx+1][idxs] \

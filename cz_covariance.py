@@ -16,7 +16,7 @@ r_hig = 1.0
 path_to_reference_sample = str("./../clustering-z_covariance/data_paper/nz_reference.dat") # path to the spectroscopic refence sample
 path_to_nz_true = str("./../clustering-z_covariance/data_paper/nz_true/nz_true_") # path to sample to be calibrated must integrate to the actual number of galaxies
 n_tomo_source = 5
-limber = True #should the Cells be calculated using Limber projection?
+limber = False #should the Cells be calculated using Limber projection?
 diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
 
 save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
@@ -219,7 +219,8 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             if covterms['ssc']:
                 cov_total += cov_w[2][0]
             clustering_z_covariance_total += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total)
-
+            print(clustering_z_covariance_total, clustering_z_covariance_sva)
+            
             '''if i_z  + 1 == j_z:
                 for s_i in range(n_s):
                     for s_j in range(n_s):
