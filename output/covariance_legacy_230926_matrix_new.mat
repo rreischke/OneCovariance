@@ -1,5 +1,0 @@
-# Covariance matrix with the diagonals in the order: xipxip ximxim with 0 tomographic clustering bins and 1 tomographic lensing bins and 2 elements per tomographic bin
-4.261297e-11 2.773952e-14 3.088970e-16 1.886653e-14
-2.773952e-14 9.301335e-14 4.523188e-16 -1.481704e-16
-3.088970e-16 4.523188e-16 4.224752e-11 9.241422e-17
-1.886653e-14 -1.481704e-16 9.241422e-17 7.334911e-14
