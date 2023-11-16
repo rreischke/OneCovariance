@@ -875,7 +875,7 @@ class Input:
                       "from the C_ells but '[covELLspace settings]: " +
                       "ell_max' is not specified. It is set to '1e5'.")
             if self.ell_bins is None:
-                self.ell_bins = int(np.log10(self.ell_max)*10)
+                self.ell_bins = int(np.log10(self.ell_max)*30)
                 print("The shear-shear correlation functions are calculated " +
                       "from the C_ells but '[covELLspace settings]: " +
                       "ell_max' is not specified. It is set to '" +

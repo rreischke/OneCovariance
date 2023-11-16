@@ -2,6 +2,8 @@ import time
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 import levin
+from scipy.special import jv
+from scipy.signal import argrelextrema
 
 try:
     from onecov.cov_ell_space import CovELLSpace
@@ -202,8 +204,18 @@ class CovTHETASpace(CovELLSpace):
                 survey_params_dict['n_eff_clust'] = save_n_eff_clust
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = save_n_eff_lens
-        self.__get_signal()
-
+        self.__get_weights()
+        self.ell_limits = []
+        for mode in range(len(self.WXY_stack[:,0])):
+            limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
+            limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
+            limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
+            limits_at_mode_append[0] = self.ellrange[0]
+            limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
+            self.ell_limits.append(limits_at_mode_append)
+        self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
+        self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
+        self.__get_signal(obs_dict)
         
         
     def __set_theta_bins(self,
@@ -243,7 +255,7 @@ class CovTHETASpace(CovELLSpace):
             theta_bins = .5 * (theta_ul_bins[1:] + theta_ul_bins[:-1])
         return theta_bins, theta_ul_bins
 
-    def __get_signal(self):
+    def __get_signal(self, obs_dict):
         """
         Calculates the clustering signal which might be used in the
         clustering-z covariance
@@ -269,14 +281,11 @@ class CovTHETASpace(CovELLSpace):
             Cell_gg_flat = np.reshape(
                 self.Cell_gg, (len(self.ellrange), flat_length))
             w_signal_at_thetai_flat = np.zeros(flat_length)
-            lev = levin.Levin(0, 16, 32, self.accuracy, self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
-                theta_i = self.thetabins[i_theta] / 60 * np.pi / 180
                 integrand = Cell_gg_flat*self.ellrange[:, None]
-                lev.init_integral(
+                self.levin_int_fourier.init_integral(
                     self.ellrange, integrand, True, True)
-                w_signal_at_thetai_flat = lev.single_bessel(
-                    theta_i, 0, self.ellrange[0], self.ellrange[-1])
+                w_signal_at_thetai_flat = self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta],i_theta)
                 w_signal[i_theta, :, :, :, :] = np.reshape(
                     w_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.w_gg = w_signal
@@ -293,67 +302,127 @@ class CovTHETASpace(CovELLSpace):
             Cell_gm_flat = np.reshape(
                 self.Cell_gm, (len(self.ellrange), flat_length))
             gt_signal_at_thetai_flat = np.zeros(flat_length)
-            lev = levin.Levin(0, 16, 32, self.accuracy, self.integration_intervals)
             for i_theta in range(len(self.thetabins)):
-                theta_i = self.thetabins[i_theta] / 60 * np.pi / 180
                 integrand = Cell_gm_flat*self.ellrange[:, None]
-                lev.init_integral(
+                self.levin_int_fourier.init_integral(
                     self.ellrange, integrand, True, True)
-                gt_signal_at_thetai_flat = lev.single_bessel(
-                    theta_i, 2, self.ellrange[0], self.ellrange[-1])
+                gt_signal_at_thetai_flat = self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries],i_theta + self.gg_summaries)
                 gt_signal[i_theta, :, :, :] = np.reshape(
                     gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.gt = gt_signal
             
 
         ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
-        if self.mm:
-            self.data_vector_length += len(self.thetabins)*self.n_tomo_lens*(self.n_tomo_lens+1)
-            theta_ul_bins = np.geomspace(
-                self.theta_ul_bins[0]/5,
-                self.theta_ul_bins[-1]*40,
-                200)
-            theta_bins = np.exp(.5 * (np.log(theta_ul_bins[1:])
-                                    + np.log(theta_ul_bins[:-1])))
-            xip_signal_shape = (len(theta_bins),
-                                self.sample_dim,
-                                self.n_tomo_lens, self.n_tomo_lens)
-            xip_signal = np.zeros(xip_signal_shape)
-            xim_signal = np.zeros(xip_signal_shape)
-            original_shape = self.Cell_mm[0, :, :, :].shape
-            flat_length = self.sample_dim*self.n_tomo_lens**2
-            Cell_mm_flat = np.reshape(
-                self.Cell_mm, (len(self.ellrange), flat_length))
-            xip_signal_at_thetai_flat = np.zeros(flat_length)
-            xim_signal_at_thetai_flat = np.zeros(flat_length)
-            lev = levin.Levin(0, 16, 32, self.accuracy, self.integration_intervals)
-            self.xi_spline = {}
-            self.xi_spline["xip"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
-            self.xi_spline["xim"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
-            for i_theta in range(len(theta_bins)):
-                theta_i = theta_bins[i_theta] / 60 * np.pi / 180
-                integrand = Cell_mm_flat*self.ellrange[:, None]
-                lev.init_integral(
-                    self.ellrange, integrand, True, True)
-                xip_signal_at_thetai_flat = lev.single_bessel(
-                    theta_i, 0, self.ellrange[0], self.ellrange[-1])
-                xip_signal[i_theta, :, :, :] = np.reshape(
-                    xip_signal_at_thetai_flat, original_shape)/2.0/np.pi
-                xim_signal_at_thetai_flat = lev.single_bessel(
-                    theta_i, 4, self.ellrange[0], self.ellrange[-1])
-                xim_signal[i_theta, :, :, :] = np.reshape(
-                    xim_signal_at_thetai_flat, original_shape)/2.0/np.pi        
-            self.xip = xip_signal
-            self.xim = xim_signal
-            flat_idx = 0
-            for i_tomo in range(self.n_tomo_lens):
-                for j_tomo in range(i_tomo, self.n_tomo_lens):
-                    self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0)
-                    self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0)
-                    flat_idx += 1
+        if obs_dict['THETAspace']['mix_term_do_mix_for'] is not None:
+            if obs_dict['THETAspace']['mix_term_do_mix_for'][0] == 'xipxip' or obs_dict['THETAspace']['mix_term_do_mix_for'][1] == 'ximxim':
+                if self.mm:
+                    self.data_vector_length += len(self.thetabins)*self.n_tomo_lens*(self.n_tomo_lens+1)
+                    theta_ul_bins = np.geomspace(
+                        self.theta_ul_bins[0]/5,
+                        self.theta_ul_bins[-1]*40,
+                        200)
+                    theta_bins = np.exp(.5 * (np.log(theta_ul_bins[1:])
+                                            + np.log(theta_ul_bins[:-1])))
+                    xip_signal_shape = (len(theta_bins),
+                                        self.sample_dim,
+                                        self.n_tomo_lens, self.n_tomo_lens)
+                    xip_signal = np.zeros(xip_signal_shape)
+                    xim_signal = np.zeros(xip_signal_shape)
+                    original_shape = self.Cell_mm[0, :, :, :].shape
+                    flat_length = self.sample_dim*self.n_tomo_lens**2
+                    Cell_mm_flat = np.reshape(
+                        self.Cell_mm, (len(self.ellrange), flat_length))
+                    xip_signal_at_thetai_flat = np.zeros(flat_length)
+                    xim_signal_at_thetai_flat = np.zeros(flat_length)
+                    self.xi_spline = {}
+                    self.xi_spline["xip"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
+                    self.xi_spline["xim"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
+                    K_mmE = []
+                    K_mmB = []
+                    for i_theta in range(len(theta_bins)):
+                        theta_u = theta_ul_bins[i_theta+1]/60/180*np.pi
+                        theta_l = theta_ul_bins[i_theta]/60/180*np.pi
+                        xu = self.ell_fourier_integral*theta_u
+                        xl = self.ell_fourier_integral*theta_l
+                        K_mmE.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
+                        K_mmB.append(2/(xu**2 - xl**2)*((xu - 8/xu)*jv(1,xu) - 8*jv(2,xu) - (xl-8/xl)*jv(1,xl) + 8*jv(2,xl)))
+                    WXY_stack = []
+                    K_mmE = np.array(K_mmE)
+                    K_mmB = np.array(K_mmB)
+                    for i_theta in range(len(theta_bins)):
+                        WXY_stack.append(K_mmE[i_theta,:])
+                    for i_theta in range(len(theta_bins)):
+                        WXY_stack.append(K_mmB[i_theta,:])
+                    WXY_stack = np.array(WXY_stack)
+                    ell_limits = []
+                    for mode in range(len(WXY_stack[:,0])):
+                        limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
+                        limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]) + 2)
+                        limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]
+                        limits_at_mode_append[0] = self.ellrange[1]
+                        limits_at_mode_append[-1] = self.ellrange[-2]
+                        ell_limits.append(limits_at_mode_append)
+                    levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
+                    levin_int_fourier.init_w_ell(self.ell_fourier_integral, WXY_stack.T)
+                    for i_theta in range(len(theta_bins)):
+                        integrand = Cell_mm_flat*self.ellrange[:, None]
+                        levin_int_fourier.init_integral(
+                            self.ellrange, integrand, True, True)
+                        xip_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta],i_theta)
+                        xip_signal[i_theta, :, :, :] = np.reshape(
+                            xip_signal_at_thetai_flat, original_shape)/2.0/np.pi
+                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + self.mmE_summaries],i_theta + self.mmE_summaries)
+                        xim_signal[i_theta, :, :, :] = np.reshape(
+                            xim_signal_at_thetai_flat, original_shape)/2.0/np.pi        
+                    self.xip = xip_signal
+                    self.xim = xim_signal
+                    flat_idx = 0
+                    for i_tomo in range(self.n_tomo_lens):
+                        for j_tomo in range(i_tomo, self.n_tomo_lens):
+                            self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0)
+                            self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0)
+                            flat_idx += 1
                     
-            
-                      
+    def __get_weights(self):
+        N_fourier = int(1e5)
+        self.K_gg = []
+        self.K_gm = []
+        self.K_mmE = []
+        self.K_mmB = []
+        self.gg_summaries = 0
+        self.gm_summaries = 0
+        self.mmE_summaries = 0
+        self.ell_fourier_integral = np.geomspace(1,1e5,N_fourier)
+        for i_theta in range(len(self.thetabins)):
+            theta_u = self.theta_ul_bins[i_theta+1]/60/180*np.pi
+            theta_l = self.theta_ul_bins[i_theta]/60/180*np.pi
+            xu = self.ell_fourier_integral*theta_u
+            xl = self.ell_fourier_integral*theta_l
+            self.K_gg.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
+            self.K_gm.append(2/(xu**2 - xl**2)*(-xu*jv(1,xu) + xl*jv(1,xl) -2*jv(0,xu) + 2*jv(0,xl)))
+            self.K_mmE.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
+            self.K_mmB.append(2/(xu**2 - xl**2)*((xu - 8/xu)*jv(1,xu) - 8*jv(2,xu) - (xl-8/xl)*jv(1,xl) + 8*jv(2,xl)))
+        self.K_gg = np.array(self.K_gg)
+        self.K_gm = np.array(self.K_gm)
+        self.K_mmE = np.array(self.K_mmE)
+        self.K_mmB = np.array(self.K_mmB)
+        self.WXY_stack = []
+        if self.gg:
+            for i_theta in range(len(self.thetabins)):
+                self.WXY_stack.append(self.K_gg[i_theta,:])
+            self.gg_summaries = len(self.thetabins)
+        if self.gm:
+            for i_theta in range(len(self.thetabins)):
+                self.WXY_stack.append(self.K_gm[i_theta,:])
+            self.gm_summaries = len(self.thetabins)
+        if self.mm:
+            self.mmE_summaries = len(self.thetabins)
+            for i_theta in range(len(self.thetabins)):
+                self.WXY_stack.append(self.K_mmE[i_theta,:])
+            for i_theta in range(len(self.thetabins)):
+                self.WXY_stack.append(self.K_mmB[i_theta,:])
+        self.WXY_stack = np.array(self.WXY_stack)
+
     def __get_triplet_mix_term(self,
                                CovTHETASpace_settings,
                                survey_params_dict):
@@ -585,14 +654,18 @@ class CovTHETASpace(CovELLSpace):
                                               prec,
                                               read_in_tables['tri'], True)
         #self.cov_dict['ssc'] = False
-        ssc = self.covTHETA_ssc(obs_dict['ELLspace'],
-                                survey_params_dict,
-                                output_dict,
-                                bias_dict,
-                                hod_dict,
-                                prec,
-                                read_in_tables['tri'], True)
-
+        if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
+            ssc = []
+            for i_list in range(len(nongauss)):
+                ssc.append(nongauss[i_list]*0)
+        else:     
+            ssc = self.covTHETA_ssc(obs_dict['ELLspace'],
+                                    survey_params_dict,
+                                    output_dict,
+                                    bias_dict,
+                                    hod_dict,
+                                    prec,
+                                    read_in_tables['tri'], True)
         return list(gauss), list(nongauss), list(ssc)
 
     def covTHETA_gaussian(self,
@@ -767,13 +840,6 @@ class CovTHETASpace(CovELLSpace):
         if self.gg:
             print("")
             original_shape = gaussELLgggg_sva[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                prefac_ww = self.__calc_prefac_covreal(
-                    survey_params_dict['survey_area_clust'][0])
-            else:
-                prefac_ww = np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_ww = prefac_ww[:, :, None, None, None, None, None, None]
-
             covww_shape_sva = (len(self.thetabins), len(self.thetabins),
                                self.sample_dim, self.sample_dim,
                                self.n_tomo_clust, self.n_tomo_clust,
@@ -786,43 +852,22 @@ class CovTHETASpace(CovELLSpace):
             gaussELLgggg_mix_flat = np.reshape(gaussELLgggg_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             
-            lev = levin.Levin(2, 16, 32, self.accuracy/2.0, self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    integrand = np.moveaxis(np.diagonal(gaussELLgggg_sva_flat)/self.ellrange,0,-1)
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    gauss_ww_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
-                    
-                    integrand = np.moveaxis(np.diagonal(gaussELLgggg_mix_flat)/self.ellrange,0,-1)
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    gauss_ww_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
-                    
+            for m_mode in range(self.gg_summaries):
+                for n_mode in range(self.gg_summaries):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                        local_ell_limit = self.ell_limits[n_mode][:]
+                    if self.cov_dict['split_gauss']:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_sva_flat)*self.ellrange,0,-1), True, True)
+                        gauss_ww_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_mix_flat)*self.ellrange,0,-1), True, True)
+                        gauss_ww_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                    else:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_sva_flat + gaussELLgggg_mix_flat)*self.ellrange,0,-1), True, True)
+                        gauss_ww_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '
@@ -830,8 +875,6 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            gauss_ww_sva *= prefac_ww
-            gauss_ww_mix *= prefac_ww
             gauss_ww_sn = \
                 (kron_delta_tomo_clust[None, None, None, :, None, :, None]
                  * kron_delta_tomo_clust[None, None, None, None, :, None, :]
@@ -848,15 +891,6 @@ class CovTHETASpace(CovELLSpace):
         if self.gg and self.gm and self.cross_terms:
             print("")
             original_shape = gaussELLgggm_sva[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                prefac_wgt = self.__calc_prefac_covreal(
-                    max(survey_params_dict['survey_area_clust'],
-                        survey_params_dict['survey_area_ggl']))
-            else:
-                prefac_wgt = np.ones(
-                    (len(self.thetabins), len(self.thetabins)))
-            prefac_wgt = prefac_wgt[:, :, None, None, None, None, None, None]
-
             covwgt_shape_sva = (len(self.thetabins), len(self.thetabins),
                                 self.sample_dim, self.sample_dim,
                                 self.n_tomo_clust, self.n_tomo_clust,
@@ -869,67 +903,22 @@ class CovTHETASpace(CovELLSpace):
             gaussELLgggm_mix_flat = np.reshape(gaussELLgggm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             
-            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(8.), self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    integrand = np.moveaxis(np.diagonal(gaussELLgggm_sva_flat)/self.ellrange,0,-1)
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = -theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    integrand /= self.ellrange[:,None] 
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat -= 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    
-                    gauss_wgt_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
-                    
-                    integrand = np.moveaxis(np.diagonal(gaussELLgggm_mix_flat)/self.ellrange,0,-1)
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = -theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    integrand /= self.ellrange[:,None] 
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat -= 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    
-                    gauss_wgt_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
-                    
+            for m_mode in range(self.gg_summaries):
+                for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                        local_ell_limit = self.ell_limits[n_mode][:]
+                    if self.cov_dict['split_gauss']:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_sva_flat)*self.ellrange,0,-1), True, True)
+                        gauss_wgt_sva[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, self.gg_summaries)),original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_mix_flat)*self.ellrange,0,-1), True, True)
+                        gauss_wgt_mix[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, self.gg_summaries)),original_shape)
+                    else:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_sva_flat + gaussELLgggm_mix_flat)*self.ellrange,0,-1), True, True)
+                        gauss_wgt_sva[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, self.gg_summaries)),original_shape)
+                        
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '
@@ -937,24 +926,12 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            gauss_wgt_sva *= prefac_wgt
-            gauss_wgt_mix *= prefac_wgt
         else:
             gauss_wgt_sva, gauss_wgt_mix = 0, 0
 
         if self.gg and self.mm and self.cross_terms:
             print("")
             original_shape = gaussELLggmm_sva[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                prefac_wxipm = self.__calc_prefac_covreal(
-                    max(survey_params_dict['survey_area_clust'],
-                        survey_params_dict['survey_area_lens']))
-            else:
-                prefac_wxipm = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_wxipm = prefac_wxipm[:, :,
-                                        None, None, None, None, None, None]
-
             covwxipm_shape_sva = (len(self.thetabins), len(self.thetabins),
                                   self.sample_dim, 1,
                                   self.n_tomo_clust, self.n_tomo_clust,
@@ -964,69 +941,18 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
             gaussELLggmm_sva_flat = np.reshape(gaussELLggmm_sva, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(12.), self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
+            for m_mode in range(self.gg_summaries):
+                for n_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                        local_ell_limit = self.ell_limits[n_mode][:]
+                    self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(flat_length)*self.ellrange,0,-1), True, True)
                     if self.xi_pp:
-                        integrand = np.moveaxis(np.diagonal(gaussELLggmm_sva_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        gauss_wxip_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                    
+                        gauss_wxip_sva[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
                     if self.xi_mm:
-                        integrand = np.moveaxis(np.diagonal(gaussELLggmm_sva_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                                self.ellrange, integrand, True, True)    
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_li/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        gauss_wxim_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-
+                        gauss_wxim_sva[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '
@@ -1034,23 +960,12 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            gauss_wxip_sva *= prefac_wxipm
-            gauss_wxim_sva *= prefac_wxipm
         else:
             gauss_wxip_sva, gauss_wxim_sva = 0, 0
 
         if self.gm:
             print("")
             original_shape = gaussELLgmgm_sva[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                prefac_gtgt = self.__calc_prefac_covreal(
-                    survey_params_dict['survey_area_ggl'])
-            else:
-                prefac_gtgt = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_gtgt = prefac_gtgt[:, :, None, None, None, None, None, None]
-
-
             covgtgt_shape_sva = (len(self.thetabins), len(self.thetabins),
                                  self.sample_dim, self.sample_dim,
                                  self.n_tomo_clust, self.n_tomo_lens,
@@ -1062,110 +977,21 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             gaussELLgmgm_mix_flat = np.reshape(gaussELLgmgm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            lev = levin.Levin(2, 16, 32, self.accuracy/4.0, self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    integrand = np.moveaxis(np.diagonal(gaussELLgmgm_sva_flat)/self.ellrange,0,-1)
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    integrand /= self.ellrange[:,None] 
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat += 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    integrand /= self.ellrange[:,None]
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat += 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    
-                    gauss_gtgt_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
-                    
-                    integrand = np.moveaxis(np.diagonal(gaussELLgmgm_mix_flat)/self.ellrange,0,-1)
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    
-                    integrand /= self.ellrange[:,None] 
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat += 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2*theta_li*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 2*theta_uj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2*theta_lj*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 0, 1, self.ellrange[0], self.ellrange[-1]))
-                    
-
-                    
-                    
-                    integrand /= self.ellrange[:,None]
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat += 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_uj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_ui, theta_lj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_uj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 4.0*np.nan_to_num(lev.double_bessel(
-                        theta_li, theta_lj, 0, 0, self.ellrange[0], self.ellrange[-1]))
-                    
-                    gauss_gtgt_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
-                    
+            for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                        local_ell_limit = self.ell_limits[n_mode][:]
+                    if self.cov_dict['split_gauss']:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_sva_flat)*self.ellrange,0,-1), True, True)
+                        gauss_gtgt_sva[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                        gauss_gtgt_mix[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                    else:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_sva_flat + gaussELLgmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                        gauss_gtgt_sva[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '
@@ -1173,10 +999,6 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-
-            gauss_gtgt_sva *= prefac_gtgt
-            gauss_gtgt_mix *= prefac_gtgt
-
             gauss_gtgt_sn = \
                 kron_delta_tomo_clust[None, None, None, :, None, :, None] \
                 * kron_delta_tomo_lens[None, None, None, None, :, None, :] \
@@ -1193,16 +1015,6 @@ class CovTHETASpace(CovELLSpace):
         if self.mm and self.gm and self.cross_terms:
             print("")
             original_shape = gaussELLmmgm_sva[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                prefac_xipmgt = self.__calc_prefac_covreal(
-                    max(survey_params_dict['survey_area_ggl'],
-                        survey_params_dict['survey_area_lens']))
-            else:
-                prefac_xipmgt = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_xipmgt = prefac_xipmgt[:, :,
-                                          None, None, None, None, None, None]
-
             covxipmgt_shape_sva = (len(self.thetabins), len(self.thetabins),
                                    1, self.sample_dim,
                                    self.n_tomo_lens, self.n_tomo_lens,
@@ -1221,221 +1033,43 @@ class CovTHETASpace(CovELLSpace):
             gaussELLmmgm_mix_flat = np.reshape(gaussELLmmgm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
             
-            lev = levin.Levin(2, 16, 32, self.accuracy/np.sqrt(24.), self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    
-                    if self.xi_pp:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = -theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        gauss_xipgt_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                    
-                    if self.xi_mm:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = -theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 2*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat += 8*theta_uj/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_lj/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_uj/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8*theta_lj/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 16*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 16*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat += 16/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 16/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        gauss_ximgt_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-
-                    if self.xi_pp:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmgm_mix_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = -theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 2.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        gauss_xipgt_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-
-                    if self.xi_mm:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmgm_mix_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = -theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 2*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 2*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat += 8*theta_uj/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_lj/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8*theta_uj/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8*theta_lj/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 16*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 16*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 0, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None] 
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat += 16/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16/theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 16/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 16/theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 0, self.ellrange[0], self.ellrange[-1]))
-                        gauss_ximgt_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-
+            for m_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
+                for n_mode in range(self.gg_summaries, self.gg_summaries + self.gm_summaries):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                        local_ell_limit = self.ell_limits[n_mode][:]
+                    if self.cov_dict['split_gauss']:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat)*self.ellrange,0,-1), True, True)
+                        if self.xi_pp:
+                            gauss_xipgt_sva[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        if self.xi_mm:
+                            gauss_ximgt_sva[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                        if self.xi_pp:
+                            gauss_xipgt_mix[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        if self.xi_mm:
+                            gauss_ximgt_mix[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
+                    else:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat + gaussELLmmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                        if self.xi_pp:
+                            gauss_xipgt_sva[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        if self.xi_mm:
+                            gauss_ximgt_sva[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '
                           'real-space covariance xipmgt at ' +
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
-            gauss_xipgt_sva *= prefac_xipmgt
-            gauss_ximgt_sva *= prefac_xipmgt
-            gauss_xipgt_mix *= prefac_xipmgt
-            gauss_ximgt_mix *= prefac_xipmgt        
+                          str(round(eta, 1)) + 'min', end="")   
         else:
             gauss_xipgt_sva, gauss_ximgt_sva, gauss_xipgt_mix, gauss_ximgt_mix = 0, 0, 0 ,0
 
         if self.mm:
             print("")
             original_shape = gaussELLmmmm_sva[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                prefac_xipm = self.__calc_prefac_covreal(
-                    survey_params_dict['survey_area_lens'])
-            else:
-                prefac_xipm = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_xipm = prefac_xipm[:, :, None, None, None, None, None, None]
-
             covxipm_shape_sva = (len(self.thetabins), len(self.thetabins),
                                  1, 1,
                                  self.n_tomo_lens, self.n_tomo_lens,
@@ -1451,298 +1085,38 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             gaussELLmmmm_mix_flat = np.reshape(gaussELLmmmm_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            lev = levin.Levin(2, 16, 32, self.accuracy/6.0, self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
             
 
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    
-                    
-                    if self.xi_pp:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-
-                        
-                        gauss_xipxip_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                    if self.xi_pm:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))        
-                        cov_at_thetaij_flat += 8.*theta_li/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        gauss_xipxim_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                    if self.xi_mm:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        
-                        cov_at_thetaij_flat -= 8.*(theta_ui/theta_uj + theta_uj/theta_ui)*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*(theta_ui/theta_lj + theta_lj/theta_ui)*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*(theta_li/theta_uj + theta_uj/theta_li)*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*(theta_li/theta_lj + theta_lj/theta_li)*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64.*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64.*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64.*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64.*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        
-                        integrand /= self.ellrange[:,None]
-                        
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        
-                        cov_at_thetaij_flat += 64./theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat += 64./theta_ui/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_ui/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_li/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_li/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        gauss_ximxim_sva[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-
-                    if self.xi_pp:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmmm_mix_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        gauss_xipxip_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                    
-                    if self.xi_pm:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmmm_mix_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                    
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_li/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        gauss_xipxim_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                        
-                    if self.xi_mm:
-                        integrand = np.moveaxis(np.diagonal(gaussELLmmmm_mix_flat)/self.ellrange,0,-1)
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_ui*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += theta_li*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.*(theta_ui/theta_uj + theta_uj/theta_ui)*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*(theta_ui/theta_lj + theta_lj/theta_ui)*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.*(theta_li/theta_uj + theta_uj/theta_li)*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 8.*(theta_li/theta_lj + theta_lj/theta_li)*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64.*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64.*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64.*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64.*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 2, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat += 64./theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_ui*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_li*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 2, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand /= self.ellrange[:,None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat += 64./theta_ui/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_ui/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_ui, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= 64./theta_li/theta_uj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_uj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 64./theta_li/theta_lj*np.nan_to_num(lev.double_bessel(
-                            theta_li, theta_lj, 1, 1, self.ellrange[0], self.ellrange[-1]))
-                        gauss_ximxim_mix[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                        
+            for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
+                for n_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                        local_ell_limit = self.ell_limits[n_mode][:]
+                    if self.cov_dict['split_gauss']:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat)*self.ellrange,0,-1), True, True)
+                        if self.xi_pp:
+                            gauss_xipxip_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        if self.xi_mm:
+                            gauss_ximxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
+                            if self.cross_terms:
+                                gauss_xipxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_mix_flat)*self.ellrange,0,-1), True, True)
+                        if self.xi_pp:
+                            gauss_xipxip_mix[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        if self.xi_mm:
+                            gauss_ximxim_mix[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
+                            if self.cross_terms:
+                                gauss_xipxim_mix[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
+                    else:
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat + gaussELLmmmm_mix_flat)*self.ellrange,0,-1), True, True)
+                        if self.xi_pp:
+                            gauss_xipxip_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        if self.xi_mm:
+                            gauss_ximxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
+                            if self.cross_terms:
+                                gauss_xipxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape) 
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '
@@ -1750,12 +1124,7 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            gauss_xipxip_sva *= prefac_xipm                
-            gauss_xipxip_mix *= prefac_xipm                
-            gauss_xipxim_sva *= prefac_xipm                
-            gauss_xipxim_mix *= prefac_xipm                
-            gauss_ximxim_sva *= prefac_xipm                
-            gauss_ximxim_mix *= prefac_xipm                
+                       
             gauss_xipm_sn = \
                 (kron_delta_tomo_lens[None, None, None, :, None, :, None]
                  * kron_delta_tomo_lens[None, None, None, None, :, None, :]
@@ -1765,8 +1134,7 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipm_sn = \
                 gauss_xipm_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.thetabins))[:, :, None, None, None, None, None, None]
-
-           
+            print("")
         else:
             gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, gauss_xipm_sn = 0, 0, 0, 0, 0, 0, 0
 
@@ -1793,32 +1161,6 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipxip_sva, gauss_xipxip_mix, gauss_xipm_sn, \
             gauss_xipxim_sva, gauss_xipxim_mix, gauss_xipxim_sn, \
             gauss_ximxim_sva, gauss_ximxim_mix, gauss_xipm_sn
-
-    def __calc_prefac_covreal(self,
-                              Amax):
-        """
-        Calculates the prefactor for the real-sapce covariance matrix.
-        In particular for the SVA and mix terms.
-
-        Parameters
-        ----------
-        Amax : float
-            Maximum of the survey area between the two probes under
-            consideration.
-
-        Returns:
-        --------
-        prefac : array
-            Prefactor of shape (theta_bins, theta bins)
-        """
-        prefac = 1 / 2 / np.pi / Amax * self.deg2torad2 \
-            * (2 / (self.theta_ul_bins[1:]**2
-                    - self.theta_ul_bins[:-1]**2)[:, None]) \
-            * (2 / (self.theta_ul_bins[1:]**2
-                    - self.theta_ul_bins[:-1]**2)[None, :]) \
-            * self.arcmin2torad2**2
-
-        return prefac
 
 
     def covTHETA_non_gaussian(self,
@@ -2074,26 +1416,34 @@ class CovTHETASpace(CovELLSpace):
         nongauss_xipxip = None
         nongauss_xipxim = None
         nongauss_ximxim = None
-        if (connected):
+        if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
-                covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
+                    covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
+            nongaussELLgggg1, nongaussELLgggm1, nongaussELLggmm1, nongaussELLgmgm1, nongaussELLmmgm1, nongaussELLmmmm1 = self.covELL_ssc(
+                    bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
+            if self.gg:
+                nongaussELLgggg = nongaussELLgggg/(survey_params_dict['survey_area_clust'] / self.deg2torad2) + nongaussELLgggg1
+            if self.gg and self.gm and self.cross_terms:
+                nongaussELLgggm = nongaussELLgggm/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl']) / self.deg2torad2) + nongaussELLgggm1
+            if self.gg and self.mm and self.cross_terms:
+                nongaussELLggmm = nongaussELLggmm/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2) + nongaussELLggmm1
+            if self.gm:
+                nongaussELLgmgm = nongaussELLggmm/(survey_params_dict['survey_area_ggl'] / self.deg2torad2) + nongaussELLgmgm1
+            if self.mm and self.gm and self.cross_terms:
+                nongaussELLmmgm = nongaussELLmmgm/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl']) / self.deg2torad2) + nongaussELLmmgm1
+            if self.mm:
+                nongaussELLmmmm = nongaussELLmmmm/(survey_params_dict['survey_area_lens'] / self.deg2torad2) + nongaussELLmmmm1
+            connected = False
         else:
-            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
-                bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
+            if (connected):
+                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
+                    covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
+            else:
+                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
+                    bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
         if self.gg:
             print("")
             original_shape = nongaussELLgggg[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                if connected:
-                    prefac_ww = self.__calc_prefac_covreal(
-                        survey_params_dict['survey_area_clust'])/2/np.pi
-                else:
-                    prefac_ww = self.__calc_prefac_covreal(
-                        self.deg2torad2)/2/np.pi
-            else:
-                prefac_ww = np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_ww = prefac_ww[:, :, None, None, None, None, None, None]
-
             covww_shape_nongauss = (len(self.thetabins), len(self.thetabins),
                                     self.sample_dim, self.sample_dim,
                                     self.n_tomo_clust, self.n_tomo_clust,
@@ -2106,56 +1456,28 @@ class CovTHETASpace(CovELLSpace):
             lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    # cov_NG(w^ij(theta1) w^kl(theta2))
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    inner_integral = np.zeros(
-                        (len(self.ellrange), flat_length))
+            for m_mode in range(self.gg_summaries):
+                for n_mode in range(self.gg_summaries):
+                    inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
-                        integrand = nongaussELLgggg_flat[i_ell, :, :]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        inner_integral[i_ell, :] = theta_uj*np.nan_to_num(lev.single_bessel(
-                            theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                        inner_integral[i_ell, :] -= theta_lj*np.nan_to_num(lev.single_bessel(
-                            theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                    integrand = inner_integral
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                        theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                        theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                    nongauss_ww[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLgggg_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        inner_integral[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+                    self.levin_int_fourier.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
+                    nongauss_ww[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    if connected:
+                        nongauss_ww[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_clust'] / self.deg2torad2)
                     theta += 1
-                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                    
+                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)                    
                     print('\rProjection for non-Gaussian term for the '
                           'real-space covariance ww at ' +
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            nongauss_ww *= prefac_ww
+
         if self.gg and self.gm and self.cross_terms:
             print("")
             # cov_NG(w^ij(theta1) gt^kl(theta2))
             original_shape = nongaussELLgggm[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                if connected:
-                    prefac_wgt = self.__calc_prefac_covreal(
-                        max(survey_params_dict['survey_area_clust'],
-                            survey_params_dict['survey_area_ggl']))/2/np.pi
-                else:
-                    prefac_wgt = self.__calc_prefac_covreal(
-                        self.deg2torad2)/2/np.pi
-            else:
-                prefac_wgt = np.ones(
-                    (len(self.thetabins), len(self.thetabins)))
             prefac_wgt = prefac_wgt[:, :, None, None, None, None, None, None]
 
             covwgt_shape_nongauss = (len(self.thetabins), len(self.thetabins),
@@ -2170,42 +1492,16 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    inner_integral = np.zeros(
-                        (len(self.ellrange), flat_length))
+            for m_mode in range(self.gg_summaries):
+                for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                    inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
-                        integrand = nongaussELLgggm_flat[i_ell, :, :]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        inner_integral[i_ell, :] = -theta_uj*np.nan_to_num(lev.single_bessel(
-                            theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                        inner_integral[i_ell, :] += theta_lj*np.nan_to_num(lev.single_bessel(
-                            theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = nongaussELLgggm_flat[i_ell,
-                                                         :, :]/self.ellrange[:, None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        inner_integral[i_ell, :] -= 2.*np.nan_to_num(lev.single_bessel(
-                            theta_uj, 0, self.ellrange[0], self.ellrange[-1]))
-                        inner_integral[i_ell, :] += 2.*np.nan_to_num(lev.single_bessel(
-                            theta_lj, 0, self.ellrange[0], self.ellrange[-1]))
-                    integrand = inner_integral
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                        theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                    
-                    cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                        theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                    
-                    nongauss_wgt[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLgggm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        inner_integral[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+                    self.levin_int_fourier.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
+                    nongauss_wgt[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    if connected:
+                        nongauss_wgt[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl']) / self.deg2torad2)
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for non-Gaussian term for the '
@@ -2213,24 +1509,9 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            nongauss_wgt *= prefac_wgt
         if self.gg and self.mm and self.cross_terms:
             print("")
             original_shape = nongaussELLggmm[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                if connected:
-                    prefac_wxipm = self.__calc_prefac_covreal(
-                        max(survey_params_dict['survey_area_clust'],
-                            survey_params_dict['survey_area_lens']))/2/np.pi
-                else:
-                    prefac_wxipm = self.__calc_prefac_covreal(
-                        self.deg2torad2)/2/np.pi
-            else:
-                prefac_wxipm = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_wxipm = prefac_wxipm[:, :,
-                                        None, None, None, None, None, None]
-
             covwxip_shape_nongauss = (len(self.thetabins), len(self.thetabins),
                                       self.sample_dim, 1,
                                       self.n_tomo_clust, self.n_tomo_clust,
@@ -2248,93 +1529,35 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    inner_integral_xip = np.zeros(
-                        (len(self.ellrange), flat_length))
-                    inner_integral_xim = np.zeros(
-                        (len(self.ellrange), flat_length))
-                    if self.xi_pp:
-                        for i_ell in range(len(self.ellrange)):
-                            integrand = nongaussELLggmm_flat[i_ell, :, :]
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xip[i_ell, :] = theta_uj*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xip[i_ell, :] -= theta_lj*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = inner_integral_xip
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_wxip[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
+            for m_mode in range(self.gg_summaries):
+                for n_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
+                    inner_integralE = np.zeros((len(self.ellrange), flat_length))
                     if self.xi_mm:
-                        for i_ell in range(len(self.ellrange)):
-                            integrand = nongaussELLggmm_flat[i_ell, :, :]
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xim[i_ell, :] = theta_uj*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xim[i_ell, :] -= theta_lj*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                            integrand = nongaussELLggmm_flat[i_ell,
-                                                             :, :]/self.ellrange[:, None]**2
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xim[i_ell, :] -= 8.0/theta_uj*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xim[i_ell, :] += 8.0/theta_lj*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                            integrand = nongaussELLggmm_flat[i_ell,
-                                                             :, :]/self.ellrange[:, None]
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xim[i_ell, :] -= 8.0*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 2, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xim[i_ell, :] += 8.0*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 2, self.ellrange[0], self.ellrange[-1]))
-                        integrand = inner_integral_xim
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_wxim[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                        theta += 1
-                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                        print('\rProjection for non-Gaussian term for the '
-                          'real-space covariance wxipm at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
-                nongauss_wxim *= prefac_wxipm
-                nongauss_wxip *= prefac_wxipm
-
+                        inner_integralB = np.zeros((len(self.ellrange), flat_length))
+                    for i_ell in range(len(self.ellrange)):
+                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLggmm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        inner_integralE[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+                        if self.xi_mm:
+                            inner_integralB[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode + self.mmE_summaries][:], n_mode + self.mmE_summaries))
+                    self.levin_int_fourier.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
+                    nongauss_wxip[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    if self.xi_mm:
+                        self.levin_int_fourier.init_integral(self.ellrange, inner_integralB*self.ellrange[:, None], True, True)
+                        nongauss_wxim[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode + self.mmE_summaries][:], m_mode + self.mmE_summaries)),original_shape)
+                    if connected:
+                        nongauss_ASEggmm[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                        if self.xi_mm:
+                            nongauss_ASBggmm[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)    
+                    theta += 1
+                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                    print('\rProjection for non-Gaussian term for the '
+                        'real-space covariance wxipm at ' +
+                        str(round(theta/theta_comb*100, 1)) + '% in ' +
+                        str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                        str(round(eta, 1)) + 'min', end="")
         if self.gm:
             print("")
             original_shape = nongaussELLgmgm[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                if connected:
-                    prefac_gtgt = self.__calc_prefac_covreal(
-                        survey_params_dict['survey_area_ggl'])/2/np.pi
-                else:
-                    prefac_gtgt = self.__calc_prefac_covreal(
-                        self.deg2torad2)/2/np.pi
-            else:
-                prefac_gtgt = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_gtgt = prefac_gtgt[:, :, None, None, None, None, None, None]
             covgtgt_shape_nongauss = (len(self.thetabins), len(self.thetabins),
                                       self.sample_dim, self.sample_dim,
                                       self.n_tomo_clust, self.n_tomo_lens,
@@ -2347,47 +1570,16 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    inner_integral = np.zeros(
-                        (len(self.ellrange), flat_length))
+            for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                    inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
-                        integrand = nongaussELLgmgm_flat[i_ell, :, :]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        inner_integral[i_ell, :] = -theta_uj*np.nan_to_num(lev.single_bessel(
-                            theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                        inner_integral[i_ell, :] += theta_lj*np.nan_to_num(lev.single_bessel(
-                            theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = nongaussELLgmgm_flat[i_ell,
-                                                         :, :]/self.ellrange[:, None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        inner_integral[i_ell, :] -= 2.*np.nan_to_num(lev.single_bessel(
-                            theta_uj, 0, self.ellrange[0], self.ellrange[-1]))
-                        inner_integral[i_ell, :] += 2.*np.nan_to_num(lev.single_bessel(
-                            theta_lj, 0, self.ellrange[0], self.ellrange[-1]))
-                    integrand = inner_integral
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat = -theta_ui*np.nan_to_num(lev.single_bessel(
-                        theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += theta_li*np.nan_to_num(lev.single_bessel(
-                        theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                    integrand = inner_integral/self.ellrange[:, None]
-                    lev.init_integral(
-                        self.ellrange, integrand, True, True)
-                    cov_at_thetaij_flat -= 2.*np.nan_to_num(lev.single_bessel(
-                        theta_ui, 0, self.ellrange[0], self.ellrange[-1]))
-                    cov_at_thetaij_flat += 2.*np.nan_to_num(lev.single_bessel(
-                        theta_li, 0, self.ellrange[0], self.ellrange[-1]))
-                    nongauss_gtgt[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                        cov_at_thetaij_flat, original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, nongauss_gtgt[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        inner_integral[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+                    self.levin_int_fourier.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
+                    nongauss_gtgt[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    if connected:
+                        nongauss_gtgt[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] /= (survey_params_dict['survey_area_ggl']) / self.deg2torad2
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for non-Gaussian term for the '
@@ -2395,25 +1587,10 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            nongauss_gtgt *= prefac_gtgt
-
         if self.mm and self.gm and self.cross_terms:
             print("")
             #
             original_shape = nongaussELLmmgm[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                if connected:
-                    prefac_xipmgt = self.__calc_prefac_covreal(
-                        max(survey_params_dict['survey_area_ggl'],
-                            survey_params_dict['survey_area_lens']))/2/np.pi
-                else:
-                    prefac_xipmgt = self.__calc_prefac_covreal(
-                        self.deg2torad2)/2/np.pi
-            else:
-                prefac_xipmgt = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_xipmgt = prefac_xipmgt[:, :,
-                                          None, None, None, None, None, None]
             covxipgt_shape_nongauss = (len(self.thetabins), len(self.thetabins),
                                        1, self.sample_dim,
                                        self.n_tomo_lens, self.n_tomo_lens,
@@ -2431,89 +1608,30 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    inner_integral = np.zeros(
-                        (len(self.ellrange), flat_length))
+            for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
+                for n_mode in range(self.gg_summaries, self.gg_summaries + self.gm_summaries):
+                    inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
-                        integrand = nongaussELLmmgm_flat[i_ell, :, :]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        inner_integral[i_ell, :] = -theta_uj*np.nan_to_num(lev.single_bessel(
-                            theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                        inner_integral[i_ell, :] += theta_lj*np.nan_to_num(lev.single_bessel(
-                            theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = nongaussELLmmgm_flat[i_ell,
-                                                         :, :]/self.ellrange[:, None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        inner_integral[i_ell, :] -= 2.*np.nan_to_num(lev.single_bessel(
-                            theta_uj, 0, self.ellrange[0], self.ellrange[-1]))
-                        inner_integral[i_ell, :] += 2.*np.nan_to_num(lev.single_bessel(
-                            theta_lj, 0, self.ellrange[0], self.ellrange[-1]))
-                    if self.xi_pp:
-                        integrand = inner_integral
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_xipgt[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLmmgm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        inner_integral[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+                    self.levin_int_fourier.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
+                    nongauss_xipgt[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if self.xi_mm:
-                        integrand = inner_integral
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = inner_integral/self.ellrange[:, None]**2
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.0/theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.0/theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = inner_integral/self.ellrange[:, None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.0*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.0*np.nan_to_num(lev.single_bessel(
-                            theta_li, 2, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_ximgt[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                        theta += 1
-                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                        print('\rProjection for non-Gaussian term for the '
-                          'real-space covariance xipmgt at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
-            nongauss_xipgt *= prefac_xipmgt
-            nongauss_ximgt *= prefac_xipmgt
-
+                        nongauss_ximgt[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + self.mmE_summaries)),original_shape)
+                    if connected:
+                        nongauss_xipgt[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                        if self.xi_mm:
+                            nongauss_ximgt[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                    theta += 1
+                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                    print('\rProjection for non-Gaussian term for the '
+                        'real-space covariance xipmgt at ' +
+                        str(round(theta/theta_comb*100, 1)) + '% in ' +
+                        str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                        str(round(eta, 1)) + 'min', end="")
         if self.mm:
             print("")
             original_shape = nongaussELLmmmm[0, 0, :, :, :, :, :, :].shape
-            if calc_prefac:
-                if connected:
-                    prefac_xipm = self.__calc_prefac_covreal(
-                        survey_params_dict['survey_area_lens'])/2/np.pi
-                else:
-                    prefac_xipm = self.__calc_prefac_covreal(
-                        self.deg2torad2)/2/np.pi
-            else:
-                prefac_xipm = \
-                    np.ones((len(self.thetabins), len(self.thetabins)))
-            prefac_xipm = prefac_xipm[:, :, None, None, None, None, None, None]
             covxipxip_shape_nongauss = (len(self.thetabins), len(self.thetabins),
                                         1, 1,
                                         self.n_tomo_lens, self.n_tomo_lens,
@@ -2535,107 +1653,27 @@ class CovTHETASpace(CovELLSpace):
             cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
-            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
-            for i_theta in range(len(self.thetabins)):
-                for j_theta in range(len(self.thetabins)):
-                    theta_li = self.theta_ul_bins[i_theta] / 60 * np.pi / 180
-                    theta_ui = self.theta_ul_bins[i_theta+1] / 60 * np.pi / 180
-                    theta_lj = self.theta_ul_bins[j_theta] / 60 * np.pi / 180
-                    theta_uj = self.theta_ul_bins[j_theta+1] / 60 * np.pi / 180
-                    inner_integral = np.zeros(
-                        (len(self.ellrange), flat_length))
-                    inner_integral_xip = np.zeros(
-                        (len(self.ellrange), flat_length))
-                    inner_integral_xim = np.zeros(
-                        (len(self.ellrange), flat_length))
-                    if self.xi_pp:
-                        for i_ell in range(len(self.ellrange)):
-                            integrand = nongaussELLmmmm_flat[i_ell, :, :]
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xip[i_ell, :] = theta_uj*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xip[i_ell, :] -= theta_lj*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = inner_integral_xip
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_xipxip[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
+            for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
+                for n_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
+                    inner_integralE = np.zeros((len(self.ellrange), flat_length))
                     if self.xi_mm:
-                        for i_ell in range(len(self.ellrange)):
-                            integrand = nongaussELLmmmm_flat[i_ell, :, :]
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xim[i_ell, :] = theta_uj*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xim[i_ell, :] -= theta_lj*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                            integrand = nongaussELLmmmm_flat[i_ell,
-                                                             :, :]/self.ellrange[:, None]**2
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xim[i_ell, :] -= 8.0/theta_uj*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 1, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xim[i_ell, :] += 8.0/theta_lj*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 1, self.ellrange[0], self.ellrange[-1]))
-                            integrand = nongaussELLmmmm_flat[i_ell,
-                                                             :, :]/self.ellrange[:, None]
-                            lev.init_integral(
-                                self.ellrange, integrand, True, True)
-                            inner_integral_xim[i_ell, :] -= 8.0*np.nan_to_num(lev.single_bessel(
-                                theta_uj, 2, self.ellrange[0], self.ellrange[-1]))
-                            inner_integral_xim[i_ell, :] += 8.0*np.nan_to_num(lev.single_bessel(
-                                theta_lj, 2, self.ellrange[0], self.ellrange[-1]))
-                    if self.xi_pp:
-                        integrand = inner_integral_xip
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_xipxip[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
+                        inner_integralB = np.zeros((len(self.ellrange), flat_length))
+                    for i_ell in range(len(self.ellrange)):
+                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLmmmm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        inner_integralE[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+                        if self.xi_mm:
+                            inner_integralB[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode + self.mmE_summaries][:], n_mode + self.mmE_summaries))
+                    self.levin_int_fourier.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
+                    nongauss_xipxip[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if self.xi_mm:
-                        integrand = inner_integral_xim
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = inner_integral_xim / \
-                            self.ellrange[:, None]**2
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.0/theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.0/theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        integrand = inner_integral_xim/self.ellrange[:, None]
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat -= 8.0*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 2, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat += 8.0*np.nan_to_num(lev.single_bessel(
-                            theta_li, 2, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_ximxim[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
-                    if self.xi_pm:
-                        integrand = inner_integral_xim
-                        lev.init_integral(
-                            self.ellrange, integrand, True, True)
-                        cov_at_thetaij_flat = theta_ui*np.nan_to_num(lev.single_bessel(
-                            theta_ui, 1, self.ellrange[0], self.ellrange[-1]))
-                        cov_at_thetaij_flat -= theta_li*np.nan_to_num(lev.single_bessel(
-                            theta_li, 1, self.ellrange[0], self.ellrange[-1]))
-                        nongauss_xipxim[i_theta, j_theta, :, :, :, :, :, :] = np.reshape(
-                            cov_at_thetaij_flat, original_shape)
+                        nongauss_xipxim[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode + self.mmE_summaries][:], m_mode + self.mmE_summaries)),original_shape)
+                        self.levin_int_fourier.init_integral(self.ellrange, inner_integralB*self.ellrange[:, None], True, True)
+                        nongauss_ximxim[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode + self.mmE_summaries][:], m_mode + self.mmE_summaries)),original_shape)
+                    if connected:
+                        nongauss_xipxip[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                        if self.xi_mm:
+                            nongauss_xipxim[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                            nongauss_ximxim[m_mode - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for connected term for the '
@@ -2643,8 +1681,5 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-            nongauss_xipxip *= prefac_xipm
-            nongauss_ximxim *= prefac_xipm
-            nongauss_xipxim *= prefac_xipm
         print("")
         return nongauss_ww, nongauss_wgt, nongauss_wxip, nongauss_wxim, nongauss_gtgt, nongauss_xipgt, nongauss_ximgt, nongauss_xipxip, nongauss_xipxim, nongauss_ximxim

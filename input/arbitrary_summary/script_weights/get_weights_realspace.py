@@ -1,9 +1,9 @@
 import numpy as np
 from scipy.special import jv
 
-N_fourier = int(1e4) # at how many ells should the Fourier space filter be evaluated
+N_fourier = int(1e5) # at how many ells should the Fourier space filter be evaluated
 fourier_ell = np.geomspace(1,1e5,N_fourier) # define the ell, this range is more than enough
-N_real = int(1e4) # at how many theta should the real space filter be evaluated
+N_real = int(1e5) # at how many theta should the real space filter be evaluated
 theta_type = 'log'
 
 
@@ -86,6 +86,8 @@ for i_theta in range(len(theta_bins)):
 # Define theta-range for xip_m (i.e. mm)
 theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
 real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
+print(theta_bins)
+print(theta_ul_bins)
 # Get fourier and real  weights for w covariance
 for i_theta in range(len(theta_bins)):
     theta_u = theta_ul_bins[i_theta+1]/60/180*np.pi
@@ -96,7 +98,7 @@ for i_theta in range(len(theta_bins)):
     if i_theta+1 < 10:
         filename_mm = "./../fourier_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
     else:
-        filename_mm = "./../ourier_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
+        filename_mm = "./../fourier_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
     np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T)
     K_mm = 2/(xu**2 - xl**2)*((xu - 8/xu)*jv(1,xu) - 8*jv(2,xu) - (xl-8/xl)*jv(1,xl) + 8*jv(2,xl))
     if i_theta+1 < 10:

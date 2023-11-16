@@ -50,9 +50,10 @@ private:
   uint col, nsub;
   uint number_x_values;
   uint number_integrals;
-  double x_max, x_min;
+  double x_max, x_min, xmax_weight;
   bool logx;
   std::vector<bool> logy;
+  std::vector<double> slope, slope0;
   double relative_tol;
   bool already_called;
 

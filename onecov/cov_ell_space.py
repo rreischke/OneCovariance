@@ -4711,8 +4711,8 @@ class CovELLSpace(PolySpectra):
                     if i_chi == 0:
                         power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     else:
-                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
-                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+                        power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
                 survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
