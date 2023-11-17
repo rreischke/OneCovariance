@@ -851,7 +851,6 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             gaussELLgggg_mix_flat = np.reshape(gaussELLgggg_mix, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
             for m_mode in range(self.gg_summaries):
@@ -867,7 +866,7 @@ class CovTHETASpace(CovELLSpace):
                     else:
                         self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_sva_flat + gaussELLgggg_mix_flat)*self.ellrange,0,-1), True, True)
                         gauss_ww_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        
+                         
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '

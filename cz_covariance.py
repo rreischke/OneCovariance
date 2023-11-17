@@ -16,7 +16,7 @@ r_hig = 1.0
 path_to_reference_sample = str("./../clustering-z_covariance/data_paper/nz_reference.dat") # path to the spectroscopic refence sample
 path_to_nz_true = str("./../clustering-z_covariance/data_paper/nz_true/nz_true_") # path to sample to be calibrated must integrate to the actual number of galaxies
 n_tomo_source = 5
-limber = False #should the Cells be calculated using Limber projection?
+limber = True #should the Cells be calculated using Limber projection?
 diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
 
 save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
@@ -93,7 +93,7 @@ spec_reference_covariance = np.zeros(((len(zbound)-1), ((len(zbound)-1))))
 spec_signal = np.zeros(len(zbound)-1)
 
 
-def get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total):
+def get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total , signal_w):
     clustering_z_covariance = np.zeros(((len(zbound)-1)*n_tomo_source, ((len(zbound)-1) * n_tomo_source)))
     if i_z  + 1 == j_z:
         for s_i in range(n_s):
@@ -151,10 +151,10 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                 continue
             print(i_z, j_z)
             if i_z  + 1 != j_z:
-                covterms["nongauss"] = True
+                covterms["nongauss"] = False
                 observables["ELLspace"]['limber'] = limber
             else:
-                covterms["nongauss"] = False
+                covterms["nongauss"] = True
                 observables["ELLspace"]['limber'] = limber
             
             read_in_tables['zclust']['z'] = zbins
@@ -188,7 +188,6 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                 observables, output, bias, hod, survey_params, prec, read_in_tables)
             #
             # has shape len(theta), len(samples), n_tomo, n_tomo
-            signal_w = cov_theta.w_gg
             
             #out.write_cov(covterms, observables, cov_theta.n_tomo_clust,
             #              cov_theta.n_tomo_lens, cov_theta.thetabins, cov_w[0], cov_w[1], cov_w[2])
@@ -209,17 +208,15 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             #SSC
             cov_SSC = np.copy(cov_w[2][0][0][0][0])
             '''
-            cov_total = cov_w[0][0] + cov_w[0][1]  + cov_w[0][2]
-            clustering_z_covariance_sva += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][0])
-            clustering_z_covariance_sn += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][2])
-            clustering_z_covariance_gauss += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total)
-            
+            cov_total_ = cov_w[0][0] + cov_w[0][1]  + cov_w[0][2]
+            clustering_z_covariance_sva += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][0],cov_theta.w_gg)
+            clustering_z_covariance_sn += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][2],cov_theta.w_gg)
+            clustering_z_covariance_gauss += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total_,cov_theta.w_gg)
             if covterms['nongauss']:
-                cov_total += cov_w[1][0] 
+                cov_total_ += cov_w[1][0] 
             if covterms['ssc']:
-                cov_total += cov_w[2][0]
-            clustering_z_covariance_total += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total)
-            print(clustering_z_covariance_total, clustering_z_covariance_sva)
+                cov_total_ += cov_w[2][0]
+            clustering_z_covariance_total += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total_,cov_theta.w_gg)
             
             '''if i_z  + 1 == j_z:
                 for s_i in range(n_s):
@@ -331,10 +328,13 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                 spec_reference_covariance[i_z,j_z] = cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j] 
                 spec_signal[i_z] = signal_w[s_i_theta,0,0,s_i,s_i]
 
-for i_cov in range(len(clustering_z_covariance[:,0])):
-    for j_cov in range(i_cov,len(clustering_z_covariance[:,0])):
-        clustering_z_covariance[j_cov, i_cov] = clustering_z_covariance[i_cov,j_cov]
-        cross_correlation_covariance[j_cov, i_cov] = cross_correlation_covariance[i_cov,j_cov]                  
+for i_cov in range(len(clustering_z_covariance_sva[:,0])):
+    for j_cov in range(i_cov,len(clustering_z_covariance_sva[:,0])):
+        clustering_z_covariance_sva[j_cov, i_cov] = clustering_z_covariance_sva[i_cov,j_cov]
+        clustering_z_covariance_gauss[j_cov, i_cov] = clustering_z_covariance_gauss[i_cov,j_cov]
+        clustering_z_covariance_sn[j_cov, i_cov] = clustering_z_covariance_sn[i_cov,j_cov]
+        clustering_z_covariance_total[j_cov, i_cov] = clustering_z_covariance_total[i_cov,j_cov]
+        
 if diagonal_only:
     np.savetxt("clustering_z_cov_diagonal_biased",clustering_z_covariance)
     np.savetxt("cross_correlation_cov_diagonal_biased",cross_correlation_covariance)

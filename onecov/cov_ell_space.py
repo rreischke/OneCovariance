@@ -2,6 +2,7 @@ import numpy as np
 import time
 from scipy.interpolate import UnivariateSpline, interp1d, interp2d
 from scipy.special import j1
+from scipy.special import spherical_jn
 import multiprocessing as mp
 import healpy as hp
 import levin
@@ -789,50 +790,50 @@ class CovELLSpace(PolySpectra):
 
         print("Calculating non-limber angular power spectra (C_ell's).")
         n_tomo_clust_copy = np.copy(self.n_tomo_clust)
+        ellmax = 200
         if self.clustering_z:
             self.n_tomo_clust = 2
+            ellmax = 1000
+        
                     
         if (self.gg or self.gm) and not tab_bools[0]:
             for eidx, ell in enumerate(self.ellrange):
-                if (int(ell) < 1000):
+                if (int(ell) < ellmax):
                     #print(ell)
-                    kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
+                    kmax = 10*(ell + 0.5)/np.min(self.chi_min_clust)
                     kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    
-                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 3000)
+                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 1500)
                     for i_sample in range(self.sample_dim):
                         for j_sample in range(i_sample,self.sample_dim): 
                             global non_limber_k_integral
 
                             def non_limber_k_integral(k_integral):
-                                lev = levin.Levin(1, 32, 64, 1e-7, self.integration_intervals)
+                                lev = levin.Levin(1, 16, 32, 1e-5, self.integration_intervals)
                                 result = np.zeros(self.n_tomo_clust)
                                 for tomo_i in range(self.n_tomo_clust):
                                     chi_low = self.chi_min_clust[tomo_i]
                                     chi_high = self.chi_max_clust[tomo_i]
-                                    los_chi = self.__get_updated_los_integration_chi(
+                                    los_chi = self.los_integration_chi
+                                    
+                                    self.__get_updated_los_integration_chi(
                                         chi_low, chi_high, covELLspacesettings)
                                     integrand = np.sqrt((10**self.spline_Pgg[i_sample*self.sample_dim +j_sample](
                                         np.log10(k_integral), los_chi))[:, 0])*self.spline_zclust[tomo_i](
                                         los_chi)
                                     lev.init_integral(
                                         los_chi, integrand[:, None], True, True)
-                                result = np.array(lev.single_bessel(
-                                        k_integral, int(ell), los_chi[0], los_chi[-1]))*k_integral
+                                    result[tomo_i] = np.array(lev.single_bessel(
+                                            k_integral, int(ell), los_chi[0], los_chi[-1]))*k_integral
                                 return result
                             pool = mp.Pool(self.num_cores)
                             inner_integral_gg = np.array(pool.map(
                                 non_limber_k_integral, k_nonlimber)).T
                             pool.close()
                             pool.terminate()
-
-                            self.Cell_gg[eidx, i_sample, j_sample, :, :] = \
+                            self.Cell_gg[eidx, i_sample, j_sample, :self.n_tomo_clust, :self.n_tomo_clust] = \
                                 np.trapz(
                                     inner_integral_gg[:, None, :]*inner_integral_gg[None,:, :], k_nonlimber, axis = -1)*2.0/np.pi
-                            self.Cell_gg[eidx, j_sample, i_sample, :, :] = self.Cell_gg[eidx, i_sample, j_sample, :, :]
-            import matplotlib.pyplot as plt
-            plt.loglog(self.ellrange, self.Cell_gg[:,0,0,0,0])
-            plt.show()
+                            self.Cell_gg[eidx, j_sample, i_sample, :self.n_tomo_clust, :self.n_tomo_clust] = self.Cell_gg[eidx, i_sample, j_sample, :self.n_tomo_clust, :self.n_tomo_clust]
         if self.clustering_z:
             self.n_tomo_clust = n_tomo_clust_copy
         elif tab_bools[0]:
