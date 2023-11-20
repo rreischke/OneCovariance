@@ -25,7 +25,7 @@ ext_modules = [
     Pybind11Extension(
         "levin",
         ["./LevinBessel/src/levin.cpp", "./LevinBessel/python/pybind11_interface.cpp"],
-        cxx_std=11,
+        cxx_std=14,
         include_dirs=["./LevinBessel/src"],
         libraries=["m", "gsl", "gslcblas"],
         extra_compile_args=compiler_args,
