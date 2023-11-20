@@ -217,6 +217,7 @@ class CovELLSpace(PolySpectra):
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'])
+
         self.__check_krange_support(
             obs_dict, cosmo_dict, bias_dict, hod_dict, prec)
         self.calc_survey_area(survey_params_dict)
@@ -290,7 +291,6 @@ class CovELLSpace(PolySpectra):
             self.consistency_checks_for_Cell_calculation(
                 obs_dict, cosmo_dict, prec['powspec'],
                 self.ellrange, self.los_integration_chi)
-
         if update_massfunc:
             self.mass_func.update(lnk_min=np.log(10**kmin),
                                   lnk_max=np.log(10**kmax))
@@ -934,7 +934,6 @@ class CovELLSpace(PolySpectra):
             0, self.zet_max, self.los_interpolation_sampling)
         self.los_chi = self.cosmology.comoving_distance(
             self.los_z).value * self.cosmology.h
-
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
         if (self.mm or self.gm) and not tab_bools[2] and prec['hm']['transfer_model'] == 'CAMB':
             pars = camb.CAMBparams()
@@ -954,7 +953,6 @@ class CovELLSpace(PolySpectra):
                                                             maxkh=self.mass_func.k[-1],
                                                             npoints = len(self.mass_func.k))
 
-        
         t0 = time.time()
         if self.csmf:
             aux_stellar_mass_func = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))

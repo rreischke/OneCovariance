@@ -718,7 +718,7 @@ class Setup():
         update_massfunc, update_ellrange = False, False
         calc_theta = False
         if not obs_dict['arbitrary_summary']['do_arbitrary_summary']:
-            if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'xipm':
+            if obs_dict['observables']['cosmic_shear'] and obs_dict['observables']['est_shear'] == 'xi_pm':
                 calc_theta = True
             if obs_dict['observables']['ggl'] and obs_dict['observables']['est_ggl'] == 'gamma_t':
                 calc_theta = True
@@ -746,7 +746,10 @@ class Setup():
                 if np.any(observables == 'C_ell'):
                     calc_ell = True
             calc_ell = True if calc_theta else False
-            calc_ell = True if calc_cosebi else calc_ell
+            calc_ell = True if calc_cosebi else False
+        else:
+            calc_ell = True
+        
             
         ellmin, ellmax = ellrange[0], ellrange[-1]
         ell_bins = len(ellrange)
@@ -756,8 +759,8 @@ class Setup():
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
                       "infinity. We, therefore, adjust the minimum ell mode "
-                      "to '[covELLspace settings]: ell_min = 2'.")
-                ellmin = 2
+                      "to '[covELLspace settings]: ell_min = 1'.")
+                ellmin = 1
                 update_ellrange = True
             elif ellrange[0] < 1:
                 ellmin = 1
@@ -765,7 +768,7 @@ class Setup():
             elif ellrange[0] == 0:
                 print("SetupWarning: Setting to minimum ell mode to 0 is " +
                       "quite brave. For numerical safety reasons, we adjust " +
-                      "it to '[covELLspace settings]: ell_min = 2'.")
+                      "it to '[covELLspace settings]: ell_min = 1'.")
                 ellmin = 1
                 update_ellrange = True
 
@@ -857,7 +860,7 @@ class Setup():
                 update_ellrange = True
 
         kmin, kmax = None, None
-        if calc_ell:
+        if calc_ell or calc_theta or calc_cosebi:
             kmin = np.log10(ellmin / los_chi[-1])
             kmax = np.log10(ellmax / los_chi[0])
             if kmax > 1e4:

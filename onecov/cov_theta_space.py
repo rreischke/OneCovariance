@@ -312,10 +312,9 @@ class CovTHETASpace(CovELLSpace):
                     gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.gt = gt_signal
             
-
         ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
         if obs_dict['THETAspace']['mix_term_do_mix_for'] is not None:
-            if obs_dict['THETAspace']['mix_term_do_mix_for'][0] == 'xipxip' or obs_dict['THETAspace']['mix_term_do_mix_for'][1] == 'ximxim':
+            if 'xipxip' in obs_dict['THETAspace']['mix_term_do_mix_for'][:] or 'ximxim' in obs_dict['THETAspace']['mix_term_do_mix_for'][:]:
                 if self.mm:
                     self.data_vector_length += len(self.thetabins)*self.n_tomo_lens*(self.n_tomo_lens+1)
                     theta_ul_bins = np.geomspace(
@@ -432,7 +431,7 @@ class CovTHETASpace(CovELLSpace):
         accounts for a more accurate prediction, especially at the survey
         edges
         """
-        if CovTHETASpace_settings['mix_term_do_mix_for'][0] == 'xipxip' or CovTHETASpace_settings['mix_term_do_mix_for'][1] == 'ximxim':
+        if 'xipxip' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'ximxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:]:
             print("Calculating the mixed term from triplet counts")
             thisdata = DiscreteData(path_to_data=CovTHETASpace_settings['mix_term_file_path_catalog'], 
                     colname_weight=CovTHETASpace_settings['mix_term_col_name_weight'], 
@@ -1117,6 +1116,7 @@ class CovTHETASpace(CovELLSpace):
                             gauss_ximxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
                             if self.cross_terms:
                                 gauss_xipxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape) 
+                    print(gauss_xipxip_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :])
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '

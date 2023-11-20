@@ -9,22 +9,14 @@ import sys
 import matplotlib.pyplot as plt
 
 
+which_survey = "VIPERS"
 
 config = "./config_files/config_cz.ini"
 r_low = 0.1 # Scales considered 
 r_hig = 1.0
-path_to_reference_sample = str("./../clustering-z_covariance/data_paper/nz_reference.dat") # path to the spectroscopic refence sample
-path_to_nz_true = str("./../clustering-z_covariance/data_paper/nz_true/nz_true_") # path to sample to be calibrated must integrate to the actual number of galaxies
-n_tomo_source = 5
 limber = True #should the Cells be calculated using Limber projection?
 diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
 
-save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/unbiased_limber_cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
-save_path_spec_covariance = str("./../clustering-z_covariance/data_onecov/unbiased_limber_spec_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
-save_path_spec_Cell = str("./../clustering-z_covariance/data_onecov/unbiased_limber_Cell_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
-
-
-# Setting up the OneCovariance code
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
     config)
@@ -32,19 +24,48 @@ fileinp = FileInput(bias)
 read_in_tables = fileinp.read_input(inp.config_name)
 out = Output(output)
 
+
+if which_survey == 'mice2_mock':
+    path_to_reference_sample = str("./../clustering-z_covariance/data/mice2_mock/nz_reference.dat") # path to the spectroscopic refence sample
+    path_to_nz_true = str("./../clustering-z_covariance/data/mice2_mock/nz_true/nz_true/nz_true_") # path to sample to be calibrated must integrate to the actual number of galaxies
+    n_tomo_source = 5
+    save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/mice2_mock/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+    save_path_spec_covariance = str("./../clustering-z_covariance/data_onecov/mice2_mock/spec_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+    save_path_spec_Cell = str("./../clustering-z_covariance/data_onecov/mice2_mock/Cell_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+    survey_params['survey_area_clust'][0] = float(np.loadtxt(str("./../clustering-z_covariance/data/") +which_survey + str("/area")))
+else:
+    path_to_reference_sample = str("./../clustering-z_covariance/data/") +which_survey + str("/true/nz_reference.dat")   # path to the spectroscopic refence sample
+    path_to_nz_true = str("./../clustering-z_covariance/data/") + which_survey + str("/true/nz_true_") # path to sample to be calibrated must integrate to the actual number of galaxies
+    n_tomo_source = 6
+    save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/") + which_survey+  str("/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+    save_path_spec_covariance = str("./../clustering-z_covariance/data_onecov/") + which_survey+  str("/spec_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+    save_path_spec_Cell = str("./../clustering-z_covariance/data_onecov/") + which_survey+  str("/Cell_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+    survey_params['survey_area_clust'][0] = float(np.loadtxt(str("./../clustering-z_covariance/data/") +which_survey + str("/area")))
+
+
+
+# Setting up the OneCovariance code
+
 # How fine should the binning bes
 nz_binning = 0.001
 
 
 # Number counts for the reference sample
 galcount = np.array(np.loadtxt(path_to_reference_sample)[:, 2])
+zbound = np.array(np.loadtxt(path_to_reference_sample)[:, 1])
+zbound = zbound[np.where(galcount > 0)[0]]
+
+zbound = np.insert(zbound,0,float(np.loadtxt(path_to_reference_sample)[np.where(galcount > 0)[0][0],0]),0)
+galcount = galcount[np.where(galcount > 0)[0]]
+
+
 # Survey area of the CZ measurements
 survey_area = survey_params['survey_area_clust'][0]*3600.  # in arcmin^2
 # Number density of the reference sample
 ndens_spec = galcount / survey_area
 # Redshift boundaries
-zbound = np.array(np.loadtxt(path_to_reference_sample)[:, 1])
-zbound = np.insert(zbound,0,float(np.loadtxt(path_to_reference_sample)[0, 0]),0)
+
+
 zmean = (zbound[1:]+zbound[:-1])/2.
 deltaz = (zbound[1:]-zbound[:-1])
 # Corresponding co-moving distances
@@ -68,12 +89,12 @@ nz_interp = np.zeros(n_tomo_source*len(zbins)
 
 neff_phot = np.zeros(n_tomo_source)
 for j in range(n_tomo_source):
-    ndens_phot_file = path_to_nz_true+ str(j+2) +".dat"
+    ndens_phot_file = path_to_nz_true+ str(j+1) +".dat"
     ndens_phot = np.array(np.loadtxt(ndens_phot_file)[:, 2])
     neff_phot[j] = np.sum(ndens_phot)
     neff_phot[j] /= survey_area
     nz_interp[j] = np.interp(zbins, np.array(np.loadtxt(ndens_phot_file)[:, 0]), ndens_phot)
-    
+
     
 read_in_tables['zclust']['z'] = zbins
 
@@ -162,6 +183,8 @@ def get_spec_covariance(i_z, j_z, n_tomo_source, n_s, cov_total , signal_w):
             flat_idx_j = s_j + j_z + p_beta*(len(zbound)-1)                
             clustering_spec_covariance[flat_idx_i, flat_idx_j] = cov_total[s_i_theta, s_j_theta, 0, 0,s_i, p_alpha + n_s,s_j, p_beta+ n_s]
     return clustering_spec_covariance
+
+survey_params['n_eff_clust'] = np.zeros(n_tomo_source)
 
 if not diagonal_only:
     n_s = 2

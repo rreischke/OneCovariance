@@ -135,7 +135,7 @@ public:
 
   std::vector<double> get_w_ell(std::vector<double> ell, uint m_mode);
 
-  std::vector<double> get_integrand(std::vector<double> x);
+  std::vector<double> get_integrand(std::vector<double> x, uint j);
 
   void init_cov_R_space_Gaussian(std::vector<std::vector<std::vector<double>>> cov_k_space_Gaussian, std::vector<double> k, std::vector<double> r);
 

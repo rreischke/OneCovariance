@@ -184,12 +184,9 @@ class CovCOSEBI(CovELLSpace):
             self.wn_kernels = wn_kernels_new
 
         self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
+
         
         self.__get_Tn_pm(read_in_tables['COSEBIs'], obs_dict['COSEBIs'], obs_dict) 
-        obs_dict['ELLspace']['ell_min'] = self.wn_ells[0]
-        obs_dict['ELLspace']['ell_max'] = self.wn_ells[-1]
-        obs_dict['ELLspace']['ell_bins'] = 100
-        obs_dict['ELLspace']['ell_type'] = 'log'
         CovELLSpace.__init__(self,
                              cov_dict,
                              obs_dict,
@@ -1047,6 +1044,10 @@ class CovCOSEBI(CovELLSpace):
                     if self.cov_dict['split_gauss']:
                         self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
                         gaussCOSEBIEEmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        import matplotlib.pyplot as plt
+                        plt.loglog(self.wn_ells,self.levin_int.get_integrand(self.wn_ells,0))
+                        plt.show()
+        
                         self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
                         gaussCOSEBIEEmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
                     else:
