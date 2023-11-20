@@ -9,13 +9,16 @@ import sys
 import matplotlib.pyplot as plt
 
 
-which_survey = "VIPERS"
+if len(sys.argv) < 1:
+    which_survey = "VIPERS"
+else:
+    which_survey = str(sys.argv[1])
 
 config = "./config_files/config_cz.ini"
 r_low = 0.1 # Scales considered 
 r_hig = 1.0
 limber = True #should the Cells be calculated using Limber projection?
-diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
+diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
 
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
@@ -57,7 +60,6 @@ zbound = zbound[np.where(galcount > 0)[0]]
 
 zbound = np.insert(zbound,0,float(np.loadtxt(path_to_reference_sample)[np.where(galcount > 0)[0][0],0]),0)
 galcount = galcount[np.where(galcount > 0)[0]]
-
 
 # Survey area of the CZ measurements
 survey_area = survey_params['survey_area_clust'][0]*3600.  # in arcmin^2
