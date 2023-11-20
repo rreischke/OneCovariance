@@ -19,9 +19,9 @@ n_tomo_source = 5
 limber = True #should the Cells be calculated using Limber projection?
 diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
 
-save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/nonlimber_cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
-save_path_spec_covariance = str("./../clustering-z_covariance/data_onecov/nonlimber_spec_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
-save_path_spec_Cell = str("./../clustering-z_covariance/data_onecov/nonlimber_Cell_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/unbiased_limber_cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+save_path_spec_covariance = str("./../clustering-z_covariance/data_onecov/unbiased_limber_spec_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
+save_path_spec_Cell = str("./../clustering-z_covariance/data_onecov/unbiased_limber_Cell_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
 
 
 # Setting up the OneCovariance code
@@ -173,7 +173,7 @@ else:
     read_in_tables['zclust']['nz'] = np.zeros((n_s + n_tomo_source, len(zbins)))
     survey_params['n_eff_clust'] = np.insert(survey_params['n_eff_clust'],0,0)
 subtract = 1
-for i_z in range(0, len(zbound)- subtract, 3):  # loop over each spec-z bin
+for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
     if not diagonal_only:
         for j_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             if i_z == j_z:
