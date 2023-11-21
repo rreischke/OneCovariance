@@ -18,8 +18,9 @@ config = "./config_files/config_cz.ini"
 r_low = 0.1 # Scales considered 
 r_hig = 1.0
 limber = True #should the Cells be calculated using Limber projection?
-diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
-
+diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
+nonGaussian = False
+npair_spec = True
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
     config)
@@ -39,6 +40,9 @@ if which_survey == 'mice2_mock':
 else:
     path_to_reference_sample = str("./../clustering-z_covariance/data/") +which_survey + str("/true/nz_reference.dat")   # path to the spectroscopic refence sample
     path_to_nz_true = str("./../clustering-z_covariance/data/") + which_survey + str("/true/nz_true_") # path to sample to be calibrated must integrate to the actual number of galaxies
+    path_to_reference_pair = str("./../clustering-z_covariance/data/") + which_survey + str("/estimate/auto_reference.count") # path to sample to be calibrated must integrate to the actual number of galaxies
+    path_to_nz_pair = str("./../clustering-z_covariance/data/") + which_survey + str("/estimate/cross_") # path to sample to be calibrated must integrate to the actual number of galaxies
+    
     n_tomo_source = 6
     save_path_cz_covariance = str("./../clustering-z_covariance/data_onecov/") + which_survey+  str("/cz_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
     save_path_spec_covariance = str("./../clustering-z_covariance/data_onecov/") + which_survey+  str("/spec_covariance_r_" +str(r_low) + "_"+str(r_hig)) # Where should the cz covariance be stored?
@@ -58,16 +62,18 @@ galcount = np.array(np.loadtxt(path_to_reference_sample)[:, 2])
 zbound = np.array(np.loadtxt(path_to_reference_sample)[:, 1])
 zbound = zbound[np.where(galcount > 0)[0]]
 
+measure_index = np.where(galcount > 0)[0]
+
 zbound = np.insert(zbound,0,float(np.loadtxt(path_to_reference_sample)[np.where(galcount > 0)[0][0],0]),0)
+Npair = np.array(np.loadtxt(path_to_reference_pair))[np.where(galcount > 0)[0]]
 galcount = galcount[np.where(galcount > 0)[0]]
+
 
 # Survey area of the CZ measurements
 survey_area = survey_params['survey_area_clust'][0]*3600.  # in arcmin^2
-# Number density of the reference sample
-ndens_spec = galcount / survey_area
+
+
 # Redshift boundaries
-
-
 zmean = (zbound[1:]+zbound[:-1])/2.
 deltaz = (zbound[1:]-zbound[:-1])
 # Corresponding co-moving distances
@@ -77,6 +83,13 @@ d_ang = fkchi/(1.+zmean)
 # Corresponding angular range for measurements
 theta_low = np.arctan(r_low/d_ang)/np.pi*180.*60. 
 theta_hig = np.arctan(r_hig/d_ang)/np.pi*180.*60.
+
+# Number density of the reference sample
+if npair_spec:
+    ndens_spec = np.sqrt(Npair/((theta_hig**2 - theta_low**2)*np.pi*survey_area))
+else:
+    ndens_spec = galcount / survey_area
+
 
 zbins = np.arange(zbound[0],
                   zbound[-1], nz_binning)
@@ -89,12 +102,17 @@ nz_interp = np.zeros(n_tomo_source*len(zbins)
 
 
 
-neff_phot = np.zeros(n_tomo_source)
+neff_phot = np.zeros((n_tomo_source, len(measure_index)))
 for j in range(n_tomo_source):
     ndens_phot_file = path_to_nz_true+ str(j+1) +".dat"
     ndens_phot = np.array(np.loadtxt(ndens_phot_file)[:, 2])
-    neff_phot[j] = np.sum(ndens_phot)
-    neff_phot[j] /= survey_area
+    Npair_spec_phot =np.array(np.loadtxt(path_to_nz_pair + str(j+1) + ".count"))[measure_index]
+    
+    #neff_phot[j,:] = Npair_spec_phot/ndens_spec/((theta_hig**2 - theta_low**2)*np.pi*survey_area)
+    #neff_phot[j,:] /= survey_area
+    neff_phot[j,:] = np.sum(ndens_phot)/1000/3600
+    print(neff_phot[j,:])
+    
     nz_interp[j] = np.interp(zbins, np.array(np.loadtxt(ndens_phot_file)[:, 0]), ndens_phot)
 
     
@@ -203,12 +221,13 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
         for j_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             if i_z == j_z:
                 continue
-            print(i_z, j_z)
+            print(i_z, j_z, mean_z[i_z], mean_z[j_z])
+
             if i_z  + 1 != j_z:
                 covterms["nongauss"] = False
                 observables["ELLspace"]['limber'] = limber
             else:
-                covterms["nongauss"] = True
+                covterms["nongauss"] = nonGaussian
                 observables["ELLspace"]['limber'] = limber
             
             read_in_tables['zclust']['z'] = zbins
@@ -224,7 +243,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             read_in_tables['zclust']['nz'][n_s:,:] = nz_interp
             survey_params['n_eff_clust'][0] = ndens_spec[i_z]
             survey_params['n_eff_clust'][1] = ndens_spec[j_z]
-            survey_params['n_eff_clust'][n_s:] = neff_phot
+            survey_params['n_eff_clust'][n_s:] = neff_phot[:,i_z]
             if (ndens_spec[i_z] == 0.0 or ndens_spec[j_z] == 0.0):
                 print("Iteration ", i_z, j_z, " skipped -- no galaxies")
                 continue  # skip this calculation if no galaxies in bin
@@ -312,8 +331,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
                         clustering_z_covariance[flat_idx_i, flat_idx_j] = covariance'''
 
     else:
-        print(i_z)
-        covterms["nongauss"] = True
+        covterms["nongauss"] = nonGaussian
         observables["ELLspace"]['limber'] = limber
         j_z = i_z
         read_in_tables['zclust']['z'] = zbins
@@ -324,7 +342,8 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
 
         read_in_tables['zclust']['nz'][n_s:,:] = nz_interp
         survey_params['n_eff_clust'][0] = ndens_spec[i_z]
-        survey_params['n_eff_clust'][n_s:] = neff_phot
+        survey_params['n_eff_clust'][n_s:] = neff_phot[:,i_z]
+        print(i_z, zmean[i_z])
         
         
         if (ndens_spec[i_z] == 0.0):

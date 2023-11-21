@@ -754,22 +754,22 @@ class Setup():
         ellmin, ellmax = ellrange[0], ellrange[-1]
         ell_bins = len(ellrange)
         if calc_cosebi or calc_bandpower:
-            if ellrange[0] > 1:
+            if ellrange[0] > 2:
                 print("SetupWarning: The COSEBI covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
                       "infinity. We, therefore, adjust the minimum ell mode "
-                      "to '[covELLspace settings]: ell_min = 1'.")
-                ellmin = 1
+                      "to '[covELLspace settings]: ell_min = 2'.")
+                ellmin = 2
                 update_ellrange = True
-            elif ellrange[0] < 1:
-                ellmin = 1
+            elif ellrange[0] < 2:
+                ellmin = 2
                 update_ellrange = True
             elif ellrange[0] == 0:
                 print("SetupWarning: Setting to minimum ell mode to 0 is " +
                       "quite brave. For numerical safety reasons, we adjust " +
-                      "it to '[covELLspace settings]: ell_min = 1'.")
-                ellmin = 1
+                      "it to '[covELLspace settings]: ell_min = 2'.")
+                ellmin = 2
                 update_ellrange = True
 
             if ellrange[-1] < 1e4:
