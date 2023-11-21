@@ -109,8 +109,8 @@ for j in range(n_tomo_source):
     
     #neff_phot[j,:] = Npair_spec_phot/ndens_spec/((theta_hig**2 - theta_low**2)*np.pi*survey_area)
     #neff_phot[j,:] /= survey_area
-    neff_phot[j,:] = np.sum(ndens_phot)/3600/1000
-    print(neff_phot[j,:])
+    neff_phot[j,:] = np.sum(ndens_phot)/(survey_area)/15
+    #print(neff_phot[j,:])
     nz_interp[j] = np.interp(zbins, np.array(np.loadtxt(ndens_phot_file)[:, 0]), ndens_phot)
 
     
