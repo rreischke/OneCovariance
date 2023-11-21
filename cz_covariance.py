@@ -18,8 +18,8 @@ config = "./config_files/config_cz.ini"
 r_low = 0.1 # Scales considered 
 r_hig = 1.0
 limber = True #should the Cells be calculated using Limber projection?
-diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
-nonGaussian = False
+diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
+nonGaussian = True
 npair_spec = True
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
@@ -68,7 +68,6 @@ zbound = np.insert(zbound,0,float(np.loadtxt(path_to_reference_sample)[np.where(
 Npair = np.array(np.loadtxt(path_to_reference_pair))[np.where(galcount > 0)[0]]
 galcount = galcount[np.where(galcount > 0)[0]]
 
-
 # Survey area of the CZ measurements
 survey_area = survey_params['survey_area_clust'][0]*3600.  # in arcmin^2
 
@@ -110,9 +109,8 @@ for j in range(n_tomo_source):
     
     #neff_phot[j,:] = Npair_spec_phot/ndens_spec/((theta_hig**2 - theta_low**2)*np.pi*survey_area)
     #neff_phot[j,:] /= survey_area
-    neff_phot[j,:] = np.sum(ndens_phot)/1000/3600
+    neff_phot[j,:] = np.sum(ndens_phot)/3600/1000
     print(neff_phot[j,:])
-    
     nz_interp[j] = np.interp(zbins, np.array(np.loadtxt(ndens_phot_file)[:, 0]), ndens_phot)
 
     
@@ -125,6 +123,7 @@ filename_old2 = os.path.splitext(os.path.basename(output['file'][1]))
 # Defining the covariance
 clustering_z_covariance_sva = np.zeros(((len(zbound)-1)*n_tomo_source, ((len(zbound)-1) * n_tomo_source)))
 clustering_z_covariance_sn = np.zeros(((len(zbound)-1)*n_tomo_source, ((len(zbound)-1) * n_tomo_source)))
+clustering_z_covariance_mix = np.zeros(((len(zbound)-1)*n_tomo_source, ((len(zbound)-1) * n_tomo_source)))
 clustering_z_covariance_gauss = np.zeros(((len(zbound)-1)*n_tomo_source, ((len(zbound)-1) * n_tomo_source)))
 clustering_z_covariance_total = np.zeros(((len(zbound)-1)*n_tomo_source, ((len(zbound)-1) * n_tomo_source)))
 clustering_z_spec_covariance = np.zeros(((len(zbound)-1)*n_tomo_source, ((len(zbound)-1) * n_tomo_source)))
@@ -221,7 +220,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
         for j_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             if i_z == j_z:
                 continue
-            print(i_z, j_z, mean_z[i_z], mean_z[j_z])
+            print(i_z, j_z, zmean[i_z], zmean[j_z])
 
             if i_z  + 1 != j_z:
                 covterms["nongauss"] = False
@@ -282,9 +281,11 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             cov_SSC = np.copy(cov_w[2][0][0][0][0])
             '''
             cov_total_ = cov_w[0][0] + cov_w[0][1]  + cov_w[0][2]
-            clustering_z_covariance_sva += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][0],cov_theta.w_gg)
-            clustering_z_covariance_sn += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][2],cov_theta.w_gg)
-            clustering_z_covariance_gauss += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total_,cov_theta.w_gg)
+            clustering_z_covariance_sva += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][0],cov_theta.w_gg)
+            clustering_z_covariance_sn += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][2],cov_theta.w_gg)
+            clustering_z_covariance_mix += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][1],cov_theta.w_gg)
+            clustering_z_covariance_gauss += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_total_,cov_theta.w_gg)
+        
             
             if covterms['nongauss']:
                 cov_total_ += cov_w[1][0] 
@@ -378,9 +379,10 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
         #SSC
         cov_SSC = np.copy(cov_w[2][0][0][0][0])
         '''
-        cov_total_ = cov_w[0][0] + cov_w[0][1]  + cov_w[0][2]
+        cov_total_ = cov_w[0][0] + cov_w[0][1] + cov_w[0][2]
         clustering_z_covariance_sva += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][0],cov_theta.w_gg)
         clustering_z_covariance_sn += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][2],cov_theta.w_gg)
+        clustering_z_covariance_mix += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][1],cov_theta.w_gg)
         clustering_z_covariance_gauss += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_total_,cov_theta.w_gg)
         if covterms['nongauss']:
             cov_total_ += cov_w[1][0] 
@@ -418,9 +420,9 @@ for i_cov in range(len(clustering_z_covariance_sva[:,0])):
 if diagonal_only:
     np.savetxt(save_path_cz_covariance + "_gauss_diagonal.mat",clustering_z_covariance_gauss)
     np.savetxt(save_path_cz_covariance + "_sva_diagonal.mat",clustering_z_covariance_sva)
+    np.savetxt(save_path_cz_covariance + "_mix_diagonal.mat",clustering_z_covariance_mix)
     np.savetxt(save_path_cz_covariance + "_sn_diagonal.mat",clustering_z_covariance_sn)
     np.savetxt(save_path_cz_covariance + "_total_diagonal.mat",clustering_z_covariance_total)
-    np.savetxt(save_path_spec_covariance + "_gauss_diagonal.mat",clustering_z_spec_covariance)
     np.save(save_path_spec_Cell,np.array(Cells))
     np.save("./../clustering-z_covariance/data_onecov/theta_bins_of_z", np.array(thetas))
 else:
@@ -428,3 +430,4 @@ else:
     np.savetxt(save_path_cz_covariance + "_sva.mat",clustering_z_covariance_sva)
     np.savetxt(save_path_cz_covariance + "_sn.mat",clustering_z_covariance_sn)
     np.savetxt(save_path_cz_covariance + "_total.mat",clustering_z_covariance_total)
+    np.savetxt(save_path_cz_covariance + "_mix.mat",clustering_z_covariance_mix)
