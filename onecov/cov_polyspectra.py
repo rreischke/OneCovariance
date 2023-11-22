@@ -465,6 +465,7 @@ class PolySpectra(HaloModel):
         if type_y == 'm':
             bias_fac /= bias_dict['bias_2h']
 
+
         integralX = bias_fac*np.trapz(self.mass_func.dndm * bias * hurlyX,
                                       self.mass_func.m)
         integralY = bias_fac*np.trapz(self.mass_func.dndm * bias * hurlyY,
@@ -665,7 +666,8 @@ class PolySpectra(HaloModel):
                             hm_prec['small_k_damping'],
                             self.mass_func.k)[:, None, None] \
                         + self.mass_func.power[:, None, None] \
-                        * (bias_dict['bias_2h'])**2.0* self.effective_bias[None,:,None]* self.effective_bias[None,None,:]
+                        * (bias_dict['bias_2h'])**2.0* (self.effective_bias[None,:,None])*( self.effective_bias[None,None,:])
+
             else:
                 Pgg = np.zeros((len(self.mass_func.k), self.sample_dim))
                 for mbin in range(self.sample_dim):

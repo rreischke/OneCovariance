@@ -101,15 +101,16 @@ nz_interp = np.zeros(n_tomo_source*len(zbins)
 
 
 
-neff_phot = np.zeros((n_tomo_source, len(measure_index)))
+neff_phot = np.zeros(n_tomo_source)
 for j in range(n_tomo_source):
     ndens_phot_file = path_to_nz_true+ str(j+1) +".dat"
     ndens_phot = np.array(np.loadtxt(ndens_phot_file)[:, 2])
     Npair_spec_phot =np.array(np.loadtxt(path_to_nz_pair + str(j+1) + ".count"))[measure_index]
     
     #neff_phot[j,:] = Npair_spec_phot/ndens_spec/((theta_hig**2 - theta_low**2)*np.pi*survey_area)
+    #print(neff_phot[j,:]/10)
     #neff_phot[j,:] /= survey_area
-    neff_phot[j,:] = np.sum(ndens_phot)/(survey_area)/15
+    neff_phot[j] = np.sum(ndens_phot)/(survey_area)/15
     #print(neff_phot[j,:])
     nz_interp[j] = np.interp(zbins, np.array(np.loadtxt(ndens_phot_file)[:, 0]), ndens_phot)
 
@@ -154,6 +155,7 @@ def get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total , signal
                         covariance += .25*signal_w[s_i_theta,0,0,s_i, p_alpha + n_s] * signal_w[s_j_theta,0,0,s_j, p_beta + n_s]/signal_w[s_i_theta,0,0,s_i,s_i]/signal_w[s_j_theta,0,0,s_j,s_j]*cov_total[s_i_theta, s_j_theta, 0, 0,s_i, s_i,s_j,s_j]   
                         covariance /= np.sqrt(signal_w[s_i_theta,0,0,s_i,s_i]*signal_w[s_j_theta,0,0,s_j,s_j])
                         clustering_z_covariance[flat_idx_i, flat_idx_j] = covariance
+                            
     else:
         for p_alpha in range (0, n_tomo_source):
             for p_beta in range(0, n_tomo_source):
@@ -224,7 +226,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
 
             if i_z  + 1 != j_z:
                 covterms["nongauss"] = False
-                observables["ELLspace"]['limber'] = limber
+                observables["ELLspace"]['limber'] = True
             else:
                 covterms["nongauss"] = nonGaussian
                 observables["ELLspace"]['limber'] = limber
@@ -242,7 +244,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             read_in_tables['zclust']['nz'][n_s:,:] = nz_interp
             survey_params['n_eff_clust'][0] = ndens_spec[i_z]
             survey_params['n_eff_clust'][1] = ndens_spec[j_z]
-            survey_params['n_eff_clust'][n_s:] = neff_phot[:,i_z]
+            survey_params['n_eff_clust'][n_s:] = neff_phot
             if (ndens_spec[i_z] == 0.0 or ndens_spec[j_z] == 0.0):
                 print("Iteration ", i_z, j_z, " skipped -- no galaxies")
                 continue  # skip this calculation if no galaxies in bin
@@ -281,12 +283,10 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
             cov_SSC = np.copy(cov_w[2][0][0][0][0])
             '''
             cov_total_ = cov_w[0][0] + cov_w[0][1]  + cov_w[0][2]
-            clustering_z_covariance_sva += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][0],cov_theta.w_gg)
-            clustering_z_covariance_sn += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][2],cov_theta.w_gg)
-            clustering_z_covariance_mix += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][1],cov_theta.w_gg)
-            clustering_z_covariance_gauss += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_total_,cov_theta.w_gg)
-        
-            
+            clustering_z_covariance_sva += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][0],cov_theta.w_gg)
+            clustering_z_covariance_sn += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][2],cov_theta.w_gg)
+            clustering_z_covariance_mix += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_w[0][1],cov_theta.w_gg)
+            clustering_z_covariance_gauss += get_clustering_z_covariance(i_z, j_z, n_tomo_source, n_s, cov_total_,cov_theta.w_gg)
             if covterms['nongauss']:
                 cov_total_ += cov_w[1][0] 
             if covterms['ssc']:
@@ -343,7 +343,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
 
         read_in_tables['zclust']['nz'][n_s:,:] = nz_interp
         survey_params['n_eff_clust'][0] = ndens_spec[i_z]
-        survey_params['n_eff_clust'][n_s:] = neff_phot[:,i_z]
+        survey_params['n_eff_clust'][n_s:] = neff_phot
         print(i_z, zmean[i_z])
         
         

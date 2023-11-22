@@ -471,7 +471,8 @@ class HaloModel(Setup):
         return bias
 
     def uk(self,
-           Mc_relation):
+           Mc_relation,
+           type = 'cen'):
         """
         Calculates the normalized Fourier transform of the NFW density
         profile. Requires a mass-concentration relation and the
@@ -492,6 +493,10 @@ class HaloModel(Setup):
 
         overdensity = self.mass_func.mdef_params['overdensity']
         con = self.__concentration(Mc_relation)
+        if type == 'sat':
+            con *= 0.6289028827810339
+        if type == 'halo':
+            con *= 0.9841
         deltac = overdensity * con**3 / (3 * (np.log(1+con) - con/(1+con)))
 
         rvir = self.__virial_radius()
@@ -625,7 +630,7 @@ class HaloModel(Setup):
         """
 
         # if type == 'sat'
-        uk = self.uk(bias_dict['Mc_relation_sat'])
+        uk = self.uk(bias_dict['Mc_relation_sat'], 'sat')
         norm = self.ngal
         pop = self.hod.occ_num_and_prob_per_pop(
             hod_dict,
@@ -645,7 +650,7 @@ class HaloModel(Setup):
                 self.occnum_tab
             )[0]
         if (type_x == 'm'):
-            uk = self.uk(bias_dict['Mc_relation_cen'])
+            uk = self.uk(bias_dict['Mc_relation_cen'],'halo')
             norm = np.ones_like(norm) * self.rho_bg
             pop = self.mass_func.m
 

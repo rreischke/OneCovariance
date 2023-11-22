@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from astropy.io import fits
 from scipy.signal import correlate
 
 try:
@@ -95,12 +96,36 @@ class DiscreteData:
         self.do_overlap = do_overlap
         self.patchcats = None
         self.npatches = None
-        tmpdata = Table.read(self.path_to_data)
-        self.weight = tmpdata[self.colname_weight]
-        self.pos1 = tmpdata[self.colname_pos1]
-        self.pos2 = tmpdata[self.colname_pos2]
-        self.zbin = tmpdata[self.colname_zbin]
-        self.nbinsz = len(sigma2_eps)
+        hdul = fits.open(self.path_to_data)
+        self.weight = None
+        self.pos1 = None
+        self.pos2 = None
+        self.zbin = None
+        self.nbinsz = None
+        self.mixed_fail = False
+        for i in range(len(hdul) - 1):
+            try:
+                tmpdata = Table.read(self.path_to_data)
+                self.weight = tmpdata[self.colname_weight]
+                self.pos1 = tmpdata[self.colname_pos1]
+                self.pos2 = tmpdata[self.colname_pos2]
+                self.zbin = tmpdata[self.colname_zbin]
+                self.nbinsz = len(sigma2_eps)
+                break
+            except:
+                continue
+        if self.weight is None:
+            self.mixed_fail = True
+            print("WARNING: Couldnt find",self.colname_weight,"in",self.path_to_data,"proceeding with standard mixed term")
+        if self.pos1 is None:
+            self.mixed_fail = True
+            print("WARNING: Couldnt find",self.colname_pos1,"in",self.path_to_data,"proceeding with standard mixed term")
+        if self.pos1 is None:
+            self.mixed_fail = True
+            print("WARNING: Couldnt find",self.colname_pos2,"in",self.path_to_data,"proceeding with standard mixed term")
+        if self.zbin is None:
+            self.mixed_fail = True
+            print("WARNING: Couldnt find",self.colname_zbin,"in",self.path_to_data,"proceeding with standard mixed term")
         #self.nbinsz = 1+int(np.max(self.zbin)-np.min(self.zbin))
         
     
