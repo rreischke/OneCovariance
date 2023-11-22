@@ -350,13 +350,17 @@ class DiscreteCovTHETASpace:
         # Does not check for correct format etc!
         triplet_right_format = False
         if self.loadpath_triplets is not None:
-            tripletdata = Table.read(self.loadpath_triplets)
-            self.bin_centers = tripletdata["bin_centers"]
-            self.paircounts = tripletdata["paircounts"] 
-            self.paircounts_sq = tripletdata["paircounts_sq"]
-            self.tripletcounts = tripletdata["tripletcounts"]
-            if len(self.tripletcounts[:,0,0,0,0,0]) == self.discrete.nbinsz and  len(self.tripletcounts[0,0,0,:,0,0]) == int(len(self.bin_edges)-1):
-                triplet_right_format = True
+            try:
+                tripletdata = Table.read(self.loadpath_triplets)
+                self.bin_centers = tripletdata["bin_centers"]
+                self.paircounts = tripletdata["paircounts"] 
+                self.paircounts_sq = tripletdata["paircounts_sq"]
+                self.tripletcounts = tripletdata["tripletcounts"]
+                if len(self.tripletcounts[:,0,0,0,0,0]) == self.discrete.nbinsz and  len(self.tripletcounts[0,0,0,:,0,0]) == int(len(self.bin_edges)-1):
+                    triplet_right_format = True
+            except:
+                print("Warning, triplet count file", self.loadpath_triplets, "not found, will compute triplets")
+                trplet_right_format = False
         # Compute triplets and store
         if not triplet_right_format:
             if self.discrete.npatches is None:
