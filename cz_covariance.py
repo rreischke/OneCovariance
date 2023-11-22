@@ -18,8 +18,8 @@ config = "./config_files/config_cz.ini"
 r_low = 0.1 # Scales considered 
 r_hig = 1.0
 limber = True #should the Cells be calculated using Limber projection?
-diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
-nonGaussian = True
+diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
+nonGaussian = False
 npair_spec = True
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
@@ -111,7 +111,7 @@ for j in range(n_tomo_source):
     #print(neff_phot[j,:]/10)
     #neff_phot[j,:] /= survey_area
     neff_phot[j] = np.sum(ndens_phot)/(survey_area)/15
-    #print(neff_phot[j,:])
+    print(neff_phot[j])
     nz_interp[j] = np.interp(zbins, np.array(np.loadtxt(ndens_phot_file)[:, 0]), ndens_phot)
 
     

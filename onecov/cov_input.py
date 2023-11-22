@@ -779,37 +779,69 @@ class Input:
                 if self.mix_term_do_mix_for[0] == '':
                     self.mix_term_do_mix_for = None
             if self.mix_term_do_mix_for:
-                self.mix_term_file_path_load_triplets = config['covTHETAspace settings']['mix_term_file_path_load_triplets']
-                if self.mix_term_file_path_load_triplets == '':
+                if 'mix_term_file_path_load_triplets' in config['covTHETAspace settings']:
+                    self.mix_term_file_path_load_triplets = config['covTHETAspace settings']['mix_term_file_path_load_triplets']
+                    if self.mix_term_file_path_load_triplets == '':
+                        self.mix_term_file_path_load_triplets = None
+                else:
                     self.mix_term_file_path_load_triplets = None
             if self.mix_term_do_mix_for:
                 if 'mix_term_file_path_catalog' in config['covTHETAspace settings']:
                     self.mix_term_file_path_catalog = config['covTHETAspace settings']['mix_term_file_path_catalog']
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the path to the catalogue. Please update [mix_term_file_path_catalog] in your config")
                 if 'mix_term_col_name_weight' in config['covTHETAspace settings']:
                     self.mix_term_col_name_weight = config['covTHETAspace settings']['mix_term_col_name_weight']
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not the column name of the weight. Please update [mix_term_col_name_weight] in your config")
                 if 'mix_term_col_name_pos1' in config['covTHETAspace settings']:
                     self.mix_term_col_name_pos1 = config['covTHETAspace settings']['mix_term_col_name_pos1']
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the column name of the first position. Please update [mix_term_col_name_pos1] in your config")
                 if 'mix_term_col_name_pos2' in config['covTHETAspace settings']:
                     self.mix_term_col_name_pos2 = config['covTHETAspace settings']['mix_term_col_name_pos2']
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the column name of the second position. Please update [mix_term_col_name_pos2] in your config")
                 if 'mix_term_col_name_zbin' in config['covTHETAspace settings']:
                     self.mix_term_col_name_zbin = config['covTHETAspace settings']['mix_term_col_name_zbin']
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the column name of the zbin. Please update [mix_term_col_name_zbin] in your config")
                 if 'mix_term_isspherical' in config['covTHETAspace settings']:
                     self.mix_term_isspherical = config['covTHETAspace settings'].getboolean('mix_term_isspherical')
+                else:
+                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify mix_term_isspherical. mix_term_isspherical is set to false")
+                    self.mix_term_isspherical = False
                 if 'mix_term_target_patchsize' in config['covTHETAspace settings']:
                     self.mix_term_target_patchsize = float(config['covTHETAspace settings']['mix_term_target_patchsize'])
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify patchsize. Please update [mix_term_target_patchsize] in your config")
                 if 'mix_term_do_overlap' in config['covTHETAspace settings']:
                     self.mix_term_do_overlap = config['covTHETAspace settings'].getboolean('mix_term_do_overlap')
+                else:
+                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specif whether the overlap should be considered. mix_term_do_overlap is set to false")
+                    self.mix_term_do_overlap = False
                 if 'mix_term_nbins_phi' in config['covTHETAspace settings']:
                     self.mix_term_nbins_phi = int(config['covTHETAspace settings']['mix_term_nbins_phi'])
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the number of phi bins. Please update [mix_term_nbins_phi] in your config")
                 if 'mix_term_nmax' in config['covTHETAspace settings']:
                     self.mix_term_nmax = int(config['covTHETAspace settings']['mix_term_nmax'])
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the N_max for the mixterm. Please update [mix_term_nmax] in your config")
                 if 'mix_term_dpix_min' in config['covTHETAspace settings']:
                     self.mix_term_dpix_min = float(config['covTHETAspace settings']['mix_term_dpix_min'])
+                else:
+                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the minimum pixel size. Please update [mix_term_dpix_min] in your config")
                 if 'mix_term_do_ec' in config['covTHETAspace settings']:
                     self.mix_term_do_ec = config['covTHETAspace settings'].getboolean('mix_term_do_ec')
+                else:
+                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify whether the edge correction should be done. mix_term_do_ec is set to false")
+                    self.mix_term_do_ec = False
                 if 'mix_term_file_path_save_triplets' in config['covTHETAspace settings']:
                     self.mix_term_file_path_save_triplets = config['covTHETAspace settings']['mix_term_file_path_save_triplets']
-                
+                else:
+                    print("ConfigWarning: You want to save the triplets for the mixterm for", self.mix_term_do_mix_for, "but did not specify a path to save. Will not be saved")
+                    self.mix_term_file_path_save_triplets = None
         else:
             if self.cosmicshear and self.est_shear == 'xi_pm':
                 self.xi_pp = True
