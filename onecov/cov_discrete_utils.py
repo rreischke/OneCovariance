@@ -69,6 +69,18 @@ def toorigin(ras, decs, gammas1, gammas2, rotangle=None, inv=False, radec_units=
 
 
 
+def gen_flatz(nbinsz):
+    # Construct zmatcher
+    flatz = np.zeros((nbinsz,nbinsz),dtype=int)
+    _ind = 0
+    for i in range(nbinsz):
+        for j in range(i,nbinsz):
+            flatz[i,j] = _ind
+            flatz[j,i] = _ind
+            _ind += 1
+    return flatz
+
+
 
 ############################
 ## UTILS FOR CYGNUS MOCKS ##
