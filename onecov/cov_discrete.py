@@ -105,7 +105,7 @@ class DiscreteData:
         self.mixed_fail = False
         for i in range(len(hdul) - 1):
             try:
-                tmpdata = Table.read(self.path_to_data)
+                tmpdata = Table.read(self.path_to_data, hdu = i+1)
                 self.weight = tmpdata[self.colname_weight]
                 self.pos1 = tmpdata[self.colname_pos1]
                 self.pos2 = tmpdata[self.colname_pos2]
