@@ -440,7 +440,7 @@ class CovTHETASpace(CovELLSpace):
                     sigma2_eps= 4*survey_params_dict['ellipticity_dispersion']**2, 
                     target_patchsize=CovTHETASpace_settings['mix_term_target_patchsize'], 
                     do_overlap=CovTHETASpace_settings['mix_term_do_overlap'])
-            if not thisdata.self.mixed_fail:
+            if not thisdata.mixed_fail:
                 thisdata.gen_patches(func=cygnus_patches, 
                         func_args={"ra":thisdata.pos1, "dec":thisdata.pos2, 
                                     "g1":np.ones(len(thisdata.pos1)), "g2":np.ones(len(thisdata.pos1)), 
@@ -1117,7 +1117,6 @@ class CovTHETASpace(CovELLSpace):
                             gauss_ximxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
                             if self.cross_terms:
                                 gauss_xipxim_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape) 
-                    print(gauss_xipxip_sva[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :])
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for Gaussian term for the '
