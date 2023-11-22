@@ -18,8 +18,8 @@ config = "./config_files/config_cz.ini"
 r_low = 0.1 # Scales considered 
 r_hig = 1.0
 limber = True #should the Cells be calculated using Limber projection?
-diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
-nonGaussian = False
+diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
+nonGaussian = True
 npair_spec = True
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
@@ -84,10 +84,13 @@ theta_low = np.arctan(r_low/d_ang)/np.pi*180.*60.
 theta_hig = np.arctan(r_hig/d_ang)/np.pi*180.*60.
 
 # Number density of the reference sample
+
 if npair_spec:
     ndens_spec = np.sqrt(Npair/((theta_hig**2 - theta_low**2)*np.pi*survey_area))
+    #print(ndens_spec**2*np.pi*(theta_hig**2 - theta_low**2)*survey_area)
 else:
     ndens_spec = galcount / survey_area
+
 
 
 zbins = np.arange(zbound[0],
@@ -111,7 +114,7 @@ for j in range(n_tomo_source):
     #print(neff_phot[j,:]/10)
     #neff_phot[j,:] /= survey_area
     neff_phot[j] = np.sum(ndens_phot)/(survey_area)/15
-    print(neff_phot[j])
+    #print(neff_phot[j])
     nz_interp[j] = np.interp(zbins, np.array(np.loadtxt(ndens_phot_file)[:, 0]), ndens_phot)
 
     
@@ -356,7 +359,7 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
 
         cov_theta = CovTHETASpace(covterms, observables, output,
                                 cosmo, bias, iA,  hod, survey_params, prec, read_in_tables)
-        
+       
         cov_w = cov_theta.calc_covTHETA(
             observables, output, bias, hod, survey_params, prec, read_in_tables)
         #
