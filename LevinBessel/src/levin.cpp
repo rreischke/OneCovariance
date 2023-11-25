@@ -14,6 +14,7 @@ Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_spl
     already_called = false;
     number_integrals = 0;
     n_split_rs = n_split_rs1;
+    converged = 1e-4;
     setup(type);
 }
 
@@ -24,15 +25,18 @@ Levin::~Levin()
         gsl_spline_free(spline_integrand.at(i));
         gsl_interp_accel_free(acc_integrand.at(i));
     }
-    if (number_of_modes != 0)
+    for (uint j = 0; j < N_thread_max; j++)
     {
-        for (uint i = 0; i < number_of_modes; i++)
+        if (number_of_modes != 0)
         {
-            gsl_spline_free(spline_w_ell.at(i));
-            gsl_interp_accel_free(acc_w_ell.at(i));
+            for (uint i = 0; i < number_of_modes; i++)
+            {
+                gsl_spline_free(spline_w_ell.at(j).at(i));
+                gsl_interp_accel_free(acc_w_ell.at(j).at(i));
+            }
+            delete int_m_mode;
+            delete int_n_mode;
         }
-        delete int_m_mode;
-        delete int_n_mode;
     }
     if (type < 2)
     {
@@ -66,37 +70,44 @@ void Levin::setup(uint type)
     }
 }
 
-void Levin::update_Levin(uint type1, uint col1, uint nsub1, double relative_tol1)
+void Levin::update_Levin(uint type1, uint col1, uint nsub1, double relative_tol1, double converged1)
 {
     type = type1;
     col = col1;
     nsub = nsub1;
     relative_tol = relative_tol1;
+    converged = converged1;
     setup(type);
 }
 
 void Levin::init_w_ell(std::vector<double> ell, std::vector<std::vector<double>> w_ells)
 {
-    int_m_mode = new uint[N_thread_max];
-    int_n_mode = new uint[N_thread_max];
-
-    number_of_modes = w_ells.at(0).size();
-    std::vector<double> y_value(ell.size());
-    for (uint i = 0; i < number_of_modes; i++)
+    ell_w_ell = ell;
+    for (uint j = 0; j < N_thread_max; j++)
     {
-        spline_w_ell.push_back(gsl_spline_alloc(gsl_interp_steffen, ell.size()));
-        acc_w_ell.push_back(gsl_interp_accel_alloc());
-    }
-    for (uint a = 0; a < number_of_modes; a++)
-    {
-#pragma omp parallel for
-        for (uint i = 0; i < ell.size(); i++)
+        spline_w_ell.push_back(std::vector<gsl_spline *>());
+        acc_w_ell.push_back(std::vector<gsl_interp_accel *>());
+        int_m_mode = new uint[N_thread_max];
+        int_n_mode = new uint[N_thread_max];
+        number_of_modes = w_ells.at(0).size();
+        std::vector<double> y_value(ell.size());
+        for (uint i = 0; i < number_of_modes; i++)
         {
-            y_value.at(i) = w_ells.at(i).at(a);
+            spline_w_ell.at(j).push_back(gsl_spline_alloc(gsl_interp_steffen, ell.size()));
+            acc_w_ell.at(j).push_back(gsl_interp_accel_alloc());
         }
-        gsl_spline_init(spline_w_ell.at(a), &ell[0], &y_value[0], ell.size());
+        for (uint a = 0; a < number_of_modes; a++)
+        {
+#pragma omp parallel for
+            for (uint i = 0; i < ell.size(); i++)
+            {
+                y_value.at(i) = w_ells.at(i).at(a);
+            }
+            gsl_spline_init(spline_w_ell.at(j).at(a), &ell[0], &y_value[0], ell.size());
+        }
+        xmax_weight = ell.back();
+        xmin_weight = ell.at(0);
     }
-    xmax_weight = ell.back();
 }
 
 void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>> integrand, bool logx1, bool logy1)
@@ -140,9 +151,15 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
         }
         already_called = true;
     }
-    // x.at(0) *= (1 - relative_tol);
-    // x.at(number_x_values - 1) *= (1 + relative_tol);
-    //  #pragma omp parallel for
+#pragma omp parallel for
+    for (uint a = 0; a < number_integrals; a++)
+    {
+        gsl_spline_free(spline_integrand.at(a));
+        gsl_interp_accel_free(acc_integrand.at(a));
+        spline_integrand.at(a) = gsl_spline_alloc(gsl_interp_steffen, number_x_values);
+        acc_integrand.at(a) = gsl_interp_accel_alloc();
+    }
+
     for (uint i = 0; i < number_x_values; i++)
     {
         if (logx)
@@ -185,6 +202,40 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
     }
     x_max = x.at(number_x_values - 1);
     x_min = x.at(0);
+#pragma omp parallel for
+    for (uint a = 0; a < number_integrals; a++)
+    {
+        std::vector<double> new_x(2 * x.size());
+        std::vector<double> new_y(2 * x.size());
+        for (uint i = 0; i < 2 * x.size(); i++)
+        {
+            if (logx)
+            {
+                new_x.at(i) = exp(log(ell_w_ell.at(0)) + (log(ell_w_ell.back()) - log(ell_w_ell.at(0))) / (2 * x.size() - 1) * i);
+            }
+            else
+            {
+                new_x.at(i) = (ell_w_ell.at(0)) + ((ell_w_ell.back()) - (ell_w_ell.at(0))) / (2 * x.size() - 1) * i;
+            }
+        }
+        new_y = get_integrand(new_x, a);
+        gsl_spline_free(spline_integrand.at(a));
+        gsl_interp_accel_free(acc_integrand.at(a));
+        for (uint i = 0; i < 2 * x.size(); i++)
+        {
+            if (logx)
+            {
+                new_x.at(i) = log(new_x.at(i));
+            }
+            if (logy.at(a))
+            {
+                new_y.at(i) = log(new_y.at(i));
+            }
+        }
+        spline_integrand.at(a) = gsl_spline_alloc(gsl_interp_steffen, 2 * number_x_values);
+        acc_integrand.at(a) = gsl_interp_accel_alloc();
+        gsl_spline_init(spline_integrand.at(a), &new_x[0], &new_y[0], 2 * number_x_values);
+    }
 }
 
 std::vector<double> Levin::get_w_ell(std::vector<double> ell, uint m_mode)
@@ -192,7 +243,7 @@ std::vector<double> Levin::get_w_ell(std::vector<double> ell, uint m_mode)
     std::vector<double> result(ell.size());
     for (uint i = 0; i < ell.size(); i++)
     {
-        result.at(i) = gsl_spline_eval(spline_w_ell.at(m_mode), ell.at(i), acc_w_ell.at(m_mode));
+        result.at(i) = gsl_spline_eval(spline_w_ell.at(0).at(m_mode), ell.at(i), acc_w_ell.at(0).at(m_mode));
     }
     return result;
 }
@@ -205,7 +256,7 @@ std::vector<double> Levin::get_integrand(std::vector<double> x, uint j)
         if (logx)
         {
             x.at(i) = log(x.at(i));
-        }       
+        }
         if (x.at(i) < x_max && x.at(i) > x_min)
         {
             result.at(i) = gsl_spline_eval(spline_integrand.at(j), x.at(i), acc_integrand.at(j));
@@ -227,6 +278,21 @@ std::vector<double> Levin::get_integrand(std::vector<double> x, uint j)
         {
             result.at(i) = exp(result.at(i));
         }
+    }
+    return result;
+}
+
+double Levin::call_integrand(double x, uint i)
+{
+    double result = 0;
+    if (logx)
+    {
+        x = log(x);
+    }
+    result = gsl_spline_eval(spline_integrand.at(i), x, acc_integrand.at(i));
+    if (logy.at(i))
+    {
+        result = exp(result);
     }
     return result;
 }
@@ -1213,84 +1279,23 @@ double Levin::cquad_integrand_single_well(double x, void *p)
 {
     uint tid = omp_get_thread_num();
     Levin *lp = static_cast<Levin *>(p);
-    double result = 0.0;
-    if (lp->logx)
-    {
-        x = log(x);
-        if (x < lp->x_max && x > lp->x_min)
-        {
-            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
-        }
-        else
-        {
-            if (x >= lp->x_max)
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_max, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope.at(lp->int_index_integral[tid]) * (x - lp->x_max);
-            }
-            else
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_min, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope0.at(lp->int_index_integral[tid]) * (x - lp->x_min);
-            }
-        }
-        x = exp(x);
-    }
-    else
-    {
-        if (x < lp->x_max && x > lp->x_min)
-        {
-            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
-        }
-        else
-        {
-            if (x >= lp->x_max)
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_max, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope.at(lp->int_index_integral[tid]) * (x - lp->x_max);
-            }
-            else
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_min, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope0.at(lp->int_index_integral[tid]) * (x - lp->x_min);
-            }
-        }
-    }
-    if (lp->logy[lp->int_index_integral[tid]])
-    {
-        result = exp(result);
-    }
-    return result * gsl_spline_eval(lp->spline_w_ell.at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(lp->int_m_mode[tid]));
+    return lp->call_integrand(x, lp->int_index_integral[tid]) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_m_mode[tid]));
 }
 
 std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limits, uint m_mode)
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic)
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
         int_index_integral[tid] = i;
         int_m_mode[tid] = m_mode;
         result.at(i) = 0.0;
-        double difference = 1.;
         for (uint j = 0; j < limits.size() - 1; j++)
         {
-            double upper_limit = limits.at(j + 1);
-            bool stop = false;
-            if (limits.at(j + 1) > xmax_weight)
-            {
-                upper_limit = xmax_weight;
-                stop = true;
-            }
-            double aux_result = gslIntegratecquad(cquad_integrand_single_well, limits.at(j), upper_limit);
-            result.at(i) += aux_result;
-            if (difference < 1e-4 || stop == true)
-            {
-                break;
-            }
-            difference = abs(aux_result / result.at(i));
+            result.at(i) += gslIntegratecquad(cquad_integrand_single_well, limits.at(j), limits.at(j + 1));
         }
     }
     delete int_index_integral;
@@ -1301,85 +1306,24 @@ double Levin::cquad_integrand_double_well(double x, void *p)
 {
     uint tid = omp_get_thread_num();
     Levin *lp = static_cast<Levin *>(p);
-    double result = 0.0;
-    if (lp->logx)
-    {
-        x = log(x);
-        if (x < lp->x_max && x > lp->x_min)
-        {
-            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
-        }
-        else
-        {
-            if (x >= lp->x_max)
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_max, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope.at(lp->int_index_integral[tid]) * (x - lp->x_max);
-            }
-            else
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_min, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope0.at(lp->int_index_integral[tid]) * (x - lp->x_min);
-            }
-        }
-        x = exp(x);
-    }
-    else
-    {
-        if (x < lp->x_max && x > lp->x_min)
-        {
-            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
-        }
-        else
-        {
-            if (x >= lp->x_max)
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_max, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope.at(lp->int_index_integral[tid]) * (x - lp->x_max);
-            }
-            else
-            {
-                result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), lp->x_min, lp->acc_integrand.at(lp->int_index_integral[tid]));
-                result += lp->slope0.at(lp->int_index_integral[tid]) * (x - lp->x_min);
-            }
-        }
-    }
-    if (lp->logy[lp->int_index_integral[tid]])
-    {
-        result = exp(result);
-    }
-    return result * gsl_spline_eval(lp->spline_w_ell.at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(lp->int_m_mode[tid])) * gsl_spline_eval(lp->spline_w_ell.at(lp->int_n_mode[tid]), x, lp->acc_w_ell.at(lp->int_n_mode[tid]));
+    return lp->call_integrand(x, lp->int_index_integral[tid]) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_m_mode[tid])) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_n_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_n_mode[tid]));
 }
 
 std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limits, uint m_mode, uint n_mode)
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-    // #pragma omp parallel for
+#pragma omp parallel for dynamic
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
         int_index_integral[tid] = i;
         int_m_mode[tid] = m_mode;
         int_n_mode[tid] = n_mode;
-        result.at(i) = 0.0;
-        double difference = 1.;
+        std::vector<double> result_local(limits.size() - 1);
         for (uint j = 0; j < limits.size() - 1; j++)
         {
-            double upper_limit = limits.at(j + 1);
-            bool stop = false;
-            if (limits.at(j + 1) > xmax_weight)
-            {
-                upper_limit = xmax_weight;
-                stop = true;
-            }
-            double aux_result = gslIntegratecquad(cquad_integrand_double_well, limits.at(j), upper_limit);
-            result.at(i) += aux_result;
-            if (difference < 1e-4 || stop == true)
-            {
-                break;
-            }
-            difference = abs(aux_result / result.at(i));
+            result.at(i) += gslIntegratecquad(cquad_integrand_double_well, limits.at(j), limits.at(j + 1));
         }
     }
     delete int_index_integral;

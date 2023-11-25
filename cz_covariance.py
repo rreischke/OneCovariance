@@ -18,8 +18,8 @@ config = "./config_files/config_cz.ini"
 r_low = 0.1 # Scales considered 
 r_hig = 1.0
 limber = True #should the Cells be calculated using Limber projection?
-diagonal_only = False # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
-nonGaussian = True
+diagonal_only = True # should only be autocorrelations be considered, that is autocorrelations in the spectroscopic sample
+nonGaussian = False
 npair_spec = True
 inp = Input()
 covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(
@@ -210,6 +210,9 @@ def get_spec_covariance(i_z, j_z, n_tomo_source, n_s, cov_total , signal_w):
 
 survey_params['n_eff_clust'] = np.zeros(n_tomo_source)
 
+
+bias_correction = 0.6*(1+zmean)**.2
+
 if not diagonal_only:
     n_s = 2
     read_in_tables['zclust']['nz'] = np.zeros((n_s + n_tomo_source, len(zbins)))
@@ -382,7 +385,11 @@ for i_z in range(0, len(zbound)- subtract, 1):  # loop over each spec-z bin
         #SSC
         cov_SSC = np.copy(cov_w[2][0][0][0][0])
         '''
+        cov_w[0][0][:,:,:,:,:n_s,:n_s,:n_s,:n_s] *= bias_correction[i_z]**4
+        cov_w[0][1][:,:,:,:,:n_s,:n_s,:n_s,:n_s] *= bias_correction[i_z]**2
         cov_total_ = cov_w[0][0] + cov_w[0][1] + cov_w[0][2]
+        cov_theta.w_gg[:,:,:,:n_s,:n_s] *= bias_correction[i_z]**2
+        cov_w[1][0] *=bias_correction[i_z]**4
         clustering_z_covariance_sva += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][0],cov_theta.w_gg)
         clustering_z_covariance_sn += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][2],cov_theta.w_gg)
         clustering_z_covariance_mix += get_clustering_z_covariance_diagonal(i_z, j_z, n_tomo_source, n_s, cov_w[0][1],cov_theta.w_gg)

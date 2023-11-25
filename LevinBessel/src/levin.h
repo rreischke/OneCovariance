@@ -52,7 +52,7 @@ private:
   uint col, nsub;
   uint number_x_values;
   uint number_integrals;
-  double x_max, x_min, xmax_weight;
+  double x_max, x_min, xmax_weight, xmin_weight;
   bool logx;
   std::vector<bool> logy;
   std::vector<double> slope, slope0;
@@ -61,8 +61,8 @@ private:
 
   std::vector<gsl_interp_accel *> acc_integrand;
   std::vector<gsl_spline *> spline_integrand;
-  std::vector<gsl_interp_accel *> acc_w_ell;
-  std::vector<gsl_spline *> spline_w_ell;
+  std::vector<std::vector<gsl_interp_accel *>> acc_w_ell;
+  std::vector<std::vector<gsl_spline *>> spline_w_ell;
 
   std::vector<gsl_interp_accel *> acc_cov_Gauss, acc_cov_SSC;
   std::vector<gsl_spline *> spline_cov_Gauss, spline_cov_SSC;
@@ -70,10 +70,12 @@ private:
   std::vector<gsl_interp_accel *> acc_non_cov_Gauss_k1;
   std::vector<gsl_interp_accel *> acc_non_cov_Gauss_k2;
   std::vector<double> cov_R_radii;
+  std::vector<double> ell_w_ell;
 
   uint sample_size;
   double k_max;
   double k_min;
+  double converged;
   uint *int_cov_R_m_bin, *int_cov_R_n_bin, *int_cov_R_i_R, *int_cov_R_j_R, *int_cov_R_ell1, *int_cov_R_ell2, *int_index_integral;
   double *int_cov_R_non_Gauss_outer_k;
 
@@ -119,7 +121,7 @@ public:
    * @param nsub1
    * @param relative_tol1
    */
-  void update_Levin(uint type1, uint col1, uint nsub1, double relative_tol1);
+  void update_Levin(uint type1, uint col1, uint nsub1, double relative_tol1, double converged1);
 
   /**
    * General initialization of the ingegral to be carried out. x is an array of all the x values in the domain
@@ -136,6 +138,8 @@ public:
   std::vector<double> get_w_ell(std::vector<double> ell, uint m_mode);
 
   std::vector<double> get_integrand(std::vector<double> x, uint j);
+
+  double call_integrand(double x, uint i);
 
   void init_cov_R_space_Gaussian(std::vector<std::vector<std::vector<double>>> cov_k_space_Gaussian, std::vector<double> k, std::vector<double> r);
 

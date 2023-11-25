@@ -18,8 +18,8 @@ else:
     compiler_args = []
     linker_args = []
 
-compiler_args += ["-fopenmp"]
-linker_args += ["-fopenmp"]
+compiler_args += ["-fopenmp", "-O3"]
+linker_args += ["-fopenmp", "-O3"]
 
 ext_modules = [
     Pybind11Extension(

@@ -4573,7 +4573,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), 1, 1, self.n_tomo_lens,
                                         self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
             t0, tomos = time.time(), 0
-            tomos_comb = self.n_tomo_lens*(self.n_tomo_lens + 1)/2*self.sample_dim
+            tomos_comb = self.n_tomo_lens*(self.n_tomo_lens + 1)/2*1
             for i_sample in range(1):
                 for j_sample in range(1):
                     for i_tomo in range(self.n_tomo_lens):

@@ -18,7 +18,7 @@ PYBIND11_MODULE(levin, m)
          .def(py::init<uint, uint, uint, double, uint>(),
               "type1"_a, "col1"_a, "nsub1"_a, "relative_tol1"_a, "n_split_rs1"_a) // Keyword arguments
          .def("update_Levin", &Levin::update_Levin,
-              "type1"_a, "col1"_a, "nsub1"_a, "relative_tol1"_a,
+              "type1"_a, "col1"_a, "nsub1"_a, "relative_tol1"_a, "converged1"_a,
               py::call_guard<py::gil_scoped_release>())
          .def("init_integral", &Levin::init_integral,
               "x"_a, "integrand"_a, "logx1"_a, "logy1"_a,
