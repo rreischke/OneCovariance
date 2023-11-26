@@ -1044,10 +1044,6 @@ class CovCOSEBI(CovELLSpace):
                     if self.cov_dict['split_gauss']:
                         self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
                         gaussCOSEBIEEmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        import matplotlib.pyplot as plt
-                        plt.loglog(self.wn_ells,self.levin_int.get_integrand(self.wn_ells,0))
-                        plt.show()
-        
                         self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
                         gaussCOSEBIEEmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
                     else:
@@ -1340,9 +1336,9 @@ class CovCOSEBI(CovELLSpace):
 
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
-                    covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
+                    covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
             nongaussELLgggg1, nongaussELLgggm1, nongaussELLggmm1, nongaussELLgmgm1, nongaussELLmmgm1, nongaussELLmmmm1 = self.covELL_ssc(
-                    bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
+                    bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
             if self.gg:
                 nongaussELLgggg = nongaussELLgggg/(survey_params_dict['survey_area_clust'] / self.deg2torad2) + nongaussELLgggg1
             if self.gg and self.gm and self.cross_terms:

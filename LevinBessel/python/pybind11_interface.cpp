@@ -53,6 +53,9 @@ PYBIND11_MODULE(levin, m)
          .def("double_bessel", &Levin::double_bessel,
               "k1"_a, "k2"_a, "ell_1"_a, "ell_2"_a, "a"_a, "b"_a,
               py::call_guard<py::gil_scoped_release>())
+         .def("double_bessel_many_args", &Levin::double_bessel_many_args,
+              "k1"_a, "k2"_a, "ell_1"_a, "ell_2"_a, "a"_a, "b"_a,
+              py::call_guard<py::gil_scoped_release>())
          .def("get_integrand",&Levin::get_integrand,
               "x"_a, "j"_a,
               py::call_guard<py::gil_scoped_release>())

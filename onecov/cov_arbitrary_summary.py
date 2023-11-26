@@ -1436,9 +1436,9 @@ class CovARBsummary(CovELLSpace):
         nongauss_ASBBmmmm = None
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
-                    covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
+                    covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
             nongaussELLgggg1, nongaussELLgggm1, nongaussELLggmm1, nongaussELLgmgm1, nongaussELLmmgm1, nongaussELLmmmm1 = self.covELL_ssc(
-                    bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
+                    bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
             if self.gg:
                 nongaussELLgggg = nongaussELLgggg/(survey_params_dict['survey_area_clust'] / self.deg2torad2) + nongaussELLgggg1
             if self.gg and self.gm and self.cross_terms:

@@ -856,9 +856,6 @@ class CovELLSpace(PolySpectra):
                             
 
         
-        #import matplotlib.pyplot as plt
-        #plt.loglog(self.ellrange, self.Cell_gg[:,0,0,0,0])
-        #plt.show()
         
         if self.clustering_z:
             self.n_tomo_clust = n_tomo_clust_copy
@@ -1866,10 +1863,6 @@ class CovELLSpace(PolySpectra):
                 sscELLgmgm_smsm_new, sscELLgmgm_smpm_new, sscELLgmgm_pmsm_new, \
                 sscELLgmgm_pmpm_new, sscELLmmgm_mmsm_new, sscELLmmgm_mmpm_new, \
                 sscELLmmmm_mmmm_new
-
-        if self.csmf:
-            np.save("sn_csmf",self.covELL_csmf_SN())
-            np.save("ssc_csmf",self.covELL_csmf_SSC(survey_params_dict))
         return list(gauss), list(nongauss), list(ssc)
     
     def __bin_Gaussian(self,

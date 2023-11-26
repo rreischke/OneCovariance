@@ -254,6 +254,9 @@ public:
 
   std::vector<double> double_bessel(double k1, double k2, uint ell_1, uint ell_2, double a, double b);
 
+  std::vector<double> double_bessel_many_args(std::vector<double> k1, double k2, uint ell_1, uint ell_2, double a, double b);
+
+
   static double double_bessel_integrand(double, void *);
 
   std::vector<double> single_bessel_many_args(std::vector<double> k, uint ell, double a, double b);

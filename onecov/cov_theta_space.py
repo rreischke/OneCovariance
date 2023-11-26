@@ -204,18 +204,19 @@ class CovTHETASpace(CovELLSpace):
                 survey_params_dict['n_eff_clust'] = save_n_eff_clust
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = save_n_eff_lens
-        self.__get_weights()
-        self.ell_limits = []
-        for mode in range(len(self.WXY_stack[:,0])):
-            limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
-            limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
-            limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
-            limits_at_mode_append[0] = self.ellrange[1]
-            limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
-            self.ell_limits.append(limits_at_mode_append)
-        self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
-        self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
-        self.__get_signal(obs_dict)
+        if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
+            self.__get_weights()
+            self.ell_limits = []
+            for mode in range(len(self.WXY_stack[:,0])):
+                limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
+                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
+                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
+                limits_at_mode_append[0] = self.ellrange[1]
+                limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
+                self.ell_limits.append(limits_at_mode_append)
+            self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
+            self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
+            self.__get_signal(obs_dict)
         
     def __set_theta_bins(self,
                          covTHETAspacesettings):
