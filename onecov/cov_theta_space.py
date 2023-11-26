@@ -1676,7 +1676,6 @@ class CovTHETASpace(CovELLSpace):
                     if self.xi_mm:
                         inner_integralB = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
-                        print(i_ell)
                         self.levin_int_fourier.init_integral(self.ellrange, nongaussELLmmmm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)                   
                         inner_integralE[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
                         if self.xi_mm:

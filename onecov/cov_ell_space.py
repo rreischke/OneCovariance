@@ -4702,7 +4702,7 @@ class CovELLSpace(PolySpectra):
                     if i_chi == 0:
                         power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     else:
-                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                        power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
                 survey_variance_gggg = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
@@ -4756,7 +4756,7 @@ class CovELLSpace(PolySpectra):
                     if i_chi == 0:
                         power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     else:
-                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                        power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
                 survey_variance_gmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
@@ -4784,7 +4784,7 @@ class CovELLSpace(PolySpectra):
                     if i_chi == 0:
                         power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     else:
-                       power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
+                        power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     y_aux[i_chi] = np.sum(power* sum_m_a_lm[1:])/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_ggl']/self.deg2torad2**2)
                 survey_variance_gggm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
