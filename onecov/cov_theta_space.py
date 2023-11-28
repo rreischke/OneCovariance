@@ -1495,8 +1495,7 @@ class CovTHETASpace(CovELLSpace):
             print("")
             # cov_NG(w^ij(theta1) gt^kl(theta2))
             original_shape = nongaussELLgggm[0, 0, :, :, :, :, :, :].shape
-            prefac_wgt = prefac_wgt[:, :, None, None, None, None, None, None]
-
+            
             covwgt_shape_nongauss = (len(self.thetabins), len(self.thetabins),
                                      self.sample_dim, self.sample_dim,
                                      self.n_tomo_clust, self.n_tomo_clust,
@@ -1518,7 +1517,7 @@ class CovTHETASpace(CovELLSpace):
                     self.levin_int_fourier.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
                     nongauss_wgt[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if connected:
-                        nongauss_wgt[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl']) / self.deg2torad2)
+                        nongauss_wgt[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl']) / self.deg2torad2)
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for non-Gaussian term for the '
@@ -1591,7 +1590,7 @@ class CovTHETASpace(CovELLSpace):
                 for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
                     inner_integral = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
-                        self.levin_int_fourier.init_integral(self.ellrange, nongauss_gtgt[:, i_ell, :]*self.ellrange[:, None], True, True)
+                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLgmgm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
                         inner_integral[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
                     self.levin_int_fourier.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
                     nongauss_gtgt[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)

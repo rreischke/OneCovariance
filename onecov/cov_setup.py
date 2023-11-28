@@ -1187,6 +1187,7 @@ class Setup():
                                               npair_tab['theta_mm'],
                                               theta_ul_bins,
                                               theta_bins)
+                npair_mm = npair_mm.transpose(0, 3, 1, 2)
         elif mm:
             print("Approximating the cosmic shear real space shot noise " +
                   "contribution with the effective number density of source " +
@@ -1197,6 +1198,7 @@ class Setup():
                 * survey_params_dict['survey_area_lens'][0] * 60*60 \
                 * survey_params_dict['n_eff_lens'][None, :, None, :] \
                 * survey_params_dict['n_eff_lens'][None, None, :, :]
+            npair_mm = npair_mm.transpose(0, 3, 1, 2)
         else:
             npair_mm = None
 
