@@ -4520,8 +4520,12 @@ class FileInput:
             self.n_tomo_clust = len(self.zet_clust_nz)
         if self.zet_lens_z is not None:
             if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
-                self.zet_lens_z = self.zet_lens_z[1:]
-                self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
+                try:
+                    self.zet_lens_z = self.zet_lens_z[1:]
+                    self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
+                except:
+                    self.zet_lens_z = self.zet_lens_z[1:]
+                    self.zet_lens_photoz = self.zet_lens_photoz[1:]
             if len(self.zet_lens_photoz.shape) == 1:
                 self.zet_lens_photoz = np.array([self.zet_lens_photoz])
             self.n_tomo_lens = len(self.zet_lens_photoz)

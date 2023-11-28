@@ -1432,7 +1432,7 @@ class CovTHETASpace(CovELLSpace):
         nongauss_xipxip = None
         nongauss_xipxim = None
         nongauss_ximxim = None
-        self.levin_int_fourier.update_Levin(0, 16, 32,1e-3,1e-3)
+        self.levin_int_fourier.update_Levin(0, 16, 32,1e-4,1e-3)
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
                     covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
@@ -1680,7 +1680,6 @@ class CovTHETASpace(CovELLSpace):
                         inner_integralE[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
                         if self.xi_mm:
                             inner_integralB[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode + self.mmE_summaries][:], n_mode + self.mmE_summaries))
-                        
                     self.levin_int_fourier.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
                     nongauss_xipxip[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if self.xi_mm:

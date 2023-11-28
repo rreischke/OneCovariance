@@ -4873,7 +4873,7 @@ class CovELLSpace(PolySpectra):
                   + str(round((i_chi+1)/len(self.los_z)*100, 1))
                   + '% in ' + str(round((time.time()-t0), 1)) + 'sek  ETA in '
                   + str(round(eta, 1)) + 'sek', end="")
-
+        
         for i_sample in range(self.sample_dim):
             spline_responsePgg.append(interp2d(np.log(self.mass_func.k),
                                                self.los_chi,
@@ -5157,7 +5157,7 @@ class CovELLSpace(PolySpectra):
                                   self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
             
             survey_variance = survey_variance_mmmm
-                                  
+
             global aux_spline_ssc_mmmm
 
             def aux_spline_ssc_mmmm(i_chi):

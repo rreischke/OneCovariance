@@ -123,85 +123,59 @@ def __call_levin_many_args_WE(ells, ell_up, ell_lo, theta_range, T_of_theta):
     result_WEE = np.zeros(len(ells))
     result_WEB = np.zeros(len(ells))
     result_WnE = np.zeros(len(ells))
-    lev = levin.Levin(2, 16, 32, 1e-6, 50)
-    
-    global call_levin_WEE
-    def call_levin_WEE(i_ell):
-    
-        lev.init_integral(theta_range, T_of_theta[:,None], True, False) 
-        result = ell_up*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 0, 1, theta_range[0], theta_range[-1]))
-        result -=ell_lo*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 0, 1, theta_range[0], theta_range[-1]))
-        result -=ell_lo*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
-        result +=ell_up*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None], True, False)
-        result -=8.0*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 4, 2, theta_range[0], theta_range[-1]))
-        result +=8.0*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 4, 2, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None], True, False)
-        result -=8.0/ell_up*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        result +=8.0/ell_lo*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
-        return result[0]
-    
-    global call_levin_WEB
-    def call_levin_WEB(i_ell):
-        lev.init_integral(theta_range, T_of_theta[:,None], True, False)
-        result = ell_up*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 0, 1, theta_range[0], theta_range[-1]))
-        result -=ell_lo*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 0, 1, theta_range[0], theta_range[-1]))
-        result +=ell_lo*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
-        result -=ell_up*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None], True, True)
-        result +=8.0*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 4, 2, theta_range[0], theta_range[-1]))
-        result -=8.0*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 4, 2, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None], True, True)
-        result +=8.0/ell_up*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        result -=8.0/ell_lo*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 4, 1, theta_range[0], theta_range[-1]))
-        return result[0]
-    
-    global call_levin_WnE
-    def call_levin_WnE(i_ell):
-        lev.init_integral(theta_range, T_of_theta[:,None], True, False) 
-        result = -ell_up*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 2, 1, theta_range[0], theta_range[-1]))
-        result +=ell_lo*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 2, 1, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None], True, False)
-        result -=2.0*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_up, 2, 0, theta_range[0], theta_range[-1]))
-        result +=2.0*np.nan_to_num(lev.double_bessel(
-            ells[i_ell], ell_lo, 2, 0, theta_range[0], theta_range[-1]))
-        return result[0]
-    
-    pool = mp.Pool(num_cores)
-    result_WEE = np.array(pool.map(
-                call_levin_WEE, [i for i in range(len(ells))]))
-    pool.close()
-    pool.terminate()
-    pool = mp.Pool(num_cores)
-    result_WEB = np.array(pool.map(
-                call_levin_WEB, [i for i in range(len(ells))]))
-    pool.close()
-    pool.terminate()
 
-    pool = mp.Pool(num_cores)
-    result_WnE = np.array(pool.map(
-                call_levin_WnE, [i for i in range(len(ells))]))
-    pool.close()
-    pool.terminate()
+
+    lev = levin.Levin(2, 16, 32, 1e-6, 50)
+    lev.init_integral(theta_range, T_of_theta[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, False) 
+    result_WEE = ell_up*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 0, 1, theta_range[0], theta_range[-1]))
+    result_WEE -=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 0, 1, theta_range[0], theta_range[-1]))
+    result_WEE -=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+    result_WEE +=ell_up*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
+    lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, False)
+    result_WEE -=8.0*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 4, 2, theta_range[0], theta_range[-1]))
+    result_WEE +=8.0*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 4, 2, theta_range[0], theta_range[-1]))
+    lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, False)
+    result_WEE -=8.0/ell_up*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
+    result_WEE +=8.0/ell_lo*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+
+    lev.init_integral(theta_range, T_of_theta[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, False)
+    result_WEB = ell_up*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 0, 1, theta_range[0], theta_range[-1]))
+    result_WEB -=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 0, 1, theta_range[0], theta_range[-1]))
+    result_WEB +=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+    result_WEB -=ell_up*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
+    lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, True)
+    result_WEB +=8.0*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 4, 2, theta_range[0], theta_range[-1]))
+    result_WEB -=8.0*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 4, 2, theta_range[0], theta_range[-1]))
+    lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, True)
+    result_WEB +=8.0/ell_up*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
+    result_WEB -=8.0/ell_lo*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+    
+    lev.init_integral(theta_range, T_of_theta[:,None]*np.ones_like(self.ell_fourier_integral)[None,:]*np.ones_like(self.ell_fourier_integral)[None,:], True, False) 
+    result_WnE = -ell_up*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 2, 1, theta_range[0], theta_range[-1]))
+    result_WnE +=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 2, 1, theta_range[0], theta_range[-1]))
+    lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, False)
+    result_WnE -=2.0*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_up, 2, 0, theta_range[0], theta_range[-1]))
+    result_WnE +=2.0*np.nan_to_num(lev.double_bessel_many_args(
+        ells, ell_lo, 2, 0, theta_range[0], theta_range[-1]))
 
     return result_WEE, result_WEB, result_WnE
 

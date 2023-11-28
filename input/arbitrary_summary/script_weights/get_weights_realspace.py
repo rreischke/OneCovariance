@@ -9,6 +9,8 @@ theta_type = 'log'
 
 def top_hat(x,width_low, width_high, location):
     return (np.heaviside(x- (location-width_low),1)- np.heaviside(x-(location + width_high),1))/(width_high + width_low)
+
+
 def get_theta_bins(theta_type, theta_min, theta_max, ntheta_bins, theta_list_boundary = None):
     '''
     This function returns the theta bins and the corresponding bin boundaries
@@ -86,8 +88,7 @@ for i_theta in range(len(theta_bins)):
 # Define theta-range for xip_m (i.e. mm)
 theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
 real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
-print(theta_bins)
-print(theta_ul_bins)
+
 # Get fourier and real  weights for w covariance
 for i_theta in range(len(theta_bins)):
     theta_u = theta_ul_bins[i_theta+1]/60/180*np.pi
