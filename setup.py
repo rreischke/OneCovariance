@@ -4,6 +4,7 @@ from setuptools import setup
 
 # Available at setup time due to pyproject.toml
 from pybind11.setup_helpers import Pybind11Extension
+from setuptools import Extension
 
 import distutils.sysconfig
 
@@ -18,8 +19,10 @@ else:
     compiler_args = []
     linker_args = []
 
-compiler_args += ["-fopenmp", "-O3"]
-linker_args += ["-fopenmp", "-O3"]
+compiler_args_levin =  compiler_args + ["-fopenmp", "-O3"]
+linker_args_levin   =  linker_args   + ["-fopenmp", "-O3"]
+compiler_args_discretecov =  compiler_args + ["-shared", "-fopenmp", "-fPIC", "-Wall", "-O3", "-std=c99"]
+linker_args_discretecov   =  linker_args   + ["-shared", "-fopenmp", "-fPIC", "-Wall", "-O3", "-std=c99"]
 
 ext_modules = [
     Pybind11Extension(
@@ -28,9 +31,16 @@ ext_modules = [
         cxx_std=14,
         include_dirs=["./LevinBessel/src"],
         libraries=["m", "gsl", "gslcblas"],
-        extra_compile_args=compiler_args,
-        extra_link_args=linker_args
+        extra_compile_args=compiler_args_levin,
+        extra_link_args=linker_args_levin
         ),
+    Extension(
+        "discretecov",
+        sources=["onecov/ccov_discrete.c"],
+        include_dirs=["onecov/ccov_discrete.h"],
+        extra_compile_args=compiler_args_discretecov,
+        extra_linker_args=linker_args_discretecov,
+    ),
 ]
 
 setup(

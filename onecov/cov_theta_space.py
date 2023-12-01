@@ -427,14 +427,18 @@ class CovTHETASpace(CovELLSpace):
     def __get_triplet_mix_term(self,
                                CovTHETASpace_settings,
                                survey_params_dict,
-                               gauss_xipxip_mix):
+                               gauss_xipxip_mix,
+                               gauss_xipxim_mix,
+                               gauss_ximxim_mix):
         """
         Calculates the mixed term directly from a catalogue and therefore
         accounts for a more accurate prediction, especially at the survey
         edges
         """
         if 'xipxip' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'ximxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:]:
-            print("Calculating the mixed term from triplet counts")
+            print("")
+            print("\rCalculating the mixed term from triplet counts",end="")
+            print("\rAllocating DiscreteDataClass",end="")
             thisdata = DiscreteData(path_to_data=CovTHETASpace_settings['mix_term_file_path_catalog'], 
                     colname_weight=CovTHETASpace_settings['mix_term_col_name_weight'], 
                     colname_pos1=CovTHETASpace_settings['mix_term_col_name_pos1'], 
@@ -445,27 +449,34 @@ class CovTHETASpace(CovELLSpace):
                     target_patchsize=CovTHETASpace_settings['mix_term_target_patchsize'], 
                     do_overlap=CovTHETASpace_settings['mix_term_do_overlap'])
             if not thisdata.mixed_fail:
+                print("\rBuilding patches",end="")
                 thisdata.gen_patches(func=cygnus_patches, 
                         func_args={"ra":thisdata.pos1, "dec":thisdata.pos2, 
                                     "g1":np.ones(len(thisdata.pos1)), "g2":np.ones(len(thisdata.pos1)), 
                                     "e1":np.ones(len(thisdata.pos1)), "e2":np.ones(len(thisdata.pos1)),
                                     "zbin":thisdata.zbin, "weight":thisdata.weight,
                                     "overlap_arcmin":CovTHETASpace_settings['mix_term_do_overlap']*self.theta_ul_bins[-1]})
+                print("\rAllocating DiscreteCovTHETASpace",end="")
                 disccov = DiscreteCovTHETASpace(discrete=thisdata,
                                     xi_spl=self.xi_spline,
                                     bin_edges=self.theta_ul_bins,
                                     nmax=CovTHETASpace_settings['mix_term_nmax'],
                                     nbinsphi=CovTHETASpace_settings['mix_term_nbins_phi'],
+                                    nsubbins=CovTHETASpace_settings['mix_term_nsubr'],
                                     do_ec=CovTHETASpace_settings['mix_term_do_ec'],
+                                    nthreads=self.num_cores,
                                     savepath_triplets=CovTHETASpace_settings['mix_term_file_path_save_triplets'],
                                     loadpath_triplets=CovTHETASpace_settings['mix_term_file_path_load_triplets'],
-                                    dpix_min_force=CovTHETASpace_settings['mix_term_dpix_min'],
                                     terms=CovTHETASpace_settings['mix_term_do_mix_for'])
-                disccov.compute_triplets()
-                gauxx_xipxip_mixed_reconsidered, allshape = disccov.mixed_covariance()
-                return gauxx_xipxip_mixed_reconsidered
+
+                print("\rComputing triplets",end="")
+                disccov.compute_triplets(fthin=CovTHETASpace_settings['mix_term_subsample'])
+                print("\rComputing Mixed covariance",end="")
+                gauxx_xipxip_mixed_reconsidered, gauxx_xipxim_mixed_reconsidered, gauxx_ximxim_mixed_reconsidered = \
+                disccov.mixed_covariance()
+                return gauxx_xipxip_mixed_reconsidered, gauxx_xipxim_mixed_reconsidered, gauxx_ximxim_mixed_reconsidered
             else:
-                return gauss_xipxip_mix
+                return gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix
         else:
             return None
         
@@ -744,7 +755,11 @@ class CovTHETASpace(CovELLSpace):
                                            survey_params_dict,
                                            calc_prefac)
         if self.theta_space_dict['mix_term_do_mix_for'] is not None:
-            gauss_xipxip_mix = self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict,gauss_xipxip_mix)
+            print("")
+            print('\rDoing mixed term', end="")
+            gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix = \
+            self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict,
+                                        gauss_xipxip_mix,gauss_xipxim_mix,gauss_ximxim_mix)
         if not self.cov_dict['split_gauss']:
             gauss_ww = gauss_ww_sva + gauss_ww_mix
             gauss_wgt = gauss_wgt_sva + gauss_wgt_mix
