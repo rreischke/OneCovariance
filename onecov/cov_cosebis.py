@@ -217,6 +217,7 @@ class CovCOSEBI(CovELLSpace):
                                                                                                                         self.theta_integral,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
+        
         if self.gg or self.gm:    
             survey_params_dict['n_eff_clust'] = save_n_eff_clust
         if self.mm or self.gm:

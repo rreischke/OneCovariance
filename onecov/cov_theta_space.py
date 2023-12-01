@@ -211,8 +211,8 @@ class CovTHETASpace(CovELLSpace):
                 limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
                 limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
                 limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
-                limits_at_mode_append[0] = self.ellrange[1]
-                limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
+                limits_at_mode_append[0] = self.ell_fourier_integral[0]
+                limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
                 self.ell_limits.append(limits_at_mode_append)
             self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
             self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
@@ -308,16 +308,15 @@ class CovTHETASpace(CovELLSpace):
                 gt_signal[i_theta, :, :, :] = np.reshape(
                     gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.gt = gt_signal
-            
-        ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
+          ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
         if obs_dict['THETAspace']['mix_term_do_mix_for'] is not None:
             if 'xipxip' in obs_dict['THETAspace']['mix_term_do_mix_for'][:] or 'ximxim' in obs_dict['THETAspace']['mix_term_do_mix_for'][:]:
                 if self.mm:
                     self.data_vector_length += len(self.thetabins)*self.n_tomo_lens*(self.n_tomo_lens+1)
                     theta_ul_bins = np.geomspace(
                         self.theta_ul_bins[0]/5,
-                        self.theta_ul_bins[-1]*40,
-                        200)
+                        self.theta_ul_bins[-1]*5,
+                        100)
                     theta_bins = np.exp(.5 * (np.log(theta_ul_bins[1:])
                                             + np.log(theta_ul_bins[:-1])))
                     xip_signal_shape = (len(theta_bins),
@@ -356,21 +355,25 @@ class CovTHETASpace(CovELLSpace):
                         limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
                         limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]) + 2)
                         limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]
-                        limits_at_mode_append[0] = self.ellrange[1]
-                        limits_at_mode_append[-1] = self.ellrange[-2]
+                        limits_at_mode_append[0] = self.ell_fourier_integral[1]
+                        limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
                         ell_limits.append(limits_at_mode_append)
-                    levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
-                    levin_int_fourier.init_w_ell(self.ell_fourier_integral, WXY_stack.T)
                     for i_theta in range(len(theta_bins)):
+                        levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
+                        aux_WXY_stack = []
+                        aux_WXY_stack.append(WXY_stack[i_theta, :])
+                        aux_WXY_stack.append(WXY_stack[i_theta + self.mmE_summaries,:])
+                        aux_WXY_stack = np.array(aux_WXY_stack)
+                        levin_int_fourier.init_w_ell(self.ell_fourier_integral, aux_WXY_stack.T)
                         integrand = Cell_mm_flat*self.ellrange[:, None]
                         levin_int_fourier.init_integral(
                             self.ellrange, integrand, True, True)
-                        xip_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta],i_theta)
+                        xip_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta],0)
                         xip_signal[i_theta, :, :, :] = np.reshape(
                             xip_signal_at_thetai_flat, original_shape)/2.0/np.pi
-                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + self.mmE_summaries],i_theta + self.mmE_summaries)
+                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + self.mmE_summaries],1)
                         xim_signal[i_theta, :, :, :] = np.reshape(
-                            xim_signal_at_thetai_flat, original_shape)/2.0/np.pi        
+                            xim_signal_at_thetai_flat, original_shape)/2.0/np.pi    
                     self.xip = xip_signal
                     self.xim = xim_signal
                     flat_idx = 0
@@ -379,6 +382,7 @@ class CovTHETASpace(CovELLSpace):
                             self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0)
                             self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0)
                             flat_idx += 1
+                    
                     
     def __get_weights(self):
         N_fourier = int(1e5)
@@ -1432,7 +1436,7 @@ class CovTHETASpace(CovELLSpace):
         nongauss_xipxip = None
         nongauss_xipxim = None
         nongauss_ximxim = None
-        self.levin_int_fourier.update_Levin(0, 16, 32,1e-4,1e-3)
+        self.levin_int_fourier.update_Levin(0, 16, 32,1e-3,1e-3)
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
                     covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
@@ -1675,11 +1679,11 @@ class CovTHETASpace(CovELLSpace):
                     if self.xi_mm:
                         inner_integralB = np.zeros((len(self.ellrange), flat_length))
                     for i_ell in range(len(self.ellrange)):
-                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLmmmm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)                   
+                        self.levin_int_fourier.init_integral(self.ellrange, nongaussELLmmmm_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
                         inner_integralE[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
                         if self.xi_mm:
                             inner_integralB[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode + self.mmE_summaries][:], n_mode + self.mmE_summaries))
-                    self.levin_int_fourier.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
+                    self.levin_int_fourier.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)    
                     nongauss_xipxip[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if self.xi_mm:
                         nongauss_xipxim[m_mode - self.gg_summaries + self.gm_summaries - self.gg_summaries + self.gm_summaries, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode + self.mmE_summaries][:], m_mode + self.mmE_summaries)),original_shape)

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from scipy.special import sici, erf
-from astropy import units as u
+from astropy import units as u        
 
 import hmf
 try:
@@ -205,7 +205,7 @@ class HaloModel(Setup):
                        'dlnk': kstep,
                        'takahashi': False}
         self.transfmodel = transfmodel
-
+        
         prefix = 'hmf.mass_function.fitting_functions.'
         try:
             hm_prec_model = eval(prefix+hm_prec['hmf_model'])

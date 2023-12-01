@@ -220,6 +220,19 @@ class CovELLSpace(PolySpectra):
 
         self.__check_krange_support(
             obs_dict, cosmo_dict, bias_dict, hod_dict, prec)
+        pars = camb.CAMBparams()
+        pars.set_cosmology(H0=100*self.cosmology.h, 
+                            ombh2=self.cosmology.h**2*self.cosmology.Ob0,
+                            omch2=self.cosmology.h**2*(self.cosmology.Om0- self.cosmology.Ob0),
+                            omk = 0.0)
+        pars.set_dark_energy(w=self.cosmology.w0, wa=self.cosmology.wa, dark_energy_model='fluid') 
+        pars.InitPower.set_params(ns=self.transfmodel['n'],
+                                    As = 1.8e-9*(self.transfmodel['sigma_8']/0.769965784)**2)
+        pars.set_matter_power(kmax=self.mass_func.k[-1])
+        if prec['hm']['transfer_model'] == 'CAMB':
+            self.mass_func.transfer_params = {'extrapolate_with_eh':False,
+                                              'camb_params':pars}
+                
         self.calc_survey_area(survey_params_dict)
         self.get_Cells(obs_dict, output_dict,
                        bias_dict, iA_dict, hod_dict, prec, read_in_tables)
@@ -497,7 +510,6 @@ class CovELLSpace(PolySpectra):
                     self.spline_z_of_chi(self.los_integration_chi))
             aux_W_iA = -iA_dict['A_IA']*((1.0 + self.spline_z_of_chi(self.los_integration_chi))/(1+iA_dict['z_pivot_IA']))**(iA_dict['eta_IA'])*0.0134*self.cosmology.Om0/linear_growth_factor*self.spline_zlens[tomo](
                 self.los_integration_chi)/norm
-            
             self.spline_lensweight.append(UnivariateSpline(self.los_integration_chi,
                                                            aux_integral + aux_W_iA,
                                                            k=1, s=0, ext=0))
@@ -926,7 +938,7 @@ class CovELLSpace(PolySpectra):
         aux_mm = np.zeros((self.los_interpolation_sampling,
                            len(self.mass_func.k)))
         self.power_mm_lin_z = np.zeros_like(aux_mm)
-
+        camb_lin_pow = np.zeros_like(aux_mm)
         self.los_z = np.linspace(
             0, self.zet_max, self.los_interpolation_sampling)
         self.los_chi = self.cosmology.comoving_distance(
@@ -942,14 +954,20 @@ class CovELLSpace(PolySpectra):
             pars.InitPower.set_params(ns=self.transfmodel['n'],
                                       As = 1.8e-9*(self.transfmodel['sigma_8']/0.769965784)**2)
             pars.set_matter_power(redshifts = self.los_z[::-1], kmax=self.mass_func.k[-1])
+            pars.NonLinear = model.NonLinear_none
+            results = camb.get_results(pars)
+            _,_, camb_lin_pow = results.get_matter_power_spectrum(minkh=self.mass_func.k[0],
+                                                            maxkh=self.mass_func.k[-1],
+                                                            npoints = len(self.mass_func.k))
+            
             pars.NonLinear = model.NonLinear_pk
             pars.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
-            results = camb.get_results(pars)
+
             results.calc_power_spectra(pars)
             _,_, aux_mm = results.get_matter_power_spectrum(minkh=self.mass_func.k[0],
                                                             maxkh=self.mass_func.k[-1],
                                                             npoints = len(self.mass_func.k))
-
+            
         t0 = time.time()
         if self.csmf:
             aux_stellar_mass_func = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))
@@ -4746,6 +4764,7 @@ class CovELLSpace(PolySpectra):
                 survey_variance_mmmm = np.interp(self.los_integration_chi, self.los_chi, y_aux)*self.los_integration_chi**2
             self.survey_variance_mmmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
+
         if self.gm:
             ell, sum_m_a_lm = \
                 self.calc_a_lm('gm', 'gm', survey_params_dict)
