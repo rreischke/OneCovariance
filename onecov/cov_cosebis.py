@@ -558,7 +558,10 @@ class CovCOSEBI(CovELLSpace):
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             ssc = []
             for i_list in range(len(nongauss)):
-                ssc.append(nongauss[i_list]*0)
+                if nongauss[i_list] is not None:
+                    ssc.append(nongauss[i_list]*0)
+                else:
+                    ssc.append(None)
         else:     
             ssc = self.covCOSEBI_ssc(obs_dict['ELLspace'],
                                     survey_params_dict,
@@ -1334,7 +1337,8 @@ class CovCOSEBI(CovELLSpace):
         nongaussCOSEBIEEmmmm = None
         nongaussCOSEBIEBmmmm = None
         nongaussCOSEBIBBmmmm = None
-
+        self.levin_int.update_Levin(0, 16, 32,1e-3,1e-4)
+        
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
                     covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
