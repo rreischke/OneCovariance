@@ -188,7 +188,7 @@ class CovARBsummary(CovELLSpace):
             limits_at_mode_append[0] = self.ellrange[1]
             limits_at_mode_append[-1] = self.ellrange[-2]
             self.ell_limits.append(limits_at_mode_append)
-        self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.ell_limits, key=len))), 50)
+        self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.ell_limits, key=len))), 50, self.num_cores)
         self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
         
         self.theta_limits = []
@@ -209,7 +209,7 @@ class CovARBsummary(CovELLSpace):
                 limits_at_mode_append[-1] = self.theta_real_integral[-2]
                 limits_at_mode_append[0] = self.theta_real_integral[1]
             self.theta_limits.append(limits_at_mode_append/60/180*np.pi)
-        self.levin_int_real = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.theta_limits, key=len))), 50)
+        self.levin_int_real = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.theta_limits, key=len))), 50, self.num_cores)
         self.levin_int_real.init_w_ell(self.theta_real_integral/60/180*np.pi, self.RXY_stack.T)
         self.__get_shotnoise_integrals()
         

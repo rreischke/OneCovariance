@@ -43,7 +43,7 @@ private:
   static const double tol_abs;
   static const double min_sv;
   static const double kernel_overlap_eps;
-  const uint N_thread_max = std::thread::hardware_concurrency();
+  uint N_thread_max = std::thread::hardware_concurrency();
   std::vector<uint> ell;
   uint d;
   uint type;
@@ -101,7 +101,7 @@ public:
    *  - \p type  \p = 2, corresponds to integrals \f$ I(k) \int_a^b f(x;k)J_{\ell_1} (xk)j_{\ell_2} (xk) \f$ with a cylindrical Bessel function \f$ J_\ell (xk) \f$.
    *  - \p type  \p = 3, corresponds to integrals \f$ I(k) \int_a^b f(x;k)j_{\ell_1} (xk)j_{\ell_2} (xk) \f$ with a spherical Bessel function \f$ j_\ell (xk) \f$.
    */
-  Levin(uint type1, uint col1 = 8, uint nsub1 = 16, double relative_tol1 = 1e-6, uint n_split_rs1 = 50);
+  Levin(uint type1, uint col1 = 8, uint nsub1 = 16, double relative_tol1 = 1e-6, uint n_split_rs1 = 50, uint Nthread = 4);
 
   /**
    * Destructor: clean up all allocated memory.

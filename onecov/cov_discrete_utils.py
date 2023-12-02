@@ -1,6 +1,8 @@
 import numpy as np
 from astropy.table import Table
 import healpy as hp
+import site
+import os
 
 
 def toorigin(ras, decs, gammas1, gammas2, rotangle=None, inv=False, radec_units="deg"):
@@ -111,7 +113,8 @@ def load_cygnus_mock(run, basepath):
     g2 = np.array([])
     weight = np.array([])
     
-    for zind in range(6):
+    # [Debug] We only use the first five z-bins in order not to break the ini file.
+    for zind in range(5):
         #print(zind)
         nextbit = Table.read(basepath+"galCat_run_%i_1_kids1000like_sample0_type%i.fits"%(run,4+2*zind))
         ra = np.append(ra, nextbit["ALPHA_J2000"])
@@ -148,9 +151,9 @@ def cyg2disc(run, basepath="/cosma6/data/dp004/dc-port3/KiDS/cygnus_mocks/", fpa
     g1 = np.array([])
     g2 = np.array([])
     weight = np.array([])
-    ngal = np.zeros(6)
+    ngal = np.zeros(5)
     
-    for zind in range(6):
+    for zind in range(5):
         nextbit = Table.read(basepath+"galCat_run_%i_1_kids1000like_sample0_type%i.fits"%(run,4+2*zind))
         ra = np.append(ra, nextbit["ALPHA_J2000"])
         dec = np.append(dec, nextbit["DELTA_J2000"])
@@ -298,3 +301,14 @@ def cygnus_patches(ra, dec, g1, g2, e1, e2, zbin, weight, overlap_arcmin=0.):
 
     return patchcats
 
+
+def get_site_packages_dir():
+        return [p for p  in site.getsitepackages()
+                if p.endswith(("site-packages", "dist-packages"))][0]
+
+def search_file_in_site_package(directory, package):
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.startswith(package):
+                return os.path.join(root, file)
+    return None

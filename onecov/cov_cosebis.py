@@ -159,7 +159,7 @@ class CovCOSEBI(CovELLSpace):
                  prec,
                  read_in_tables):
         self.En_modes = obs_dict['COSEBIs']['En_modes']
-        self.array_En_modes = np.array([i +1 for i in range(self.En_modes)]).astype(int)
+        self.array_En_modes = np.array([i + 1 for i in range(self.En_modes)]).astype(int)
         self.wn_ells, self.wn_kernels = \
             self.__get_wn_kernels(read_in_tables['COSEBIs'])
         self.wn_gg_ells, self.wn_gg_kernels = \
@@ -172,21 +172,6 @@ class CovCOSEBI(CovELLSpace):
             limits_at_mode_append[0] = self.wn_ells[0]
             limits_at_mode_append[-1] = self.wn_ells[-1]
             self.ell_limits.append(limits_at_mode_append)
-        
-        self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc']/np.sqrt(len(self.ell_limits[0][:])), 50)
-        if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:
-            for i_modes in range(self.En_modes):
-                self.wn_gg_kernels[i_modes,:] = UnivariateSpline(self.wn_gg_ells,  self.wn_gg_kernels[i_modes,:], k=2, s=0, ext=0)(self.wn_ells)
-        if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:    
-            wn_kernels_new = np.zeros((2*self.En_modes,len(self.wn_ells)))
-            wn_kernels_new[:self.En_modes, : ] = self.wn_kernels
-            wn_kernels_new[self.En_modes:, : ] = self.wn_gg_kernels
-            self.wn_kernels = wn_kernels_new
-
-        self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
-
-        
-        self.__get_Tn_pm(read_in_tables['COSEBIs'], obs_dict['COSEBIs'], obs_dict) 
         CovELLSpace.__init__(self,
                              cov_dict,
                              obs_dict,
@@ -198,6 +183,17 @@ class CovCOSEBI(CovELLSpace):
                              survey_params_dict,
                              prec,
                              read_in_tables)
+        self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc'] / np.sqrt(len(self.ell_limits[0][:])), 50, self.num_cores)
+        if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:
+            for i_modes in range(self.En_modes):
+                self.wn_gg_kernels[i_modes, :] = UnivariateSpline(self.wn_gg_ells, self.wn_gg_kernels[i_modes, :], k=2, s=0, ext=0)(self.wn_ells)
+        if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:
+            wn_kernels_new = np.zeros((2 * self.En_modes, len(self.wn_ells)))
+            wn_kernels_new[:self.En_modes, :] = self.wn_kernels
+            wn_kernels_new[self.En_modes:, :] = self.wn_gg_kernels
+            self.wn_kernels = wn_kernels_new
+        self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
+        self.__get_Tn_pm(read_in_tables['COSEBIs'], obs_dict['COSEBIs'], obs_dict) 
         self.theta_integral = np.geomspace(obs_dict['COSEBIs']['theta_min'], obs_dict['COSEBIs']['theta_max'], 1000) 
         if self.gg or self.gm:
             save_n_eff_clust = survey_params_dict['n_eff_clust']
@@ -222,8 +218,6 @@ class CovCOSEBI(CovELLSpace):
             survey_params_dict['n_eff_clust'] = save_n_eff_clust
         if self.mm or self.gm:
             survey_params_dict['n_eff_lens'] = save_n_eff_lens
-        
-        
         if self.cov_dict['gauss']:
             self.E_mode_gg, self.E_mode_gm, self.E_mode_mm = self.calc_E_mode()
 

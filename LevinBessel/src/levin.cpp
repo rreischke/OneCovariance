@@ -5,7 +5,7 @@ const double Levin::min_interval = 1.e-4;
 const double Levin::tol_abs = 1.0e-200;
 const double Levin::min_sv = 1.0e-10;
 
-Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_split_rs1)
+Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_split_rs1,  uint Nthread)
 {
     type = type1;
     col = col1;
@@ -15,6 +15,7 @@ Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_spl
     number_integrals = 0;
     n_split_rs = n_split_rs1;
     converged = 1e-4;
+    N_thread_max = Nthread;
     setup(type);
 }
 
@@ -101,7 +102,7 @@ void Levin::init_w_ell(std::vector<double> ell, std::vector<std::vector<double>>
         }
         for (uint a = 0; a < number_of_modes; a++)
         {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
             for (uint i = 0; i < ell.size(); i++)
             {
                 y_value.at(i) = w_ells.at(i).at(a);
@@ -156,7 +157,7 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
     }
     if (number_of_modes != 0)
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint a = 0; a < number_integrals; a++)
         {
             gsl_spline_free(spline_integrand.at(a));
@@ -209,7 +210,7 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
     x_min = x.at(0);
     if (number_of_modes != 0)
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint a = 0; a < number_integrals; a++)
         {
             std::vector<double> new_x(2 * x.size());
@@ -1120,7 +1121,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
     std::vector<double> result(number_integrals);
     if (k * b > 1000)
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1131,7 +1132,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
     else
     {
         gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1194,7 +1195,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
     std::vector<double> result(number_integrals);
     if (k1 * b > 1000 && k2 * b > 1000)
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1204,7 +1205,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
     }
     else
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1231,7 +1232,7 @@ std::vector<double> Levin::double_bessel_many_args(std::vector<double> k1, doubl
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k1.size());
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(N_thread_max)
     for (uint i_k1 = 0; i_k1 < k1.size(); i_k1++)
     {
         if (k1.at(i_k1) * b > 1000 && k2 * b > 1000)
@@ -1266,7 +1267,7 @@ std::vector<double> Levin::single_bessel_many_args(std::vector<double> k, uint e
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k.size());
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
     for (uint i = 0; i < k.size(); i++)
     {
         uint tid = omp_get_thread_num();
@@ -1303,7 +1304,7 @@ std::vector<double> Levin::cquad_integrate(std::vector<double> limits)
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
@@ -1329,7 +1330,7 @@ std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limit
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(N_thread_max)
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
@@ -1361,7 +1362,7 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(N_thread_max)
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
@@ -1418,7 +1419,7 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Levin::cov_R_get_gaus
     std::vector<std::vector<std::vector<std::vector<double>>>> result(cov_R_radii.size(), std::vector<std::vector<std::vector<double>>>(cov_R_radii.size(), std::vector<std::vector<double>>(sample_size, std::vector<double>(sample_size, 0.0))));
     if (!cross)
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
         {
             for (uint j_R = i_R; j_R < cov_R_radii.size(); j_R++)
@@ -1441,7 +1442,7 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Levin::cov_R_get_gaus
     }
     else
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
         {
             for (uint j_R = 0; j_R < cov_R_radii.size(); j_R++)
@@ -1476,7 +1477,7 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Levin::cov_R_get_ssc(
     std::vector<std::vector<std::vector<std::vector<double>>>> result(cov_R_radii.size(), std::vector<std::vector<std::vector<double>>>(cov_R_radii.size(), std::vector<std::vector<double>>(sample_size, std::vector<double>(sample_size, 0.0))));
     if (!cross)
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
         {
             for (uint j_R = i_R; j_R < cov_R_radii.size(); j_R++)
@@ -1499,7 +1500,7 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Levin::cov_R_get_ssc(
     }
     else
     {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(N_thread_max)
         for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
         {
             for (uint j_R = 0; j_R < cov_R_radii.size(); j_R++)

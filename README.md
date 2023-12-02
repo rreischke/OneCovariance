@@ -18,11 +18,18 @@ conda env create -f conda_env.yaml
 conda activate cov20_env
 pip install .
 ```
+On some Linux servers you will have to install ``gxx_linux-64`` by hand and the installation will not work. If this is the case just install it by typing
+```shell
+ conda install -c conda-forge gxx_linux-64
+```
+and redo the ``pip`` installation.
+
 If you do not want to use the conda environment make sure that you have ``gfortran`` and ``gsl`` installed.
 You can install both via ``conda``:
 ```shell
 conda install -c conda-forge gfortran
 conda install -c conda-forge gsl
+conda install -c conda-forge gxx_linux-64
 git clone git@github.com:rreischke/OneCovariance.git
 cd OneCovariance    
 pip install .

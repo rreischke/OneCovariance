@@ -176,7 +176,6 @@ class CovTHETASpace(CovELLSpace):
         self.xi_mm = obs_dict['THETAspace']['xi_mm']
         self.accuracy = obs_dict['THETAspace']['theta_acc']
         self.theta_space_dict = obs_dict['THETAspace']
-        
         self.thetabins, self.theta_ul_bins = \
             self.__set_theta_bins(obs_dict['THETAspace'])
         if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
@@ -214,7 +213,7 @@ class CovTHETASpace(CovELLSpace):
                 limits_at_mode_append[0] = self.ell_fourier_integral[0]
                 limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
                 self.ell_limits.append(limits_at_mode_append)
-            self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
+            self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
             self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
             self.__get_signal(obs_dict)
         
@@ -315,7 +314,7 @@ class CovTHETASpace(CovELLSpace):
                     self.data_vector_length += len(self.thetabins)*self.n_tomo_lens*(self.n_tomo_lens+1)
                     theta_ul_bins = np.geomspace(
                         self.theta_ul_bins[0]/5,
-                        self.theta_ul_bins[-1]*5,
+                        self.theta_ul_bins[-1]*40,
                         100)
                     theta_bins = np.exp(.5 * (np.log(theta_ul_bins[1:])
                                             + np.log(theta_ul_bins[:-1])))
@@ -359,10 +358,10 @@ class CovTHETASpace(CovELLSpace):
                         limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
                         ell_limits.append(limits_at_mode_append)
                     for i_theta in range(len(theta_bins)):
-                        levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals)
+                        levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
                         aux_WXY_stack = []
                         aux_WXY_stack.append(WXY_stack[i_theta, :])
-                        aux_WXY_stack.append(WXY_stack[i_theta + self.mmE_summaries,:])
+                        aux_WXY_stack.append(WXY_stack[i_theta + len(theta_bins),:])
                         aux_WXY_stack = np.array(aux_WXY_stack)
                         levin_int_fourier.init_w_ell(self.ell_fourier_integral, aux_WXY_stack.T)
                         integrand = Cell_mm_flat*self.ellrange[:, None]
@@ -371,7 +370,7 @@ class CovTHETASpace(CovELLSpace):
                         xip_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta],0)
                         xip_signal[i_theta, :, :, :] = np.reshape(
                             xip_signal_at_thetai_flat, original_shape)/2.0/np.pi
-                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + self.mmE_summaries],1)
+                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + len(theta_bins)],1)
                         xim_signal[i_theta, :, :, :] = np.reshape(
                             xim_signal_at_thetai_flat, original_shape)/2.0/np.pi    
                     self.xip = xip_signal
@@ -379,8 +378,8 @@ class CovTHETASpace(CovELLSpace):
                     flat_idx = 0
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
-                            self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0)
-                            self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0)
+                            self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0, k= 1)
+                            self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0, k= 1)
                             flat_idx += 1
                     
                     
@@ -427,14 +426,18 @@ class CovTHETASpace(CovELLSpace):
     def __get_triplet_mix_term(self,
                                CovTHETASpace_settings,
                                survey_params_dict,
-                               gauss_xipxip_mix):
+                               gauss_xipxip_mix,
+                               gauss_xipxim_mix,
+                               gauss_ximxim_mix):
         """
         Calculates the mixed term directly from a catalogue and therefore
         accounts for a more accurate prediction, especially at the survey
         edges
         """
-        if 'xipxip' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'ximxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:]:
-            print("Calculating the mixed term from triplet counts")
+        if 'xipxip' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'ximxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'xipxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:]:
+            print("")
+            print("\rCalculating the mixed term from triplet counts")
+            print("\rAllocating DiscreteDataClass",end="")
             thisdata = DiscreteData(path_to_data=CovTHETASpace_settings['mix_term_file_path_catalog'], 
                     colname_weight=CovTHETASpace_settings['mix_term_col_name_weight'], 
                     colname_pos1=CovTHETASpace_settings['mix_term_col_name_pos1'], 
@@ -445,27 +448,34 @@ class CovTHETASpace(CovELLSpace):
                     target_patchsize=CovTHETASpace_settings['mix_term_target_patchsize'], 
                     do_overlap=CovTHETASpace_settings['mix_term_do_overlap'])
             if not thisdata.mixed_fail:
+                print("\rBuilding patches")
                 thisdata.gen_patches(func=cygnus_patches, 
                         func_args={"ra":thisdata.pos1, "dec":thisdata.pos2, 
                                     "g1":np.ones(len(thisdata.pos1)), "g2":np.ones(len(thisdata.pos1)), 
                                     "e1":np.ones(len(thisdata.pos1)), "e2":np.ones(len(thisdata.pos1)),
                                     "zbin":thisdata.zbin, "weight":thisdata.weight,
                                     "overlap_arcmin":CovTHETASpace_settings['mix_term_do_overlap']*self.theta_ul_bins[-1]})
+                print("\rAllocating DiscreteCovTHETASpace")
                 disccov = DiscreteCovTHETASpace(discrete=thisdata,
                                     xi_spl=self.xi_spline,
                                     bin_edges=self.theta_ul_bins,
                                     nmax=CovTHETASpace_settings['mix_term_nmax'],
                                     nbinsphi=CovTHETASpace_settings['mix_term_nbins_phi'],
+                                    nsubbins=CovTHETASpace_settings['mix_term_nsubr'],
                                     do_ec=CovTHETASpace_settings['mix_term_do_ec'],
+                                    nthreads=self.num_cores,
                                     savepath_triplets=CovTHETASpace_settings['mix_term_file_path_save_triplets'],
                                     loadpath_triplets=CovTHETASpace_settings['mix_term_file_path_load_triplets'],
-                                    dpix_min_force=CovTHETASpace_settings['mix_term_dpix_min'],
                                     terms=CovTHETASpace_settings['mix_term_do_mix_for'])
-                disccov.compute_triplets()
-                gauxx_xipxip_mixed_reconsidered, allshape = disccov.mixed_covariance()
-                return gauxx_xipxip_mixed_reconsidered
+
+                print("\rComputing triplets",end="")
+                disccov.compute_triplets(fthin=CovTHETASpace_settings['mix_term_subsample'])
+                print("\rComputing Mixed covariance",end="")
+                gauxx_xipxip_mixed_reconsidered, gauxx_xipxim_mixed_reconsidered, gauxx_ximxim_mixed_reconsidered = \
+                disccov.mixed_covariance()
+                return gauxx_xipxip_mixed_reconsidered, gauxx_xipxim_mixed_reconsidered, gauxx_ximxim_mixed_reconsidered
             else:
-                return gauss_xipxip_mix
+                return gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix
         else:
             return None
         
@@ -747,7 +757,11 @@ class CovTHETASpace(CovELLSpace):
                                            survey_params_dict,
                                            calc_prefac)
         if self.theta_space_dict['mix_term_do_mix_for'] is not None:
-            gauss_xipxip_mix = self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict,gauss_xipxip_mix)
+            print("")
+            print('\rDoing mixed term', end="")
+            gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix = \
+            self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict,
+                                        gauss_xipxip_mix,gauss_xipxim_mix,gauss_ximxim_mix)
         if not self.cov_dict['split_gauss']:
             gauss_ww = gauss_ww_sva + gauss_ww_mix
             gauss_wgt = gauss_wgt_sva + gauss_wgt_mix
