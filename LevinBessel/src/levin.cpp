@@ -1338,7 +1338,12 @@ std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limit
         result.at(i) = 0.0;
         for (uint j = 0; j < limits.size() - 1; j++)
         {
-            result.at(i) += gslIntegratecquad(cquad_integrand_single_well, limits.at(j), limits.at(j + 1));
+            double result_aux = gslIntegratecquad(cquad_integrand_single_well, limits.at(j), limits.at(j + 1));
+            result.at(i) += result_aux;
+            if (result_aux/result.at(i) < converged)
+            {
+                break;
+            }
         }
     }
     delete int_index_integral;
@@ -1363,10 +1368,15 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
         int_index_integral[tid] = i;
         int_m_mode[tid] = m_mode;
         int_n_mode[tid] = n_mode;
-        std::vector<double> result_local(limits.size() - 1);
+        
         for (uint j = 0; j < limits.size() - 1; j++)
         {
-            result.at(i) += gslIntegratecquad(cquad_integrand_double_well, limits.at(j), limits.at(j + 1));
+            double result_aux = gslIntegratecquad(cquad_integrand_double_well, limits.at(j), limits.at(j + 1));
+            result.at(i) += result_aux;
+            if (result_aux/result.at(i) < converged)
+            {
+                break;
+            }
         }
     }
     delete int_index_integral;

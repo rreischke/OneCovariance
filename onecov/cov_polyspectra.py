@@ -723,7 +723,7 @@ class PolySpectra(HaloModel):
         """
         lnk = np.log(self.mass_func.k)
 
-        if self.gm or self.mm:
+        if self.gm or self.mm or self.unbiased_clustering:
             integral_m = \
                 self.halo_model_integral_I_alpha_x(
                     bias_dict, hod_dict, hm_prec, 1, 'm')
@@ -732,26 +732,25 @@ class PolySpectra(HaloModel):
                 self.halo_model_integral_I_alpha_x(
                     bias_dict, hod_dict, hm_prec, 1, 'g')
             bias_g = self.calc_effective_bias(bias_dict, hod_dict, hm_prec)
-        if self.mm:
+        if self.mm or self.unbiased_clustering:
             integral_mm = \
                 self.halo_model_integral_I_alpha_xy(
                     bias_dict, hod_dict, hm_prec, 1, 'm', 'm')
             integral_mm = np.einsum('iijj->ij', integral_mm)
-        if self.gm:
+        if self.gm and not self.unbiased_clustering:
             integral_gm = \
                 self.halo_model_integral_I_alpha_xy(
                     bias_dict, hod_dict, hm_prec, 1, 'g', 'm')
             integral_gm = np.einsum('iijj->ij', integral_gm)
-        if self.gg:
+        if self.gg and not self.unbiased_clustering:
             integral_gg = \
                 self.halo_model_integral_I_alpha_xy(
                     bias_dict, hod_dict, hm_prec, 1, 'g', 'g')
-            integral_gg = np.einsum('iijj->ij', integral_gg)
-
-        log_k3_Plin = 3*lnk + self.Plin_spline(lnk)
-        spline_lnk3_Plin = UnivariateSpline(lnk, log_k3_Plin, k=1, s=0, ext=0)
-        spline_deriv_Plin = spline_lnk3_Plin.derivative()
-        deriv_Plin = spline_deriv_Plin(lnk)
+            integral_gg = np.diagonal(np.diagonal(integral_gg, axis1 = 0, axis2 = 1), axis1 = 0, axis2 = 1)
+        k3lnPkspl = UnivariateSpline(np.log(self.mass_func.k),np.log(self.mass_func.k**3*self.mass_func.power),k = 3,s = 5*min(self.mass_func.k[1:]- self.mass_func.k[:-1]),ext=0)
+        dk3lnPkspl_dlnk = k3lnPkspl.derivative()
+        deriv_Plin = dk3lnPkspl_dlnk(np.log(self.mass_func.k))
+        
 
         if self.mm:
             response_P_mm = \
@@ -760,22 +759,37 @@ class PolySpectra(HaloModel):
                 + integral_mm
         else:
             response_P_mm = None
-
-        if self.gm:
-            response_P_gm = \
+        if self.unbiased_clustering:
+            if self.gm:
+                response_P_gm = \
                 (68/21 - deriv_Plin[:, None]/3) \
-                * integral_g * integral_m * self.mass_func.power[:, None] \
-                + integral_gm - bias_g[None, :] * self.Pgm
-        else:
-            response_P_gm = None
-
-        if self.gg:
-            response_P_gg = \
+                * integral_m**2 * self.mass_func.power[:, None] \
+                + integral_mm
+            else:
+                response_P_gm = None
+            if self.gg:
+                response_P_gg = \
                 (68/21 - deriv_Plin[:, None]/3) \
-                * integral_g**2 * self.mass_func.power[:, None] \
-                + integral_gg - 2 * bias_g[None, :] * np.diagonal(self.Pgg,axis1=-2,axis2=-1)
+                * integral_m**2 * self.mass_func.power[:, None] \
+                + integral_mm
+            else:
+                response_P_gg
         else:
-            response_P_gg = None
+            if self.gm:
+                response_P_gm = \
+                    (68/21 - deriv_Plin[:, None]/3) \
+                    * integral_g * integral_m * self.mass_func.power[:, None] \
+                    + integral_gm - bias_g[None, :] * self.Pgm
+            else:
+                response_P_gm = None
+
+            if self.gg:
+                response_P_gg = \
+                    (68/21 - deriv_Plin[:, None]/3) \
+                    * integral_g**2 * self.mass_func.power[:, None] \
+                    + integral_gg - 2 * bias_g[None, :] * (np.diagonal(self.Pgg,axis1=-2,axis2=-1) - (np.diagonal(self.Pgg,axis1=-2,axis2=-1)[-1,:])[None,:])
+            else:
+                response_P_gg = None
         return response_P_gg, response_P_gm, response_P_mm
 
     def __check_for_tabulated_trispectra(self, tri_tab):

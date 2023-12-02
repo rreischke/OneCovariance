@@ -712,7 +712,10 @@ class CovBandPowers(CovTHETASpace):
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             ssc = []
             for i_list in range(len(nongauss)):
-                ssc.append(nongauss[i_list]*0)        
+                if nongauss[i_list] is not None:
+                    ssc.append(nongauss[i_list]*0)
+                else:
+                    ssc.append(None)     
         else:     
             ssc = self.covbandpowers_ssc(obs_dict['ELLspace'],
                                     survey_params_dict,

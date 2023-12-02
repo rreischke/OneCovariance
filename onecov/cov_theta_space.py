@@ -664,7 +664,10 @@ class CovTHETASpace(CovELLSpace):
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             ssc = []
             for i_list in range(len(nongauss)):
-                ssc.append(nongauss[i_list]*0)
+                if nongauss[i_list] is not None:
+                    ssc.append(nongauss[i_list]*0)
+                else:
+                    ssc.append(None)
         else:     
             ssc = self.covTHETA_ssc(obs_dict['ELLspace'],
                                     survey_params_dict,
@@ -1473,13 +1476,12 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**4
             nongaussELLgggg_flat = np.reshape(nongaussELLgggg, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            cov_at_thetaij_flat = np.zeros(flat_length)
-            lev = levin.Levin(0, 16, 32, self.accuracy/6., self.integration_intervals)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) **2
             for m_mode in range(self.gg_summaries):
                 for n_mode in range(self.gg_summaries):
                     inner_integral = np.zeros((len(self.ellrange), flat_length))
+                    import matplotlib.pyplot as plt
                     for i_ell in range(len(self.ellrange)):
                         self.levin_int_fourier.init_integral(self.ellrange, nongaussELLgggg_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
                         inner_integral[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
@@ -1509,7 +1511,6 @@ class CovTHETASpace(CovELLSpace):
                 self.n_tomo_clust**3*self.n_tomo_lens
             nongaussELLgggm_flat = np.reshape(nongaussELLgggm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
             for m_mode in range(self.gg_summaries):
@@ -1546,7 +1547,6 @@ class CovTHETASpace(CovELLSpace):
                 self.n_tomo_clust**2*self.n_tomo_lens**2
             nongaussELLggmm_flat = np.reshape(nongaussELLggmm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
             for m_mode in range(self.gg_summaries):
@@ -1565,9 +1565,9 @@ class CovTHETASpace(CovELLSpace):
                         self.levin_int_fourier.init_integral(self.ellrange, inner_integralB*self.ellrange[:, None], True, True)
                         nongauss_wxim[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode + self.mmE_summaries][:], m_mode + self.mmE_summaries)),original_shape)
                     if connected:
-                        nongauss_ASEggmm[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                        nongauss_wxip[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
                         if self.xi_mm:
-                            nongauss_ASBggmm[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)    
+                            nongauss_wxim[m_mode, n_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)    
                     theta += 1
                     eta = (time.time()-t0)/60 * (theta_comb/theta-1)
                     print('\rProjection for non-Gaussian term for the '
@@ -1587,7 +1587,6 @@ class CovTHETASpace(CovELLSpace):
                 self.n_tomo_clust**2*self.n_tomo_lens**2
             nongaussELLgmgm_flat = np.reshape(nongaussELLgmgm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins)) ** 2
             for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
@@ -1625,7 +1624,6 @@ class CovTHETASpace(CovELLSpace):
                 self.n_tomo_clust*self.n_tomo_lens**3
             nongaussELLmmgm_flat = np.reshape(nongaussELLmmgm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
             for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
@@ -1670,7 +1668,6 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.n_tomo_lens**4
             nongaussELLmmmm_flat = np.reshape(nongaussELLmmmm, (len(self.ellrange), len(
                 self.ellrange), flat_length))
-            cov_at_thetaij_flat = np.zeros(flat_length)
             t0, theta = time.time(), 0
             theta_comb = (len(self.thetabins))**2
             for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
