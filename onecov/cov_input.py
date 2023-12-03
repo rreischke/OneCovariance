@@ -3185,9 +3185,9 @@ class Input:
             if 'num_cores' in config['misc']:
                 self.num_cores = int(config['misc']['num_cores'])
             else:
-                self.num_cores = 0
+                self.num_cores = 8
         else:
-            self.num_cores = 0
+            self.num_cores = 8
 
         return True
 

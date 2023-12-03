@@ -773,7 +773,7 @@ class PolySpectra(HaloModel):
                 * integral_m**2 * self.mass_func.power[:, None] \
                 + integral_mm
             else:
-                response_P_gg
+                response_P_gg = None
         else:
             if self.gm:
                 response_P_gm = \
