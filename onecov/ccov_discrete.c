@@ -40,6 +40,7 @@ void build_spatialhash(double *pos_1, double *pos_2, int ngal,
     start_pixgals = ngal+npix+ngal+1;
     start_ngalinpix=ngal+npix+ngal+1+ngal;
 
+    int test = 213;
     npixs_with_gals = 0;
     noutside = 0;
     for (ind_gal=0; ind_gal<ngal; ind_gal++){

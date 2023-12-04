@@ -1568,12 +1568,12 @@ class CovBandPowers(CovTHETASpace):
                         inner_integralE[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
                         inner_integralB[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode + len(self.ell_bins)))
                     self.levin_int.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
-                    nongauss_BPEggmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    nongauss_BPEggmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(2*self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     self.levin_int.init_integral(self.ellrange, inner_integralB*self.ellrange[:, None], True, True)
-                    nongauss_BPBggmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    nongauss_BPBggmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(2*self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if connected:
-                        nongauss_BPEggmm[m_mode, n_mode, :, :, :, :, :, :] /= (2.*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
-                        nongauss_BPBggmm[m_mode, n_mode, :, :, :, :, :, :] /= (2.*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                        nongauss_BPEggmm[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                        nongauss_BPBggmm[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
                     eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
                     print('\rBandpower E-mode covariance calculation for the '
@@ -1638,11 +1638,11 @@ class CovBandPowers(CovTHETASpace):
                         self.levin_int.init_integral(self.ellrange, nongaussELL_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
                         inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + 2*len(self.ell_bins)][:], n_mode))
                     self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    nongauss_BPEmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
-                    nongauss_BPBmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
+                    nongauss_BPEmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(2.*self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    nongauss_BPBmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(2.*self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
                     if connected:
-                        nongauss_BPEmmgm[m_mode, n_mode, :, :, :, :, :, :] /= (2.*max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
-                        nongauss_BPBmmgm[m_mode, n_mode, :, :, :, :, :, :] /= (2.*max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                        nongauss_BPEmmgm[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
+                        nongauss_BPBmmgm[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
                     eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
                     print('\rBandpower E-mode covariance calculation for the '
@@ -1676,14 +1676,14 @@ class CovBandPowers(CovTHETASpace):
                         inner_integralE[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
                         inner_integralB[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode + len(self.ell_bins)))
                     self.levin_int.init_integral(self.ellrange, inner_integralE*self.ellrange[:, None], True, True)
-                    nongauss_BPEEmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
-                    nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
+                    nongauss_BPEEmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4*self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
+                    nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4*self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
                     self.levin_int.init_integral(self.ellrange, inner_integralB*self.ellrange[:, None], True, True)
-                    nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
+                    nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4*self.N_ell[m_mode]*self.N_ell[n_mode])*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode + len(self.ell_bins))),original_shape)
                     if connected:
-                        nongauss_BPEEmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (4.*survey_params_dict['survey_area_lens'] / self.deg2torad2)
-                        nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (4.*survey_params_dict['survey_area_lens'] / self.deg2torad2)
-                        nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (4.*survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                        nongauss_BPEEmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                        nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                        nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (*survey_params_dict['survey_area_lens'] / self.deg2torad2)
                     eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
                     print('\rBandpower E-mode covariance calculation for the '

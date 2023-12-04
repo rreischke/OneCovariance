@@ -437,7 +437,7 @@ class CovTHETASpace(CovELLSpace):
         if 'xipxip' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'ximxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'xipxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:]:
             print("")
             print("\rCalculating the mixed term from triplet counts")
-            print("\rAllocating DiscreteDataClass",end="")
+            print("\rAllocating DiscreteDataClass")
             thisdata = DiscreteData(path_to_data=CovTHETASpace_settings['mix_term_file_path_catalog'], 
                     colname_weight=CovTHETASpace_settings['mix_term_col_name_weight'], 
                     colname_pos1=CovTHETASpace_settings['mix_term_col_name_pos1'], 
