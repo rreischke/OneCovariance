@@ -1683,7 +1683,7 @@ class CovBandPowers(CovTHETASpace):
                     if connected:
                         nongauss_BPEEmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
                         nongauss_BPEBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
-                        nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (*survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                        nongauss_BPBBmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
                     eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
                     print('\rBandpower E-mode covariance calculation for the '
