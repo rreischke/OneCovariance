@@ -21,6 +21,8 @@ else:
 
 compiler_args_levin =  compiler_args + ["-fopenmp", "-O3"]
 linker_args_levin   =  linker_args   + ["-fopenmp", "-O3"]
+
+
 compiler_args_discretecov =  compiler_args + ["-fopenmp", "-fPIC", "-Wall", "-O3", "-std=c99"]
 linker_args_discretecov   =  linker_args   + ["-fopenmp", "-fPIC", "-Wall", "-O3", "-std=c99"]
 

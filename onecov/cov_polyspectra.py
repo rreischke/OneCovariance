@@ -221,6 +221,8 @@ class PolySpectra(HaloModel):
         self.gm = obs_dict['observables']['ggl']
         self.gg = obs_dict['observables']['clustering']
         self.unbiased_clustering = obs_dict['observables']['unbiased_clustering']
+       # if self.gg == False and self.gm == False:
+       #     self.unbiased_clustering = False
         if self.unbiased_clustering:
             self.mm = True
         self.cross_terms = obs_dict['observables']['cross_terms']
@@ -246,7 +248,6 @@ class PolySpectra(HaloModel):
 
         self.num_cores = prec['misc']['num_cores'] \
             if prec['misc']['num_cores'] > 0 else mp.cpu_count()
-        self.num_cores_save = self.num_cores
         if self.unbiased_clustering:
             self.lensing = obs_dict['observables']['cosmic_shear']
             self.mm = obs_dict['observables']['cosmic_shear']
@@ -1050,6 +1051,7 @@ class PolySpectra(HaloModel):
         """
         if self.unbiased_clustering:
             self.mm = True
+            gg_save = self.gg
             self.gg = False
         tri_gggg, tri_gggm, tri_ggmm, \
             tri_gmgm, tri_mmgm, tri_mmmm, \
@@ -1223,7 +1225,7 @@ class PolySpectra(HaloModel):
         if self.unbiased_clustering:
             if not self.lensing:
                 self.mm = False
-            self.gg = True
+            self.gg = gg_save
             return trispec_mmmm, trispec_mmmm, trispec_mmmm, \
                 trispec_mmmm, trispec_mmmm, trispec_mmmm
         else:
@@ -1440,10 +1442,7 @@ class PolySpectra(HaloModel):
 
         if (self.gg or self.gm) and \
            (tri_gggg or tri_gggm or tri_ggmm or tri_gmgm or tri_mmgm):
-            if int(len(self.tri_idxlist)/4) < self.num_cores_save:
-                self.num_cores = int(len(self.tri_idxlist)/4)
             pool = mp.Pool(self.num_cores)
-            self.num_cores = self.num_cores_save   
             tri_list = pool.map(T1h_allbutmmmm, self.tri_idxlist)
             pool.close()
             pool.terminate()
@@ -1476,10 +1475,7 @@ class PolySpectra(HaloModel):
                     * self.mass_func.dndm
                 return simpson(integrand, self.mass_func.m)
 
-            if int(len(self.tri_idxlist)/4) < self.num_cores_save:
-                self.num_cores = int(len(self.tri_idxlist)/4)
             pool = mp.Pool(self.num_cores)
-            self.num_cores = self.num_cores_save   
             tri_mmmm = pool.map(T1h_mmmm, self.tri_idxlist)
             pool.close()
             pool.terminate()
@@ -1920,10 +1916,7 @@ class PolySpectra(HaloModel):
 
             return int_2h, int_3h, int_4h
 
-        if int(len(kidxlist)/4) < self.num_cores_save:
-            self.num_cores = int(len(kidxlist)/4)
         pool = mp.Pool(self.num_cores)
-        self.num_cores = self.num_cores_save   
         int_list = pool.map(calc_all_trispec_ints, kidxlist)
         pool.close()
         pool.terminate()

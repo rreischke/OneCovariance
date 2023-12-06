@@ -3959,6 +3959,8 @@ class CovELLSpace(PolySpectra):
         gmgm_z = []
         mmgm_z = []
         mmmm_z = []
+        self.num_cores_save = self.num_cores
+        self.num_cores = 8
         while zet < self.zet_max:
             zet = self.zet_min + \
                 covELLspacesettings['tri_delta_z']*idx_z
@@ -4193,7 +4195,7 @@ class CovELLSpace(PolySpectra):
                 aux_spline_tri_mmmm, [i for i in range(len(self.los_integration_chi))]))
             pool.close()
             pool.terminate()
-
+        self.num_cores = self.num_cores_save
         nongaussELLgggg = None
         nongaussELLgggm = None
         nongaussELLggmm = None
