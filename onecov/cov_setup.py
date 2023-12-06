@@ -772,7 +772,7 @@ class Setup():
                 ellmin = 2
                 update_ellrange = True
 
-            if ellrange[-1] < 1e4:
+            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell']:
                 print("SetupWarning: The COSEBI covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -807,7 +807,7 @@ class Setup():
                 ellmin = 2
                 update_ellrange = True
 
-            if ellrange[-1] < 1e4:
+            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell']:
                 print("SetupWarning: The xi_pm covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -842,7 +842,7 @@ class Setup():
                 ellmin = 2
                 update_ellrange = True
 
-            if ellrange[-1] < 1e4:
+            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell']:
                 print("SetupWarning: The arbitrary summary covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +

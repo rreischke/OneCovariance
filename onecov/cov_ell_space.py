@@ -213,6 +213,13 @@ class CovELLSpace(PolySpectra):
             self.f_tomo[:] = read_in_tables['csmf']['f_tomo']
             
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
+        if obs_dict['ELLspace']['pixelised_cell']:
+            obs_dict['ELLspace']['ellmax'] = int(3*obs_dict['ELLspace']['pixel_Nside'] + 1)
+            self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
+            integer_ell = np.copy(self.ellrange.astype(int))
+            pixel_weight = (hp.sphtfunc.pixwin(obs_dict['ELLspace']['pixel_Nside']))[integer_ell]
+            self.pixelweight_matrix = (pixel_weight**2)[:,None]*(pixel_weight**2)[None,:]
+        
         self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
@@ -238,10 +245,6 @@ class CovELLSpace(PolySpectra):
                        bias_dict, iA_dict, hod_dict, prec, read_in_tables)
         if not self.cov_dict['gauss']:
             self.__set_lensweight_splines(obs_dict['ELLspace'], iA_dict)
-        if obs_dict['ELLspace']['pixelised_cell']:
-            integer_ell = np.copy(self.ellrange.astype(int))
-            pixel_weight = (hp.sphtfunc.pixwin(obs_dict['ELLspace']['pixel_Nside']))[integer_ell]
-            self.pixelweight_matrix = (pixel_weight**2)[:,None]*(pixel_weight**2)[None,:]
             
     def __check_krange_support(self,
                                obs_dict,
@@ -4733,6 +4736,10 @@ class CovELLSpace(PolySpectra):
                                     P2_response = spline_responsePgg[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                                     integrand = P1_response[:, :, None]*P2_response[:, None, :]*survey_variance[:, None, None]
                                     SSCELLgggg[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
+                                    self.__update_los_integration_chi(
+                                        self.chimin, self.chimax, covELLspacesettings)
+                                    if covELLspacesettings['pixelised_cell']:
+                                        SSCELLgggg *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
             SSCELLgggg = 0
 
@@ -4783,6 +4790,8 @@ class CovELLSpace(PolySpectra):
                                     SSCELLgggm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
                                         self.chimin, self.chimax, covELLspacesettings)
+                                    if covELLspacesettings['pixelised_cell']:
+                                        SSCELLgggm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
             SSCELLgggm = 0
 
@@ -4833,6 +4842,8 @@ class CovELLSpace(PolySpectra):
                                     SSCELLggmm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
                                         self.chimin, self.chimax, covELLspacesettings)
+                                    if covELLspacesettings['pixelised_cell']:
+                                        SSCELLggmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
             SSCELLggmm = 0
 
@@ -4880,6 +4891,8 @@ class CovELLSpace(PolySpectra):
                                     SSCELLgmgm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
                                         self.chimin, self.chimax, covELLspacesettings)
+                                    if covELLspacesettings['pixelised_cell']:
+                                        SSCELLgmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
             SSCELLgmgm = 0
 
@@ -4923,6 +4936,8 @@ class CovELLSpace(PolySpectra):
                                         + str(round((flat_tomo+1)/tomo_comb*100, 1))
                                         + '% in ' + str(round((time.time()-t0), 1)) + 'sek  ETA in '
                                         + str(round(eta, 1)) + 'sek', end="")
+                                    if covELLspacesettings['pixelised_cell']:
+                                        SSCELLmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
             SSCELLmmmm = 0
 
@@ -4969,6 +4984,8 @@ class CovELLSpace(PolySpectra):
                                     SSCELLmmgm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
                                         self.chimin, self.chimax, covELLspacesettings)
+                                    if covELLspacesettings['pixelised_cell']:
+                                        SSCELLmmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
             SSCELLmmgm = 0
         return SSCELLgggg, SSCELLgggm, SSCELLggmm, SSCELLgmgm, SSCELLmmgm, SSCELLmmmm
