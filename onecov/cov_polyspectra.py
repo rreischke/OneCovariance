@@ -226,7 +226,7 @@ class PolySpectra(HaloModel):
         if self.unbiased_clustering:
             self.mm = True
         self.cross_terms = obs_dict['observables']['cross_terms']
-
+        self.int_list = None
         self.cov_dict = cov_dict
         self.Pmm = self.P_mm(bias_dict, hod_dict, prec)
         self.Pgm = self.P_gm(bias_dict, hod_dict, prec['hm'])
@@ -1874,7 +1874,8 @@ class PolySpectra(HaloModel):
         phis = np.linspace(0, np.pi/2, 300)
         kidxlist = \
             list(itertools.combinations_with_replacement(np.arange(k_dim), 2))
-                
+
+        
         global calc_all_trispec_ints
 
         def calc_all_trispec_ints(idxlist):
@@ -1913,21 +1914,24 @@ class PolySpectra(HaloModel):
                         integrand[idx] = \
                             self.__calc_int_for_trispec_4h(phi, ki, kj)
                     int_4h = 2/np.pi * simpson(integrand, phis)
-
-            return int_2h, int_3h, int_4h
-
-        pool = mp.Pool(self.num_cores)
-        int_list = pool.map(calc_all_trispec_ints, kidxlist)
-        pool.close()
-        pool.terminate()
+            
+            Dp = self.mass_func.growth_factor
+            return int_2h/Dp**2, int_3h/Dp**4, int_4h/Dp**6
         
+
+        if self.int_list is None:
+            pool = mp.Pool(self.num_cores)
+            self.int_list = pool.map(calc_all_trispec_ints, kidxlist)
+            pool.close()
+            pool.terminate()
+        Dp = self.mass_func.growth_factor
         idx = 0
         for idxi, idxj in kidxlist:
             ki, kj = self.krange_tri[idxi], self.krange_tri[idxj]
 
-            integral_2h = int_list[idx][0]
-            integral_3h = int_list[idx][1]
-            integral_4h = int_list[idx][2]
+            integral_2h = self.int_list[idx][0]*Dp**2
+            integral_3h = self.int_list[idx][1]*Dp**4
+            integral_4h = self.int_list[idx][2]*Dp**6
 
             trispec_2h[idxi][idxj] = \
                 2 * integral_mmm[idxi][idxj] * integral_m[idxi] \
