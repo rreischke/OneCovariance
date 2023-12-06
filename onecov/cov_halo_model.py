@@ -879,7 +879,7 @@ class HaloModel(Setup):
                     self.hurly_x(
                         bias_dict, hod_dict, 'cen')[:, None, :,  None, :] \
                     * self.hurly_x(
-                        bias_dict, hod_dict, 'cen')[:, None, :, :]
+                        bias_dict, hod_dict, 'cen')[None, :, None, :, :]
                 bias = self.bias(bias_dict, hm_prec)
 
             if type_x == 'm' and type_y == 'm':
@@ -896,8 +896,8 @@ class HaloModel(Setup):
                 bias = self.bias(bias_dict, hm_prec)
                 integral_xy = np.trapz(self.mass_func.dndm
                                        * hurlyX[:, None, :,  None, :]
-                                       * hurlyX[:, None, :, :]
-                                       * bias,
+                                       * hurlyX[None, :, None, :, :]
+                                       * bias[None, None, None, None, :],
                                        self.mass_func.m)
 
                 hm_prec["log10M_min"] = M_min_save
@@ -907,9 +907,9 @@ class HaloModel(Setup):
             else:
                 integral_xy = np.trapz(self.mass_func.dndm
                                        * (hurlyX[:, None, :,  None, :]
-                                          * hurlyY[:, None, :, :]
+                                          * hurlyY[None, :, None, :, :]
                                           - correct)
-                                       * bias,
+                                       * bias[None, None, None, None, :],
                                        self.mass_func.m)
 
         return integral_xy

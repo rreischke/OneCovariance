@@ -768,14 +768,14 @@ class PolySpectra(HaloModel):
                 response_P_gm = \
                 (68/21 - deriv_Plin[:, None]/3) \
                 * integral_m**2 * self.mass_func.power[:, None] \
-                + integral_mm
+                + integral_mm - self.Pgm
             else:
                 response_P_gm = None
             if self.gg:
                 response_P_gg = \
                 (68/21 - deriv_Plin[:, None]/3) \
                 * integral_m**2 * self.mass_func.power[:, None] \
-                + integral_mm
+                + integral_mm - 2*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)
             else:
                 response_P_gg = None
         else:
