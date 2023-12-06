@@ -1495,10 +1495,10 @@ class CovTHETASpace(CovELLSpace):
             for m_mode in range(self.gg_summaries):
                 for n_mode in range(self.gg_summaries):
                     inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    import matplotlib.pyplot as plt
                     for i_ell in range(len(self.ellrange)):
                         self.levin_int_fourier.init_integral(self.ellrange, nongaussELLgggg_flat[:, i_ell, :]*self.ellrange[:, None], True, True)
                         inner_integral[i_ell, :] = np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
+
                     self.levin_int_fourier.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
                     nongauss_ww[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
                     if connected:

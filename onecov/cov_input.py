@@ -1633,6 +1633,8 @@ class Input:
 
             if 'omega_de' in config['cosmo']:
                 self.omegade = float(config['cosmo']['omega_de'])
+                if np.abs(self.omegade + self.omegam - 1) < 1e-5:
+                    self.omegade = 1.0 - self.omegam
             else:
                 self.omegade = 1.0 - self.omegam
                 print("The dimensionless dark energy density parameter " +

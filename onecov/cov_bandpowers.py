@@ -159,6 +159,7 @@ class CovBandPowers(CovTHETASpace):
         obs_dict['THETAspace']['xi_pp'] = True
         obs_dict['THETAspace']['xi_mm'] = True
         self.cross_terms = True
+        
         CovTHETASpace.__init__(self,
                              cov_dict,
                              obs_dict,

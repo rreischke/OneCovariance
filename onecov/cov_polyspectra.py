@@ -1,9 +1,11 @@
 import warnings
 import itertools
 import numpy as np
-from scipy.integrate import quad, IntegrationWarning
+from scipy.integrate import quad, IntegrationWarning, simpson
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 import multiprocessing as mp
+import time
+
 
 try:
     from onecov.cov_halo_model import HaloModel
@@ -229,7 +231,7 @@ class PolySpectra(HaloModel):
         self.Pgg = self.P_gg(bias_dict, hod_dict, prec['hm'])
         self.Plin_spline = UnivariateSpline(np.log(self.mass_func.k),
                                             np.log(self.mass_func.power),
-                                            k=3, s=0, ext=0)
+                                            k=2, s=0, ext=0)
         self.krange_tri = np.logspace(prec['trispec']['log10k_min'],
                                       prec['trispec']['log10k_max'],
                                       prec['trispec']['log10k_bins'])
@@ -244,6 +246,7 @@ class PolySpectra(HaloModel):
 
         self.num_cores = prec['misc']['num_cores'] \
             if prec['misc']['num_cores'] > 0 else mp.cpu_count()
+        self.num_cores_save = self.num_cores
         if self.unbiased_clustering:
             self.lensing = obs_dict['observables']['cosmic_shear']
             self.mm = obs_dict['observables']['cosmic_shear']
@@ -320,7 +323,7 @@ class PolySpectra(HaloModel):
         self.Pgg = self.P_gg(bias_dict, hod_dict, prec['hm'])
         self.Plin_spline = UnivariateSpline(np.log(self.mass_func.k),
                                             np.log(self.mass_func.power),
-                                            k=3, s=0, ext=0)
+                                            k=2, s=0, ext=0)
 
         return True
 
@@ -384,7 +387,7 @@ class PolySpectra(HaloModel):
 
             hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
             hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
-            integral = np.trapz(
+            integral = simpson(
                 hurlyX*hurlyY*self.mass_func.dndm, self.mass_func.m)
 
             # resets mass range of the halo mass function
@@ -396,7 +399,7 @@ class PolySpectra(HaloModel):
         else:
             hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
             hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
-            integral = np.trapz(hurlyX[:,:,None,:]*hurlyY[:,None,:,:]*self.mass_func.dndm,
+            integral = simpson(hurlyX[:,:,None,:]*hurlyY[:,None,:,:]*self.mass_func.dndm,
                                 self.mass_func.m)
 
         return integral
@@ -466,9 +469,9 @@ class PolySpectra(HaloModel):
             bias_fac /= bias_dict['bias_2h']
 
 
-        integralX = bias_fac*np.trapz(self.mass_func.dndm * bias * hurlyX,
+        integralX = bias_fac*simpson(self.mass_func.dndm * bias * hurlyX,
                                       self.mass_func.m)
-        integralY = bias_fac*np.trapz(self.mass_func.dndm * bias * hurlyY,
+        integralY = bias_fac*simpson(self.mass_func.dndm * bias * hurlyY,
                                       self.mass_func.m)
 
         return integralX[:,:,None]*integralY[:,None,:]*self.mass_func.power[:,None,None]
@@ -1047,12 +1050,12 @@ class PolySpectra(HaloModel):
         """
         if self.unbiased_clustering:
             self.mm = True
+            self.gg = False
         tri_gggg, tri_gggm, tri_ggmm, \
             tri_gmgm, tri_mmgm, tri_mmmm, \
             trispec_gggg, trispec_gggm, trispec_ggmm, \
             trispec_gmgm, trispec_mmgm, trispec_mmmm = \
             self.__check_for_tabulated_trispectra(tri_tab)
-
         trispec1h_gggg, trispec1h_gggm, trispec1h_ggmm, \
             trispec1h_gmgm, trispec1h_mmgm, trispec1h_mmmm = \
             self.__trispectra_1h(bias_dict, hod_dict, hm_prec,
@@ -1129,7 +1132,7 @@ class PolySpectra(HaloModel):
         # prepare extrapolation
         idx_min = np.min(np.where(self.mass_func.k > self.krange_tri[0]))
         idx_max = np.max(np.where(self.mass_func.k < self.krange_tri[-1]))
-
+        
         extr_idx = np.arange(idx_min)
         extr_idx = np.append(extr_idx,
                              np.arange(idx_max, len(self.mass_func.k)))
@@ -1198,6 +1201,7 @@ class PolySpectra(HaloModel):
                             np.copy(trispec[idxi, :, nbin, mbin])
                         trispec[:, idxi, mbin, nbin] = \
                             np.copy(trispec[idxi, :, nbin, mbin])
+        
         if self.gg:
             trispec_gggg[np.where(trispec_gggg < self.tri_lowlim)] = \
                 self.tri_lowlim
@@ -1219,6 +1223,7 @@ class PolySpectra(HaloModel):
         if self.unbiased_clustering:
             if not self.lensing:
                 self.mm = False
+            self.gg = True
             return trispec_mmmm, trispec_mmmm, trispec_mmmm, \
                 trispec_mmmm, trispec_mmmm, trispec_mmmm
         else:
@@ -1380,7 +1385,7 @@ class PolySpectra(HaloModel):
                     * (4 * hurly_c[idxj][mbin] * hurly_s[idxj][mbin]**3
                         + hurly_s[idxj][mbin]**4)) \
                     * self.mass_func.dndm * self.__poisson(4)
-                gggg = np.trapz(integrand, self.mass_func.m)
+                gggg = simpson(integrand, self.mass_func.m)
             else:
                 gggg = 0
 
@@ -1393,7 +1398,7 @@ class PolySpectra(HaloModel):
                         + hurly_s[idxj][mbin]**3)
                     * hurly_m[idxj][mbin]) \
                     * self.mass_func.dndm * self.__poisson(3)
-                gggm = np.trapz(integrand, self.mass_func.m)
+                gggm = simpson(integrand, self.mass_func.m)
             else:
                 gggm = 0
 
@@ -1403,7 +1408,7 @@ class PolySpectra(HaloModel):
                      + hurly_s[idxi][nbin]**4)
                     * hurly_m[idxj][mbin]**4) \
                     * self.mass_func.dndm
-                ggmm = np.trapz(integrand, self.mass_func.m)
+                ggmm = simpson(integrand, self.mass_func.m)
             else:
                 ggmm = 0
 
@@ -1416,7 +1421,7 @@ class PolySpectra(HaloModel):
                         + hurly_s[idxj][mbin]**2)
                     * hurly_m[idxj][mbin]**2) \
                     * self.mass_func.dndm
-                gmgm = np.trapz(integrand, self.mass_func.m)
+                gmgm = simpson(integrand, self.mass_func.m)
             else:
                 gmgm = 0
 
@@ -1427,7 +1432,7 @@ class PolySpectra(HaloModel):
                         + hurly_s[idxj][mbin]**2)
                     * hurly_m[idxj][mbin]**2) \
                     * self.mass_func.dndm
-                mmgm = np.trapz(integrand, self.mass_func.m)
+                mmgm = simpson(integrand, self.mass_func.m)
             else:
                 mmgm = 0
 
@@ -1435,7 +1440,10 @@ class PolySpectra(HaloModel):
 
         if (self.gg or self.gm) and \
            (tri_gggg or tri_gggm or tri_ggmm or tri_gmgm or tri_mmgm):
+            if int(len(self.tri_idxlist)/4) < self.num_cores_save:
+                self.num_cores = int(len(self.tri_idxlist)/4)
             pool = mp.Pool(self.num_cores)
+            self.num_cores = self.num_cores_save   
             tri_list = pool.map(T1h_allbutmmmm, self.tri_idxlist)
             pool.close()
             pool.terminate()
@@ -1457,7 +1465,7 @@ class PolySpectra(HaloModel):
                 for idxM in range(M_dim):
                     hurly_m[:, nbin, idxM] = \
                         hurly_m_spline[nbin][idxM](self.logks_tri)
-
+            
             global T1h_mmmm
 
             def T1h_mmmm(idxlist):
@@ -1466,13 +1474,16 @@ class PolySpectra(HaloModel):
                     hurly_m[idxi][nbin]**2 \
                     * hurly_m[idxj][mbin]**2 \
                     * self.mass_func.dndm
-                return np.trapz(integrand, self.mass_func.m)
+                return simpson(integrand, self.mass_func.m)
 
+            if int(len(self.tri_idxlist)/4) < self.num_cores_save:
+                self.num_cores = int(len(self.tri_idxlist)/4)
             pool = mp.Pool(self.num_cores)
+            self.num_cores = self.num_cores_save   
             tri_mmmm = pool.map(T1h_mmmm, self.tri_idxlist)
             pool.close()
             pool.terminate()
-
+            
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
@@ -1557,7 +1568,6 @@ class PolySpectra(HaloModel):
                 and (1+mu < self.trispec_matter_mulim)):
             kp = np.sqrt(ki*ki + kj*kj + 2*ki*kj*mu)
             pp = np.exp(self.Plin_spline(np.log(kp)))
-
         return pp + pm
 
     def __calc_int_for_trispec_3h(self,
@@ -1666,25 +1676,29 @@ class PolySpectra(HaloModel):
 
         pm = 0
         F2_im, F2_jm = 0, 0
-        if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
-                and (1-mu < self.trispec_matter_mulim)):
-            km = np.sqrt(ki*ki + kj*kj - 2*ki*kj*mu)
-            mu_im = kj/km * mu - ki/km
-            mu_jm = kj/km - mu * ki/km
-            pm = np.exp(self.Plin_spline(np.log(km)))
-            F2_im = self.__pt_kernel_f2(mu_im, ki, km)
-            F2_jm = self.__pt_kernel_f2(-mu_jm, kj, km)
+        #if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
+        #        and (1-mu < self.trispec_matter_mulim)):
+        km = np.sqrt(ki*ki + kj*kj - 2*ki*kj*mu)
+        if km == 0:
+            km = 1e-20
+        mu_im = kj/km * mu - ki/km
+        mu_jm = kj/km - mu * ki/km
+        pm = np.exp(self.Plin_spline(np.log(km)))
+        F2_im = self.__pt_kernel_f2(mu_im, ki, km)
+        F2_jm = self.__pt_kernel_f2(-mu_jm, kj, km)
 
         pp = 0
         F2_ip, F2_jp = 0, 0
-        if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
-                and (1+mu < self.trispec_matter_mulim)):
-            kp = np.sqrt(ki*ki + kj*kj + 2*ki*kj*mu)
-            mu_ip = kj/kp * mu + ki/kp
-            mu_jp = ki/kp * mu + kj/kp
-            pp = np.exp(self.Plin_spline(np.log(kp)))
-            F2_ip = self.__pt_kernel_f2(-mu_ip, ki, kp)
-            F2_jp = self.__pt_kernel_f2(-mu_jp, kj, kp)
+        #if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
+        #        and (1+mu < self.trispec_matter_mulim)):
+        kp = np.sqrt(ki*ki + kj*kj + 2*ki*kj*mu)
+        if kp == 0:
+            kp = 1e-20
+        mu_ip = kj/kp * mu + ki/kp
+        mu_jp = ki/kp * mu + kj/kp
+        pp = np.exp(self.Plin_spline(np.log(kp)))
+        F2_ip = self.__pt_kernel_f2(-mu_ip, ki, kp)
+        F2_jp = self.__pt_kernel_f2(-mu_jp, kj, kp)
 
         pi = np.exp(self.Plin_spline(np.log(ki)))
         pj = np.exp(self.Plin_spline(np.log(kj)))
@@ -1749,28 +1763,34 @@ class PolySpectra(HaloModel):
             + 4/54 * (G2_minus * beta_m + G2_plus * beta_p) \
             + 7/54 * (G2_minus * alpha_m + G2_plus * alpha_p)
         '''
-        if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
-                and (1-mu < self.trispec_matter_mulim)):
-            kj_minus_ki_squared = ki**2 + kj**2 - 2*ki*kj*mu
-            if (kj_minus_ki_squared == 0):
-                return 0.0
-            F2_plus = self.__pt_kernel_f2(mu, ki, kj)
-            F2_minus = self.__pt_kernel_f2(-mu, ki, kj)
-            G2_plus = self.__pt_kernel_g2(mu, ki, kj)
-            G2_minus = self.__pt_kernel_g2(-mu, ki, kj)
-            kj_plus_ki_squared = ki**2 + kj**2 + 2*ki*kj*mu
-            beta_m = kj**2.0*(ki*kj*mu-ki**2)/2.0/ki**2/kj_minus_ki_squared
-            beta_p = kj**2*(-ki**2 -ki*kj*mu)/2.0/ki**2/kj_plus_ki_squared
-            alpha_m = (kj**2-ki*kj*mu)/kj_minus_ki_squared
-            alpha_p = (kj**2+ki*kj*mu)/kj_plus_ki_squared
-            res = 7/54 * F2_minus * kj/ki*mu \
-                - 7/54 * F2_plus * kj/ki*mu \
-                + 4/54 * (G2_minus * beta_m + G2_plus * beta_p) \
-                + 7/54 * (G2_minus * alpha_m + G2_plus * alpha_p)
-
-            return res
+        #if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
+        #        and (1-mu < self.trispec_matter_mulim)):
+        kj_minus_ki_squared = ki**2 + kj**2 - 2*ki*kj*mu
+        kj_plus_ki_squared = ki**2 + kj**2 + 2*ki*kj*mu
+        if kj_minus_ki_squared == 0:
+            beta_m = 1
+            alpha_m = 1
         else:
-            return 0.0
+            beta_m = kj**2.0*(ki*kj*mu-ki**2)/2.0/ki**2/kj_minus_ki_squared
+            alpha_m = (kj**2-ki*kj*mu)/kj_minus_ki_squared
+        if kj_plus_ki_squared == 0:
+            beta_p = 1
+            alpha_p = 1
+        else:
+            beta_p = kj**2*(-ki**2 -ki*kj*mu)/2.0/ki**2/kj_plus_ki_squared
+            alpha_p = (kj**2+ki*kj*mu)/kj_plus_ki_squared
+        F2_plus = self.__pt_kernel_f2(mu, ki, kj)
+        F2_minus = self.__pt_kernel_f2(-mu, ki, kj)
+        G2_plus = self.__pt_kernel_g2(mu, ki, kj)
+        G2_minus = self.__pt_kernel_g2(-mu, ki, kj)
+        res = 7/54 * F2_minus * kj/ki*mu \
+            - 7/54 * F2_plus * kj/ki*mu \
+            + 4/54 * (G2_minus * beta_m + G2_plus * beta_p) \
+            + 7/54 * (G2_minus * alpha_m + G2_plus * alpha_p)
+
+        return res
+        #else:
+        #    return 0.0
 
     def __pt_kernel_g2(self,
                        mu,
@@ -1875,7 +1895,7 @@ class PolySpectra(HaloModel):
                     for idx, phi in enumerate(phis):
                         integrand[idx] = \
                             self.__calc_int_for_trispec_2h(phi, ki, kj)
-                    int_2h = 2/np.pi * np.trapz(integrand, phis)
+                    int_2h = 2/np.pi * simpson(integrand, phis)
                 try:
                     int_3h = 2/np.pi \
                         * quad(self.__calc_int_for_trispec_3h, 0, .5*np.pi,
@@ -1885,7 +1905,7 @@ class PolySpectra(HaloModel):
                     for idx, phi in enumerate(phis):
                         integrand[idx] = \
                             self.__calc_int_for_trispec_3h(phi, ki, kj)
-                    int_3h = 2/np.pi * np.trapz(integrand, phis)
+                    int_3h = 2/np.pi * simpson(integrand, phis)
 
                 try:
                     int_4h = 2/np.pi \
@@ -1896,11 +1916,14 @@ class PolySpectra(HaloModel):
                     for idx, phi in enumerate(phis):
                         integrand[idx] = \
                             self.__calc_int_for_trispec_4h(phi, ki, kj)
-                    int_4h = 2/np.pi * np.trapz(integrand, phis)
+                    int_4h = 2/np.pi * simpson(integrand, phis)
 
             return int_2h, int_3h, int_4h
 
+        if int(len(kidxlist)/4) < self.num_cores_save:
+            self.num_cores = int(len(kidxlist)/4)
         pool = mp.Pool(self.num_cores)
+        self.num_cores = self.num_cores_save   
         int_list = pool.map(calc_all_trispec_ints, kidxlist)
         pool.close()
         pool.terminate()
@@ -1929,8 +1952,8 @@ class PolySpectra(HaloModel):
             trispec_4h[idxi][idxj] = \
                 integral_m[idxi]**2 * integral_m[idxj]**2 * integral_4h
             trispec_4h[idxj][idxi] = trispec_4h[idxi][idxj]
-
             idx += 1
+        
         
         if np.isnan(trispec_2h).any():
             print("TrispectraWarning: One or several elements in the 2-halo " +
