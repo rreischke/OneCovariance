@@ -1,7 +1,10 @@
 import numpy as np
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from scipy.special import sici, erf
-from astropy import units as u        
+from astropy import units as u   
+import camb
+from camb import model, initialpower
+
 
 import hmf
 try:
@@ -192,13 +195,28 @@ class HaloModel(Setup):
             mass_func : class
 
         """
+
+
+        self.camb_pars = camb.CAMBparams()
+        self.camb_pars.set_cosmology(H0=100*self.cosmology.h, 
+                            ombh2=self.cosmology.h**2*self.cosmology.Ob0,
+                            omch2=self.cosmology.h**2*(self.cosmology.Om0-self.cosmology.Ob0),
+                            omk = 0.0,
+                            mnu= cosmo_dict['m_nu'])
+        self.camb_pars.set_dark_energy(w=self.cosmology.w0, wa=self.cosmology.wa, dark_energy_model='fluid') 
+        self.camb_pars.InitPower.set_params(ns=cosmo_dict['ns'],
+                                    As = 1.8e-9)
+        self.camb_pars.set_matter_power(kmax=1000, redshifts = [0])
+        self.camb_pars.NonLinear = model.NonLinear_none
+
         mstep = (hm_prec['log10M_max'] - hm_prec['log10M_min']) \
             / (hm_prec['M_bins'] - .5)
         kstep = (np.log(10**powspec_prec['log10k_max'])
                  - np.log(10**powspec_prec['log10k_min'])) \
             / powspec_prec['log10k_bins']
 
-        transfmodel = {'sigma_8': cosmo_dict['sigma8'],
+        transfmodel = {
+                       'sigma_8': cosmo_dict['sigma8'],
                        'n': cosmo_dict['ns'],
                        'lnk_min': np.log(10**powspec_prec['log10k_min']),
                        'lnk_max': np.log(10**powspec_prec['log10k_max']),
@@ -214,6 +232,8 @@ class HaloModel(Setup):
                             "function " + hm_prec['hmf_model'] + ". Available functions " +
                             "can be found at https://hmf.readthedocs.io/en/latest/" +
                             "_autosummary/hmf.mass_function.fitting_functions.html .")
+        
+
         mass_func = hmf.MassFunction(
             Mmin=hm_prec['log10M_min'],
             Mmax=hm_prec['log10M_max'],
@@ -226,7 +246,11 @@ class HaloModel(Setup):
             cosmo_model=self.cosmology,
             z=zet,
             transfer_model=hm_prec['transfer_model'],
+            transfer_params = {'extrapolate_with_eh':False,'camb_params':self.camb_pars},
             **transfmodel)
+
+        self.camb_pars_new = self.camb_pars.copy()
+
         hm_prec['M_bins'] = len(mass_func.m)
 
         return mass_func

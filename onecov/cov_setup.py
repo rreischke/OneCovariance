@@ -185,7 +185,7 @@ class Setup():
             w0=cosmo_dict['w0'],
             wa=cosmo_dict['wa'],
             Neff=cosmo_dict['neff'],
-            m_nu=cosmo_dict['m_nu']*u.eV,
+            m_nu=[cosmo_dict['m_nu'],0,0]*u.eV,
             Tcmb0=cosmo_dict['Tcmb0'])
 
         rho_bg = cosmology.critical_density(0).to(u.M_sun/u.parsec**3) * 1e18

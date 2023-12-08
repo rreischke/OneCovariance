@@ -224,22 +224,13 @@ class CovELLSpace(PolySpectra):
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'])
-            
         self.__check_krange_support(
             obs_dict, cosmo_dict, bias_dict, hod_dict, prec)
-        pars = camb.CAMBparams()
-        pars.set_cosmology(H0=100*self.cosmology.h, 
-                            ombh2=self.cosmology.h**2*self.cosmology.Ob0,
-                            omch2=self.cosmology.h**2*(self.cosmology.Om0- self.cosmology.Ob0),
-                            omk = 0.0)
-        pars.set_dark_energy(w=self.cosmology.w0, wa=self.cosmology.wa, dark_energy_model='fluid') 
-        pars.InitPower.set_params(ns=self.transfmodel['n'],
-                                    As = 1.8e-9*(self.transfmodel['sigma_8']/0.769965784)**2)
-        pars.set_matter_power(kmax=self.mass_func.k[-1])
-        if prec['hm']['transfer_model'] == 'CAMB':
-            self.mass_func.transfer_params = {'extrapolate_with_eh':False,
-                                              'camb_params':pars}
-                
+        self.camb_pars.set_matter_power(kmax=self.mass_func.k[-1], redshifts = [0])
+        results = camb.get_results(self.camb_pars_new)
+        self.camb_pars_new.InitPower.set_params(ns=cosmo_dict['ns'],
+                                As = 1.8e-9/results.get_sigma8()**2*cosmo_dict['sigma8']**2)
+        self.num_cores_save = self.num_cores       
         self.calc_survey_area(survey_params_dict)
         self.get_Cells(obs_dict, output_dict,
                        bias_dict, iA_dict, hod_dict, prec, read_in_tables)
@@ -945,36 +936,21 @@ class CovELLSpace(PolySpectra):
         aux_mm = np.zeros((self.los_interpolation_sampling,
                            len(self.mass_func.k)))
         self.power_mm_lin_z = np.zeros_like(aux_mm)
-        camb_lin_pow = np.zeros_like(aux_mm)
         self.los_z = np.linspace(
             0, self.zet_max, self.los_interpolation_sampling)
         self.los_chi = self.cosmology.comoving_distance(
             self.los_z).value * self.cosmology.h
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
-        if (self.mm or self.gm) and not tab_bools[2] and prec['hm']['transfer_model'] == 'CAMB':
-            pars = camb.CAMBparams()
-            pars.set_cosmology(H0=100*self.cosmology.h, 
-                               ombh2=self.cosmology.h**2*self.cosmology.Ob0,
-                               omch2=self.cosmology.h**2*(self.cosmology.Om0- self.cosmology.Ob0),
-                               omk = 0.0)
-            pars.set_dark_energy(w=self.cosmology.w0, wa=self.cosmology.wa, dark_energy_model='fluid') 
-            pars.InitPower.set_params(ns=self.transfmodel['n'],
-                                      As = 1.8e-9*(self.transfmodel['sigma_8']/0.769965784)**2)
-            pars.set_matter_power(redshifts = self.los_z[::-1], kmax=self.mass_func.k[-1])
-            pars.NonLinear = model.NonLinear_none
-            results = camb.get_results(pars)
-            _,_, camb_lin_pow = results.get_matter_power_spectrum(minkh=self.mass_func.k[0],
-                                                            maxkh=self.mass_func.k[-1],
-                                                            npoints = len(self.mass_func.k))
-            
-            pars.NonLinear = model.NonLinear_pk
-            pars.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
+        if (self.mm or self.gm or self.unbiased_clustering) and not tab_bools[2] and prec['hm']['transfer_model'] == 'CAMB':
+            self.camb_pars_new.set_matter_power(redshifts = self.los_z[::-1], kmax=self.mass_func.k[-1])
+            results = camb.get_results(self.camb_pars_new)
+            self.camb_pars_new.NonLinear = model.NonLinear_pk
+            self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
 
-            results.calc_power_spectra(pars)
+            results.calc_power_spectra(self.camb_pars_new)
             _,_, aux_mm = results.get_matter_power_spectrum(minkh=self.mass_func.k[0],
                                                             maxkh=self.mass_func.k[-1],
                                                             npoints = len(self.mass_func.k))
-            
         t0 = time.time()
         if self.csmf:
             aux_stellar_mass_func = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))
@@ -986,11 +962,17 @@ class CovELLSpace(PolySpectra):
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     if (self.gg or  self.gm) and not tab_bools[0]:
-                        aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
+                        if self.unbiased_clustering:
+                            aux_gg[zet, :, i_sample, j_sample] = aux_mm[zet,:]
+                        else:
+                            aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
                     else:
                         aux_gg[zet, :, i_sample, j_sample] = np.ones_like(self.mass_func.k)
                 if not tab_bools[1] and self.gm or (self.mm and self.gm):
-                    aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
+                    if self.unbiased_clustering:
+                        aux_gm[zet, :, i_sample, j_sample] = aux_mm[zet,:]
+                    else:
+                        aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
                 else:
                     aux_gm[zet, :, i_sample] = np.ones_like(self.mass_func.k)
             if prec['hm']['transfer_model'] != 'CAMB':
@@ -1010,6 +992,7 @@ class CovELLSpace(PolySpectra):
                     + '% in ' + str(round((time.time()-t0), 1)
                                     ) + 'sek  ETA in '
                     + str(round(eta, 1)) + 'sek', end="")
+        
         print(" ")
         self.update_mass_func(0, bias_dict, hod_dict, prec)
         if self.csmf:
@@ -3962,8 +3945,8 @@ class CovELLSpace(PolySpectra):
         gmgm_z = []
         mmgm_z = []
         mmmm_z = []
-        self.num_cores_save = self.num_cores
-        self.num_cores = 8
+        if self.num_cores > 16:
+            self.num_cores = 16
         while zet < self.zet_max:
             zet = self.zet_min + \
                 covELLspacesettings['tri_delta_z']*idx_z
@@ -4032,172 +4015,53 @@ class CovELLSpace(PolySpectra):
                     trispec_array = np.log(mmmm_z[:,:,:,i_sample,j_sample])
                     splines_mmmm[i_sample].append(RegularGridInterpolator(
                                 (chi_list,np.log(self.mass_func.k), np.log(self.mass_func.k)), trispec_array,bounds_error= False, fill_value = None))
+        flat_idx = 0  
+        mesh_k = np.zeros((3,len(self.ellrange)**2*len(self.los_integration_chi)))
+        for i_chi in range(len(self.los_integration_chi)):
+            for i_ell in range(len(self.ellrange)):
+                ki = np.log((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
+                for j_ell in range(len(self.ellrange)):
+                    kj = np.log((self.ellrange[j_ell] + 0.5)/self.los_integration_chi[i_chi])
+                    mesh_k[0,flat_idx] = self.los_integration_chi[i_chi]
+                    mesh_k[1,flat_idx] = ki
+                    mesh_k[2,flat_idx] = kj
+                    flat_idx +=1
         if self.gg:
             print("At gggg-spline")
-            
-
-
-            global aux_spline_tri_gggg
-
-            def aux_spline_tri_gggg(i_chi):
-                mesh_k = np.zeros((2,len(self.ellrange)**2))
-                flat_idx = 0
-                for i_ell in range(len(self.ellrange)):
-                    ki = np.log((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                    for j_ell in range(len(self.ellrange)):
-                        kj = np.log((self.ellrange[j_ell] + 0.5)/self.los_integration_chi[i_chi])
-                        mesh_k[0,flat_idx] = ki
-                        mesh_k[1,flat_idx] = kj
-                        flat_idx +=1
-                aux_chi = np.ones_like(mesh_k[1,:])*self.los_integration_chi[i_chi]
-                aux_trispec_integrand_gggg = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim))
-                for i_sample in range(self.sample_dim):
-                    for j_sample in range(self.sample_dim):
-                        aux_trispec_integrand_gggg[:,:,i_sample,j_sample] = np.exp(splines_gggg[i_sample][j_sample]((aux_chi,mesh_k[0,:],mesh_k[1,:])).reshape((len(self.ellrange),len(self.ellrange))))
-                return aux_trispec_integrand_gggg
-            pool = mp.Pool(self.num_cores)
-            trispec_integrand_gggg = np.array(pool.map(
-                aux_spline_tri_gggg, [i for i in range(len(self.los_integration_chi))]))
-            pool.close()
-            pool.terminate()
-            
+            trispec_integrand_gggg = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
+                    trispec_integrand_gggg[:,:,:,i_sample,j_sample] = np.exp(splines_gggg[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gg and self.gm and self.cross_terms:
             print("At gggm-spline")
-            global aux_spline_tri_gggm
-
-            def aux_spline_tri_gggm(i_chi):
-                mesh_k = np.zeros((2,len(self.ellrange)**2))
-                flat_idx = 0
-                for i_ell in range(len(self.ellrange)):
-                    ki = np.log((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                    for j_ell in range(len(self.ellrange)):
-                        kj = np.log((self.ellrange[j_ell] + 0.5)/self.los_integration_chi[i_chi])
-                        mesh_k[0,flat_idx] = ki
-                        mesh_k[1,flat_idx] = kj
-                        flat_idx +=1
-                aux_chi = np.ones_like(mesh_k[1,:])*self.los_integration_chi[i_chi]
-                aux_trispec_integrand_gggm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim))
-                for i_sample in range(self.sample_dim):
-                    for j_sample in range(self.sample_dim):
-                        aux_trispec_integrand_gggm[:,:,i_sample,j_sample] = np.exp(splines_gggm[i_sample][j_sample]((aux_chi,mesh_k[0,:],mesh_k[1,:])).reshape((len(self.ellrange),len(self.ellrange))))
-                return aux_trispec_integrand_gggm
-            pool = mp.Pool(self.num_cores)
-            trispec_integrand_gggm = np.array(pool.map(
-                aux_spline_tri_gggm, [i for i in range(len(self.los_integration_chi))]))
-            pool.close()
-            pool.terminate()
-
+            trispec_integrand_gggm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
+                    trispec_integrand_gggm[:,:,:,i_sample,j_sample] = np.exp(splines_gggm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gg and self.mm and self.cross_terms:
             print("At ggmm-spline")
-            global aux_spline_tri_ggmm
-
-            def aux_spline_tri_ggmm(i_chi):
-                mesh_k = np.zeros((2,len(self.ellrange)**2))
-                flat_idx = 0
-                for i_ell in range(len(self.ellrange)):
-                    ki = np.log((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                    for j_ell in range(len(self.ellrange)):
-                        kj = np.log((self.ellrange[j_ell] + 0.5)/self.los_integration_chi[i_chi])
-                        mesh_k[0,flat_idx] = ki
-                        mesh_k[1,flat_idx] = kj
-                        flat_idx +=1
-                aux_chi = np.ones_like(mesh_k[1,:])*self.los_integration_chi[i_chi]
-                aux_trispec_integrand_ggmm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), self.sample_dim, 1))
-                for i_sample in range(self.sample_dim):
-                    for j_sample in range(1):
-                        aux_trispec_integrand_ggmm[:,:,i_sample,j_sample] = np.exp(splines_ggmm[i_sample][j_sample]((aux_chi,mesh_k[0,:],mesh_k[1,:])).reshape((len(self.ellrange),len(self.ellrange))))
-                return aux_trispec_integrand_ggmm
-            pool = mp.Pool(self.num_cores)
-            trispec_integrand_ggmm = np.array(pool.map(
-                aux_spline_tri_ggmm, [i for i in range(len(self.los_integration_chi))]))
-            pool.close()
-            pool.terminate()
-
+            trispec_integrand_ggmm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, 1))
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(1):
+                    trispec_integrand_ggmm[:,:,:,i_sample,j_sample] = np.exp(splines_ggmm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gm:
             print("At gmgm-spline")
-            global aux_spline_tri_gmgm
-
-            def aux_spline_tri_gmgm(i_chi):
-                mesh_k = np.zeros((2,len(self.ellrange)**2))
-                flat_idx = 0
-                for i_ell in range(len(self.ellrange)):
-                    ki = np.log((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                    for j_ell in range(len(self.ellrange)):
-                        kj = np.log((self.ellrange[j_ell] + 0.5)/self.los_integration_chi[i_chi])
-                        mesh_k[0,flat_idx] = ki
-                        mesh_k[1,flat_idx] = kj
-                        flat_idx +=1
-                aux_chi = np.ones_like(mesh_k[1,:])*self.los_integration_chi[i_chi]
-                aux_trispec_integrand_gmgm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim))
-                for i_sample in range(self.sample_dim):
-                    for j_sample in range(self.sample_dim):
-                        aux_trispec_integrand_gmgm[:,:,i_sample,j_sample] = np.exp(splines_gmgm[i_sample][j_sample]((aux_chi,mesh_k[0,:],mesh_k[1,:])).reshape((len(self.ellrange),len(self.ellrange))))
-                return aux_trispec_integrand_gmgm
-            pool = mp.Pool(self.num_cores)
-            trispec_integrand_gmgm = np.array(pool.map(
-                aux_spline_tri_gmgm, [i for i in range(len(self.los_integration_chi))]))
-            pool.close()
-            pool.terminate()
-
+            trispec_integrand_gmgm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
+                    trispec_integrand_gmgm[:,:,:,i_sample,j_sample] = np.exp(splines_gmgm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gm and self.mm and self.cross_terms:
             print("At mmgm-spline")
-            global aux_spline_tri_mmgm
-
-            def aux_spline_tri_mmgm(i_chi):
-                mesh_k = np.zeros((2,len(self.ellrange)**2))
-                flat_idx = 0
-                for i_ell in range(len(self.ellrange)):
-                    ki = np.log((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                    for j_ell in range(len(self.ellrange)):
-                        kj = np.log((self.ellrange[j_ell] + 0.5)/self.los_integration_chi[i_chi])
-                        mesh_k[0,flat_idx] = ki
-                        mesh_k[1,flat_idx] = kj
-                        flat_idx +=1
-                aux_chi = np.ones_like(mesh_k[1,:])*self.los_integration_chi[i_chi]
-                aux_trispec_integrand_mmgm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), 1, self.sample_dim))
-                for i_sample in range(1):
-                    for j_sample in range(self.sample_dim):
-                        aux_trispec_integrand_mmgm[:,:,i_sample,j_sample] = np.exp(splines_mmgm[i_sample][j_sample]((aux_chi,mesh_k[0,:],mesh_k[1,:])).reshape((len(self.ellrange),len(self.ellrange))))
-                return aux_trispec_integrand_mmgm
-            pool = mp.Pool(self.num_cores)
-            trispec_integrand_mmgm = np.array(pool.map(
-                aux_spline_tri_mmgm, [i for i in range(len(self.los_integration_chi))]))
-            pool.close()
-            pool.terminate()
-
+            trispec_integrand_mmgm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), 1, self.sample_dim))
+            for i_sample in range(1):
+                for j_sample in range(self.sample_dim):
+                    trispec_integrand_mmgm[:,:,:,i_sample,j_sample] = np.exp(splines_mmgm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.mm:
-            global aux_spline_tri_mmmm
             print("At mmmm-spline")
-
-            def aux_spline_tri_mmmm(i_chi):
-                mesh_k = np.zeros((2,len(self.ellrange)**2))
-                flat_idx = 0
-                for i_ell in range(len(self.ellrange)):
-                    ki = np.log((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                    for j_ell in range(len(self.ellrange)):
-                        kj = np.log((self.ellrange[j_ell] + 0.5)/self.los_integration_chi[i_chi])
-                        mesh_k[0,flat_idx] = ki
-                        mesh_k[1,flat_idx] = kj
-                        flat_idx +=1
-                aux_chi = np.ones_like(mesh_k[1,:])*self.los_integration_chi[i_chi]
-                aux_trispec_integrand_mmmm = np.zeros(
-                    (len(self.ellrange), len(self.ellrange), 1,1))
-                aux_mmmm = np.zeros(
-                    (len(self.mass_func.k), len(self.mass_func.k)))
-                for i_sample in range(1):
-                    for j_sample in range(1):
-                        aux_trispec_integrand_mmmm[:,:,i_sample,j_sample] = np.exp(splines_mmmm[i_sample][j_sample]((aux_chi,mesh_k[0,:],mesh_k[1,:])).reshape((len(self.ellrange),len(self.ellrange))))
-                return aux_trispec_integrand_mmmm
-            pool = mp.Pool(self.num_cores)
-            trispec_integrand_mmmm = np.array(pool.map(
-                aux_spline_tri_mmmm, [i for i in range(len(self.los_integration_chi))]))
-            pool.close()
-            pool.terminate()
+            trispec_integrand_mmmm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), 1, 1))
+            for i_sample in range(1):
+                for j_sample in range(1):
+                    trispec_integrand_mmmm[:,:,:,i_sample,j_sample] = np.exp(splines_mmmm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         self.num_cores = self.num_cores_save
         nongaussELLgggg = None
         nongaussELLgggm = None

@@ -223,6 +223,7 @@ class PolySpectra(HaloModel):
         self.unbiased_clustering = obs_dict['observables']['unbiased_clustering']
        # if self.gg == False and self.gm == False:
        #     self.unbiased_clustering = False
+        self.int_2h = None
         if self.unbiased_clustering:
             self.mm = True
         self.cross_terms = obs_dict['observables']['cross_terms']
@@ -518,16 +519,15 @@ class PolySpectra(HaloModel):
         """
         if (self.mm or self.gm) and self.cov_dict['gauss']:
             if self.Pxy_tab['mm'] is None:
-                if prec['powspec']['nl_model'] == 'mead2015':
-                    Pmm = self.mass_func.nonlinear_power[:, None] \
-                        * np.ones(self.sample_dim)
-                else:
+                if prec['hm']['transfer_model'] != 'CAMB':
                     Pmm = self.__P_xy_1h(
                         bias_dict, hod_dict, prec['hm'], 'm', 'm') \
                         * self.small_k_damping(
                             prec['hm']['small_k_damping'],
                             self.mass_func.k)[:, None] \
                         + self.mass_func.power[:, None]
+                else:
+                    return None
 
             else:
                 Pmm = np.zeros((len(self.mass_func.k), self.sample_dim))
@@ -585,7 +585,7 @@ class PolySpectra(HaloModel):
         """
         if self.gm or (self.mm and self.gg) and (self.cov_dict['gauss'] or self.cov_dict['ssc']):
             if self.Pxy_tab['gm'] is None:
-                if self.unbiased_clustering:
+                if self.unbiased_clustering and hm_prec['transfer_model'] != 'CAMB':
                     Pgm = self.mass_func.nonlinear_power[:, None] \
                         * np.ones(self.sample_dim)
                 else:
@@ -655,7 +655,7 @@ class PolySpectra(HaloModel):
                 (self.cov_dict['gauss'] or self.cov_dict['ssc']):
 
             if self.Pxy_tab['gg'] is None:
-                if self.unbiased_clustering and self.sample_dim < 2:
+                if self.unbiased_clustering and self.sample_dim < 2 and hm_prec['transfer_model'] != 'CAMB':
                     Pgg = self.mass_func.nonlinear_power[:, None, None]
                 else:
                     Pgg = (2 *
@@ -1236,8 +1236,8 @@ class PolySpectra(HaloModel):
                   lam,
                   fac=0.9):
         """
-        EXPLAIN ME
-        helpy function
+        Computing poisson factors necessary for halomodel integrals and HoD functions
+        for the trispectrum.
 
         Parameters
         ----------
@@ -1375,77 +1375,54 @@ class PolySpectra(HaloModel):
                 hurly_m[:, nbin, idxM] = \
                     hurly_m_spline[nbin][idxM](self.logks_tri)
 
-        global T1h_allbutmmmm
 
-        def T1h_allbutmmmm(idxlist):
-            idxi, idxj, nbin, mbin = idxlist
+        if self.gg and tri_gggg:
+            integrand = np.sqrt((4 * hurly_c[:, None, :, None, :] 
+                        * hurly_s[:, None, :, None, :]**3 + hurly_s[:, None, :, None, :]**4)
+                    * (4 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]**3
+                        + hurly_s[None, : None, :, :]**4)) \
+                    * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(4)
+            trispec1h_gggg = simpson(integrand, self.mass_func.m)
+        
+        if self.gg and self.gm and self.cross_terms and tri_gggm:
+            integrand = np.sqrt(
+                    (3 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**2
+                     + hurly_s[:, None, :, None, :]**3)
+                    * hurly_m[:, None, :, None, :]
+                    * (3 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]**2
+                        + hurly_s[None, : None, :, :]**3)
+                    * hurly_m[None, : None, :, :]) \
+                    * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(3)
+            trispec1h_gggm = simpson(integrand, self.mass_func.m)
+        
+        if self.gg and self.mm and self.cross_terms and tri_ggmm:
+            integrand = np.sqrt(
+                (4 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**3
+                    + hurly_s[None, : None, :, :]**4)
+                * hurly_m[None, : None, :, :]**4) \
+                * self.mass_func.dndm[None, None, None, None, :] 
+            trispec1h_ggmm = simpson(integrand, self.mass_func.m)
+ 
+        if self.gm and tri_gmgm:
+            integrand = np.sqrt(
+                (2 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]
+                    + hurly_s[None, : None, :, :]**2)
+                * hurly_m[None, : None, :, :]**2
+                * (2 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]
+                    + hurly_s[None, : None, :, :]**2)
+                * hurly_m[None, : None, :, :]**2) \
+                * self.mass_func.dndm[None, None, None, None, :] 
+            trispec1h_gmgm = simpson(integrand, self.mass_func.m)
+       
+        if self.mm and self.gm and self.cross_terms and tri_mmgm:
+            integrand = np.sqrt(
+                hurly_m[None, : None, :, :]**4
+                * (2 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]
+                    + hurly_s[None, : None, :, :]**2)
+                * hurly_m[None, : None, :, :]**2) \
+                * self.mass_func.dndm[None, None, None, None, :] 
+            trispec1h_mmgm = simpson(integrand, self.mass_func.m)
 
-            if self.gg and tri_gggg:
-                integrand = np.sqrt(
-                    (4 * hurly_c[idxi][nbin] * hurly_s[idxi][nbin]**3
-                     + hurly_s[idxi][nbin]**4)
-                    * (4 * hurly_c[idxj][mbin] * hurly_s[idxj][mbin]**3
-                        + hurly_s[idxj][mbin]**4)) \
-                    * self.mass_func.dndm * self.__poisson(4)
-                gggg = simpson(integrand, self.mass_func.m)
-            else:
-                gggg = 0
-
-            if self.gg and self.gm and self.cross_terms and tri_gggm:
-                integrand = np.sqrt(
-                    (3 * hurly_c[idxi][nbin] * hurly_s[idxi][nbin]**2
-                     + hurly_s[idxi][nbin]**3)
-                    * hurly_m[idxi][nbin]
-                    * (3 * hurly_c[idxj][mbin] * hurly_s[idxj][mbin]**2
-                        + hurly_s[idxj][mbin]**3)
-                    * hurly_m[idxj][mbin]) \
-                    * self.mass_func.dndm * self.__poisson(3)
-                gggm = simpson(integrand, self.mass_func.m)
-            else:
-                gggm = 0
-
-            if self.gg and self.mm and self.cross_terms and tri_ggmm:
-                integrand = np.sqrt(
-                    (4 * hurly_c[idxi][nbin] * hurly_s[idxi][nbin]**3
-                     + hurly_s[idxi][nbin]**4)
-                    * hurly_m[idxj][mbin]**4) \
-                    * self.mass_func.dndm
-                ggmm = simpson(integrand, self.mass_func.m)
-            else:
-                ggmm = 0
-
-            if self.gm and tri_gmgm:
-                integrand = np.sqrt(
-                    (2 * hurly_c[idxi][nbin] * hurly_s[idxi][nbin]
-                     + hurly_s[idxi][nbin]**2)
-                    * hurly_m[idxi][nbin]**2
-                    * (2 * hurly_c[idxj][mbin] * hurly_s[idxj][mbin]
-                        + hurly_s[idxj][mbin]**2)
-                    * hurly_m[idxj][mbin]**2) \
-                    * self.mass_func.dndm
-                gmgm = simpson(integrand, self.mass_func.m)
-            else:
-                gmgm = 0
-
-            if self.mm and self.gm and self.cross_terms and tri_mmgm:
-                integrand = np.sqrt(
-                    hurly_m[idxi][nbin]**4
-                    * (2 * hurly_c[idxj][mbin] * hurly_s[idxj][mbin]
-                        + hurly_s[idxj][mbin]**2)
-                    * hurly_m[idxj][mbin]**2) \
-                    * self.mass_func.dndm
-                mmgm = simpson(integrand, self.mass_func.m)
-            else:
-                mmgm = 0
-
-            return gggg, gggm, ggmm, gmgm, mmgm
-
-        if (self.gg or self.gm) and \
-           (tri_gggg or tri_gggm or tri_ggmm or tri_gmgm or tri_mmgm):
-            pool = mp.Pool(self.num_cores)
-            tri_list = pool.map(T1h_allbutmmmm, self.tri_idxlist)
-            pool.close()
-            pool.terminate()
         if self.mm and tri_mmmm:
             # update mass range of the halo mass function
             M_min_save = hm_prec["log10M_min"]
@@ -1465,66 +1442,15 @@ class PolySpectra(HaloModel):
                     hurly_m[:, nbin, idxM] = \
                         hurly_m_spline[nbin][idxM](self.logks_tri)
             
-            global T1h_mmmm
-
-            def T1h_mmmm(idxlist):
-                idxi, idxj, nbin, mbin = idxlist
-                integrand = \
-                    hurly_m[idxi][nbin]**2 \
-                    * hurly_m[idxj][mbin]**2 \
-                    * self.mass_func.dndm
-                return simpson(integrand, self.mass_func.m)
-
-            pool = mp.Pool(self.num_cores)
-            tri_mmmm = pool.map(T1h_mmmm, self.tri_idxlist)
-            pool.close()
-            pool.terminate()
             
+            integrand = hurly_m[:, None, 0, :]**2 * hurly_m[None, :, 0, :]**2 * self.mass_func.dndm[None, None, :]
+            trispec1h_mmmm = simpson(integrand, self.mass_func.m)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec)  
 
-        idx = 0
-        for idxi, idxj, nbin, mbin in self.tri_idxlist:
-            if self.gg and tri_gggg:
-                trispec1h_gggg[idxi][idxj][nbin][mbin] = tri_list[idx][0]
-                trispec1h_gggg[idxi][idxj][mbin][nbin] = tri_list[idx][0]
-                trispec1h_gggg[idxj][idxi][nbin][mbin] = tri_list[idx][0]
-                trispec1h_gggg[idxj][idxi][mbin][nbin] = tri_list[idx][0]
-
-            if self.gg and self.gm and self.cross_terms and tri_gggm:
-                trispec1h_gggm[idxi][idxj][nbin][mbin] = tri_list[idx][1]
-                trispec1h_gggm[idxi][idxj][mbin][nbin] = tri_list[idx][1]
-                trispec1h_gggm[idxj][idxi][nbin][mbin] = tri_list[idx][1]
-                trispec1h_gggm[idxj][idxi][mbin][nbin] = tri_list[idx][1]
-
-            if self.gg and self.mm and self.cross_terms and tri_ggmm:
-                trispec1h_ggmm[idxi][idxj][nbin][mbin] = tri_list[idx][2]
-                trispec1h_ggmm[idxi][idxj][mbin][nbin] = tri_list[idx][2]
-                trispec1h_ggmm[idxj][idxi][nbin][mbin] = tri_list[idx][2]
-                trispec1h_ggmm[idxj][idxi][mbin][nbin] = tri_list[idx][2]
-
-            if self.gm and tri_gmgm:
-                trispec1h_gmgm[idxi][idxj][nbin][mbin] = tri_list[idx][3]
-                trispec1h_gmgm[idxi][idxj][mbin][nbin] = tri_list[idx][3]
-                trispec1h_gmgm[idxj][idxi][nbin][mbin] = tri_list[idx][3]
-                trispec1h_gmgm[idxj][idxi][mbin][nbin] = tri_list[idx][3]
-
-            if self.mm and self.gm and self.cross_terms and tri_mmgm:
-                trispec1h_mmgm[idxi][idxj][nbin][mbin] = tri_list[idx][4]
-                trispec1h_mmgm[idxi][idxj][mbin][nbin] = tri_list[idx][4]
-                trispec1h_mmgm[idxj][idxi][nbin][mbin] = tri_list[idx][4]
-                trispec1h_mmgm[idxj][idxi][mbin][nbin] = tri_list[idx][4]
-
-            if self.mm and tri_mmmm:
-                trispec1h_mmmm[idxi][idxj][nbin][mbin] = tri_mmmm[idx]
-                trispec1h_mmmm[idxi][idxj][mbin][nbin] = tri_mmmm[idx]
-                trispec1h_mmmm[idxj][idxi][nbin][mbin] = tri_mmmm[idx]
-                trispec1h_mmmm[idxj][idxi][mbin][nbin] = tri_mmmm[idx]
-
-            idx += 1
         return trispec1h_gggg * damp_1h, trispec1h_gggm * damp_1h, \
             trispec1h_ggmm * damp_1h, trispec1h_gmgm * damp_1h, \
             trispec1h_mmgm * damp_1h, trispec1h_mmmm * damp_1h
@@ -1875,83 +1801,84 @@ class PolySpectra(HaloModel):
         kidxlist = \
             list(itertools.combinations_with_replacement(np.arange(k_dim), 2))
 
-        
-        global calc_all_trispec_ints
+        if self.int_2h is None:
+            self.int_4h = np.zeros((len(self.krange_tri),len(self.krange_tri)))
+            self.int_3h = np.zeros((len(self.krange_tri),len(self.krange_tri)))
+            self.int_2h = np.zeros((len(self.krange_tri),len(self.krange_tri)))
+            for i in range(len(self.krange_tri)):
+                for j in range(i, len(self.krange_tri)):
+                    ki = self.krange_tri[i]
+                    kj = self.krange_tri[j]
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("error")
+                        try:
+                            self.int_2h[i,j] = 2/np.pi \
+                                * quad(self.__calc_int_for_trispec_2h, 0, .5*np.pi,
+                                        args=(ki, kj), limit=50, epsrel=1e-05)[0]
+                        except IntegrationWarning:
+                            integrand = np.zeros_like(phis)
+                            for idx, phi in enumerate(phis):
+                                integrand[idx] = \
+                                    self.__calc_int_for_trispec_2h(phi, ki, kj)
+                            self.int_2h[i,j] = 2/np.pi * simpson(integrand, phis)
+                        try:
+                            self.int_3h[i,j] = 2/np.pi \
+                                * quad(self.__calc_int_for_trispec_3h, 0, .5*np.pi,
+                                        args=(ki, kj), limit=50, epsrel=1e-05)[0]
+                        except IntegrationWarning:
+                            integrand = np.zeros_like(phis)
+                            for idx, phi in enumerate(phis):
+                                integrand[idx] = \
+                                    self.__calc_int_for_trispec_3h(phi, ki, kj)
+                            self.int_3h[i,j] = 2/np.pi * simpson(integrand, phis)
 
-        def calc_all_trispec_ints(idxlist):
-            ki = self.krange_tri[idxlist[0]]
-            kj = self.krange_tri[idxlist[1]]
-            with warnings.catch_warnings():
-                warnings.simplefilter("error")
-                try:
-                    int_2h = 2/np.pi \
-                        * quad(self.__calc_int_for_trispec_2h, 0, .5*np.pi,
-                               args=(ki, kj), limit=50, epsrel=1e-05)[0]
-                except IntegrationWarning:
-                    integrand = np.zeros_like(phis)
-                    for idx, phi in enumerate(phis):
-                        integrand[idx] = \
-                            self.__calc_int_for_trispec_2h(phi, ki, kj)
-                    int_2h = 2/np.pi * simpson(integrand, phis)
-                try:
-                    int_3h = 2/np.pi \
-                        * quad(self.__calc_int_for_trispec_3h, 0, .5*np.pi,
-                               args=(ki, kj), limit=50, epsrel=1e-05)[0]
-                except IntegrationWarning:
-                    integrand = np.zeros_like(phis)
-                    for idx, phi in enumerate(phis):
-                        integrand[idx] = \
-                            self.__calc_int_for_trispec_3h(phi, ki, kj)
-                    int_3h = 2/np.pi * simpson(integrand, phis)
-
-                try:
-                    int_4h = 2/np.pi \
-                        * quad(self.__calc_int_for_trispec_4h, 0, .5*np.pi,
-                               args=(ki, kj), limit=100, epsrel=1e-05)[0]    
-                except IntegrationWarning:
-                    integrand = np.zeros_like(phis)
-                    for idx, phi in enumerate(phis):
-                        integrand[idx] = \
-                            self.__calc_int_for_trispec_4h(phi, ki, kj)
-                    int_4h = 2/np.pi * simpson(integrand, phis)
-            
+                        try:
+                            self.int_4h[i,j] = 2/np.pi \
+                                * quad(self.__calc_int_for_trispec_4h, 0, .5*np.pi,
+                                        args=(ki, kj), limit=100, epsrel=1e-05)[0]    
+                        except IntegrationWarning:
+                            integrand = np.zeros_like(phis)
+                            for idx, phi in enumerate(phis):
+                                integrand[idx] = \
+                                    self.__calc_int_for_trispec_4h(phi, ki, kj)
+                            self.int_4h[i,j] = 2/np.pi * simpson(integrand, phis)  
+                        self.int_4h[j,i] = self.int_4h[i,j]
+                        self.int_3h[j,i] = self.int_3h[i,j]
+                        self.int_2h[j,i] = self.int_2h[i,j]
+                                 
             Dp = self.mass_func.growth_factor
-            return int_2h/Dp**2, int_3h/Dp**4, int_4h/Dp**6
+            self.int_2h /= Dp**2
+            self.int_3h /= Dp**4
+            self.int_4h /= Dp**6
+            
+            
         
-
-        if self.int_list is None:
-            pool = mp.Pool(self.num_cores)
-            self.int_list = pool.map(calc_all_trispec_ints, kidxlist)
-            pool.close()
-            pool.terminate()
+        
+        
         Dp = self.mass_func.growth_factor
-        idx = 0
+        self.int_2h *= Dp**2
+        self.int_3h *= Dp**4
+        self.int_4h *= Dp**6
+        Pspline_eval = np.exp(self.Plin_spline(np.log(self.krange_tri)))
+        trispec_2h = 2 * integral_mmm * integral_m[:, None] \
+                * Pspline_eval[:, None]  \
+                + 2 * integral_mmm * integral_m[None,:] \
+                *  Pspline_eval[None, : ] \
+                + integral_mm**2 * self.int_2h
+        trispec_3h = \
+                2 * integral_mm * integral_m[:, None] \
+                * integral_m[None, :] * self.int_3h
+        trispec_4h = \
+                integral_m[:, None]**2 * integral_m[None, :]**2 * self.int_4h
+        self.int_2h /= Dp**2
+        self.int_3h /= Dp**4
+        self.int_4h /= Dp**6
+        
         for idxi, idxj in kidxlist:
-            ki, kj = self.krange_tri[idxi], self.krange_tri[idxj]
-
-            integral_2h = self.int_list[idx][0]*Dp**2
-            integral_3h = self.int_list[idx][1]*Dp**4
-            integral_4h = self.int_list[idx][2]*Dp**6
-
-            trispec_2h[idxi][idxj] = \
-                2 * integral_mmm[idxi][idxj] * integral_m[idxi] \
-                * np.exp(self.Plin_spline(np.log(ki)))  \
-                + 2 * integral_mmm[idxj][idxi] * integral_m[idxj] \
-                * np.exp(self.Plin_spline(np.log(kj))) \
-                + integral_mm[idxi][idxj]**2 * integral_2h
             trispec_2h[idxj][idxi] = trispec_2h[idxi][idxj]
-
-            trispec_3h[idxi][idxj] = \
-                2 * integral_mm[idxi][idxj] * integral_m[idxi] \
-                * integral_m[idxj] * integral_3h
             trispec_3h[idxj][idxi] = trispec_3h[idxi][idxj]
-
-            trispec_4h[idxi][idxj] = \
-                integral_m[idxi]**2 * integral_m[idxj]**2 * integral_4h
             trispec_4h[idxj][idxi] = trispec_4h[idxi][idxj]
-            idx += 1
-        
-        
+
         if np.isnan(trispec_2h).any():
             print("TrispectraWarning: One or several elements in the 2-halo " +
                   "trispectrum term evaluated to nan. This might bias the " +
