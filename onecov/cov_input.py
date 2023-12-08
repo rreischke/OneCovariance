@@ -2909,7 +2909,7 @@ class Input:
                 self.transfer_model = \
                     config['halomodel evaluation']['transfer_model']
             else:
-                self.transfer_model = 'EH'
+                self.transfer_model = 'CAMB'
                 print("The parameter 'transfer_model' for the hmf module " +
                       "[halomodel evaluation]: 'transfer_model' is set to EH.")
             if 'small_k_damping_for1h' in config['halomodel evaluation']:
