@@ -2244,16 +2244,26 @@ class CovELLSpace(PolySpectra):
         print("Calculating gaussian covariance for angular power spectra " +
               "(C_ell's).")
 
-
-        gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
-            gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
-            gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
-            gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
-            gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
-            gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
-            self.__covELL_split_gaussian(covELLspacesettings,
-                                        survey_params_dict,
-                                        False)
+        if not calc_prefac or self.ellrange_spec is not None:
+            gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+                gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
+                gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
+                self.__covELL_split_gaussian(covELLspacesettings,
+                                            survey_params_dict,
+                                            False)
+        else:
+            gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+                gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
+                gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
+                self.__covELL_split_gaussian(covELLspacesettings,
+                                            survey_params_dict,
+                                            True)
         if covELLspacesettings['pixelised_cell']:
             
             gaussELLgggg_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
@@ -2274,8 +2284,7 @@ class CovELLSpace(PolySpectra):
             gaussELLmmmm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_sn  *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
-        
-        
+            
         if not self.cov_dict['split_gauss'] and self.ellrange_spec is not None and calc_prefac:
             gaussELLgggg = gaussELLgggg_sva + gaussELLgggg_mix
             gaussELLgggm = gaussELLgggm_sva + gaussELLgggm_mix
@@ -3378,6 +3387,7 @@ class CovELLSpace(PolySpectra):
                 * self.Cell_gg[:, :, :, None, :, None, :] \
                 + self.Cell_gg[:, :, :, :, None, None, :] \
                 * self.Cell_gg[:, :, :, None, :, :, None]
+            
             # Cov_mix(gg^ij gg^kl) = Cgg^ik noise_g^jl + Cgg^jl noise_g^ik
             #                      + Cgg^il noise_g^jk + Cgg^jk noise_g^il
             gaussELLgggg_mix = self.Cell_gg[:, :, :, :, None, :, None] \
@@ -3396,7 +3406,8 @@ class CovELLSpace(PolySpectra):
                 + noise_g[None, :, :, :, None, None, :] \
                 * noise_g[None, :, :, None, :, :, None]
             if calc_prefac:
-                tomo_shape = [self.n_tomo_clust, self.n_tomo_clust,
+                tomo_shape = [self.sample_dim, self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_clust,
                               self.n_tomo_clust, self.n_tomo_clust]
                 prefac_gggg = self.__calc_prefac_covELL(
                     covELLspacesettings,
@@ -3406,6 +3417,7 @@ class CovELLSpace(PolySpectra):
                 gaussELLgggg_mix = prefac_gggg * gaussELLgggg_mix
                 gaussELLgggg_sn = prefac_gggg * \
                     gaussELLgggg_sn
+                
             gaussELLgggg_sva = gaussELLgggg_sva[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
             gaussELLgggg_mix = gaussELLgggg_mix[:, None, :, :, :, :, :, :] \
@@ -3431,7 +3443,8 @@ class CovELLSpace(PolySpectra):
             gaussELLgggm_sn = 0
 
             if calc_prefac:
-                tomo_shape = [self.n_tomo_clust, self.n_tomo_clust,
+                tomo_shape = [self.sample_dim, self.sample_dim, 
+                              self.n_tomo_clust, self.n_tomo_clust,
                               self.n_tomo_clust, self.n_tomo_lens]
                 prefac_gggm = self.__calc_prefac_covELL(
                     covELLspacesettings,
@@ -3458,7 +3471,8 @@ class CovELLSpace(PolySpectra):
             gaussELLggmm_sn = 0
 
             if calc_prefac:
-                tomo_shape = [self.n_tomo_clust, self.n_tomo_clust,
+                tomo_shape = [self.sample_dim, self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_clust,
                               self.n_tomo_lens, self.n_tomo_lens]
                 prefac_ggmm = self.__calc_prefac_covELL(
                     covELLspacesettings,
@@ -3487,7 +3501,8 @@ class CovELLSpace(PolySpectra):
             gaussELLgmgm_sn = noise_g[None, :, :, :, None, :, None] \
                 * noise_kappa[None, None, None, None, :, None, :]
             if calc_prefac:
-                tomo_shape = [self.n_tomo_clust, self.n_tomo_lens,
+                tomo_shape = [self.sample_dim, self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_lens,
                               self.n_tomo_clust, self.n_tomo_lens]
                 prefac_gmgm = self.__calc_prefac_covELL(
                     covELLspacesettings,
@@ -3522,7 +3537,8 @@ class CovELLSpace(PolySpectra):
             gaussELLmmgm_sn = 0
 
             if calc_prefac:
-                tomo_shape = [self.n_tomo_lens, self.n_tomo_lens,
+                tomo_shape = [self.sample_dim, self.sample_dim,
+                              self.n_tomo_lens, self.n_tomo_lens,
                               self.n_tomo_clust, self.n_tomo_lens]
                 prefac_mmgm = self.__calc_prefac_covELL(
                     covELLspacesettings,
@@ -3566,7 +3582,8 @@ class CovELLSpace(PolySpectra):
                 * noise_kappa[None, :, :, None]
 
             if calc_prefac:
-                tomo_shape = [self.n_tomo_lens, self.n_tomo_lens,
+                tomo_shape = [self.sample_dim, self.sample_dim,
+                              self.n_tomo_lens, self.n_tomo_lens,
                               self.n_tomo_lens, self.n_tomo_lens]
                 prefac_mmmm = self.__calc_prefac_covELL(
                     covELLspacesettings,
@@ -3708,23 +3725,20 @@ class CovELLSpace(PolySpectra):
             delta_ellrange = 10**ell_ul_range[1:] - 10**ell_ul_range[:-1]
         full_sky_angle = 4*np.pi * self.deg2torad2
         prefac_noarea = full_sky_angle / 2 / (self.ellrange + 1)/ delta_ellrange
-
         prefac = None
         if len(survey_area) == 1:
             if survey_area2 is None:
                 prefac = prefac_noarea / survey_area[0]
             elif len(survey_area2) == 1:
                 prefac = prefac_noarea / max(survey_area[0], survey_area2[0])
-
         if prefac is not None:
-            prefac = prefac[:, None, None, None, None] \
+            prefac = prefac[:, None, None, None, None, None, None] \
                 * np.ones(([len(self.ellrange)] + tomo_shape))
         else:
             prefac = self.__calc_prefac6x2pt_covELL(prefac_noarea,
                                                     tomo_shape,
                                                     survey_area,
                                                     survey_area2)
-
         return prefac
 
     def __calc_prefac6x2pt_covELL(self,
