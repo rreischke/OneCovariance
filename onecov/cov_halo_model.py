@@ -676,9 +676,8 @@ class HaloModel(Setup):
         if (type_x == 'm'):
             uk = self.uk(bias_dict['Mc_relation_cen'],'halo')
             norm = np.ones_like(norm) * self.rho_bg
-            pop = self.mass_func.m
-
-        return (uk[:, None]*pop) / norm.T[:, None]
+            pop = self.mass_func.m[None, :]
+        return (uk[:, None, :]*pop[None, :, :]) / norm.T[None, :, None]
 
     def hurly_x_spline_logk(self,
                             bias_dict,
@@ -920,7 +919,7 @@ class HaloModel(Setup):
                 bias = self.bias(bias_dict, hm_prec)
                 integral_xy = np.trapz(self.mass_func.dndm
                                        * hurlyX[:, None, :,  None, :]
-                                       * hurlyX[None, :, None, :, :]
+                                       * hurlyY[None, :, None, :, :]
                                        * bias[None, None, None, None, :],
                                        self.mass_func.m)
 
@@ -1037,10 +1036,10 @@ class HaloModel(Setup):
 
             hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
             bias = self.bias(bias_dict, hm_prec)
-            integral_mmm = np.trapz(self.mass_func.dndm
+            integral_mmm = np.trapz(self.mass_func.dndm[None, None, None, :]
                                     * hurlyX[:, None, :, :]
-                                    * hurlyX**2.0
-                                    * bias,
+                                    * hurlyX[None, :, :, :]**2.0
+                                    * bias[None, None, None, :],
                                     self.mass_func.m)
 
             hm_prec["log10M_min"] = M_min_save

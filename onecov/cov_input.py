@@ -6499,7 +6499,14 @@ class FileInput:
                             "should provide the angular modes in the first column, and " +
                             "the second column should hold the kernel value.")
 
-        wn_ell = np.exp(data[:, 0])
+        np.seterr(over='ignore')
+        if np.exp(data[-1, 0]) > 1e7:
+            wn_ell = data[:, 0]
+            wn = data[:, 1]
+        else:
+            wn_ell = np.exp(data[:, 0])
+            wn = data[:, 1]
+        np.seterr(over='warn')
         wn = data[:, 1]
 
         return wn_ell, wn
@@ -7036,7 +7043,7 @@ class FileInput:
                 self.wn_log.append(wn)
             self.wn_log = np.array(self.wn_log)
         
-        if self.wn_gg_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
+        if self.wn_gg_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)):
             if '?' in self.wn_gg_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.wn_gg_file[0][:self.wn_gg_file[0].find('?')]
@@ -7123,7 +7130,7 @@ class FileInput:
                 self.Tn_minus.append(Tn)
             self.Tn_minus = np.array(self.Tn_minus)
 
-        if self.Qn_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
+        if self.Qn_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)):
             if '?' in self.Qn_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Qn_file[0][:self.Qn_file[0].find('?')]
@@ -7152,7 +7159,7 @@ class FileInput:
                 self.Qn.append(Qn)
             self.Qn = np.array(self.Qn)
         
-        if self.Un_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
+        if self.Un_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)):
             if '?' in self.Un_file[0]:
                 _, _, filenames = next(walk(self.cosebi_dir))
                 file_id = self.Un_file[0][:self.Un_file[0].find('?')]

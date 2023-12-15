@@ -4372,6 +4372,9 @@ class CovELLSpace(PolySpectra):
         survey_variance_gggm = np.ones_like(self.los_integration_chi)
         survey_variance_mmgm = np.ones_like(self.los_integration_chi)
         survey_variance_ggmm = np.ones_like(self.los_integration_chi)
+
+        
+
         if self.gg:
             ell, sum_m_a_lm = \
                 self.calc_a_lm('gg', 'gg', survey_params_dict)

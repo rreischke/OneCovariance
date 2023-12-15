@@ -210,8 +210,8 @@ class CovTHETASpace(CovELLSpace):
                 limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
                 limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
                 limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
-                limits_at_mode_append[0] = self.ell_fourier_integral[0]
-                limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
+                limits_at_mode_append[0] = self.ell_fourier_integral[1]
+                limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
                 self.ell_limits.append(limits_at_mode_append)
             self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
             self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
@@ -288,6 +288,7 @@ class CovTHETASpace(CovELLSpace):
                 w_signal[i_theta, :, :, :, :] = np.reshape(
                     w_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.w_gg = w_signal
+            np.save("2x2_realspace_andrej_slics_gg", w_signal)
         if self.gm:
             self.data_vector_length += len(self.thetabins)*self.n_tomo_clust*self.n_tomo_lens
             gt_signal_shape = (len(self.thetabins),
@@ -307,6 +308,7 @@ class CovTHETASpace(CovELLSpace):
                 gt_signal[i_theta, :, :, :] = np.reshape(
                     gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.gt = gt_signal
+            np.save("2x2_realspace_andrej_slics_gm", gt_signal)
           ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
         if obs_dict['THETAspace']['mix_term_do_mix_for'] is not None:
             if 'xipxip' in obs_dict['THETAspace']['mix_term_do_mix_for'][:] or 'ximxim' in obs_dict['THETAspace']['mix_term_do_mix_for'][:]:

@@ -1447,7 +1447,7 @@ class Setup():
             ell.append(aux_ell)
             C_ell = healpy.sphtfunc.anafast(m, use_weights=True)
             sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-            print("Assuming a spherical mask with size",survey_area,"deg2 for",est1,"and",est2,".")    
+            print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")    
         return ell, sum_m_a_lm
 
 

@@ -333,7 +333,6 @@ class HOD():
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
             occ_num = np.trapz(occ_prob, self.Mbins[:, :, None], axis=1)
-        
         return occ_num, occ_prob
 
     def occ_num_and_prob(self, 

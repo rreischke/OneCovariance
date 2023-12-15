@@ -2,6 +2,7 @@ import time
 import numpy as np
 from scipy.signal import argrelextrema
 from scipy.interpolate import UnivariateSpline
+from scipy.integrate import simpson
 
 import levin
 
@@ -159,19 +160,6 @@ class CovCOSEBI(CovELLSpace):
                  prec,
                  read_in_tables):
         self.En_modes = obs_dict['COSEBIs']['En_modes']
-        self.array_En_modes = np.array([i + 1 for i in range(self.En_modes)]).astype(int)
-        self.wn_ells, self.wn_kernels = \
-            self.__get_wn_kernels(read_in_tables['COSEBIs'])
-        self.wn_gg_ells, self.wn_gg_kernels = \
-            self.__get_wngg_kernels(read_in_tables['COSEBIs'])
-        self.ell_limits = []
-        for mode in range(self.En_modes):
-            limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::20]
-            limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
-            limits_at_mode_append[1:-1] = limits_at_mode
-            limits_at_mode_append[0] = self.wn_ells[0]
-            limits_at_mode_append[-1] = self.wn_ells[-1]
-            self.ell_limits.append(limits_at_mode_append)
         CovELLSpace.__init__(self,
                              cov_dict,
                              obs_dict,
@@ -183,7 +171,22 @@ class CovCOSEBI(CovELLSpace):
                              survey_params_dict,
                              prec,
                              read_in_tables)
-        self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc'] / np.sqrt(len(self.ell_limits[0][:])), 50, self.num_cores)
+        self.array_En_modes = np.array([i + 1 for i in range(self.En_modes)]).astype(int)
+        if self.mm:
+            self.wn_ells, self.wn_kernels = \
+                self.__get_wn_kernels(read_in_tables['COSEBIs'])
+        if self.gm or self.gg:
+            self.wn_gg_ells, self.wn_gg_kernels = \
+            self.__get_wngg_kernels(read_in_tables['COSEBIs'])
+        self.ell_limits = []
+        for mode in range(self.En_modes):
+            limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::30]
+            limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
+            limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.wn_ells[1]) & (limits_at_mode < self.wn_ells[-2])]
+            limits_at_mode_append[0] = self.wn_ells[0]
+            limits_at_mode_append[-1] = self.wn_ells[-1]
+            self.ell_limits.append(limits_at_mode_append)
+        self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc'] / np.sqrt(len(self.ell_limits[0][:])), 20, self.num_cores)
         if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:
             for i_modes in range(self.En_modes):
                 self.wn_gg_kernels[i_modes, :] = UnivariateSpline(self.wn_gg_ells, self.wn_gg_kernels[i_modes, :], k=2, s=0, ext=0)(self.wn_ells)
@@ -194,7 +197,7 @@ class CovCOSEBI(CovELLSpace):
             self.wn_kernels = wn_kernels_new
         self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
         self.__get_Tn_pm(read_in_tables['COSEBIs'], obs_dict['COSEBIs'], obs_dict) 
-        self.theta_integral = np.geomspace(obs_dict['COSEBIs']['theta_min'], obs_dict['COSEBIs']['theta_max'], 1000) 
+        self.theta_integral = np.geomspace(read_in_tables['COSEBIs']['Tn_pm_theta'][0], read_in_tables['COSEBIs']['Tn_pm_theta'][-1], 1000) 
         if self.gg or self.gm:
             save_n_eff_clust = survey_params_dict['n_eff_clust']
         if self.mm or self.gm:
@@ -809,7 +812,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Un[m_mode](self.theta_gg)*self.Un[n_mode](self.theta_gg)*self.arcmin2torad2**2
                     integrand = (Tpm_product*self.theta_gg**2)[:,None, None, None]/self.dnpair_gg    
-                    aux_gg_sn = np.trapz(integrand,self.theta_gg,axis=0)/self.arcmin2torad2**2
+                    aux_gg_sn = simpson(integrand,self.theta_gg,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIgggg_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_clust[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_clust[None, None, :, None, None, :]
@@ -944,7 +947,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Qn[m_mode](self.theta_gm)*self.Qn[n_mode](self.theta_gm)*self.arcmin2torad2**2
                     integrand = (Tpm_product*self.theta_gm**2)[:,None, None, None]/self.dnpair_gm
-                    aux_gm_sn = np.trapz(integrand,self.theta_gm,axis=0)/self.arcmin2torad2**2
+                    aux_gm_sn = simpson(integrand,self.theta_gm,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIgmgm_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
                                                                             * kron_delta_mass_bins[:,:, None, None, None, None] \
@@ -1051,7 +1054,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Tn_p[m_mode](self.theta_mm)*self.Tn_p[n_mode](self.theta_mm) + self.Tn_m[m_mode](self.theta_mm)*self.Tn_m[n_mode](self.theta_mm)
                     integrand = (Tpm_product*self.theta_mm**2)[:,None, None, None]/self.dnpair_mm
-                    aux_mm_sn = np.trapz(integrand,self.theta_mm,axis=0)/self.arcmin2torad2**2
+                    aux_mm_sn = simpson(integrand,self.theta_mm,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = (kron_delta_tomo_lens[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_lens[None, None, :, None, None, :]

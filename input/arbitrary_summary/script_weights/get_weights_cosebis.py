@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d
 import multiprocessing as mpi
 from scipy.signal import argrelextrema
 from scipy import pi,sqrt,exp
-from scipy.special.orthogonal import p_roots
+from scipy.special import p_roots
 from numpy.polynomial.legendre import legcompanion, legval, legder
 import numpy.linalg as la
 
@@ -19,11 +19,11 @@ num_cores = 8 #number of cores used
 #define constants
 Nmax = 5 # maximum COSEBI mode
 tmin = 0.5 #theta_min in arcmin
-tmax = 300.0 #theta_max in armin
+tmax = 200.0 #theta_max in armin
 ell_min = 1 # Minimum multipole
 ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
-get_W_ell_as_well = False # If true the Well are calculated
+get_W_ell_as_well = True # If true the Well are calculated
 
 #####################
 zmax = mp.log(tmax/tmin)
@@ -183,13 +183,13 @@ for nn in range(1,Nmax+1):
     print("At mode",nn)
     n = nn-1
     tpn = tplus(tmin,tmax,nn,Nn[n],rn[n])
-    lev = levin.Levin(0, 16, 32, 1e-8, 200)
+    lev = levin.Levin(0, 16, 32, 1e-8, 200, num_cores)
     theta = tpn[:,0]
     z=np.log(theta/tmin)
     wide_theta = np.linspace(theta[0]*0.9, theta[-1]*1.1,int(1e4))
     lev.init_w_ell(np.log(wide_theta/tmin), np.ones_like(wide_theta)[:,None])
     tmn = tminus(tmin,tmax,1,Nn[n],rn[n], tpn)
-    lev_w = levin.Levin(0, 16, 32, 1e-8, 200)
+    lev_w = levin.Levin(0, 16, 32, 1e-8, 200, num_cores)
     arcmintorad = np.pi/180/60
     lev_w.init_integral(theta*arcmintorad,(theta*arcmintorad*tpn[:,1])[:,None],True,True)
     if get_W_ell_as_well:
@@ -205,26 +205,16 @@ for nn in range(1,Nmax+1):
                         getWell, ell))
         pool.close()
         pool.terminate()
-    tm_GL = tminus_GL(tmin,tmax,n, Nn[n],np.array(rn[n]), tpn)
-    filenamem = "./../Tminus"+str(nn)+"_0.50-300.00.table"
-    marika_tm = np.loadtxt(filenamem)
-    plt.loglog(tmn[:,0],100*np.abs(tm_GL[:,1]/tmn[:,1]-1), ls = "-", lw = 2)
-    plt.loglog(tmn[:,0],100*np.abs(marika_tm[:,1]/tmn[:,1]-1), ls = "--")
-    plt.loglog(tmn[:,0],np.abs(tmn[:,1]), ls = "-", lw = .5)
-    #plt.semilogx(tmn[:,0],marika_tm/tmn[:,1]-1, ls = ":")
-    plt.show()
-    
-    
     tpn[:,1] /= 2
     tmn[:,1] /= 2 
     if nn < 10:
-        file_tpn = "./../Tp_0"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"
-        file_tmn = "./../Tm_0"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"
-        file_Wn = "./../Wn_0"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"
+        file_tpn = "./../Tp_" +str(tmin) + "_to_" + str(tmax) + "_0"+str(nn)  + ".table"
+        file_tmn = "./../Tm_" +str(tmin) + "_to_" + str(tmax) + "_0"+str(nn)  + ".table"
+        file_Wn = "./../Wn_"  +str(tmin) + "_to_" + str(tmax) + "_0"+str(nn)  + ".table"
     else:
-        file_tpn = "./../Tp_"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"
-        file_tmn = "./../Tm_"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"
-        file_Wn = "./../Wn_"+str(nn) + "_" +str(tmin) + "_to_" + str(tmax) + ".table"
+        file_tpn = "./../Tp_" +str(tmin) + "_to_" + str(tmax) + "_"+str(nn)  + ".table"
+        file_tmn = "./../Tm_" +str(tmin) + "_to_" + str(tmax) + "_"+str(nn)  + ".table"
+        file_Wn = "./../Wn_"  +str(tmin) + "_to_" + str(tmax) + "_"+str(nn)  + ".table"
     np.savetxt(file_tpn,tpn)
     np.savetxt(file_tmn,tmn)    
     if get_W_ell_as_well:
