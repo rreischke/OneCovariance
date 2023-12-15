@@ -398,7 +398,6 @@ class CovELLSpace(PolySpectra):
         self.spline_zcsmf = []
         self.chi_min_clust = np.zeros(self.n_tomo_clust)
         self.chi_max_clust = np.zeros(self.n_tomo_clust)
-        self.zet_lens['z'] -= 0.025
         if self.gm or self.gg:
             dzdchi_clust = self.cosmology.efunc(self.zet_clust['z']) \
                 / self.cosmology.hubble_distance.value  \
