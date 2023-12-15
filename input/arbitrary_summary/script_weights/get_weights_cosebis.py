@@ -192,6 +192,10 @@ for nn in range(1,Nmax+1):
     lev_w = levin.Levin(0, 16, 32, 1e-8, 200, num_cores)
     arcmintorad = np.pi/180/60
     lev_w.init_integral(theta*arcmintorad,(theta*arcmintorad*tpn[:,1])[:,None],True,True)
+    
+    import time.time
+    
+    t0 = time.time()
     if get_W_ell_as_well:
         global getWell
 
@@ -205,6 +209,8 @@ for nn in range(1,Nmax+1):
                         getWell, ell))
         pool.close()
         pool.terminate()
+    
+    print(time.time() - t0)
     tpn[:,1] /= 2
     tmn[:,1] /= 2 
     if nn < 10:

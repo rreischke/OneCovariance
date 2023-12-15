@@ -7014,12 +7014,16 @@ class FileInput:
                                 "external table. Must be included in [tabulated inputs " +
                                 "files] as 'Tn_plus_file' and 'Tn_minus_file' to go on.")
         
-        if self.wn_log_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
+        if self.wn_log_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)) and not self.do_arbitrary_obs:
             if '?' in self.wn_log_file[0]:
-                _, _, filenames = next(walk(self.cosebi_dir))
+                last_slash_index = self.wn_log_file[0].rfind('/')
+                _, _, filenames = next(walk(self.cosebi_dir + self.wn_log_file[0][:last_slash_index + 1]) )
                 file_id = self.wn_log_file[0][:self.wn_log_file[0].find('?')]
+                aux_dir = self.wn_log_file[0][:last_slash_index + 1]
                 self.wn_log_file = sorted([fstr for fstr in filenames
-                                           if file_id in fstr])
+                                           if file_id in self.wn_log_file[0][:last_slash_index + 1] +fstr])
+                for i, wnlogfile in enumerate(self.wn_log_file):
+                    self.wn_log_file[i] = aux_dir + self.wn_log_file[i]
             if len(self.wn_log_file) >= En_modes:
                 self.wn_log_file = self.wn_log_file[:En_modes]
             else:
@@ -7045,10 +7049,15 @@ class FileInput:
         
         if self.wn_gg_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)):
             if '?' in self.wn_gg_file[0]:
-                _, _, filenames = next(walk(self.cosebi_dir))
+                last_slash_index = self.wn_gg_file[0].rfind('/')
+                _, _, filenames = next(walk(self.cosebi_dir + self.wn_gg_file[0][:last_slash_index + 1]) )
                 file_id = self.wn_gg_file[0][:self.wn_gg_file[0].find('?')]
+                aux_dir = self.wn_gg_file[0][:last_slash_index + 1]
                 self.wn_gg_file = sorted([fstr for fstr in filenames
-                                           if file_id in fstr])
+                                           if file_id in self.wn_gg_file[0][:last_slash_index + 1] +fstr])
+                for i, wnlogfile in enumerate(self.wn_gg_file):
+                    self.wn_gg_file[i] = aux_dir + self.wn_gg_file[i]
+            
             if len(self.wn_gg_file) >= En_modes:
                 self.wn_gg_file = self.wn_gg_file[:En_modes]
             else:
@@ -7072,12 +7081,16 @@ class FileInput:
                 self.wn_gg.append(wn_gg)
             self.wn_gg = np.array(self.wn_gg)
 
-        if self.Tn_plus_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
+        if self.Tn_plus_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)) and not self.do_arbitrary_obs:
             if '?' in self.Tn_plus_file[0]:
-                _, _, filenames = next(walk(self.cosebi_dir))
+                last_slash_index = self.Tn_plus_file[0].rfind('/')
+                _, _, filenames = next(walk(self.cosebi_dir + self.Tn_plus_file[0][:last_slash_index + 1]) )
                 file_id = self.Tn_plus_file[0][:self.Tn_plus_file[0].find('?')]
+                aux_dir = self.Tn_plus_file[0][:last_slash_index + 1]
                 self.Tn_plus_file = sorted([fstr for fstr in filenames
-                                           if file_id in fstr])
+                                           if file_id in self.Tn_plus_file[0][:last_slash_index + 1] +fstr])
+                for i, wnlogfile in enumerate(self.Tn_plus_file):
+                    self.Tn_plus_file[i] = aux_dir + self.Tn_plus_file[i]
             if len(self.Tn_plus_file) >= En_modes:
                 self.Tn_plus_file = self.Tn_plus_file[:En_modes]
             else:
@@ -7101,14 +7114,16 @@ class FileInput:
                 self.Tn_plus.append(Tn)
             self.Tn_plus = np.array(self.Tn_plus)
 
-        if self.Tn_minus_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)):
+        if self.Tn_minus_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)) and not self.do_arbitrary_obs:
             if '?' in self.Tn_minus_file[0]:
-                _, _, filenames = next(walk(self.cosebi_dir))
+                last_slash_index = self.Tn_minus_file[0].rfind('/')
+                _, _, filenames = next(walk(self.cosebi_dir + self.Tn_minus_file[0][:last_slash_index + 1]) )
                 file_id = self.Tn_minus_file[0][:self.Tn_minus_file[0].find('?')]
+                aux_dir = self.Tn_minus_file[0][:last_slash_index + 1]
                 self.Tn_minus_file = sorted([fstr for fstr in filenames
-                                           if file_id in fstr])
-            if len(self.Tn_minus_file) >= En_modes:
-                self.Tn_minus_file = self.Tn_minus_file[:En_modes]
+                                           if file_id in self.Tn_minus_file[0][:last_slash_index + 1] +fstr])
+                for i, wnlogfile in enumerate(self.Tn_minus_file):
+                    self.Tn_minus_file[i] = aux_dir + self.Tn_minus_file[i]
             else:
                 raise Exception("ConfigError: To calculate the COSEBI " +
                                 "covariance the Tn_minus kernels must be provided as an " +
@@ -7130,12 +7145,16 @@ class FileInput:
                 self.Tn_minus.append(Tn)
             self.Tn_minus = np.array(self.Tn_minus)
 
-        if self.Qn_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)):
+        if self.Qn_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)) and not self.do_arbitrary_obs:
             if '?' in self.Qn_file[0]:
-                _, _, filenames = next(walk(self.cosebi_dir))
+                last_slash_index = self.Qn_file[0].rfind('/')
+                _, _, filenames = next(walk(self.cosebi_dir + self.Qn_file[0][:last_slash_index + 1]) )
                 file_id = self.Qn_file[0][:self.Qn_file[0].find('?')]
+                aux_dir = self.Qn_file[0][:last_slash_index + 1]
                 self.Qn_file = sorted([fstr for fstr in filenames
-                                           if file_id in fstr])
+                                           if file_id in self.Qn_file[0][:last_slash_index + 1] +fstr])
+                for i, wnlogfile in enumerate(self.Qn_file):
+                    self.Qn_file[i] = aux_dir + self.Qn_file[i]
             if len(self.Qn_file) >= En_modes:
                 self.Qn_file = self.Qn_file[:En_modes]
             else:
@@ -7159,12 +7178,16 @@ class FileInput:
                 self.Qn.append(Qn)
             self.Qn = np.array(self.Qn)
         
-        if self.Un_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)):
+        if self.Un_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True)) and not self.do_arbitrary_obs:
             if '?' in self.Un_file[0]:
-                _, _, filenames = next(walk(self.cosebi_dir))
+                last_slash_index = self.Un_file[0].rfind('/')
+                _, _, filenames = next(walk(self.cosebi_dir + self.Un_file[0][:last_slash_index + 1]) )
                 file_id = self.Un_file[0][:self.Un_file[0].find('?')]
+                aux_dir = self.Un_file[0][:last_slash_index + 1]
                 self.Un_file = sorted([fstr for fstr in filenames
-                                           if file_id in fstr])
+                                           if file_id in self.Un_file[0][:last_slash_index + 1] +fstr])
+                for i, wnlogfile in enumerate(self.Un_file):
+                    self.Un_file[i] = aux_dir + self.Un_file[i]
             if len(self.Un_file) >= En_modes:
                 self.Un_file = self.Un_file[:En_modes]
             else:
@@ -7188,12 +7211,16 @@ class FileInput:
                 self.Un.append(Un)
             self.Un = np.array(self.Un)
 
-        if self.wn_lin_file is not None:
+        if self.wn_lin_file is not None and ((self.est_ggl == 'cosebi' and self.ggl == True) or (self.est_clust == 'cosebi' and self.clustering == True) or (self.est_shear == 'cosebi' and self.cosmicshear == True)) and not self.do_arbitrary_obs:
             if '?' in self.wn_lin_file[0]:
-                _, _, filenames = next(walk(self.cosebi_dir))
+                last_slash_index = self.wn_lin_file[0].rfind('/')
+                _, _, filenames = next(walk(self.cosebi_dir + self.wn_lin_file[0][:last_slash_index + 1]) )
                 file_id = self.wn_lin_file[0][:self.wn_lin_file[0].find('?')]
+                aux_dir = self.wn_lin_file[0][:last_slash_index + 1]
                 self.wn_lin_file = sorted([fstr for fstr in filenames
-                                           if file_id in fstr])
+                                           if file_id in self.wn_lin_file[0][:last_slash_index + 1] +fstr])
+                for i, wnlogfile in enumerate(self.wn_lin_file):
+                    self.wn_lin_file[i] = aux_dir + self.wn_lin_file[i]
             if len(self.wn_lin_file) >= En_modes:
                 self.wn_lin_file = self.wn_lin_file[:En_modes]
             else:

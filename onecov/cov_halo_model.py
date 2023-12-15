@@ -919,7 +919,7 @@ class HaloModel(Setup):
                 bias = self.bias(bias_dict, hm_prec)
                 integral_xy = np.trapz(self.mass_func.dndm
                                        * hurlyX[:, None, :,  None, :]
-                                       * hurlyY[None, :, None, :, :]
+                                       * hurlyX[None, :, None, :, :]
                                        * bias[None, None, None, None, :],
                                        self.mass_func.m)
 

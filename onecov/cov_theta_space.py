@@ -356,8 +356,8 @@ class CovTHETASpace(CovELLSpace):
                         limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
                         limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]) + 2)
                         limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]
-                        limits_at_mode_append[0] = self.ell_fourier_integral[1]
-                        limits_at_mode_append[-1] = self.ell_fourier_integral[-2]
+                        limits_at_mode_append[0] = self.ell_fourier_integral[0]
+                        limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
                         ell_limits.append(limits_at_mode_append)
                     for i_theta in range(len(theta_bins)):
                         levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)

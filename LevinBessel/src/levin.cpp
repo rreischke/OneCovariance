@@ -5,7 +5,7 @@ const double Levin::min_interval = 1.e-4;
 const double Levin::tol_abs = 1.0e-200;
 const double Levin::min_sv = 1.0e-10;
 
-Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_split_rs1,  uint Nthread)
+Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_split_rs1, uint Nthread)
 {
     type = type1;
     col = col1;
@@ -1323,7 +1323,14 @@ double Levin::cquad_integrand_single_well(double x, void *p)
 {
     uint tid = omp_get_thread_num();
     Levin *lp = static_cast<Levin *>(p);
-    return lp->call_integrand(x, lp->int_index_integral[tid]) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_m_mode[tid]));
+    if (lp->xmax_weight > x && lp->xmin_weight < x)
+    {
+        return lp->call_integrand(x, lp->int_index_integral[tid]) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_m_mode[tid]));
+    }
+    else
+    {
+        return 0.;
+    }
 }
 
 std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limits, uint m_mode)
@@ -1341,7 +1348,7 @@ std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limit
         {
             double result_aux = gslIntegratecquad(cquad_integrand_single_well, limits.at(j), limits.at(j + 1));
             result.at(i) += result_aux;
-            if (abs(result_aux / result.at(i)) < converged &&  limits.at(j) > 1e3)
+            if (abs(result_aux / result.at(i)) < converged && limits.at(j) > 1e3)
             {
                 break;
             }
@@ -1355,7 +1362,14 @@ double Levin::cquad_integrand_double_well(double x, void *p)
 {
     uint tid = omp_get_thread_num();
     Levin *lp = static_cast<Levin *>(p);
-    return lp->call_integrand(x, lp->int_index_integral[tid]) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_m_mode[tid])) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_n_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_n_mode[tid]));
+    if (lp->xmax_weight > x && lp->xmin_weight < x)
+    {
+        return lp->call_integrand(x, lp->int_index_integral[tid]) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_m_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_m_mode[tid])) * gsl_spline_eval(lp->spline_w_ell.at(tid).at(lp->int_n_mode[tid]), x, lp->acc_w_ell.at(tid).at(lp->int_n_mode[tid]));
+    }
+    else
+    {
+        return 0.0;
+    }
 }
 
 std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limits, uint m_mode, uint n_mode)

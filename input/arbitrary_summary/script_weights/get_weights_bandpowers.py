@@ -125,7 +125,7 @@ def __call_levin_many_args_WE(ells, ell_up, ell_lo, theta_range, T_of_theta):
     result_WnE = np.zeros(len(ells))
 
 
-    lev = levin.Levin(2, 16, 32, 1e-6, 50)
+    lev = levin.Levin(2, 16, 32, 1e-6, 50, num_cores)
     lev.init_integral(theta_range, T_of_theta[:,None]*np.ones_like(self.ell_fourier_integral)[None,:], True, False) 
     result_WEE = ell_up*np.nan_to_num(lev.double_bessel_many_args(
         ells, ell_up, 0, 1, theta_range[0], theta_range[-1]))
