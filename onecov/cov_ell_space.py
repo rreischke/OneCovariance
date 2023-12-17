@@ -4819,7 +4819,6 @@ class CovELLSpace(PolySpectra):
                                         + str(round(eta, 1)) + 'sek', end="")
                                     if covELLspacesettings['pixelised_cell']:
                                         SSCELLmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
-            #np.save("SSC_test_onecov", SSCELLmmmm)
         else:
             SSCELLmmmm = 0
 

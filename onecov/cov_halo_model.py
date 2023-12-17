@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from scipy.special import sici, erf
+from scipy.integrate import simpson
 from astropy import units as u   
 import camb
 from camb import model, initialpower
@@ -161,7 +162,7 @@ class HaloModel(Setup):
             bias_dict, hod_dict, prec['hm'])
         self.__set_spline_galaxy_stellar_mf(hod_dict)
         self.__set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
-        
+        self.zet= zet
 
     def calc_mass_func(self,
                        zet,
@@ -278,7 +279,7 @@ class HaloModel(Setup):
             with shape (sample_bins)
 
         """
-        return np.trapz(self.mass_func.dndm
+        return simpson(self.mass_func.dndm
                         * self.hod.occ_num_and_prob(
                             hod_dict,
                             self.mor_tab,
@@ -333,7 +334,7 @@ class HaloModel(Setup):
             with unit 1 / (Mpc/h)^3
             with shape (sample_bins)
         """
-        return np.trapz(self.mass_func.dndm
+        return simpson(self.mass_func.dndm
                         * self.hod.occ_num_and_prob_per_pop(
                             hod_dict,
                             'sat',
@@ -415,7 +416,7 @@ class HaloModel(Setup):
             nu_save = self.mass_func.nu**0.5
 
             norm_Mmin = 2.
-            norm_Mbins = 500.
+            norm_Mbins = 900.
 
             Mmin_new = norm_Mmin
             step_new = (self.mass_func.Mmax - Mmin_new) / norm_Mbins
@@ -423,7 +424,7 @@ class HaloModel(Setup):
             nu_new = self.mass_func.nu**0.5
             if self.norm_bias == -1:
                 self.norm_bias = \
-                    np.trapz(self.mass_func.fsigma
+                    simpson(self.mass_func.fsigma
                              / nu_new
                              * self.__bias_tinker10_fittfunc(nu_new),
                              nu_new)
@@ -479,7 +480,7 @@ class HaloModel(Setup):
                 self.occprob_tab,
                 self.occnum_tab
             )[0]
-            integral = np.trapz(self.mass_func.dndm
+            integral = simpson(self.mass_func.dndm
                                 * occ_num
                                 * self.bias(bias_dict, hm_prec),
                                 self.mass_func.m)
@@ -674,7 +675,7 @@ class HaloModel(Setup):
                 self.occnum_tab
             )[0]
         if (type_x == 'm'):
-            uk = self.uk(bias_dict['Mc_relation_cen'],'halo')
+            uk = self.uk(bias_dict['Mc_relation_cen'],'cen')
             norm = np.ones_like(norm) * self.rho_bg
             pop = self.mass_func.m[None, :]
         return (uk[:, None, :]*pop[None, :, :]) / norm.T[None, :, None]
@@ -760,7 +761,7 @@ class HaloModel(Setup):
                     self.hurly_x(bias_dict, hod_dict, 'cen') \
                     + self.hurly_x(bias_dict, hod_dict, 'sat')
                 bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']
-                integral_x = np.trapz(self.mass_func.dndm
+                integral_x = simpson(self.mass_func.dndm
                                       * bias
                                       * hurlyX,
                                       self.mass_func.m)
@@ -776,7 +777,7 @@ class HaloModel(Setup):
 
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
                 bias = self.bias(bias_dict, hm_prec)
-                integral_x = np.trapz(
+                integral_x = simpson(
                     self.mass_func.dndm * hurlyX * bias, self.mass_func.m)
 
                 hm_prec["log10M_min"] = M_min_save
@@ -917,18 +918,17 @@ class HaloModel(Setup):
 
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
                 bias = self.bias(bias_dict, hm_prec)
-                integral_xy = np.trapz(self.mass_func.dndm
+                integral_xy = simpson(self.mass_func.dndm
                                        * hurlyX[:, None, :,  None, :]
                                        * hurlyX[None, :, None, :, :]
                                        * bias[None, None, None, None, :],
                                        self.mass_func.m)
-
                 hm_prec["log10M_min"] = M_min_save
                 self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
                 hm_prec['M_bins'] = len(self.mass_func.m)
                 self.hod.hod_update(bias_dict, hm_prec)
             else:
-                integral_xy = np.trapz(self.mass_func.dndm
+                integral_xy = simpson(self.mass_func.dndm
                                        * (hurlyX[:, None, :,  None, :]
                                           * hurlyY[None, :, None, :, :]
                                           - correct)
@@ -1036,7 +1036,7 @@ class HaloModel(Setup):
 
             hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
             bias = self.bias(bias_dict, hm_prec)
-            integral_mmm = np.trapz(self.mass_func.dndm[None, None, None, :]
+            integral_mmm = simpson(self.mass_func.dndm[None, None, None, :]
                                     * hurlyX[:, None, :, :]
                                     * hurlyX[None, :, :, :]**2.0
                                     * bias[None, None, None, :],
@@ -1110,14 +1110,14 @@ class HaloModel(Setup):
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return np.trapz(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
         if type == 'cen':
             csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'cen',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return np.trapz(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
     
     def galaxy_stellar_mf_bias(self,
                                hod_dict,
@@ -1151,14 +1151,14 @@ class HaloModel(Setup):
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return np.trapz((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
         if type == 'cen':
             csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'cen',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return np.trapz((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
 
     def __set_spline_galaxy_stellar_mf(self,
                                        hod_dict):
@@ -1297,8 +1297,8 @@ class HaloModel(Setup):
         term2 = self.mass_func.dndm[None, None,:]*csmf[None, :, :]*(self.mass_func.m)[None, None,:]/self.rho_bg*(halo_profile)[:, None, :]*halo_bias[None,None,:]
         term3 = self.mass_func.dndm[None,:]*(self.mass_func.m)[None,:]/self.rho_bg*(halo_profile)[:, :]*halo_bias[None,:]
 
-        I1 = np.trapz(term1, self.mass_func.m, axis=-1)
-        I2 = np.trapz(term2, self.mass_func.m, axis=-1) * np.trapz(term3, self.mass_func.m, axis=-1)[:, None]
+        I1 = simpson(term1, self.mass_func.m, axis=-1)
+        I2 = simpson(term2, self.mass_func.m, axis=-1) * simpson(term3, self.mass_func.m, axis=-1)[:, None]
 
         return I1 + 2.0 * self.mass_func.power[:, None] * I2
     

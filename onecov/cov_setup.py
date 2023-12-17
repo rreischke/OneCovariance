@@ -188,9 +188,7 @@ class Setup():
             m_nu=[cosmo_dict['m_nu'],0,0]*u.eV,
             Tcmb0=cosmo_dict['Tcmb0'])
 
-        rho_bg = cosmology.critical_density(0).to(u.M_sun/u.parsec**3) * 1e18
-        rho_bg = rho_bg.value * cosmology.Om(0) / cosmology.h**2
-
+        rho_bg = (cosmology.Om(0)*(cosmology.critical_density(0).to(u.M_sun/u.Mpc**3)/cosmology.h**2)).value
         return cosmology, rho_bg
 
     def __consistency_checks_for_z_support_in_tabs(self):

@@ -19,7 +19,7 @@ num_cores = 8 #number of cores used
 #define constants
 Nmax = 5 # maximum COSEBI mode
 tmin = 0.5 #theta_min in arcmin
-tmax = 200.0 #theta_max in armin
+tmax = 250.0 #theta_max in armin
 ell_min = 1 # Minimum multipole
 ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
@@ -193,9 +193,6 @@ for nn in range(1,Nmax+1):
     arcmintorad = np.pi/180/60
     lev_w.init_integral(theta*arcmintorad,(theta*arcmintorad*tpn[:,1])[:,None],True,True)
     
-    import time.time
-    
-    t0 = time.time()
     if get_W_ell_as_well:
         global getWell
 
@@ -210,9 +207,8 @@ for nn in range(1,Nmax+1):
         pool.close()
         pool.terminate()
     
-    print(time.time() - t0)
-    tpn[:,1] /= 2
-    tmn[:,1] /= 2 
+    #tpn[:,1] /= 2
+    #tmn[:,1] /= 2 
     if nn < 10:
         file_tpn = "./../Tp_" +str(tmin) + "_to_" + str(tmax) + "_0"+str(nn)  + ".table"
         file_tmn = "./../Tm_" +str(tmin) + "_to_" + str(tmax) + "_0"+str(nn)  + ".table"

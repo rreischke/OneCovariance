@@ -246,7 +246,6 @@ class PolySpectra(HaloModel):
         self.trispec_matter_mulim = prec['trispec']['matter_mulim']
         self.trispec_small_k_damping = prec['trispec']['small_k_damping']
         self.tri_lowlim = prec['trispec']['lower_calc_limit']
-
         self.num_cores = prec['misc']['num_cores'] \
             if prec['misc']['num_cores'] > 0 else mp.cpu_count()
         if self.unbiased_clustering:
@@ -311,6 +310,7 @@ class PolySpectra(HaloModel):
             class.
 
         """
+        self.zet = zet
         self.mass_func.update(z=zet)
         # self.mass_func.z = zet
         self.ngal = self.nbar(hod_dict)

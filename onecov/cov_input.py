@@ -7159,6 +7159,8 @@ class FileInput:
                                            if file_id in self.Tn_minus_file[0][:last_slash_index + 1] +fstr])
                 for i, wnlogfile in enumerate(self.Tn_minus_file):
                     self.Tn_minus_file[i] = aux_dir + self.Tn_minus_file[i]
+            if len(self.Tn_minus_file) >= En_modes:
+                self.Tn_minus_file = self.Tn_minus_file[:En_modes]
             else:
                 raise Exception("ConfigError: To calculate the COSEBI " +
                                 "covariance the Tn_minus kernels must be provided as an " +
