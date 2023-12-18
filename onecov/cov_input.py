@@ -1,5 +1,6 @@
 import numpy as np
 import configparser
+import glob
 from os import walk, path
 from astropy.io import ascii, fits
 
@@ -6693,7 +6694,6 @@ class FileInput:
                             for i_files in range(number_files):
                                 aux_arb_file.append(None)
                                 end_index += 1
-
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_fourier_filter_gg_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):

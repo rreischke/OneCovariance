@@ -14,4 +14,6 @@ levin.egg-info
 /input/catalogue_mixed/*
 /config_files/*
 !/config_files/config_cz.ini
+!/config_files/config_legacy_231114.ini
+!/config_files/config_kids_legacy_validation.ini
 !/input/catalogue_mixed/tmptripletcounts_test.fits
