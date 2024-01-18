@@ -23,7 +23,7 @@ tmax = 250.0 #theta_max in armin
 ell_min = 1 # Minimum multipole
 ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
-get_W_ell_as_well = True # If true the Well are calculated
+get_W_ell_as_well = False # If true the Well are calculated
 
 #####################
 zmax = mp.log(tmax/tmin)
@@ -207,8 +207,8 @@ for nn in range(1,Nmax+1):
         pool.close()
         pool.terminate()
     
-    #tpn[:,1] /= 2
-    #tmn[:,1] /= 2 
+    tpn[:,1] /= 2
+    tmn[:,1] /= 2 
     if nn < 10:
         file_tpn = "./../Tp_" +str(tmin) + "_to_" + str(tmax) + "_0"+str(nn)  + ".table"
         file_tmn = "./../Tm_" +str(tmin) + "_to_" + str(tmax) + "_0"+str(nn)  + ".table"

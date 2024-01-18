@@ -946,8 +946,13 @@ class CovELLSpace(PolySpectra):
             self.camb_pars_new.set_matter_power(redshifts = self.los_z[::-1], kmax=self.mass_func.k[-1])
             results = camb.get_results(self.camb_pars_new)
             self.camb_pars_new.NonLinear = model.NonLinear_pk
-            self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
-
+            if prec['powspec']['nl_model'] == "mead2020_feedback":
+                self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'], HMCode_logT_AGN = prec['powspec']['HMCode_logT_AGN'])
+            else:
+                if prec['powspec']['nl_model'] == "mead2015" or prec['powspec']['nl_model'] == "mead2016":
+                    self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'], HMCode_A_baryon = prec['powspec']['HMCode_A_baryon'], HMCode_eta_baryon = prec['powspec']['HMCode_eta_baryon'])
+                else:
+                    self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
             results.calc_power_spectra(self.camb_pars_new)
             _,_, aux_mm = results.get_matter_power_spectrum(minkh=self.mass_func.k[0],
                                                             maxkh=self.mass_func.k[-1],

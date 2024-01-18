@@ -296,6 +296,9 @@ class Input:
         self.log10k_min = None
         self.log10k_max = None
         self.small_k_damping = None
+        self.HMCode_logT_AGN = None
+        self.HMCode_A_baryon = None
+        self.HMCode_eta_baryon = None
 
         # k-range and precision values for the trispectra
         self.trispec_prec = dict()
@@ -3019,8 +3022,27 @@ class Input:
                    'projected_real' in estimators:
                     print("The maximum logarithmic wavenumber [powspec " +
                           "evaluation]: 'log10k_max' is set to 4.")
+            if self.nl_model == 'mead2020_feedback':
+                if 'HMCode_logT_AGN' in config['powspec evaluation']:
+                    self.HMCode_logT_AGN = float(config['powspec evaluation']['HMCode_logT_AGN'])
+                else:
+                    self.HMCode_logT_AGN = 7.8
+            if self.nl_model == 'mead2015' or self.nl_model == 'mead2016':
+                if 'HMCode_A_baryon' in config['powspec evaluation']:
+                    self.HMCode_A_baryon = float(config['powspec evaluation']['HMCode_A_baryon'])
+                else:
+                    self.HMCode_A_baryon = 3.13
+                if 'HMCode_eta_baryon' in config['powspec evaluation']:
+                    self.HMCode_eta_baryon = float(config['powspec evaluation']['HMCode_eta_baryon'])
+                else:
+                    self.HMCode_eta_baryon = 0.603
+            
+
+
         else:
             self.nl_model = 'mead2015'
+            self.HMCode_A_baryon = 3.13
+            self.HMCode_eta_baryon = 0.603
             print("The model for the nonlinear part of the matter-matter " +
                   "power spectrum [powspec evaluation]: 'non_linear_model' " +
                   "is set to mead2015.")
@@ -3534,9 +3556,9 @@ class Input:
                 ", ".join(", ".join((k, str(v)))
                           for k, v in self.mdef_params.items())
 
-        keys = ['nl_model', 'log10k_bins', 'log10k_min', 'log10k_max']
+        keys = ['nl_model', 'log10k_bins', 'log10k_min', 'log10k_max', 'HMCode_A_baryon', 'HMCode_eta_baryon', 'HMCode_logT_AGN']
         values = [self.nl_model, self.log10k_bins, self.log10k_min,
-                  self.log10k_max]
+                  self.log10k_max, self.HMCode_A_baryon, self.HMCode_eta_baryon, self.HMCode_logT_AGN]
         self.powspec_prec = dict(zip(keys, values))
         keys = ['non_linear_model', 'log10k_bins', 'log10k_min', 'log10k_max']
         self.powspec_prec_abr = dict(zip(keys, values))
@@ -3814,7 +3836,6 @@ class FileInput:
                  bias_dict):
 
         self.bias_dict = bias_dict
-        
         # clustering redshift bins
         self.zet_clust = dict()
         self.zet_clust_dir = None
@@ -4048,7 +4069,7 @@ class FileInput:
             exception texts.
 
         """
-
+        self.config_name = config_name
         if 'covariance terms' in config:
             if 'ssc' in config['covariance terms']:
                 self.ssc = config['covariance terms'].getboolean('ssc')
@@ -6702,6 +6723,8 @@ class FileInput:
                                 start_index += 1
                         self.arb_fourier_filter_gg_file = aux_arb_file
                         self.WL_gg, self.WL_ell_gg = [], []
+                        if len(self.arb_fourier_filter_gg_file) == 0:
+                            raise Exception("ConfigError: galaxy clustering requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_fourier_filter_gg_file:
                             wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
                             self.WL_ell_gg.append(wn_ell)
@@ -6734,6 +6757,8 @@ class FileInput:
                                 start_index += 1
                         self.arb_real_filter_gg_file = aux_arb_file
                         self.RL_gg, self.RL_theta_gg = [], []
+                        if len(self.arb_real_filter_gg_file) == 0:
+                            raise Exception("ConfigError: galaxy clustering requested but the Real Filter files for the w-mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_real_filter_gg_file:
                             wn_ell, wn = self.__read_in_real_filter_files(wfile)
                             self.RL_theta_gg.append(wn_ell)
@@ -6771,6 +6796,8 @@ class FileInput:
                                 start_index += 1
                         self.arb_fourier_filter_gm_file = aux_arb_file
                         self.WL_gm, self.WL_ell_gm = [], []
+                        if len(self.arb_fourier_filter_gm_file) == 0:
+                            raise Exception("ConfigError: GGL requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_fourier_filter_gm_file:
                             wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
                             self.WL_ell_gm.append(wn_ell)
@@ -6803,6 +6830,8 @@ class FileInput:
                                 start_index += 1
                         self.arb_real_filter_gm_file = aux_arb_file
                         self.RL_gm, self.RL_theta_gm = [], []
+                        if len(self.arb_real_filter_gm_file) == 0:
+                            raise Exception("ConfigError: GGL requested but the Real Filter files for the gt-mode have not been found, please check the path in " + str(self.config_name))   
                         for wfile in self.arb_real_filter_gm_file:
                             wn_ell, wn = self.__read_in_real_filter_files(wfile)
                             self.RL_theta_gm.append(wn_ell)
@@ -6839,6 +6868,8 @@ class FileInput:
                                 start_index += 1
                         self.arb_fourier_filter_mmE_file = aux_arb_file
                         self.WL_mmE, self.WL_ell_mmE = [], []
+                        if len(self.arb_fourier_filter_mmE_file) == 0:
+                            raise Exception("ConfigError: Cosmic Shear requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_fourier_filter_mmE_file:
                             wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
                             self.WL_ell_mmE.append(wn_ell)
@@ -6875,6 +6906,8 @@ class FileInput:
                         self.arb_fourier_filter_mmB_file = aux_arb_file
                         self.WL_mmB, self.WL_ell_mmB = [], []
                         i_counter = 0
+                        if len(self.arb_fourier_filter_mmB_file) == 0:
+                            raise Exception("ConfigError: Cosmic Shear requested but the Fourier Filter files for the B-mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_fourier_filter_mmB_file:
                             if i_counter < self.arb_number_first_summary_mm:
                                 i = 0
@@ -6915,6 +6948,8 @@ class FileInput:
                                 start_index += 1
                         self.arb_real_filter_mm_p_file = aux_arb_file
                         self.RL_mm_p, self.RL_theta_mm_p = [], []
+                        if len(self.arb_real_filter_mm_p_file) == 0:
+                            raise Exception("ConfigError: Cosmic Shear requested but the Real Filter files for the +-mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_real_filter_mm_p_file:
                             wn_ell, wn = self.__read_in_real_filter_files(wfile)
                             self.RL_theta_mm_p.append(wn_ell)
@@ -6948,6 +6983,8 @@ class FileInput:
                                 start_index += 1
                         self.arb_real_filter_mm_m_file = aux_arb_file
                         self.RL_mm_m, self.RL_theta_mm_m = [], []
+                        if len(self.arb_real_filter_mm_m_file) == 0:
+                            raise Exception("ConfigError: Cosmic Shear requested but the Real Filter files for the --mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_real_filter_mm_m_file:
                             wn_ell, wn = self.__read_in_real_filter_files(wfile)
                             self.RL_theta_mm_m.append(wn_ell)
