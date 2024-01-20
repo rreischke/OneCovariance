@@ -6718,7 +6718,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_fourier_filter_gg_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
                             for i_files in range(number_files):
                                 start_index += 1
                         self.arb_fourier_filter_gg_file = aux_arb_file
@@ -6752,7 +6752,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_real_filter_gg_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
                             for i_files in range(number_files):
                                 start_index += 1
                         self.arb_real_filter_gg_file = aux_arb_file
@@ -6791,7 +6791,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_fourier_filter_gm_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
                             for i_files in range(number_files):
                                 start_index += 1
                         self.arb_fourier_filter_gm_file = aux_arb_file
@@ -6825,7 +6825,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_real_filter_gm_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
                             for i_files in range(number_files):
                                 start_index += 1
                         self.arb_real_filter_gm_file = aux_arb_file
@@ -6853,7 +6853,8 @@ class FileInput:
                             file_id = self.arb_fourier_filter_mmE_file[i][:self.arb_fourier_filter_mmE_file[i].find('?')]
                             aux_dir = self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1]
                             number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1] + fstr]))
+                                                                        if file_id in self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1] + fstr]))          
+                            
                             self.mmE_summary_name.append(file_id)
                             for i_files in range(number_files):
                                 aux_arb_file.append(None)
@@ -6862,8 +6863,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
-
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
                             for i_files in range(number_files):
                                 start_index += 1
                         self.arb_fourier_filter_mmE_file = aux_arb_file
@@ -6871,6 +6871,7 @@ class FileInput:
                         if len(self.arb_fourier_filter_mmE_file) == 0:
                             raise Exception("ConfigError: Cosmic Shear requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
                         for wfile in self.arb_fourier_filter_mmE_file:
+                            print(wfile)
                             wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
                             self.WL_ell_mmE.append(wn_ell)
                             self.WL_mmE.append(wn)
@@ -6900,7 +6901,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
                             for i_files in range(number_files):
                                 start_index += 1
                         self.arb_fourier_filter_mmB_file = aux_arb_file
@@ -6943,7 +6944,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_real_filter_mm_p_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
                             for i_files in range(number_files):
                                 start_index += 1
                         self.arb_real_filter_mm_p_file = aux_arb_file
@@ -6977,7 +6978,7 @@ class FileInput:
                             aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
                                                                         if file_id in self.arb_real_filter_mm_m_file[i][:last_slash_index + 1] + fstr])
                             for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j] = aux_dir + aux_arb_file[start_index:end_index][j]
+                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
 
                             for i_files in range(number_files):
                                 start_index += 1
