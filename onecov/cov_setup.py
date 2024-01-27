@@ -975,6 +975,8 @@ class Setup():
                             if pair_rebinned[i_theta,i_tomo,j_tomo,i_sample] == 0:
                                 i_theta_hi = i_theta - 1
                                 break
+                        if i_theta_lo >= i_theta_hi:
+                            raise Exception("SetupError: The paircount file you have passed does not support the desired angular range and a rebinning is not possible. There is at least one theta bin without any pairs. Please check the files or the theta range")
                         pair_rebinned_spline = interp1d(theta_bins[i_theta_lo:i_theta_hi],pair_rebinned[i_theta_lo:i_theta_hi,i_tomo, j_tomo,i_sample], fill_value="extrapolate")
                         pair_rebinned[:,i_tomo, j_tomo,i_sample] = pair_rebinned_spline(theta_bins)
         return pair_rebinned
@@ -1185,7 +1187,7 @@ class Setup():
                                               npair_tab['theta_mm'],
                                               theta_ul_bins,
                                               theta_bins)
-                npair_mm = npair_mm.transpose(0, 3, 1, 2)
+            npair_mm = npair_mm.transpose(0, 3, 1, 2)
         elif mm:
             print("Approximating the cosmic shear real space shot noise " +
                   "contribution with the effective number density of source " +

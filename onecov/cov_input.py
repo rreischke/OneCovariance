@@ -100,6 +100,14 @@ class Input:
         self.ell_photo_max = None
         self.ell_photo_bins = None
         self.ell_photo_type = None
+        self.ell_min_lensing = None
+        self.ell_max_lensing = None
+        self.ell_bins_lensing = None
+        self.ell_type_lensing = None
+        self.ell_min_clustering = None
+        self.ell_max_clustering = None
+        self.ell_bins_clustering = None
+        self.ell_type_clustering = None
         
 
         # for cosmic shear in projected real space
@@ -603,6 +611,32 @@ class Input:
                         config['covELLspace settings']['ell_photo_bins'])
                 if 'ell_photo_type' in config['covELLspace settings']:
                     self.ell_photo_type = config['covELLspace settings']['ell_photo_type']
+            if 'ell_min_clustering' in config['covELLspace settings']:
+                self.ell_min_clustering = float(
+                    config['covELLspace settings']['ell_min_clustering'])
+            if 'ell_max_clustering' in config['covELLspace settings']:
+                self.ell_max_clustering = float(
+                    config['covELLspace settings']['ell_max_clustering'])
+                if self.pixelised_cell:
+                    self.ell_max_clustering = 3*self.pixel_Nside - 1
+            if 'ell_bins_clustering' in config['covELLspace settings']:
+                self.ell_bins_clustering = int(
+                    config['covELLspace settings']['ell_bins_clustering'])
+            if 'ell_type_clustering' in config['covELLspace settings']:
+                self.ell_type_clustering = config['covELLspace settings']['ell_type_clustering']
+            if 'ell_min_lensing' in config['covELLspace settings']:
+                self.ell_min_lensing = float(
+                    config['covELLspace settings']['ell_min_lensing'])
+            if 'ell_max_lensing' in config['covELLspace settings']:
+                self.ell_max_lensing = float(
+                    config['covELLspace settings']['ell_max_lensing'])
+                if self.pixelised_cell:
+                    self.ell_max_lensing = 3*self.pixel_Nside - 1
+            if 'ell_bins_lensing' in config['covELLspace settings']:
+                self.ell_bins_lensing = int(
+                    config['covELLspace settings']['ell_bins_lensing'])
+            if 'ell_type_lensing' in config['covELLspace settings']:
+                self.ell_type_lensing = config['covELLspace settings']['ell_type_lensing']
         else:
             ...
 
@@ -626,24 +660,11 @@ class Input:
 
 
             if self.ell_min is None:
-                raise Exception("ConfigError: The lensing estimator is " +
-                                "'C_ell' but no minimum ell for the projection is " +
-                                "specified. Must be adjusted in config file " +
-                                config_name + ", [covELLspace settings]: 'ell_min = 100'.")
-
+                self.ell_min = 2
             if self.ell_max is None:
-                raise Exception("ConfigError: The lensing estimator is " +
-                                "'C_ell' but no maximum ell for the projection is " +
-                                "specified. Must be adjusted in config file " +
-                                config_name + ", [covELLspace settings]: 'ell_max = " +
-                                "1000'.")
-
+                self.ell_max = int(1e4)
             if self.ell_bins is None:
-                raise Exception("ConfigError: The lensing estimator is " +
-                                "'C_ell' but no number of ell bins is specified. Must " +
-                                "be adjusted in config file " + config_name + ", " +
-                                "[covELLspace settings]: 'ell_bins = 10'.")
-
+                self.ell_bins = 100
             if self.ell_type is None:
                 self.ell_type = 'log'
                 print("The binning type for ell bins " +
@@ -700,7 +721,7 @@ class Input:
                     self.ell_max = self.ell_spec_max
                 if self.ell_photo_max > self.ell_max:
                     self.ell_max = self.ell_photo_max
-                
+
             if self.delta_z is None:
                 self.delta_z = 0.02
                 print("The redshift spacing for the C_ell covariance l.o.s. " +
@@ -3265,16 +3286,17 @@ class Input:
         self.output = dict(zip(keys, values))
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
-                'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type']
+                'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type',
+                'ell_min_clustering', 'ell_max_clustering', 'ell_bins_clustering', 'ell_type_clustering',
+                'ell_min_lensing', 'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing']
         values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
                   self.delta_z, self.integration_steps, self.nz_polyorder,
                   self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.n_spec,
                   self.ell_spec_min, self.ell_spec_max, self.ell_spec_bins, self.ell_spec_type,
-                  self.ell_photo_min, self.ell_photo_max, self.ell_photo_bins, self.ell_photo_type,]
+                  self.ell_photo_min, self.ell_photo_max, self.ell_photo_bins, self.ell_photo_type,
+                  self.ell_min_clustering, self.ell_max_clustering, self.ell_bins_clustering, self.ell_type_clustering,
+                  self.ell_min_lensing, self.ell_max_lensing, self.ell_bins_lensing, self.ell_type_lensing]
         self.covELLspace_settings = dict(zip(keys, values))
-        keys = ['ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
-                'integration_steps', 'nz_interpolation_polynom_order',
-                'tri_delta_z']
         self.covELLspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
@@ -4749,8 +4771,10 @@ class FileInput:
         """
         print("Reading in tabulated number of galaxy pairs from file " +
               path.join(self.npair_dir, nfile) + ".")
-
-        data = ascii.read(path.join(self.npair_dir, nfile))
+        try:
+            data = ascii.read(path.join(self.npair_dir, nfile))
+        except:
+            1
         if len(data.colnames) < 2:
             print("InputWarning: The file " +
                   path.join(self.npair_dir, nfile) + " in keyword " +
@@ -5017,10 +5041,19 @@ class FileInput:
                 fn_pt2 = self.npair_mm_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
                 fn_pt3 = self.npair_mm_file[0][loc_pt1+loc_pt2+2:]
                 self.npair_mm_file = []
-                for bin1 in range(self.n_tomo_lens):
-                    for bin2 in range(bin1, self.n_tomo_lens):
-                        self.npair_mm_file.append(
-                            fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
+                try:
+                    ascii.read(path.join(self.npair_dir, fn_pt1 + str(1) + fn_pt2 + str(self.n_tomo_lens) + fn_pt3))
+                    for bin1 in range(self.n_tomo_lens):
+                        for bin2 in range(bin1, self.n_tomo_lens):
+                            fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3
+                            self.npair_mm_file.append(
+                                fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
+                except:
+                    for bin1 in range(self.n_tomo_lens):
+                        for bin2 in range(bin1, self.n_tomo_lens):
+                            fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3
+                            self.npair_mm_file.append(
+                                fn_pt1 + str(bin2+1) + fn_pt2 + str(bin1+1) + fn_pt3)
             fidx = 0
             for bin1 in range(self.n_tomo_lens):
                 for bin2 in range(bin1, self.n_tomo_lens):
@@ -5046,7 +5079,7 @@ class FileInput:
                     self.npair_mm[:, bin2, bin1] = npair_mm
                     fidx += 1
             self.npair_mm = self.npair_mm[:,:,:,None]
-                    
+          
     def __read_in_powspec_files(self,
                                 Pfile):
         """

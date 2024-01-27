@@ -27,13 +27,15 @@ else:
 
 if not observables['arbitrary_summary']['do_arbitrary_summary']:
     if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
+        print("CALCULATING COVARIANCE FOR ANGULAR POWER SPECTRA")
+        print("################################################")    
         covell = CovELLSpace(covterms, observables, output, cosmo, bias, iA,
                             hod, survey_params, prec, read_in_tables)
         covariance_in_ell_space = covell.calc_covELL(
             observables, output, bias,  hod, survey_params, prec, read_in_tables)
         out = Output(output)
         out.write_cov(covterms, observables, covell.n_tomo_clust,
-                    covell.n_tomo_lens, covell.ellrange,
+                    covell.n_tomo_lens, covell.ellrange_clustering,
                     covariance_in_ell_space[0],
                     covariance_in_ell_space[1],
                     covariance_in_ell_space[2])

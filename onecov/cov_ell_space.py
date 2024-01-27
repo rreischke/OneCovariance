@@ -213,6 +213,7 @@ class CovELLSpace(PolySpectra):
             self.f_tomo[:] = read_in_tables['csmf']['f_tomo']
             
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
+        print(self.ellrange_clustering_ul)
         if obs_dict['ELLspace']['pixelised_cell']:
             obs_dict['ELLspace']['ellmax'] = int(3*obs_dict['ELLspace']['pixel_Nside'] + 1)
             self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
@@ -332,6 +333,32 @@ class CovELLSpace(PolySpectra):
             with shape (ell bins)
 
         """
+        self.ellrange_clustering_ul = None
+        if covELLspacesettings['ell_type_clustering'] is not None and covELLspacesettings['ell_bins_clustering'] is not None and covELLspacesettings['ell_max_clustering'] is not None and covELLspacesettings['ell_min_clustering'] is not None:
+            if covELLspacesettings['ell_type_clustering'] == 'lin':
+                self.ellrange_clustering_ul = np.linspace(
+                    covELLspacesettings['ell_min_clustering'],
+                    covELLspacesettings['ell_max_clustering'],
+                    covELLspacesettings['ell_bins_clustering'] + 1).astype(int)
+                self.ellrange_clustering = .5 * (self.ellrange_clustering_ul[1:] + self.ellrange_clustering_ul[:-1])
+            else:
+                self.ellrange_clustering_ul = np.unique(np.geomspace(covELLspacesettings['ell_min_clustering'], covELLspacesettings['ell_max_clustering'], covELLspacesettings['ell_bins_clustering'] + 1).astype(int))
+                self.ellrange_clustering = np.exp(.5 * (np.log(self.ellrange_clustering_ul[1:])
+                                    + np.log(self.ellrange_clustering_ul[:-1])))
+        self.ellrange_lensing_ul = None
+        if covELLspacesettings['ell_type_lensing'] is not None and covELLspacesettings['ell_bins_lensing'] is not None and covELLspacesettings['ell_max_lensing'] is not None and covELLspacesettings['ell_min_lensing'] is not None:
+            if covELLspacesettings['ell_type_lensing'] == 'lin':
+                self.ellrange_lensing_ul = np.linspace(
+                    covELLspacesettings['ell_min_lensing'],
+                    covELLspacesettings['ell_max_lensing'],
+                    covELLspacesettings['ell_bins_lensing'] + 1)
+                self.ellrange_lensing = .5 * (self.ellrange_lensing_ul[1:] + self.ellrange_lensing_ul[:-1])
+            else:
+                self.ellrange_lensing_ul = np.geomspace(covELLspacesettings['ell_min_lensing'], covELLspacesettings['ell_max_lensing'], covELLspacesettings['ell_bins_lensing'] + 1)
+                self.ellrange_lensing = np.exp(.5 * (np.log(self.ellrange_lensing_ul[1:])
+                                    + np.log(self.ellrange_lensing_ul[:-1])))
+
+
         if covELLspacesettings['n_spec'] is not None and covELLspacesettings['n_spec'] != 0:
             if covELLspacesettings['ell_spec_type'] == 'lin':
                 self.ellrange_spec_ul = np.linspace(
@@ -364,6 +391,7 @@ class CovELLSpace(PolySpectra):
                 return np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins'])
             else:
                 return np.unique(np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins']).astype(int)).astype(float)
+        
         
 
     def __set_redshift_distribution_splines(self,
@@ -976,7 +1004,7 @@ class CovELLSpace(PolySpectra):
                         aux_gg[zet, :, i_sample, j_sample] = np.ones_like(self.mass_func.k)
                 if not tab_bools[1] and self.gm or (self.mm and self.gm):
                     if self.unbiased_clustering:
-                        aux_gm[zet, :, i_sample, j_sample] = aux_mm[zet,:]
+                        aux_gm[zet, :, i_sample] = aux_mm[zet,:]
                     else:
                         aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
                 else:
@@ -1289,19 +1317,20 @@ class CovELLSpace(PolySpectra):
                                             hod_dict,
                                             prec,
                                             read_in_tables['tri'])
+                    
         if self.cov_dict['nongauss'] and self.ellrange_photo is None:
             if self.gg:
                 nongauss[0][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[0][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_clust']/self.deg2torad2)
+            if self.gg and self.gm and self.cross_terms:
+                nongauss[1][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[1][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
             if self.gg and self.mm and self.cross_terms:
-                nongauss[1] *= np.ones_like(nongauss[1][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
-            if self.gg and self.mm and self.cross_terms:
-                nongauss[2] *= np.ones_like(nongauss[2][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.deg2torad2)
+                nongauss[2][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[2][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.deg2torad2)
             if self.gm:
-                nongauss[3] *= np.ones_like(nongauss[3][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_ggl']/self.deg2torad2)
+                nongauss[3][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[3][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_ggl']/self.deg2torad2)
             if self.mm and self.gm and self.cross_terms:           
-                nongauss[4] *= np.ones_like(nongauss[4][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+                nongauss[4][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[4][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
             if self.mm:
-                nongauss[5] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
+                nongauss[5][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
         if self.ellrange_photo is not None:
             nongaussELLgggg_ssss_new = 0
             nongaussELLgggg_sssp_new = 0
@@ -2010,6 +2039,82 @@ class CovELLSpace(PolySpectra):
                                         binned_covariance[i_ell, j_ell, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo] = result
         return binned_covariance
     
+
+    def __bin_cov_ell_gauss(self,
+                            ellrange_12_ul,
+                            ellrange_34_ul,
+                            area_12,
+                            area_34,
+                            cov):
+        if not isinstance(cov, np.ndarray):
+            return 0
+        full_sky_angle = 1 * self.deg2torad2
+
+        binned_covariance = np.zeros((len(ellrange_12_ul) - 1, len(ellrange_34_ul) - 1, len(cov[0,0,:,0,0,0,0,0]), len(cov[0,0,0,:,0,0,0,0]), len(cov[0,0,0,0,:,0,0,0]), len(cov[0,0,0,0,0,:,0,0]), len(cov[0,0,0,0,0,0,:,0]), len(cov[0,0,0,0,0,0,0,:])))
+        for i_ell in range(len(ellrange_12_ul) - 1):
+            for j_ell in range(len(ellrange_34_ul) - 1):
+                integration_ell_12 = np.arange(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1]).astype(int)
+                N_ell_12 = len(integration_ell_12)
+                integration_ell_34 = np.arange(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1]).astype(int)
+                N_ell_34 = len(integration_ell_34)
+                overlapping_elements = np.array(list(set(integration_ell_12).intersection(set(integration_ell_34))))
+                if len(overlapping_elements) == 0:
+                    continue
+                if i_ell == 0 and j_ell == 1:
+                    print(overlapping_elements)
+                else:
+                    for i_sample in range(len(cov[0,0,:,0,0,0,0,0])):
+                        for j_sample in range(len(cov[0,0,0,:,0,0,0,0])):
+                            for i_tomo in range(len(cov[0,0,0,0,:,0,0,0])):
+                                for j_tomo in range(len(cov[0,0,0,0,0,:,0,0])):
+                                    for k_tomo in range(len(cov[0,0,0,0,0,0,:,0])):
+                                        for l_tomo in range(len(cov[0,0,0,0,0,0,0,:])):
+                                            if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
+                                                spline = UnivariateSpline(self.ellrange,np.log(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo])), k=2, s=0, ext=1)
+                                                result = full_sky_angle / max(area_12,area_34)*np.sum(np.exp(spline(overlapping_elements))/(2.*overlapping_elements + 1))/N_ell_12/N_ell_34
+                                                binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result
+        return binned_covariance
+
+    def __bin_cov_ell_nongauss(self,
+                               ellrange_12_ul,
+                               ellrange_34_ul,
+                               area_12,
+                               area_34,
+                               cov,
+                               connected):
+        if not isinstance(cov, np.ndarray):
+            return 0
+        full_sky_angle = 1 * self.deg2torad2
+
+        binned_covariance = np.zeros((len(ellrange_12_ul) - 1, len(ellrange_34_ul) - 1, len(cov[0,0,:,0,0,0,0,0]), len(cov[0,0,0,:,0,0,0,0]), len(cov[0,0,0,0,:,0,0,0]), len(cov[0,0,0,0,0,:,0,0]), len(cov[0,0,0,0,0,0,:,0]), len(cov[0,0,0,0,0,0,0,:])))
+            
+        for i in range(len(ellrange_12_ul) - 1):
+            for j_ell in range(len(ellrange_34_ul) - 1):
+                area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]
+                area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
+                integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],100)
+                integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],100)
+                ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34)
+                for i_sample in range(len(cov[0,0,:,0,0,0,0,0])):
+                    for j_sample in range(len(cov[0,0,0,:,0,0,0,0])):        
+                         for i_tomo in range(len(cov[0,0,0,0,:,0,0,0])):
+                                for j_tomo in range(len(cov[0,0,0,0,0,:,0,0])):
+                                    for k_tomo in range(len(cov[0,0,0,0,0,0,:,0])):
+                                        for l_tomo in range(len(cov[0,0,0,0,0,0,0,:])):
+                                            if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
+                                                if(np.all(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] > 0)):
+                                                    spline = RegularGridInterpolator((self.ellrange,self.ellrange), np.log(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]),bounds_error= False, fill_value = None)
+                                                    result = simpson(simpson(np.exp(spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[:,None],integration_ell_34), integration_ell_12)
+                                                else:
+                                                    spline = RegularGridInterpolator(self.ellrange,self.ellrange, cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
+                                                    result = simpson(simpson((spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[:,None],integration_ell_34), integration_ell_12)
+                                                result /= (area12_ell*area34_ell)
+                                                if connected:
+                                                    result *= full_sky_angle / max(area_12,area_34)
+                                                binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result
+        return binned_covariance
+    
+
     def __bin_non_Gaussian(self,
                             covELLspacesettings,
                             survey_params_dict,
@@ -2269,7 +2374,7 @@ class CovELLSpace(PolySpectra):
                 gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
                 self.__covELL_split_gaussian(covELLspacesettings,
                                             survey_params_dict,
-                                            True)
+                                            False)
         if covELLspacesettings['pixelised_cell']:
             
             gaussELLgggg_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
@@ -2290,7 +2395,106 @@ class CovELLSpace(PolySpectra):
             gaussELLmmmm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_sn  *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+
+        if calc_prefac or self.ellrange_spec is None:
+            if self.gg and self.ellrange_clustering_ul is not None:
+                gaussELLgggg_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_clust'],
+                                                            gaussELLgggg_sva)
+                gaussELLgggg_mix = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_clust'],
+                                                            gaussELLgggg_mix)
+                gaussELLgggg_sn = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_clust'],
+                                                            gaussELLgggg_sn)
+            if self.gg and self.gm and self.ellrange_clustering_ul is not None:
+                gaussELLgggm_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            gaussELLgggm_sva)
+                gaussELLgggm_mix = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            gaussELLgggm_mix)
+                gaussELLgggm_sn = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            gaussELLgggm_sn)
+            if self.gg and self.mm and self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                gaussELLggmm_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_lensing_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLggmm_sva)
+                gaussELLggmm_mix = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_lensing_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLggmm_mix)
+                gaussELLggmm_sn = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_lensing_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLggmm_sn)
+            if self.gm and self.ellrange_clustering_ul is not None:
+                gaussELLgmgm_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            gaussELLgmgm_sva)
+                gaussELLgmgm_mix = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            gaussELLgmgm_mix)
+                gaussELLgmgm_sn = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            survey_params_dict['survey_area_ggl'],
+                                                            gaussELLgmgm_sn)
+            if self.gm and self.mm and self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:  
+                gaussELLmmgm_sva = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLmmgm_sva)
+                gaussELLmmgm_mix = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLmmgm_mix)
+                gaussELLmmgm_sn = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
+                                                            self.ellrange_clustering_ul,
+                                                            survey_params_dict['survey_area_clust'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLmmgm_sn)
+            if self.mm and self.ellrange_lensing_ul is not None:
             
+                gaussELLmmmm_sva = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
+                                                            self.ellrange_lensing_ul,
+                                                            survey_params_dict['survey_area_lens'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLmmmm_sva)
+                gaussELLmmmm_mix = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
+                                                            self.ellrange_lensing_ul,
+                                                            survey_params_dict['survey_area_lens'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLmmmm_mix)
+                gaussELLmmmm_sn = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
+                                                            self.ellrange_lensing_ul,
+                                                            survey_params_dict['survey_area_lens'],
+                                                            survey_params_dict['survey_area_lens'],
+                                                            gaussELLmmmm_sn)
+
         if not self.cov_dict['split_gauss'] and self.ellrange_spec is not None and calc_prefac:
             gaussELLgggg = gaussELLgggg_sva + gaussELLgggg_mix
             gaussELLgggm = gaussELLgggm_sva + gaussELLgggm_mix
@@ -3469,13 +3673,12 @@ class CovELLSpace(PolySpectra):
 
         if self.gg and self.mm and self.cross_terms:
             # Cov_sva(gg^ij mm^kl) = Cgm^ik Cgm^jl + Cgm^il Cgm^jk
-            gaussELLggmm_sva = self.Cell_gm[:, :, :, None, :, None] \
-                * self.Cell_gm[:, :, None, :, None, :] \
-                + self.Cell_gm[:, :, :, None, None, :] \
-                * self.Cell_gm[:, :, None, :, :, None]
+            gaussELLggmm_sva = self.Cell_gm[:, :, None ,:, None, :, None] \
+                * self.Cell_gm[:, :, None, None, :, None, :] \
+                + self.Cell_gm[:, :, None, :, None, None, :] \
+                * self.Cell_gm[:, :, None, None, :, :, None]
             gaussELLggmm_mix = 0
             gaussELLggmm_sn = 0
-
             if calc_prefac:
                 tomo_shape = [self.sample_dim, self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_clust,
@@ -3486,7 +3689,7 @@ class CovELLSpace(PolySpectra):
                     survey_params_dict['survey_area_clust'],
                     survey_params_dict['survey_area_lens'])
                 gaussELLggmm_sva = prefac_ggmm * gaussELLggmm_sva
-            gaussELLggmm_sva = gaussELLggmm_sva[:, None, :, None, :, :, :, :] \
+            gaussELLggmm_sva = gaussELLggmm_sva[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
             gaussELLggmm_sva = gaussELLggmm_sva[:, :, :, :1, :, :, :, :]
         else:
@@ -3517,10 +3720,10 @@ class CovELLSpace(PolySpectra):
                 gaussELLgmgm_sva = prefac_gmgm * gaussELLgmgm_sva
                 gaussELLgmgm_mix = prefac_gmgm * gaussELLgmgm_mix
                 gaussELLgmgm_sn = prefac_gmgm * \
-                    gaussELLgmgm_sn[None, :, :, :, :]
-            
+                    gaussELLgmgm_sn
             gaussELLgmgm_sva = gaussELLgmgm_sva[:, None, :, :, :, :, :, :] \
                 * reshape_mat  # [:, :, :, None, None, None, None]
+                
             gaussELLgmgm_mix = gaussELLgmgm_mix[:, None, :, :, :, :, :, :]\
                 * reshape_mat  # [:, :, :, None, None, None, None]
             gaussELLgmgm_sn = gaussELLgmgm_sn[:, None, :, :, :, :, :, :] \
@@ -3586,7 +3789,6 @@ class CovELLSpace(PolySpectra):
                 * noise_kappa[None, :, None, :] \
                 + noise_kappa[:, None, None, :] \
                 * noise_kappa[None, :, :, None]
-
             if calc_prefac:
                 tomo_shape = [self.sample_dim, self.sample_dim,
                               self.n_tomo_lens, self.n_tomo_lens,
@@ -3596,18 +3798,29 @@ class CovELLSpace(PolySpectra):
                     tomo_shape,
                     survey_params_dict['survey_area_lens'])
                 gaussELLmmmm_sva = prefac_mmmm * gaussELLmmmm_sva
-                gaussELLmmmm_mix = prefac_mmmm * gaussELLmmmm_mix
+                gaussELLmmmm_mix = prefac_mmmm * gaussELLmmmm_mix[:, None, :, :, :, :, :]
                 gaussELLmmmm_sn = prefac_mmmm * \
-                    gaussELLmmmm_sn[None, :, :, :, :]
-            gaussELLmmmm_sva = gaussELLmmmm_sva[:, None, :, :, :, :, :] \
-                * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLmmmm_mix = gaussELLmmmm_mix[:, None, None, :, :, :, :, :] \
-                * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLmmmm_sn = gaussELLmmmm_sn[None, None, None, None, :, :, :, :] \
-                * reshape_mat  # [:, :, :, None, None, None, None]
-            gaussELLmmmm_sva = gaussELLmmmm_sva[:, :, :1, :1, :, :, :, :]
-            gaussELLmmmm_mix = gaussELLmmmm_mix[:, :, :1, :1, :, :, :, :]
-            gaussELLmmmm_sn = gaussELLmmmm_sn[:, :, :1, :1, :, :, :, :]            
+                    gaussELLmmmm_sn[None, None, None, :, :, :, :]
+                gaussELLmmmm_sva = gaussELLmmmm_sva[:, None, :, :, :, :, :, :] \
+                    * reshape_mat  # [:, :, :, None, None, None, None]
+                gaussELLmmmm_mix = gaussELLmmmm_mix[:, None, :, :, :, :, :, :] \
+                    * reshape_mat  # [:, :, :, None, None, None, None]
+                gaussELLmmmm_sn = gaussELLmmmm_sn[:, None, :, :, :, :, :, :] \
+                    * reshape_mat  # [:, :, :, None, None, None, None]
+                gaussELLmmmm_sva = gaussELLmmmm_sva[:, :, :1, :1, :, :, :, :]
+                gaussELLmmmm_mix = gaussELLmmmm_mix[:, :, :1, :1, :, :, :, :]
+                gaussELLmmmm_sn = gaussELLmmmm_sn[:, :, :1, :1, :, :, :, :]
+            else:
+                gaussELLmmmm_sva = gaussELLmmmm_sva[:, None, :, :, :, :, :] \
+                    * reshape_mat  # [:, :, :, None, None, None, None]
+                gaussELLmmmm_mix = gaussELLmmmm_mix[:, None, None, :, :, :, :, :] \
+                    * reshape_mat  # [:, :, :, None, None, None, None]
+                gaussELLmmmm_sn = gaussELLmmmm_sn[None, None, None, None, :, :, :, :] \
+                    * reshape_mat  # [:, :, :, None, None, None, None]
+                gaussELLmmmm_sva = gaussELLmmmm_sva[:, :, :1, :1, :, :, :, :]
+                gaussELLmmmm_mix = gaussELLmmmm_mix[:, :, :1, :1, :, :, :, :]
+                gaussELLmmmm_sn = gaussELLmmmm_sn[:, :, :1, :1, :, :, :, :]
+                   
         else:
             gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = 0, 0, 0
 
@@ -4047,37 +4260,31 @@ class CovELLSpace(PolySpectra):
                     mesh_k[2,flat_idx] = kj
                     flat_idx +=1
         if self.gg:
-            print("At gggg-spline")
             trispec_integrand_gggg = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     trispec_integrand_gggg[:,:,:,i_sample,j_sample] = np.exp(splines_gggg[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gg and self.gm and self.cross_terms:
-            print("At gggm-spline")
             trispec_integrand_gggm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     trispec_integrand_gggm[:,:,:,i_sample,j_sample] = np.exp(splines_gggm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gg and self.mm and self.cross_terms:
-            print("At ggmm-spline")
             trispec_integrand_ggmm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, 1))
             for i_sample in range(self.sample_dim):
                 for j_sample in range(1):
                     trispec_integrand_ggmm[:,:,:,i_sample,j_sample] = np.exp(splines_ggmm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gm:
-            print("At gmgm-spline")
             trispec_integrand_gmgm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     trispec_integrand_gmgm[:,:,:,i_sample,j_sample] = np.exp(splines_gmgm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.gm and self.mm and self.cross_terms:
-            print("At mmgm-spline")
             trispec_integrand_mmgm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), 1, self.sample_dim))
             for i_sample in range(1):
                 for j_sample in range(self.sample_dim):
                     trispec_integrand_mmgm[:,:,:,i_sample,j_sample] = np.exp(splines_mmgm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
         if self.mm:
-            print("At mmmm-spline")
             trispec_integrand_mmmm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), 1, 1))
             for i_sample in range(1):
                 for j_sample in range(1):
@@ -4382,6 +4589,7 @@ class CovELLSpace(PolySpectra):
         
 
         if self.gg:
+            print("Getting survey modes for gggg")
             ell, sum_m_a_lm = \
                 self.calc_a_lm('gg', 'gg', survey_params_dict)
             if ell is not None:
@@ -4409,6 +4617,7 @@ class CovELLSpace(PolySpectra):
             self.survey_variance_gggg_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_gggg, k=1, s=0, ext=0)
         if self.mm:
+            print("Getting survey modes for mmmm")
             ell, sum_m_a_lm = \
                 self.calc_a_lm('mm', 'mm', survey_params_dict)
             if ell is not None:
@@ -4437,6 +4646,7 @@ class CovELLSpace(PolySpectra):
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
 
         if self.gm:
+            print("Getting survey modes for gmgm")
             ell, sum_m_a_lm = \
                 self.calc_a_lm('gm', 'gm', survey_params_dict)
             if ell is not None:
@@ -4465,6 +4675,7 @@ class CovELLSpace(PolySpectra):
                 self.los_integration_chi, survey_variance_gmgm, k=1, s=0, ext=0)
 
         if self.gg and self.gm and self.cross_terms:
+            print("Getting survey modes for gggm")
             ell, sum_m_a_lm = \
                 self.calc_a_lm('gg', 'gm', survey_params_dict)
             if ell is not None:
@@ -4493,6 +4704,7 @@ class CovELLSpace(PolySpectra):
                 self.los_integration_chi, survey_variance_gggm, k=1, s=0, ext=0)
             
         if self.gg and self.mm and self.cross_terms:
+            print("Getting survey modes for ggmm")
             ell, sum_m_a_lm = \
                 self.calc_a_lm('gg', 'mm', survey_params_dict)
             if ell is not None:
@@ -4520,6 +4732,7 @@ class CovELLSpace(PolySpectra):
             self.survey_variance_ggmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_ggmm, k=1, s=0, ext=0)
         if self.gm and self.mm and self.cross_terms:
+            print("Getting survey modes for mmgm")
             ell, sum_m_a_lm = \
                 self.calc_a_lm('mm', 'gm', survey_params_dict)
             if ell is not None:
@@ -4530,7 +4743,7 @@ class CovELLSpace(PolySpectra):
                         power = np.exp(np.interp(np.log(ell[1:]/self.chimin),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
                     else:
                         power = np.exp(np.interp(np.log(ell[1:]/self.los_chi[i_chi]),np.log(self.mass_func.k),np.log(self.power_mm_lin_z[i_chi,:])))
-                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])(survey_params_dict['survey_area_ggl']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
+                    y_aux[i_chi] = np.sum(power * sum_m_a_lm[1:])/(survey_params_dict['survey_area_ggl']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
                 survey_variance_mmgm = np.interp(self.los_integration_chi, self.los_chi, y_aux)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
@@ -4817,12 +5030,6 @@ class CovELLSpace(PolySpectra):
                                     integrand = Pmm_response[:, :, None]*Pmm_response[:, None, :]*survey_variance[:, None, None]
                                     SSCELLmmmm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     flat_tomo += 1
-                                    eta = (time.time()-t0) * \
-                                        (tomo_comb/(flat_tomo+1)-1)
-                                    print('\rSSC calculation at '
-                                        + str(round((flat_tomo+1)/tomo_comb*100, 1))
-                                        + '% in ' + str(round((time.time()-t0), 1)) + 'sek  ETA in '
-                                        + str(round(eta, 1)) + 'sek', end="")
                                     if covELLspacesettings['pixelised_cell']:
                                         SSCELLmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
@@ -4873,6 +5080,7 @@ class CovELLSpace(PolySpectra):
                                         self.chimin, self.chimax, covELLspacesettings)
                                     if covELLspacesettings['pixelised_cell']:
                                         SSCELLmmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+            print("")
         else:
             SSCELLmmgm = 0
         return SSCELLgggg, SSCELLgggm, SSCELLggmm, SSCELLgmgm, SSCELLmmgm, SSCELLmmmm

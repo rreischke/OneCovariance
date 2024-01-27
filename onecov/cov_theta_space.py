@@ -1163,7 +1163,6 @@ class CovTHETASpace(CovELLSpace):
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                           str(round(eta, 1)) + 'min', end="")
-                       
             gauss_xipm_sn = \
                 (kron_delta_tomo_lens[None, None, None, :, None, :, None]
                  * kron_delta_tomo_lens[None, None, None, None, :, None, :]
@@ -1173,7 +1172,6 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipm_sn = \
                 gauss_xipm_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.thetabins))[:, :, None, None, None, None, None, None]
-            print("")
         else:
             gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, gauss_xipm_sn = 0, 0, 0, 0, 0, 0, 0
 

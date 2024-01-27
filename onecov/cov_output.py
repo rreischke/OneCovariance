@@ -896,7 +896,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -921,7 +921,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -942,7 +942,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -1027,7 +1027,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1077,7 +1077,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1123,7 +1123,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1565,7 +1565,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2], 
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -1592,7 +1592,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -1615,7 +1615,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -1692,7 +1692,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1744,7 +1744,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1792,7 +1792,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe],  i_r1, i_r2, 
+                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -2084,7 +2084,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -2134,7 +2134,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -2189,7 +2189,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -2239,7 +2239,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  i_r1, i_r2, 
+                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,

@@ -22,10 +22,9 @@ else:
 compiler_args_levin =  compiler_args + ["-fopenmp", "-O3"]
 linker_args_levin   =  linker_args   + ["-fopenmp", "-O3"]
 
-
-compiler_args_discretecov =  compiler_args + ["-fopenmp", "-fPIC", "-Wall", "-O3", "-std=c99"]
-linker_args_discretecov   =  linker_args   + ["-fopenmp", "-fPIC", "-Wall", "-O3", "-std=c99"]
-
+compiler = "g++"
+compiler_args_discretecov =  compiler_args + ["-fopenmp", "-O3"]
+linker_args_discretecov   =  linker_args   + ["-fopenmp", "-O3"]
 ext_modules = [
     Pybind11Extension(
         "levin",
@@ -38,8 +37,10 @@ ext_modules = [
         ),
     Extension(
         "discretecov",
-        sources=["onecov/ccov_discrete.c"],
+        cxx_std=14,
+        sources=["onecov/ccov_discrete.cpp"],
         include_dirs=["onecov/ccov_discrete.h"],
+        libraries=["m", "gsl", "gslcblas"],
         extra_compile_args=compiler_args_discretecov,
         extra_linker_args=linker_args_discretecov,
     ),

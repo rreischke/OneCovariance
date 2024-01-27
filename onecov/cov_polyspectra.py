@@ -3,6 +3,8 @@ import itertools
 import numpy as np
 from scipy.integrate import quad, IntegrationWarning, simpson
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
+from scipy.interpolate import RegularGridInterpolator
+
 import multiprocessing as mp
 import time
 
@@ -1067,11 +1069,11 @@ class PolySpectra(HaloModel):
             self.__trispectra_234h(bias_dict, hod_dict, hm_prec)
         if output_dict['trispec']:
             out = Output(output_dict)
-            trispecs = [trispec1h_gggg + trispectra234h[:, :, None, None],
-                        trispec1h_gggm + trispectra234h[:, :, None, None],
-                        trispec1h_ggmm + trispectra234h[:, :, None, None],
-                        trispec1h_gmgm + trispectra234h[:, :, None, None],
-                        trispec1h_mmgm + trispectra234h[:, :, None, None],
+            trispecs = [trispec1h_gggg + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2*self.effective_bias[None,None,None, :]**2,
+                        trispec1h_gggm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2*self.effective_bias[None,None,None, :],
+                        trispec1h_ggmm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2,
+                        trispec1h_gmgm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]*self.effective_bias[None,None,None, :],
+                        trispec1h_mmgm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,None,:],
                         trispec1h_mmmm + trispectra234h[:, :, None, None]]
             tri_bool = [tri_gggg, tri_gggm, tri_ggmm,
                         tri_gmgm, tri_mmgm, tri_mmmm]
@@ -1085,7 +1087,7 @@ class PolySpectra(HaloModel):
 
         if self.gg and tri_gggg:
             logtrispec_gggg_ktri = \
-                np.log10(trispec1h_gggg + trispectra234h[:, :, None, None])
+                np.log10(trispec1h_gggg + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2*self.effective_bias[None,None,None, :]**2)
 
             trispec_gggg = np.zeros((k_dim, k_dim,
                                      self.sample_dim, self.sample_dim))
@@ -1094,7 +1096,7 @@ class PolySpectra(HaloModel):
 
         if self.gg and self.gm and self.cross_terms and tri_gggm:
             logtrispec_gggm_ktri = \
-                np.log10(trispec1h_gggm + trispectra234h[:, :, None, None])
+                np.log10(trispec1h_gggm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2*self.effective_bias[None,None,None, :])
             trispec_gggm = np.zeros((k_dim, k_dim,
                                      self.sample_dim, self.sample_dim))
         else:
@@ -1102,7 +1104,8 @@ class PolySpectra(HaloModel):
 
         if self.gg and self.mm and self.cross_terms and tri_ggmm:
             logtrispec_ggmm_ktri = \
-                np.log10(trispec1h_ggmm + trispectra234h[:, :, None, None])
+                np.log10(trispec1h_ggmm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2)
+           
             trispec_ggmm = np.zeros((k_dim, k_dim,
                                      self.sample_dim, self.sample_dim))
         else:
@@ -1110,7 +1113,7 @@ class PolySpectra(HaloModel):
 
         if self.gm and tri_gmgm:
             logtrispec_gmgm_ktri = \
-                np.log10(trispec1h_gmgm + trispectra234h[:, :, None, None])
+                np.log10(trispec1h_gmgm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]*self.effective_bias[None,None,None, :])
             trispec_gmgm = np.zeros((k_dim, k_dim,
                                      self.sample_dim, self.sample_dim))
         else:
@@ -1118,7 +1121,7 @@ class PolySpectra(HaloModel):
 
         if self.mm and self.gm and self.cross_terms and tri_mmgm:
             logtrispec_mmgm_ktri = \
-                np.log10(trispec1h_mmgm + trispectra234h[:, :, None, None])
+                np.log10(trispec1h_mmgm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,None,:])
             trispec_mmgm = np.zeros((k_dim, k_dim,
                                      self.sample_dim, self.sample_dim))
         else:
@@ -1131,6 +1134,9 @@ class PolySpectra(HaloModel):
         else:
             logtrispec_mmmm_ktri = None
 
+
+        
+        '''
         # prepare extrapolation
         idx_min = np.min(np.where(self.mass_func.k > self.krange_tri[0]))
         idx_max = np.max(np.where(self.mass_func.k < self.krange_tri[-1]))
@@ -1204,6 +1210,41 @@ class PolySpectra(HaloModel):
                         trispec[:, idxi, mbin, nbin] = \
                             np.copy(trispec[idxi, :, nbin, mbin])
         
+        '''
+        
+        x_values = np.zeros((2,len(self.mass_func.k)*len(self.mass_func.k)))
+        flat_idx = 0
+        for i_k in range(len(self.mass_func.k)):
+            for j_k in range(len(self.mass_func.k)):
+                x_values[0,flat_idx] = np.log10(self.mass_func.k[i_k])
+                x_values[1,flat_idx] = np.log10(self.mass_func.k[j_k])
+                flat_idx +=1
+        for nbin in range(self.sample_dim):
+            for mbin in range(nbin, self.sample_dim):
+                if self.gg and tri_gggg:
+                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
+                                                    logtrispec_gggg_ktri,bounds_error= False, fill_value = None)
+                    trispec_gggg[:,:,nbin,mbin] = 10**tri_interpolator((x_values[0,:],x_values[1,:])).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                if self.gg and self.gm and self.cross_terms:
+                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
+                                                    logtrispec_gggm_ktri,bounds_error= False, fill_value = None)
+                    trispec_gggm[:,:,nbin,mbin] = 10**tri_interpolator((x_values[0,:],x_values[1,:])).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                if self.gg and self.mm and self.cross_terms:
+                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
+                                                    logtrispec_ggmm_ktri,bounds_error= False, fill_value = None)
+                    trispec_ggmm[:,:,nbin,mbin] = 10**tri_interpolator((x_values[0,:],x_values[1,:])).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                if self.gm:
+                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
+                                                    logtrispec_gmgm_ktri,bounds_error= False, fill_value = None)
+                    trispec_gmgm[:,:,nbin,mbin] = 10**tri_interpolator((x_values[0,:],x_values[1,:])).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                if self.gm and self.mm and self.cross_terms:
+                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
+                                                    logtrispec_mmgm_ktri,bounds_error= False, fill_value = None)
+                    trispec_mmgm[:,:,nbin,mbin] = 10**tri_interpolator((x_values[0,:],x_values[1,:])).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                if self.mm:
+                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
+                                                    logtrispec_mmmm_ktri,bounds_error= False, fill_value = None)
+                    trispec_mmmm[:,:,nbin,mbin] = 10**tri_interpolator((x_values[0,:],x_values[1,:])).reshape((len(self.mass_func.k),len(self.mass_func.k)))
         if self.gg:
             trispec_gggg[np.where(trispec_gggg < self.tri_lowlim)] = \
                 self.tri_lowlim
@@ -1379,47 +1420,46 @@ class PolySpectra(HaloModel):
         if self.gg and tri_gggg:
             integrand = np.sqrt((4 * hurly_c[:, None, :, None, :] 
                         * hurly_s[:, None, :, None, :]**3 + hurly_s[:, None, :, None, :]**4)
-                    * (4 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]**3
-                        + hurly_s[None, : None, :, :]**4)) \
+                    * (4 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]**3
+                        + hurly_s[None, :, None, :, :]**4)) \
                     * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(4)
             trispec1h_gggg = simpson(integrand, self.mass_func.m)
-        
         if self.gg and self.gm and self.cross_terms and tri_gggm:
             integrand = np.sqrt(
                     (3 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**2
                      + hurly_s[:, None, :, None, :]**3)
                     * hurly_m[:, None, :, None, :]
-                    * (3 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]**2
-                        + hurly_s[None, : None, :, :]**3)
-                    * hurly_m[None, : None, :, :]) \
+                    * (3 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]**2
+                        + hurly_s[None, :, None, :, :]**3)
+                    * hurly_m[None, :, None, :, :]) \
                     * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(3)
             trispec1h_gggm = simpson(integrand, self.mass_func.m)
         
         if self.gg and self.mm and self.cross_terms and tri_ggmm:
             integrand = np.sqrt(
                 (4 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**3
-                    + hurly_s[None, : None, :, :]**4)
-                * hurly_m[None, : None, :, :]**4) \
+                    + hurly_s[None, :, None, :, :]**4)
+                * hurly_m[None, :, None, :, :]**4) \
                 * self.mass_func.dndm[None, None, None, None, :] 
             trispec1h_ggmm = simpson(integrand, self.mass_func.m)
  
         if self.gm and tri_gmgm:
             integrand = np.sqrt(
-                (2 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]
-                    + hurly_s[None, : None, :, :]**2)
-                * hurly_m[None, : None, :, :]**2
-                * (2 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]
-                    + hurly_s[None, : None, :, :]**2)
-                * hurly_m[None, : None, :, :]**2) \
+                (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
+                    + hurly_s[None, :, None, :, :]**2)
+                * hurly_m[None, :, None, :, :]**2
+                * (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
+                    + hurly_s[None, :, None, :, :]**2)
+                * hurly_m[None, :, None, :, :]**2) \
                 * self.mass_func.dndm[None, None, None, None, :] 
             trispec1h_gmgm = simpson(integrand, self.mass_func.m)
        
         if self.mm and self.gm and self.cross_terms and tri_mmgm:
             integrand = np.sqrt(
-                hurly_m[None, : None, :, :]**4
-                * (2 * hurly_c[None, : None, :, :] * hurly_s[None, : None, :, :]
-                    + hurly_s[None, : None, :, :]**2)
-                * hurly_m[None, : None, :, :]**2) \
+                hurly_m[None, :, None, :, :]**4
+                * (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
+                    + hurly_s[None, :, None, :, :]**2)
+                * hurly_m[None, :, None, :, :]**2) \
                 * self.mass_func.dndm[None, None, None, None, :] 
             trispec1h_mmgm = simpson(integrand, self.mass_func.m)
 
@@ -1449,8 +1489,7 @@ class PolySpectra(HaloModel):
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.hod.hod_update(bias_dict, hm_prec)  
-
+            self.hod.hod_update(bias_dict, hm_prec)
         return trispec1h_gggg * damp_1h, trispec1h_gggm * damp_1h, \
             trispec1h_ggmm * damp_1h, trispec1h_gmgm * damp_1h, \
             trispec1h_mmgm * damp_1h, trispec1h_mmmm * damp_1h
@@ -1789,7 +1828,7 @@ class PolySpectra(HaloModel):
         halomod_integral_mmm_spline = \
             self.halo_model_integral_I_alpha_mmm_spline_loglog(
                 bias_dict, hod_dict, hm_prec, 1)
-
+        
         integral_m = 10**halomod_integral_m_spline[0](self.logks_tri)
         integral_mm = \
             10**halomod_integral_mm_spline[0][0](self.logks_tri,
