@@ -79,6 +79,7 @@ be used to describe the clustering. Since we do not require the stellar mass fun
 between the observables are calculated. 
 
 ::
+
    [output settings]
    directory = ./output/
    file = covariance_list.dat, covariance_matrix.mat
@@ -96,6 +97,7 @@ This section specifies the output setting and is in general pretty self-explanat
 saved on disk if a mask file is specified. ``use_tex = False`` is just for cosmetics of the output plot, only switch it on if ``LaTeX`` is installed.
 
 ::
+
    [covELLspace settings]
    delta_z = 0.08
    tri_delta_z = 0.5
@@ -119,5 +121,29 @@ Note that the centre of the first bin is therefore not :math:`\ell = 10`. The av
 multiplicative shear bias uncertainty. Note that, if one uses input :math:`C_\ell` which contain already residual shear bias uncertainties, this should be set to zero. Here we deal with 5 lensing
 bins and therefore specify 5 values.
 
+::
 
+   [survey specs]
+   survey_area_clust_in_deg2 = 1100
+   n_eff_clust = 0.16, 0.16
+   survey_area_ggl_in_deg2 = 1100
+   survey_area_lensing_in_deg2 = 777
+   ellipticity_dispersion = 0.270211643434, 0.261576890227, 0.276513819228, 0.265404482999, 0.286084532469
+   n_eff_lensing = 0.605481425815, 1.163822540526, 1.764459694692, 1.249143662985, 1.207829761642 
 
+In this section the survey specifications are passed. We do not pass any mask file, so the survey area is just given in square degrees and the SSC term will use a circular mask with that area
+to calculate the response. ``n_eff_clust``, ``n_eff_lensing`` and ``ellipticity_dispersion`` must always match the number of redshift bins passed in the ``redshift`` section.
+
+::
+
+   [redshift]
+   z_directory = ./input/redshift_distribution
+   zclust_file = BOSS_and_2dFLenS_n_of_z1_res_0.01.asc, BOSS_and_2dFLenS_n_of_z2_res_0.01.asc
+   value_loc_in_clustbin = left
+   zlens_file = K1000_photoz_1.asc, K1000_photoz_2.asc, K1000_photoz_3.asc, K1000_photoz_4.asc, K1000_photoz_5.asc
+   value_loc_in_lensbin = left
+
+Here the file paths of the redshift distributions are specified, both for clustering and lensing (note that in the literature clustering is often refereed to as lenses, or lens distribution, while 
+lensing is referred to as sources or source distribution). The number (or structure) of these files will determine the number of tomographic bins for clustering, lensing and GGL. The clustering signal
+will always be calculated for all unique bin combinations, even if there is no overlap between the clustering bins. ``value_loc_in_...`` specifies how the redshift values in the files should be interpreted,
+i.e. whether they correspond to the ``left``, ``mid`` or ``right`` location of the redshift distribution histogram.

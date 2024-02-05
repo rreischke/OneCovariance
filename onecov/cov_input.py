@@ -668,8 +668,6 @@ class Input:
                 self.ell_bins = 100
             if self.ell_type is None:
                 self.ell_type = 'log'
-                print("The binning type for ell bins " +
-                      "[covELLspace settings]: 'ell_type' is set to 'log'.")
             elif self.ell_type != 'lin' and self.ell_type != 'log':
                 raise Exception("ConfigError: The binning type for ell bins " +
                                 "[covELLspace settings]: 'ell_type = " +
