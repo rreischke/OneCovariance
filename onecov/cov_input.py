@@ -1770,22 +1770,17 @@ class Input:
                 self.bias_model = config['bias']['model']
             else:
                 self.bias_model = 'Tinker10'
-                print("The bias model [bias]: 'model' is set to Tinker10.")
-
+             
             if 'bias_2h' in config['bias']:
                 self.bias_2h = float(config['bias']['bias_2h'])
             else:
                 self.bias_2h = 1
-                print("The bias for the 2-halo term [bias]: 'bias_2h' is " +
-                      "set to 1.")
-
+              
             if 'Mc_relation_cen' in config['bias']:
                 self.Mc_relation_cen = config['bias']['Mc_relation_cen']
             else:
                 self.Mc_relation_cen = 'duffy08'
-                print("The mass-concentration relation for the centrals " +
-                      "[bias]: 'Mc_relation_cen' is set to duffy08.")
-
+               
             if 'Mc_relation_sat' in config['bias']:
                 self.Mc_relation_sat = config['bias']['Mc_relation_sat']
             if self.Mc_relation_sat is None:

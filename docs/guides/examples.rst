@@ -1,50 +1,6 @@
 Some examples
 =============
 
-KiDS-1000 covariance
---------------------
-The standard ``config.ini`` (after you pulled the directory) will run a simplified KiDS-1000-like cosmic shear setup. Not all parameters specified in the ``config.ini`` are used and it is merely used as an explanatory file to explain all the parameters which can be set.
-Let us take a closer look at the output: Since a plot for the correlation coefficient was requested, we have:
-
-.. image:: correlation_xpm.png
-   :width: 790
-
-With the corresponding covariance saved in ``covariance_matrix.mat``. A complete list of all the entries can be found in the ``covariance_list.dat`` file as shown below.
-
-.. image:: covariance_list.png
-   :width: 790
-
-The first column specifies which combination of observables is considered, in this case :math:`\xi_{+}\xi_{+}`. The second and third column label the combination of the independent spatial variable of the corresponding summary statistic, here this are the two :math:`\theta` bins.
-For bandpowers this would be the multipole bands and for COSEBIS the order. ``s1`` and ``s2`` label the sample bins in mass used (for the evaluation of the halo model integrals). ``tomoi``, ..., `tomol` are the tomographic bin combinations, which start counting at 1.
-The total covariance is safed in the column ``cov``. If in the ``config.ini`` the variable ``split_gauss`` is set to true the Gaussian component of the covariance is split into a sample-variance, shot/shape noise and mix term labeled ``covg_sva``, ``covg_sn`` and ``covg_mix`` respectively.
-Finally the last two columns show the non-Gaussian and the super-sample covariance term respecitvely, since they have been switched off in the ini-file they are set to zero.
-
-We can calculate the covariance also for bandpowers and COSEBIs by setting:
-
-``est_shear = bandpowers``
-
-``est_shear = cosebi``
-
-in the ini-file. Similarly the non-Gaussian and the super-sample covariance term can be requested by setting
-
-``nongauss = True``
-
-``ssc = True``
-
-Using Input :math:`C_\ell`
---------------------------
-In the directory ``input/Cell`` files for precomputed angular power spectra, :math:`C_\ell`, are provided. They should explain the required structure and can be passed to the code by setting
-
-``Cell_directory = ./input``
-
-``Cgg_file = Cell_gg.ascii``
-
-``Cgm_file = Cell_gkappa.ascii``
-
-``Cmm_file = Cell_kappakappa.ascii``
-
-in the ini-file. In this way one can use the code to produce the covariance of the implemented summary statistic for any tracer for which a harmonic covariance has been calculated. 
-
 3x2pt for :math:`C_\ell`:
 -------------------------
 We will calculate the full 3x2pt covariance matrix in harmonic space by running the covariance code with the in ``config_3x2pt.ini`` in the ``/config_files`` directory.
@@ -147,3 +103,82 @@ Here the file paths of the redshift distributions are specified, both for cluste
 lensing is referred to as sources or source distribution). The number (or structure) of these files will determine the number of tomographic bins for clustering, lensing and GGL. The clustering signal
 will always be calculated for all unique bin combinations, even if there is no overlap between the clustering bins. ``value_loc_in_...`` specifies how the redshift values in the files should be interpreted,
 i.e. whether they correspond to the ``left``, ``mid`` or ``right`` location of the redshift distribution histogram.
+
+::
+   
+   [cosmo]
+   sigma8 = 0.8
+   h = 0.7
+   omega_m = 0.3
+   omega_b = 0.05
+   omega_de = 0.7
+   w0 = -1.0
+   wa = 0.0
+   ns = 0.965
+   neff = 3.046
+   m_nu = 0.0
+
+The cosmology section just specifies the used cosmology, nothing surprising here. ``astropy`` is used for background calculations and ``hmf`` for the mass function and ``camb`` for matter power spectra.
+
+::
+
+   [bias]
+   bias_files = ./input/bias/zet_dependent_bias.ascii
+
+In this case the bias section is very simple as we are just passing a redshift dependent bias as stored in a file. You should make sure that the bias file covers the same redshift range as the redshift distribution files,
+otherwise extrapolation will be used. Furthermore, make sure that the bias file structure matches the number of clustering bins.
+
+::
+
+   [IA]
+   A_IA = 0.264
+   eta_IA = 0.0
+   z_pivot_IA = 0.3
+
+The base alignment model in the OneCovariance code is the NLA model and it is implemented such that the alignment signal is always a linear response to the non-linear tidal field. Hence non-Gaussian and SSC terms will also
+contain a small IA contribution. 
+
+KiDS-1000 covariance
+--------------------
+The standard ``config.ini`` (after you pulled the directory) will run a simplified KiDS-1000-like cosmic shear setup. Not all parameters specified in the ``config.ini`` are used and it is merely used as an explanatory file to explain all the parameters which can be set.
+Let us take a closer look at the output: Since a plot for the correlation coefficient was requested, we have:
+
+.. image:: correlation_xpm.png
+   :width: 790
+
+With the corresponding covariance saved in ``covariance_matrix.mat``. A complete list of all the entries can be found in the ``covariance_list.dat`` file as shown below.
+
+.. image:: covariance_list.png
+   :width: 790
+
+The first column specifies which combination of observables is considered, in this case :math:`\xi_{+}\xi_{+}`. The second and third column label the combination of the independent spatial variable of the corresponding summary statistic, here this are the two :math:`\theta` bins.
+For bandpowers this would be the multipole bands and for COSEBIS the order. ``s1`` and ``s2`` label the sample bins in mass used (for the evaluation of the halo model integrals). ``tomoi``, ..., `tomol` are the tomographic bin combinations, which start counting at 1.
+The total covariance is safed in the column ``cov``. If in the ``config.ini`` the variable ``split_gauss`` is set to true the Gaussian component of the covariance is split into a sample-variance, shot/shape noise and mix term labeled ``covg_sva``, ``covg_sn`` and ``covg_mix`` respectively.
+Finally the last two columns show the non-Gaussian and the super-sample covariance term respecitvely, since they have been switched off in the ini-file they are set to zero.
+
+We can calculate the covariance also for bandpowers and COSEBIs by setting:
+
+``est_shear = bandpowers``
+
+``est_shear = cosebi``
+
+in the ini-file. Similarly the non-Gaussian and the super-sample covariance term can be requested by setting
+
+``nongauss = True``
+
+``ssc = True``
+
+Using Input :math:`C_\ell`
+--------------------------
+In the directory ``input/Cell`` files for precomputed angular power spectra, :math:`C_\ell`, are provided. They should explain the required structure and can be passed to the code by setting
+
+``Cell_directory = ./input``
+
+``Cgg_file = Cell_gg.ascii``
+
+``Cgm_file = Cell_gkappa.ascii``
+
+``Cmm_file = Cell_kappakappa.ascii``
+
+in the ini-file. In this way one can use the code to produce the covariance of the implemented summary statistic for any tracer for which a harmonic covariance has been calculated. 
+
