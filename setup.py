@@ -34,16 +34,7 @@ ext_modules = [
         libraries=["m", "gsl", "gslcblas"],
         extra_compile_args=compiler_args_levin,
         extra_link_args=linker_args_levin
-        ),
-    Extension(
-        "discretecov",
-        cxx_std=14,
-        sources=["onecov/ccov_discrete.cpp"],
-        include_dirs=["onecov/ccov_discrete.h"],
-        libraries=["m", "gsl", "gslcblas"],
-        extra_compile_args=compiler_args_discretecov,
-        extra_linker_args=linker_args_discretecov,
-    ),
+        )
 ]
 
 setup(

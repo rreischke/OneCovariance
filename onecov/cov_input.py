@@ -3,6 +3,7 @@ import configparser
 import glob
 from os import walk, path
 from astropy.io import ascii, fits
+from scipy.interpolate import interp1d
 
 
 
@@ -3940,6 +3941,10 @@ class FileInput:
         self.effbias_z = None
         self.effbias_file = None
         self.effbias = None
+        self.bias_files = None
+        self.bias_bz = None
+        self.bias_z = None
+        self.unbiased_clustering = None
 
         # mor from files
         self.mor_tab = dict()
@@ -5249,6 +5254,117 @@ class FileInput:
             self.Pmm_tab = np.insert(
                 self.Pmm_tab, [0, 1], self.Pmm_tab, axis=1)
 
+        return True
+
+    def __read_in_bias_files(self,
+                             config,
+                             config_name):
+        """
+        Reads in the redshift dependent but scale-independent bias for the clustering.
+        If no bias is given the HoD or unbiased clustering will be assumed.
+        
+        Parameters
+        ----------
+        config : class
+            This class holds all the information specified the config 
+            file. It originates from the configparser module.
+        config_name : string
+            Name of the config file. Needed for giving meaningful
+            exception texts.
+
+        File structure :
+        --------------
+        # z     n(z)
+        0.1     4.1e-4
+        0.2     1.3e-3
+        ...     ...
+        1.1     0.0
+
+        """
+        if 'unbiased_clustering' in config['observables']:
+            self.unbiased_clustering = config['observables'].getboolean('unbiased_clustering')
+            
+        if 'bias' in config:
+            if 'bias_files' in config['bias']:
+                self.bias_files = \
+                    list((config['bias']['bias_files'].replace(
+                        " ", "")).split(','))
+
+        
+        if self.bias_files is not None and (self.clustering or self.ggl):
+            try:
+                save_zet_bias_z = []
+                save_zet_bias_bz = []
+                for fidx, file in enumerate(self.bias_files):
+                    data = ascii.read(file)
+                    if len(data.colnames) < 2:
+                        print("InputWarning: The file " + file + " in keyword " +
+                            "'bias_files' has less than 2 columns. The data " +
+                            "file should provide the redshift on the first " +
+                            "column and the bias in the " +
+                            "second. This file will be ignored.")
+                        continue
+                    different_redshifts = False
+                    if fidx == 0:
+                        self.bias_z = np.array(data[data.colnames[0]])
+                        save_zet_bias_z.append(self.bias_z)
+                        self.bias_bz = np.array(data[data.colnames[1]])
+                        save_zet_bias_bz.append(self.bias_bz)
+                        for colname in data.colnames[2:]:
+                            self.bias_bz = \
+                                np.vstack([self.bias_bz, data[colname]])
+                            save_zet_bias_bz.append(data[colname])
+                    else:
+                        save_zet_bias_z.append(np.array(data[data.colnames[0]]))
+                        if len(np.array(data[data.colnames[0]])) != len(self.bias_z):
+                            redshift_increment = min(self.bias_z[1]- self.bias_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
+                            redshift_max = max(np.max(min(self.bias_z)),np.max(np.array(data[data.colnames[0]])))
+                            redshift_min = min(np.min(min(self.bias_z)),np.min(np.array(data[data.colnames[0]])))
+                            self.bias_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
+                            different_redshifts = True         
+                            print("ConfigWarning: Adjusting the redshift range in the bias files due to different redshift ranges in bias files")
+                        if not different_redshifts:
+                            for colname in data.colnames[1:]:
+                                self.bias_bz = \
+                                    np.vstack([self.bias_bz, data[colname]])
+                                save_zet_bias_bz.append(data[colname])
+                        else:
+                            for colname in data.colnames[1:]:
+                                save_zet_bias_bz.append(data[colname])
+                if different_redshifts:
+                    self.bias_bz = np.array([])
+                    for i_z in range(len(save_zet_bias_bz)):
+                        if i_z == 0:
+                            self.bias_bz = np.interp(self.bias_z,
+                                                            save_zet_bias_z[i_z],
+                                                            save_zet_bias_bz[i_z],
+                                                            left = 0,
+                                                            right = 0)
+                        else:
+                            self.bias_bz = np.vstack([self.bias_bz, np.interp(self.bias_z,
+                                                                                        save_zet_bias_z[i_z],
+                                                                                        save_zet_bias_bz[i_z],
+                                                                                        left = 0,
+                                                                                        right = 0)])
+                
+                self.bias_bz = np.array([])
+                for i_z in range(len(save_zet_bias_bz)):
+                    if i_z == 0:
+                        interp = interp1d(self.bias_z, save_zet_bias_bz[i_z], fill_value = "extrapolate")
+                        self.bias_bz = interp(self.zet_clust_z)
+                    else:
+                        interp = interp1d(self.bias_z, save_zet_bias_bz[i_z], fill_value = "extrapolate")
+                        
+                        self.bias_bz = np.vstack([self.bias_bz, interp(self.zet_clust_z)])
+                if not self.unbiased_clustering:
+                    print("Using redshft dependent bias and NOT HoD for galaxy count modelling from file " + self.bias_files[0] + "...")
+                else:
+                    print("Using unbiased clustering for galaxy count modelling.")
+                if(len(save_zet_bias_bz) != self.n_tomo_clust):
+                    raise Exception("InputError: From the redshift files, " + self.n_tomo_clust + " bias functions are required. You have only specified " + len(save_zet_bias_bz) + ". Pleas change this in the config file." )
+
+            except:
+                print("InputWarning: The bias files " + self.bias_files[0] + "... where not found, will procede with HoD or unbiased clustering")
         return True
 
     def __read_in_Cell_manyfiles(self,
@@ -7746,6 +7862,7 @@ class FileInput:
         self.__read_config_for_consistency_checks(config, config_name)
         self.__read_in_z_files(config, config_name)
         self.__read_in_csmf_files(config)
+        self.__read_in_bias_files(config, config_name)
         self.__get_npair_tabs(config)
         self.__get_powspec_tabs(config)
         self.__get_Cell_tabs(config)  
@@ -7767,6 +7884,7 @@ class FileInput:
                 'Pxy': self.Pxy_tab,
                 'Cxy': self.Cxy_tab,
                 'effbias': self.effbias_tab,
+                'zet_dep_bias' : self.bias_bz,
                 'mor': self.mor_tab,
                 'occprob': self.occprob_tab,
                 'occnum': self.occnum_tab,

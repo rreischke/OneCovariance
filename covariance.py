@@ -33,9 +33,9 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
                             hod, survey_params, prec, read_in_tables)
         covariance_in_ell_space = covell.calc_covELL(
             observables, output, bias,  hod, survey_params, prec, read_in_tables)
-        out = Output(output)
+        out = Output(output, covell.ellrange_clustering, covell.ellrange_lensing)
         out.write_cov(covterms, observables, covell.n_tomo_clust,
-                    covell.n_tomo_lens, covell.ellrange_clustering,
+                    covell.n_tomo_lens, covell.ellrange,
                     covariance_in_ell_space[0],
                     covariance_in_ell_space[1],
                     covariance_in_ell_space[2])

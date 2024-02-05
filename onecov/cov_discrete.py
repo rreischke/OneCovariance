@@ -494,8 +494,6 @@ class Catalog:
         
         ## Link compiled libraries ##
         self.clib = ct.CDLL(search_file_in_site_package(get_site_packages_dir(),"discretecov"))
-        #self.library_path = str(Path(__file__).parent.absolute())
-        #self.clib = ct.CDLL(self.library_path + "discretecov.cpython-310-x86_64-linux-gnu.so")
         p_c128 = ndpointer(np.complex128, flags="C_CONTIGUOUS")
         p_f64 = ndpointer(np.float64, flags="C_CONTIGUOUS")
         p_f32 = ndpointer(np.float32, flags="C_CONTIGUOUS")
@@ -888,9 +886,6 @@ class BinnedNPCF:
         ## Link compiled libraries ##
         #############################
         self.clib = ct.CDLL(search_file_in_site_package(get_site_packages_dir(),"discretecov"))
-        #self.clib = ct.CDLL("/users/lporth/anaconda3/envs/3PointEnv/lib/python3.10/site-packages/levin.cpython-310-x86_64-linux-gnu.so")
-        #self.library_path = str(Path(__file__).parent.absolute())
-        #self.clib = ct.CDLL(self.library_path + "discretecov.cpython-310-x86_64-linux-gnu.so")
         
         p_c128 = ndpointer(np.complex128, flags="C_CONTIGUOUS")
         p_f64 = ndpointer(np.float64, flags="C_CONTIGUOUS")

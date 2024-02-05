@@ -59,7 +59,7 @@ class Output():
                   ssc)
     """
 
-    def __init__(self, output_dict):
+    def __init__(self, output_dict, projected_clust = None, projected_lens = None):
         self.filename = output_dict['file']
         self.__check_filetype()
         self.style = output_dict['style']
@@ -69,7 +69,9 @@ class Output():
         self.Cellfile = output_dict['Cell']
         self.tex = output_dict['use_tex']
         self.list_style_spatial_first = output_dict['list_style_spatial_first']
-
+        self.projected_lens = projected_lens
+        self.projected_clust = projected_clust
+    
     def __check_filetype(self):
         for idx,fn in enumerate(self.filename):
             if fn == '':
@@ -514,6 +516,8 @@ class Output():
         position = 0
         old_position = 0
         if gg:
+            if np.any(self.projected_clust):
+                proj_quant = self.projected_clust
             sub_position_tomo = 0
             for sub_tomo in range(int(n_tomo_clust*(n_tomo_clust + 1)/2)):
                 sub_position_sample = sub_position_tomo
@@ -541,6 +545,8 @@ class Output():
             ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
             ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
         if gm:
+            if np.any(self.projected_clust):
+                proj_quant = self.projected_clust
             sub_position_tomo = old_position
             for sub_tomo in range(int(n_tomo_clust*n_tomo_lens)):
                 sub_position_sample = sub_position_tomo
@@ -569,6 +575,8 @@ class Output():
             ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
             ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
         if mm:
+            if np.any(self.projected_lens):
+                proj_quant = self.projected_lens
             sub_position_tomo = old_position
             for sub_tomo in range(int(n_tomo_lens*(n_tomo_lens + 1)/2)):
                 sub_position_sample = sub_position_tomo
@@ -875,6 +883,8 @@ class Output():
                     sampledim2 = 1
                     for i_r1 in range(r1):
                         for i_r2 in range(r2):
+                            p1 = proj_quant[i_r1]
+                            p2 = proj_quant[i_r2]                    
                             if obs_type[i_probe] == 'gggg' or obs_type[i_probe] == 'mmmm' or obs_type[i_probe] == 'ggmm':
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo2):
@@ -883,12 +893,22 @@ class Output():
                                                 if obs_type[i_probe] == 'gggg':
                                                     sampledim1 = sampledim
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                        p2 = self.projected_clust[i_r2]
                                                 if obs_type[i_probe] == 'mmmm':
                                                     sampledim1 = 1
                                                     sampledim2 = 1
+                                                    if np.any(self.projected_lens):
+                                                        p1 = self.projected_lens[i_r1]
+                                                        p2 = self.projected_lens[i_r2]
                                                 if obs_type[i_probe] == 'ggmm':
                                                     sampledim1 = sampledim
                                                     sampledim2 = 1
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                    if np.any(self.projected_lens):
+                                                        p2 = self.projected_lens[i_r2]        
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
@@ -896,7 +916,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -911,9 +931,16 @@ class Output():
                                                 if obs_type[i_probe] == 'gggm':
                                                     sampledim1 = sampledim
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                        p2 = self.projected_clust[i_r2]
                                                 if obs_type[i_probe] == 'mmgm':
                                                     sampledim1 = 1
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_lens):
+                                                        p1 = self.projected_lens[i_r1]
+                                                    if np.any(self.projected_clust):
+                                                        p2 = self.projected_clust[i_r2]    
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
@@ -921,7 +948,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -937,12 +964,15 @@ class Output():
                                             for t4 in range(tomo4):
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
+                                                        if np.any(self.projected_clust):
+                                                            p1 = self.projected_clust[i_r1]
+                                                            p2 = self.projected_clust[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         cov = gauss[i_probe][idxs] \
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -984,6 +1014,8 @@ class Output():
                     tomo4 = gauss[3*i_probe].shape[7]
                     for i_r1 in range(r1):
                         for i_r2 in range(r2):
+                            p1 = proj_quant[i_r1]
+                            p2 = proj_quant[i_r2]                    
                             if obs_type[i_probe] == 'gggg' or obs_type[i_probe] == 'mmmm' or obs_type[i_probe] == 'ggmm':
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo2):
@@ -992,12 +1024,22 @@ class Output():
                                                 if obs_type[i_probe] == 'gggg':
                                                     sampledim1 = sampledim
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                        p2 = self.projected_clust[i_r2]
                                                 if obs_type[i_probe] == 'mmmm':
                                                     sampledim1 = 1
                                                     sampledim2 = 1
+                                                    if np.any(self.projected_lens):
+                                                        p1 = self.projected_lens[i_r1]
+                                                        p2 = self.projected_lens[i_r2]
                                                 if obs_type[i_probe] == 'ggmm':
                                                     sampledim1 = sampledim
                                                     sampledim2 = 1
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                    if np.any(self.projected_lens):
+                                                        p2 = self.projected_lens[i_r2]    
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
@@ -1027,7 +1069,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1044,9 +1086,16 @@ class Output():
                                                 if obs_type[i_probe] == 'gggm':
                                                     sampledim1 = sampledim
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                        p2 = self.projected_clust[i_r2]
                                                 if obs_type[i_probe] == 'mmgm':
                                                     sampledim1 = 1
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_lens):
+                                                        p1 = self.projected_lens[i_r1]
+                                                    if np.any(self.projected_clust):
+                                                        p2 = self.projected_clust[i_r2]
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
@@ -1077,7 +1126,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1089,6 +1138,9 @@ class Output():
                             if obs_type[i_probe] == 'gmgm':
                                 sampledim1 = sampledim
                                 sampledim2 = sampledim
+                                if np.any(self.projected_clust):
+                                    p1 = self.projected_clust[i_r1]
+                                    p2 = self.projected_clust[i_r2]
                                 for t1 in range(tomo1):
                                     for t2 in range(tomo2):
                                         for t3 in range(tomo3):
@@ -1123,7 +1175,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1209,8 +1261,10 @@ class Output():
                         nongauss[oidx] = np.zeros_like(gauss[oidx])
                     if not isinstance(ssc[oidx], np.ndarray):
                         ssc[oidx] = np.zeros_like(gauss[oidx])
-                    for i_r1 in range(len(proj_quant)):
-                        for i_r2 in range(len(proj_quant)):
+                    r1 = gauss[oidx].shape[0]
+                    r2 = gauss[oidx].shape[1]
+                    for i_r1 in range(r1):
+                        for i_r2 in range(r2):
                             ri = proj_quant[i_r1]
                             rj = proj_quant[i_r2]
                             if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
@@ -1218,9 +1272,15 @@ class Output():
                                 if obs == 'gggg':
                                     sampledim1 = sampledim
                                     sampledim2 = sampledim
+                                    if np.any(self.projected_clust):
+                                        ri = self.projected_clust[i_r1]
+                                        rj = self.projected_clust[i_r2]
                                 if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                     sampledim1 = 1
                                     sampledim2 = 1
+                                    if np.any(self.projected_lens):
+                                        ri = self.projected_lens[i_r1]
+                                        rj = self.projected_lens[i_r2]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo1):
@@ -1244,6 +1304,9 @@ class Output():
                                 sampledim2 = sampledim
                                 tomo1 = gauss[oidx].shape[4]
                                 tomo2 = gauss[oidx].shape[5]
+                                if np.any(self.projected_clust):
+                                    ri = self.projected_clust[i_r1]
+                                    rj = self.projected_clust[i_r2]
                                 for t1 in range(tomo1):
                                     for t2 in range(tomo2):
                                         for t3 in range(tomo1):
@@ -1269,9 +1332,16 @@ class Output():
                                 if obs == 'gggm':
                                     sampledim1 = sampledim
                                     sampledim2 = sampledim
+                                    if np.any(self.projected_clust):
+                                        ri = self.projected_clust[i_r1]
+                                        rj = self.projected_clust[i_r2]
                                 if obs in ['mmgm', 'gmxip', 'gmxim']:
                                     sampledim1 = 1
                                     sampledim2 = sampledim
+                                    if np.any(self.projected_clust):
+                                        rj = self.projected_clust[i_r2]
+                                    if np.any(self.projected_lens):
+                                        ri = self.projected_lens[i_r1]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo3):
@@ -1295,6 +1365,10 @@ class Output():
                                 tomo2 = gauss[oidx].shape[6]
                                 sampledim1 = sampledim
                                 sampledim2 = 1
+                                if np.any(self.projected_lens):
+                                    rj = self.projected_lens[i_r2]
+                                if np.any(self.projected_clust):
+                                    ri = self.projected_clust[i_r1]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo2):
@@ -1329,9 +1403,10 @@ class Output():
                         nongauss[oidx] = np.zeros_like(gauss[3*oidx])
                     if not isinstance(ssc[oidx], np.ndarray):
                         ssc[oidx] = np.zeros_like(gauss[3*oidx])
-                    
-                    for i_r1 in range(len(proj_quant)):
-                        for i_r2 in range(len(proj_quant)):
+                    r1 = gauss[oidx].shape[0]
+                    r2 = gauss[oidx].shape[1]
+                    for i_r1 in range(r1):
+                        for i_r2 in range(r2):
                             ri = proj_quant[i_r1]
                             rj = proj_quant[i_r2]
                             if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
@@ -1339,9 +1414,17 @@ class Output():
                                 if obs == 'gggg':
                                     sampledim1 = sampledim
                                     sampledim2 = sampledim
+                                    if np.any(self.projected_clust):
+                                        rj = self.projected_clust[i_r2]
+                                        ri = self.projected_clust[i_r1]
+                                
                                 if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                     sampledim1 = 1
                                     sampledim2 = 1
+                                    if np.any(self.projected_lens):
+                                        rj = self.projected_lens[i_r2]
+                                        ri = self.projected_lens[i_r1]
+                                
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo1):
@@ -1367,6 +1450,9 @@ class Output():
                             elif obs == 'gmgm':
                                 sampledim1 = sampledim
                                 sampledim2 = sampledim
+                                if np.any(self.projected_clust):
+                                    rj = self.projected_clust[i_r2]
+                                    ri = self.projected_clust[i_r1]
                                 tomo1 = gauss[splitidx].shape[4]
                                 tomo2 = gauss[splitidx].shape[5]
                                 for t1 in range(tomo1):
@@ -1398,9 +1484,18 @@ class Output():
                                 if obs == 'gggm':
                                     sampledim1 = sampledim
                                     sampledim2 = sampledim
+                                    if np.any(self.projected_clust):
+                                        rj = self.projected_clust[i_r2]
+                                        ri = self.projected_clust[i_r1]
+                                    
                                 if obs in ['mmgm', 'gmxip', 'gmxim']:
                                     sampledim1 = 1
                                     sampledim2 = sampledim
+                                    if np.any(self.projected_clust):
+                                        rj = self.projected_clust[i_r2]
+                                    if np.any(self.projected_lens):
+                                        ri = self.projected_lens[i_r1]
+                                    
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo3):
@@ -1428,6 +1523,10 @@ class Output():
                                 tomo2 = gauss[splitidx].shape[6]
                                 sampledim1 = sampledim
                                 sampledim2 = 1
+                                if np.any(self.projected_lens):
+                                    rj = self.projected_lens[i_r2]
+                                if np.any(self.projected_clust):
+                                    ri = self.projected_clust[i_r1]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo2):
@@ -1549,15 +1648,27 @@ class Output():
                                     for t4 in range(t3, tomo4):
                                         for i_r1 in range(r1):
                                             for i_r2 in range(r2):
+                                                p1 = proj_quant[i_r1]
+                                                p2 = proj_quant[i_r2] 
                                                 if obs_type[i_probe] == 'gggg':
                                                     sampledim1 = sampledim
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                        p2 = self.projected_clust[i_r2]
                                                 if obs_type[i_probe] == 'mmmm':
                                                     sampledim1 = 1
                                                     sampledim2 = 1
+                                                    if np.any(self.projected_lens):
+                                                        p1 = self.projected_lens[i_r1]
+                                                        p2 = self.projected_lens[i_r2]
                                                 if obs_type[i_probe] == 'ggmm':
                                                     sampledim1 = sampledim
                                                     sampledim2 = 1
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                    if np.any(self.projected_lens):
+                                                        p1 = self.projected_lens[i_r1]
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
@@ -1565,7 +1676,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2], 
+                                                            % (obs_copy[i_probe], p1, p2, 
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -1579,12 +1690,21 @@ class Output():
                                     for t4 in range(tomo4):
                                         for i_r1 in range(r1):
                                             for i_r2 in range(r2):
+                                                p1 = proj_quant[i_r1]
+                                                p2 = proj_quant[i_r2] 
                                                 if obs_type[i_probe] == 'gggm':
                                                     sampledim1 = sampledim
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
+                                                        p2 = self.projected_clust[i_r2]
                                                 if obs_type[i_probe] == 'mmgm':
                                                     sampledim1 = 1
                                                     sampledim2 = sampledim
+                                                    if np.any(self.projected_lens):
+                                                        p1 = self.projected_lens[i_r1]
+                                                    if np.any(self.projected_clust):
+                                                        p1 = self.projected_clust[i_r1]
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
@@ -1592,7 +1712,7 @@ class Output():
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -1610,12 +1730,17 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
+                                                        p1 = proj_quant[i_r1]
+                                                        p2 = proj_quant[i_r2] 
+                                                        if np.any(self.projected_clust):
+                                                            p1 = self.projected_clust[i_r1]
+                                                            p2 = self.projected_clust[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         cov = gauss[i_probe][idxs] \
                                                             + nongauss[i_probe][idxs] \
                                                             + ssc[i_probe][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss[i_probe][idxs],
@@ -1660,11 +1785,26 @@ class Output():
                                             sampledim2 = 1
                                         if obs_type[i_probe] == 'ggmm':
                                             sampledim1 = sampledim
-                                            sampledim2 = 1
+                                            sampledim2 = 1                  
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
+                                                        p1 = proj_quant[i_r1]
+                                                        p2 = proj_quant[i_r2]
+                                                        if obs_type[i_probe] == 'gggg':
+                                                            if np.any(self.projected_clust):
+                                                                p1 = self.projected_clust[i_r1]
+                                                                p2 = self.projected_clust[i_r2]
+                                                        if obs_type[i_probe] == 'mmmm':
+                                                            if np.any(self.projected_lens):
+                                                                p1 = self.projected_lens[i_r1]
+                                                                p2 = self.projected_lens[i_r2]
+                                                        if obs_type[i_probe] == 'ggmm':
+                                                            if np.any(self.projected_clust):
+                                                                p1 = self.projected_clust[i_r1]
+                                                            if np.any(self.projected_lens):
+                                                                p1 = self.projected_lens[i_r1]         
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[3*i_probe], int):
                                                             gauss_sva = 0.0
@@ -1692,7 +1832,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1708,14 +1848,25 @@ class Output():
                                     for t4 in range(tomo4):
                                         if obs_type[i_probe] == 'gggm':
                                             sampledim1 = sampledim
-                                            sampledim2 = sampledim
+                                            sampledim2 = sampledim  
                                         if obs_type[i_probe] == 'mmgm':
                                             sampledim1 = 1
-                                            sampledim2 = sampledim
+                                            sampledim2 = sampledim   
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
+                                                        p1 = proj_quant[i_r1]
+                                                        p2 = proj_quant[i_r2]
+                                                        if obs_type[i_probe] == 'gggm':
+                                                            if np.any(self.projected_clust):
+                                                                p1 = self.projected_clust[i_r1]
+                                                                p2 = self.projected_clust[i_r2]
+                                                        if obs_type[i_probe] == 'mmgm':
+                                                            if np.any(self.projected_lens):
+                                                                p1 = self.projected_lens[i_r1]
+                                                            if np.any(self.projected_clust):
+                                                                p2 = self.projected_clust[i_r2]                                                       
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -1744,7 +1895,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1764,6 +1915,11 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
+                                                        p1 = proj_quant[i_r1]
+                                                        p2 = proj_quant[i_r2]
+                                                        if np.any(self.projected_clust):
+                                                            p1 = self.projected_clust[i_r1]
+                                                            p2 = self.projected_clust[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -1792,7 +1948,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + nongauss_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy[i_probe], proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy[i_probe], p1, p2,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -1871,7 +2027,9 @@ class Output():
                 if not cov_dict['split_gauss']:
                     if not isinstance(gauss[oidx], np.ndarray):
                         continue
-                
+                    r1 = gauss[oidx].shape[0]
+                    r2 = gauss[oidx].shape[1]
+                    
                     if write_header:
                         olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
                                     tomo_str + 'cov\t\t\tcovg\t\tcovng\t\tcovssc')
@@ -1890,10 +2048,18 @@ class Output():
                                     for t4 in range(t3, tomo1):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
                                                         ri = proj_quant[i_r1]
                                                         rj = proj_quant[i_r2]
+                                                        if obs == 'gggg':
+                                                            if np.any(self.projected_clust):
+                                                                ri = self.projected_clust[i_r1]
+                                                                rj = self.projected_clust[i_r2]
+                                                        if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                                                            if np.any(self.projected_lens):
+                                                                ri = self.projected_lens[i_r1]
+                                                                rj = self.projected_lens[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -1927,10 +2093,13 @@ class Output():
                                     for t4 in range(tomo2):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
                                                         ri = proj_quant[i_r1]
                                                         rj = proj_quant[i_r2]
+                                                        if np.any(self.projected_clust):
+                                                            ri = self.projected_clust[i_r1]
+                                                            rj = self.projected_clust[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -1969,10 +2138,19 @@ class Output():
                                     for t4 in range(tomo4):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
                                                         ri = proj_quant[i_r1]
                                                         rj = proj_quant[i_r2]
+                                                        if obs == 'gggm':
+                                                            if np.any(self.projected_clust):
+                                                                ri = self.projected_clust[i_r1]
+                                                                rj = self.projected_clust[i_r2]
+                                                        if obs in ['mmgm', 'gmxip', 'gmxim']:
+                                                            if np.any(self.projected_lens):
+                                                                ri = self.projected_lens[i_r1]
+                                                            if np.any(self.projected_clust):
+                                                                rj = self.projected_clust[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -2006,10 +2184,14 @@ class Output():
                                     for t4 in range(t3, tomo2):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
                                                         ri = proj_quant[i_r1]
                                                         rj = proj_quant[i_r2]
+                                                        if np.any(self.projected_lens):
+                                                            rj = self.projected_lens[i_r2]
+                                                        if np.any(self.projected_clust):
+                                                            ri = self.projected_clust[i_r1]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -2035,6 +2217,9 @@ class Output():
                 else:
                     if not isinstance(gauss[3*oidx], np.ndarray):
                         continue
+                    r1 = gauss[3*oidx].shape[0]
+                    r2 = gauss[3*oidx].shape[1]
+                    
                     if write_header:
                         olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
                                     tomo_str + 'cov\t\t\tcovg sva\tcovg mix' +
@@ -2054,9 +2239,21 @@ class Output():
                                     for t4 in range(t3, tomo1):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
+                                                        ri = proj_quant[i_r1]
+                                                        rj = proj_quant[i_r2]
+                                                        
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if obs == 'gggg':
+                                                            if np.any(self.projected_clust):
+                                                                ri = self.projected_clust[i_r1]
+                                                                rj = self.projected_clust[i_r2]
+                                                        if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
+                                                            if np.any(self.projected_lens):
+                                                                rj = self.projected_lens[i_r2]
+                                                                ri = self.projected_lens[i_r1]
+                                                        
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
                                                             gauss_sva = 0.0
@@ -2084,7 +2281,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy, ri, rj,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -2104,8 +2301,13 @@ class Output():
                                     for t4 in range(tomo2):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
+                                                        ri = proj_quant[i_r1]
+                                                        rj = proj_quant[i_r2]
+                                                        if np.any(self.projected_clust):
+                                                            ri = self.projected_clust[i_r1]
+                                                            rj = self.projected_clust[i_r2]             
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -2134,7 +2336,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy, ri, rj,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -2159,8 +2361,19 @@ class Output():
                                     for t4 in range(tomo4):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
+                                                        ri = proj_quant[i_r1]
+                                                        rj = proj_quant[i_r2]
+                                                        if obs == 'gggm':
+                                                            if np.any(self.projected_clust):
+                                                                ri = self.projected_clust[i_r1]
+                                                                rj = self.projected_clust[i_r2]             
+                                                        if obs in ['mmgm', 'gmxip', 'gmxim']:
+                                                            if np.any(self.projected_lens):
+                                                                ri = self.projected_lens[i_r1]
+                                                            if np.any(self.projected_clust): 
+                                                                rj = self.projected_clust[i_r2] 
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -2189,7 +2402,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy, ri, rj,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,
@@ -2209,8 +2422,14 @@ class Output():
                                     for t4 in range(t3, tomo2):
                                         for i_s1 in range(sampledim1):
                                             for i_s2 in range(sampledim2):
-                                                for i_r1 in range(len(proj_quant)):
-                                                    for i_r2 in range(len(proj_quant)):
+                                                for i_r1 in range(r1):
+                                                    for i_r2 in range(r2):
+                                                        ri = proj_quant[i_r1]
+                                                        rj = proj_quant[i_r2]
+                                                        if np.any(self.projected_lens):
+                                                            rj = self.projected_lens[i_r2]
+                                                        if np.any(self.projected_clust): 
+                                                            ri = self.projected_clust[i_r1] 
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -2239,7 +2458,7 @@ class Output():
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy, proj_quant[i_r1], proj_quant[i_r2],
+                                                            % (obs_copy, ri, rj,
                                                             i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
                                                             cov, 
                                                             gauss_sva,

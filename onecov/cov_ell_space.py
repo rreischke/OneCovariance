@@ -213,18 +213,20 @@ class CovELLSpace(PolySpectra):
             self.f_tomo[:] = read_in_tables['csmf']['f_tomo']
             
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
-        print(self.ellrange_clustering_ul)
+        if (self.mm and self.est_shear == 'C_ell') and ((self.gm and self.est_ggl == 'C_ell') or (self.gg and self.est_clust == 'C_ell')):
+            if (self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is None) or (self.ellrange_clustering_ul is None and self.ellrange_lensing_ul is not None):
+                raise Exception("ConfigError: You require the C_ell covariance for lensing and clustering or ggl. However, you only specified the ellrange for lensing and not for clustering/GGL or vice versa. Please fix this in the config file under covELLspace settings.")     
         if obs_dict['ELLspace']['pixelised_cell']:
             obs_dict['ELLspace']['ellmax'] = int(3*obs_dict['ELLspace']['pixel_Nside'] + 1)
             self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
             integer_ell = np.copy(self.ellrange.astype(int))
             pixel_weight = (hp.sphtfunc.pixwin(obs_dict['ELLspace']['pixel_Nside']))[integer_ell]
             self.pixelweight_matrix = (pixel_weight**2)[:,None]*(pixel_weight**2)[None,:]
-        
         self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
-        self.__set_redshift_distribution_splines(obs_dict['ELLspace'])
+        self.bias_of_zet = read_in_tables['zet_dep_bias']
+        self.__set_redshift_distribution_splines(obs_dict['ELLspace'], read_in_tables)
         self.__check_krange_support(
             obs_dict, cosmo_dict, bias_dict, hod_dict, prec)
         self.camb_pars.set_matter_power(kmax=self.mass_func.k[-1], redshifts = [0])
@@ -235,6 +237,8 @@ class CovELLSpace(PolySpectra):
         self.calc_survey_area(survey_params_dict)
         self.get_Cells(obs_dict, output_dict,
                        bias_dict, iA_dict, hod_dict, prec, read_in_tables)
+        
+            
         if not self.cov_dict['gauss']:
             self.__set_lensweight_splines(obs_dict['ELLspace'], iA_dict)
             
@@ -335,28 +339,30 @@ class CovELLSpace(PolySpectra):
         """
         self.ellrange_clustering_ul = None
         if covELLspacesettings['ell_type_clustering'] is not None and covELLspacesettings['ell_bins_clustering'] is not None and covELLspacesettings['ell_max_clustering'] is not None and covELLspacesettings['ell_min_clustering'] is not None:
-            if covELLspacesettings['ell_type_clustering'] == 'lin':
-                self.ellrange_clustering_ul = np.linspace(
-                    covELLspacesettings['ell_min_clustering'],
-                    covELLspacesettings['ell_max_clustering'],
-                    covELLspacesettings['ell_bins_clustering'] + 1).astype(int)
-                self.ellrange_clustering = .5 * (self.ellrange_clustering_ul[1:] + self.ellrange_clustering_ul[:-1])
-            else:
-                self.ellrange_clustering_ul = np.unique(np.geomspace(covELLspacesettings['ell_min_clustering'], covELLspacesettings['ell_max_clustering'], covELLspacesettings['ell_bins_clustering'] + 1).astype(int))
-                self.ellrange_clustering = np.exp(.5 * (np.log(self.ellrange_clustering_ul[1:])
-                                    + np.log(self.ellrange_clustering_ul[:-1])))
+            if (self.est_clust == "C_ell" and self.gg) or (self.est_ggl == "C_ell" and self.gm): 
+                if covELLspacesettings['ell_type_clustering'] == 'lin':
+                    self.ellrange_clustering_ul = np.linspace(
+                        covELLspacesettings['ell_min_clustering'],
+                        covELLspacesettings['ell_max_clustering'],
+                        covELLspacesettings['ell_bins_clustering'] + 1).astype(int)
+                    self.ellrange_clustering = .5 * (self.ellrange_clustering_ul[1:] + self.ellrange_clustering_ul[:-1])
+                else:
+                    self.ellrange_clustering_ul = np.unique(np.geomspace(covELLspacesettings['ell_min_clustering'], covELLspacesettings['ell_max_clustering'], covELLspacesettings['ell_bins_clustering'] + 1).astype(int))
+                    self.ellrange_clustering = np.exp(.5 * (np.log(self.ellrange_clustering_ul[1:])
+                                        + np.log(self.ellrange_clustering_ul[:-1])))
         self.ellrange_lensing_ul = None
         if covELLspacesettings['ell_type_lensing'] is not None and covELLspacesettings['ell_bins_lensing'] is not None and covELLspacesettings['ell_max_lensing'] is not None and covELLspacesettings['ell_min_lensing'] is not None:
-            if covELLspacesettings['ell_type_lensing'] == 'lin':
-                self.ellrange_lensing_ul = np.linspace(
-                    covELLspacesettings['ell_min_lensing'],
-                    covELLspacesettings['ell_max_lensing'],
-                    covELLspacesettings['ell_bins_lensing'] + 1)
-                self.ellrange_lensing = .5 * (self.ellrange_lensing_ul[1:] + self.ellrange_lensing_ul[:-1])
-            else:
-                self.ellrange_lensing_ul = np.geomspace(covELLspacesettings['ell_min_lensing'], covELLspacesettings['ell_max_lensing'], covELLspacesettings['ell_bins_lensing'] + 1)
-                self.ellrange_lensing = np.exp(.5 * (np.log(self.ellrange_lensing_ul[1:])
-                                    + np.log(self.ellrange_lensing_ul[:-1])))
+            if (self.est_shear == "C_ell" and self.mm): 
+                if covELLspacesettings['ell_type_lensing'] == 'lin':
+                    self.ellrange_lensing_ul = np.linspace(
+                        covELLspacesettings['ell_min_lensing'],
+                        covELLspacesettings['ell_max_lensing'],
+                        covELLspacesettings['ell_bins_lensing'] + 1).astype(int)
+                    self.ellrange_lensing = .5 * (self.ellrange_lensing_ul[1:] + self.ellrange_lensing_ul[:-1])
+                else:
+                    self.ellrange_lensing_ul = np.unique(np.geomspace(covELLspacesettings['ell_min_lensing'], covELLspacesettings['ell_max_lensing'], covELLspacesettings['ell_bins_lensing'] + 1).astype(int))
+                    self.ellrange_lensing = np.exp(.5 * (np.log(self.ellrange_lensing_ul[1:])
+                                        + np.log(self.ellrange_lensing_ul[:-1])))
 
 
         if covELLspacesettings['n_spec'] is not None and covELLspacesettings['n_spec'] != 0:
@@ -395,7 +401,8 @@ class CovELLSpace(PolySpectra):
         
 
     def __set_redshift_distribution_splines(self,
-                                            covELLspacesettings):
+                                            covELLspacesettings,
+                                            read_in_tables):
         r"""
         Sets the splines the redshift distributions for later integration along
         the line-of-sight.
@@ -426,7 +433,6 @@ class CovELLSpace(PolySpectra):
         self.spline_zcsmf = []
         self.chi_min_clust = np.zeros(self.n_tomo_clust)
         self.chi_max_clust = np.zeros(self.n_tomo_clust)
-        self.zet_lens['z'] -= 0.05
         if self.gm or self.gg:
             dzdchi_clust = self.cosmology.efunc(self.zet_clust['z']) \
                 / self.cosmology.hubble_distance.value  \
@@ -470,6 +476,13 @@ class CovELLSpace(PolySpectra):
                     else:
                         self.chi_max_clust[tomo] = self.los_integration_chi[-1]
                     break
+            if self.redshift_dep_bias:
+                self.spline_zclust[tomo] = UnivariateSpline(
+                    self.cosmology.comoving_distance(self.zet_clust['z']).value
+                    * self.cosmology.h,
+                    self.zet_clust['nz'][tomo]*dzdchi_clust*read_in_tables['zet_dep_bias'][tomo,:],
+                    k=covELLspacesettings['nz_polyorder'], s=0, ext=1)
+
         if self.csmf:
             for tomo in range(self.n_tomo_csmf):
                 norm = simpson(self.zet_csmf['pz'][tomo], self.zet_csmf['z'])
@@ -1054,6 +1067,8 @@ class CovELLSpace(PolySpectra):
             spline_Pmm = RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_mm[:, :]),bounds_error= False, fill_value = None)
         self.__set_lensweight_splines(covELLspacesettings, iA_dict)
         self.spline_Pgg = spline_Pgg
+        self.aux_gm = aux_gm
+        self.aux_gg = aux_gg
         if Cells is not None:
             if ((self.gg and tab_bools[0]) or not self.gg) and ((self.mm and tab_bools[2]) or not self.mm) and ((self.gm and np.all(tab_bools)) or not self.gm):
                 return Cells[0], Cells[1], Cells[2]
@@ -1319,18 +1334,94 @@ class CovELLSpace(PolySpectra):
                                             read_in_tables['tri'])
                     
         if self.cov_dict['nongauss'] and self.ellrange_photo is None:
+            nongauss_new = []
             if self.gg:
-                nongauss[0][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[0][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_clust']/self.deg2torad2)
+                if self.ellrange_clustering_ul is not None:
+                    nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_clust'],
+                                                              survey_params_dict['survey_area_clust'],
+                                                              nongauss[0],
+                                                              True))
+                else:
+                    nongauss[0][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[0][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_clust']/self.deg2torad2)
+            else:
+                nongauss_new.append(0)
             if self.gg and self.gm and self.cross_terms:
-                nongauss[1][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[1][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+                if self.ellrange_clustering_ul is not None:
+                    nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_clust'],
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              nongauss[1],
+                                                              True))
+                else:
+                    nongauss[1][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[1][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+            else:
+                nongauss_new.append(0)
             if self.gg and self.mm and self.cross_terms:
-                nongauss[2][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[2][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.deg2torad2)
+                if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_lensing_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_lensing,
+                                                              survey_params_dict['survey_area_clust'],
+                                                              survey_params_dict['survey_area_lens'],
+                                                              nongauss[2],
+                                                              True))
+                else:
+                    nongauss[2][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[2][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.deg2torad2)
+            else:
+                nongauss_new.append(0)
             if self.gm:
-                nongauss[3][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[3][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_ggl']/self.deg2torad2)
+                if self.ellrange_clustering_ul is not None:
+                    nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              nongauss[3],
+                                                              True))
+                else:
+                    nongauss[3][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[3][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_ggl']/self.deg2torad2)
+            else:
+                nongauss_new.append(0)
             if self.mm and self.gm and self.cross_terms:           
-                nongauss[4][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[4][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+                if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_lensing,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_lens'],
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              nongauss[4],
+                                                              True))
+                else:
+                    nongauss[4][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[4][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+            else:
+                nongauss_new.append(0)
             if self.mm:
-                nongauss[5][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
+                if self.ellrange_lensing_ul is not None:
+                    t0 = time.time()
+                    nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
+                                                              self.ellrange_lensing_ul,
+                                                              self.ellrange_lensing,
+                                                              self.ellrange_lensing,
+                                                              survey_params_dict['survey_area_lens'],
+                                                              survey_params_dict['survey_area_lens'],
+                                                              nongauss[5],
+                                                              True))
+                    print(time.time() - t0)
+                else:
+                    nongauss[5][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
+            else:
+                nongauss_new.append(0)
+            nongauss = nongauss_new
         if self.ellrange_photo is not None:
             nongaussELLgggg_ssss_new = 0
             nongaussELLgggg_sssp_new = 0
@@ -1599,7 +1690,82 @@ class CovELLSpace(PolySpectra):
                               prec,
                               survey_params_dict,
                               obs_dict['ELLspace'])
-        
+        if self.ellrange_photo is None:
+            ssc_new = []    
+            if self.gg:
+                if self.ellrange_clustering_ul is not None:
+                    ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_clust'],
+                                                              survey_params_dict['survey_area_clust'],
+                                                              ssc[0],
+                                                              False))
+            else:
+                ssc_new.append(0)
+            if self.gg and self.gm and self.cross_terms:
+                if self.ellrange_clustering_ul is not None:
+                    ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_clust'],
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              ssc[1],
+                                                              False))
+            else:
+                ssc_new.append(0)
+            if self.gg and self.mm and self.cross_terms:
+                if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_lensing_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_lensing,
+                                                              survey_params_dict['survey_area_clust'],
+                                                              survey_params_dict['survey_area_lens'],
+                                                              ssc[2],
+                                                              False))
+            else:
+                ssc_new.append(0)
+            if self.gm:
+                if self.ellrange_clustering_ul is not None:
+                    ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_clustering,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              ssc[3],
+                                                              False))
+            else:
+                ssc_new.append(0)
+            if self.mm and self.gm and self.cross_terms:           
+                if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
+                                                              self.ellrange_clustering_ul,
+                                                              self.ellrange_lensing,
+                                                              self.ellrange_clustering,
+                                                              survey_params_dict['survey_area_lens'],
+                                                              survey_params_dict['survey_area_ggl'],
+                                                              ssc[4],
+                                                              False))
+            else:
+                ssc_new.append(0)
+            if self.mm:
+                if self.ellrange_lensing_ul is not None:
+                    ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
+                                                              self.ellrange_lensing_ul,
+                                                              self.ellrange_lensing,
+                                                              self.ellrange_lensing,
+                                                              survey_params_dict['survey_area_lens'],
+                                                              survey_params_dict['survey_area_lens'],
+                                                              ssc[5],
+                                                              False))
+            else:
+                ssc_new.append(0)
+            ssc = ssc_new
+            
         if self.ellrange_photo is not None:
             sscELLgggg_ssss_new = 0
             sscELLgggg_sssp_new = 0
@@ -2058,10 +2224,9 @@ class CovELLSpace(PolySpectra):
                 integration_ell_34 = np.arange(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1]).astype(int)
                 N_ell_34 = len(integration_ell_34)
                 overlapping_elements = np.array(list(set(integration_ell_12).intersection(set(integration_ell_34))))
+
                 if len(overlapping_elements) == 0:
                     continue
-                if i_ell == 0 and j_ell == 1:
-                    print(overlapping_elements)
                 else:
                     for i_sample in range(len(cov[0,0,:,0,0,0,0,0])):
                         for j_sample in range(len(cov[0,0,0,:,0,0,0,0])):
@@ -2078,6 +2243,8 @@ class CovELLSpace(PolySpectra):
     def __bin_cov_ell_nongauss(self,
                                ellrange_12_ul,
                                ellrange_34_ul,
+                               ellrange_12,
+                               ellrange_34,
                                area_12,
                                area_34,
                                cov,
@@ -2087,8 +2254,10 @@ class CovELLSpace(PolySpectra):
         full_sky_angle = 1 * self.deg2torad2
 
         binned_covariance = np.zeros((len(ellrange_12_ul) - 1, len(ellrange_34_ul) - 1, len(cov[0,0,:,0,0,0,0,0]), len(cov[0,0,0,:,0,0,0,0]), len(cov[0,0,0,0,:,0,0,0]), len(cov[0,0,0,0,0,:,0,0]), len(cov[0,0,0,0,0,0,:,0]), len(cov[0,0,0,0,0,0,0,:])))
-            
-        for i in range(len(ellrange_12_ul) - 1):
+        original_shape = binned_covariance[0, 0, :, :, :, :, :, :].shape
+        flat_length = len(cov[0,0,:,0,0,0,0,0])*len(cov[0,0,0,:,0,0,0,0])*len(cov[0,0,0,0,:,0,0,0])*len(cov[0,0,0,0,0,:,0,0])*len(cov[0,0,0,0,0,0,:,0])*len(cov[0,0,0,0,0,0,0,:])
+        flat_cov = np.reshape(cov, (len(self.ellrange), len(self.ellrange), flat_length))     
+        for i_ell in range(len(ellrange_12_ul) - 1):
             for j_ell in range(len(ellrange_34_ul) - 1):
                 area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]
                 area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
@@ -2101,17 +2270,18 @@ class CovELLSpace(PolySpectra):
                                 for j_tomo in range(len(cov[0,0,0,0,0,:,0,0])):
                                     for k_tomo in range(len(cov[0,0,0,0,0,0,:,0])):
                                         for l_tomo in range(len(cov[0,0,0,0,0,0,0,:])):
+
                                             if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
                                                 if(np.all(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] > 0)):
                                                     spline = RegularGridInterpolator((self.ellrange,self.ellrange), np.log(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]),bounds_error= False, fill_value = None)
                                                     result = simpson(simpson(np.exp(spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[:,None],integration_ell_34), integration_ell_12)
                                                 else:
-                                                    spline = RegularGridInterpolator(self.ellrange,self.ellrange, cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
+                                                    spline = RegularGridInterpolator((self.ellrange,self.ellrange), cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
                                                     result = simpson(simpson((spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[:,None],integration_ell_34), integration_ell_12)
                                                 result /= (area12_ell*area34_ell)
                                                 if connected:
                                                     result *= full_sky_angle / max(area_12,area_34)
-                                                binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result
+                                                binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result    
         return binned_covariance
     
 
@@ -4760,30 +4930,88 @@ class CovELLSpace(PolySpectra):
             self.survey_variance_mmgm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmgm, k=1, s=0, ext=0)
 
-        aux_response_gg = np.zeros((len(self.los_chi),
-                                    len(self.mass_func.k),
-                                    self.sample_dim))
-        aux_response_gm = np.zeros_like(aux_response_gg)
-        aux_response_mm = np.zeros_like(aux_response_gg)
-        t0 = time.time()
-        for i_chi in range(self.los_interpolation_sampling):
-            self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
-            aux_response_gg[i_chi, :, :], aux_response_gm[i_chi, :, :], aux_response_mm[i_chi,
-                                                                                        :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
-            eta = (time.time()-t0) * \
-                (len(self.los_z)/(i_chi+1)-1)
-            print('\rPreparations for SSC calculation at '
-                  + str(round((i_chi+1)/len(self.los_z)*100, 1))
-                  + '% in ' + str(round((time.time()-t0), 1)) + 'sek  ETA in '
-                  + str(round(eta, 1)) + 'sek', end="")
-        
-        for i_sample in range(self.sample_dim):
-            spline_responsePgg.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                               (aux_response_gg[:, :, i_sample]),bounds_error= False, fill_value = None))
-            spline_responsePgm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                               (aux_response_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
-            spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                               (aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
+        if not self.redshift_dep_bias:  
+            aux_response_gg = np.zeros((len(self.los_chi),
+                                        len(self.mass_func.k),
+                                        self.sample_dim))
+            aux_response_gm = np.zeros_like(aux_response_gg)
+            aux_response_mm = np.zeros_like(aux_response_gg)
+            t0 = time.time()
+            for i_chi in range(self.los_interpolation_sampling):
+                self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
+                aux_response_gg[i_chi, :, :], aux_response_gm[i_chi, :, :], aux_response_mm[i_chi,
+                                                                                            :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
+                eta = (time.time()-t0) * \
+                    (len(self.los_z)/(i_chi+1)-1)
+                print('\rPreparations for SSC calculation at '
+                    + str(round((i_chi+1)/len(self.los_z)*100, 1))
+                    + '% in ' + str(round((time.time()-t0), 1)) + 'sek  ETA in '
+                    + str(round(eta, 1)) + 'sek', end="")
+            
+            for i_sample in range(self.sample_dim):
+                spline_responsePgg.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
+                                                (aux_response_gg[:, :, i_sample]),bounds_error= False, fill_value = None))
+                spline_responsePgm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
+                                                (aux_response_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
+                spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
+                                                (aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
+        else:
+            aux_gg = np.zeros((len(self.los_chi),
+                                        len(self.mass_func.k),
+                                        self.sample_dim))
+            aux_gm = np.zeros_like(aux_gg)
+            aux_mm = np.zeros_like(aux_gg)
+            aux_response_gg = np.zeros((len(self.los_chi),
+                                        len(self.mass_func.k),
+                                        self.sample_dim,
+                                        self.n_tomo_clust,
+                                        self.n_tomo_clust))
+            aux_response_gm = np.zeros((len(self.los_chi),
+                                        len(self.mass_func.k),
+                                        self.sample_dim,
+                                        self.n_tomo_clust))
+            aux_response_mm = np.zeros((len(self.los_chi),
+                                        len(self.mass_func.k),
+                                        self.sample_dim))
+            t0 = time.time()
+            for i_chi in range(self.los_interpolation_sampling):
+                self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
+                aux_gg[i_chi, :, :], aux_gm[i_chi, :, :], aux_response_mm[i_chi, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
+                if self.gm:
+                    for i_sample in range(self.sample_dim):
+                        for i_tomo in range(self.n_tomo_clust):
+                            bias_i_tomo = np.interp(self.los_z[i_chi],self.zet_clust['z'], self.bias_of_zet[i_tomo,:])
+                            aux_response_gm[i_chi, :, i_sample, i_tomo] = aux_gm[i_chi, :, i_sample]*bias_i_tomo
+                            aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[i_chi, :]*bias_i_tomo**2
+                            aux_response_gm[i_chi, :, i_sample, i_tomo] /= bias_i_tomo
+                if self.gg:
+                    for i_sample in range(self.sample_dim):
+                        for i_tomo in range(self.n_tomo_clust):
+                            bias_i_tomo = np.interp(self.los_z[i_chi],self.zet_clust['z'], self.bias_of_zet[i_tomo,:])
+                            for j_tomo in range(self.n_tomo_clust):
+                                bias_j_tomo = np.interp(self.los_z[i_chi],self.zet_clust['z'], self.bias_of_zet[j_tomo,:])
+                                aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] = aux_gg[i_chi, :, i_sample]*bias_i_tomo*bias_j_tomo
+                                aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_i_tomo + bias_j_tomo)*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]*bias_i_tomo*bias_j_tomo
+                                aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] /= (bias_i_tomo*bias_j_tomo)
+                eta = (time.time()-t0) * \
+                    (len(self.los_z)/(i_chi+1)-1)
+                print('\rPreparations for SSC calculation at '
+                    + str(round((i_chi+1)/len(self.los_z)*100, 1))
+                    + '% in ' + str(round((time.time()-t0), 1)) + 'sek  ETA in '
+                    + str(round(eta, 1)) + 'sek', end="")
+            
+            for i_sample in range(self.sample_dim):
+                spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
+                                                (aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
+                for i_tomo in range(self.n_tomo_clust):
+                    spline_responsePgm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
+                                                (aux_response_gm[:, :, i_sample, i_tomo]),bounds_error= False, fill_value = None))
+                    for j_tomo in range(self.n_tomo_clust):        
+                        spline_responsePgg.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
+                                                        (aux_response_gg[:, :, i_sample, i_tomo, j_tomo]),bounds_error= False, fill_value = None))
+                
+                    
+
         print("")
         print("Calculating SSC contribution in ell space")
         self.update_mass_func(0, bias_dict, hod_dict, prec)
@@ -4832,8 +5060,12 @@ class CovELLSpace(PolySpectra):
                                             x_values[0,flat_idx] = self.los_integration_chi[i_chi]
                                             x_values[1,flat_idx] = ki
                                             flat_idx +=1
-                                    P1_response = spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                                    P2_response = spline_responsePgg[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    if not self.redshift_dep_bias:
+                                        P1_response = spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgg[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    else:
+                                        P1_response = spline_responsePgg[i_sample*self.n_tomo_clust**2 + i_tomo*self.n_tomo_clust + j_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgg[j_sample*self.n_tomo_clust**2 + k_tomo*self.n_tomo_clust + l_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                                     integrand = P1_response[:, :, None]*P2_response[:, None, :]*survey_variance[:, None, None]
                                     SSCELLgggg[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
@@ -4884,8 +5116,12 @@ class CovELLSpace(PolySpectra):
                                             x_values[0,flat_idx] = self.los_integration_chi[i_chi]
                                             x_values[1,flat_idx] = ki
                                             flat_idx +=1
-                                    P1_response = spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                                    P2_response = spline_responsePgm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    if not self.redshift_dep_bias:
+                                        P1_response = spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    else:
+                                        P1_response = spline_responsePgg[i_sample*self.n_tomo_clust**2 + i_tomo*self.n_tomo_clust + j_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgm[j_sample*self.n_tomo_clust + k_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                                     integrand = P1_response[:, :, None]*P2_response[:, None, :]*survey_variance[:, None, None]
                                     SSCELLgggm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
@@ -4936,8 +5172,12 @@ class CovELLSpace(PolySpectra):
                                             x_values[0,flat_idx] = self.los_integration_chi[i_chi]
                                             x_values[1,flat_idx] = ki
                                             flat_idx +=1
-                                    P1_response = spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                                    P2_response = spline_responsePmm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    if not self.redshift_dep_bias:
+                                        P1_response = spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePmm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    else:
+                                        P1_response = spline_responsePgg[i_sample*self.n_tomo_clust**2 + i_tomo*self.n_tomo_clust + j_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePmm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                                     integrand = P1_response[:, :, None]*P2_response[:, None, :]*survey_variance[:, None, None]
                                     SSCELLggmm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
@@ -4985,8 +5225,12 @@ class CovELLSpace(PolySpectra):
                                             x_values[0,flat_idx] = self.los_integration_chi[i_chi]
                                             x_values[1,flat_idx] = ki
                                             flat_idx +=1
-                                    P1_response = spline_responsePgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                                    P2_response = spline_responsePgm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    if not self.redshift_dep_bias:
+                                        P1_response = spline_responsePgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    else:
+                                        P1_response = spline_responsePgm[i_sample*self.n_tomo_clust + i_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgm[j_sample*self.n_tomo_clust + k_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                                     integrand = P1_response[:, :, None]*P2_response[:, None, :]*survey_variance[:, None, None]
                                     SSCELLgmgm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(
@@ -5072,8 +5316,12 @@ class CovELLSpace(PolySpectra):
                                             x_values[0,flat_idx] = self.los_integration_chi[i_chi]
                                             x_values[1,flat_idx] = ki
                                             flat_idx +=1
-                                    P1_response = spline_responsePmm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                                    P2_response = spline_responsePgm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    if not self.redshift_dep_bias:
+                                        P1_response = spline_responsePmm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                    else:
+                                        P1_response = spline_responsePmm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                                        P2_response = spline_responsePgm[j_sample*self.n_tomo_clust + k_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                                     integrand = P1_response[:, :, None]*P2_response[:, None, :]*survey_variance[:, None, None]
                                     SSCELLmmgm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     self.__update_los_integration_chi(

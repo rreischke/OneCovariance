@@ -205,6 +205,10 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
         gsl_spline_init(spline_integrand.at(a), &x[0], &y_value[0], number_x_values);
         slope.at(a) = gsl_spline_eval_deriv(spline_integrand.at(a), x.at(number_x_values - 1), acc_integrand.at(a));
         slope0.at(a) = gsl_spline_eval_deriv(spline_integrand.at(a), x.at(0), acc_integrand.at(a));
+        if (slope.at(a) > 0)
+        {
+            slope.at(a) = 0;
+        }
     }
     x_max = x.at(number_x_values - 1);
     x_min = x.at(0);
@@ -1071,14 +1075,18 @@ double Levin::integrand(double x, void *p)
 {
     uint tid = omp_get_thread_num();
     Levin *lp = static_cast<Levin *>(p);
+    double result = 0.0;
     if (lp->logx)
     {
         x = log(x);
     }
-    double result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
-    if (lp->logy[lp->int_index_integral[tid]])
+    if (x <= lp->x_max && x >= lp->x_min)
     {
-        result = exp(result);
+        result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        if (lp->logy[lp->int_index_integral[tid]])
+        {
+            result = exp(result);
+        }
     }
     return result;
 }
@@ -1166,12 +1174,19 @@ double Levin::double_bessel_integrand(double x, void *p)
     if (lp->logx)
     {
         x = log(x);
-        result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        if (x <= lp->x_max && x >= lp->x_min)
+        {
+            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        }
         x = exp(x);
     }
     else
     {
-        result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        if (x <= lp->x_max && x >= lp->x_min)
+        {
+
+            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        }
     }
     if (lp->logy[lp->int_index_integral[tid]])
     {
