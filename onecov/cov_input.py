@@ -5290,7 +5290,6 @@ class FileInput:
                     list((config['bias']['bias_files'].replace(
                         " ", "")).split(','))
 
-        
         if self.bias_files is not None and (self.clustering or self.ggl):
             try:
                 save_zet_bias_z = []
