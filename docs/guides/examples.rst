@@ -136,7 +136,83 @@ otherwise extrapolation will be used. Furthermore, make sure that the bias file 
    z_pivot_IA = 0.3
 
 The base alignment model in the OneCovariance code is the NLA model and it is implemented such that the alignment signal is always a linear response to the non-linear tidal field. Hence non-Gaussian and SSC terms will also
-contain a small IA contribution. 
+contain a small IA contribution.
+
+::
+
+   [halomodel evaluation]
+   m_bins = 900
+   log10m_min = 6
+   log10m_max = 18
+   hmf_model = Tinker10
+   mdef_model = SOMean
+   mdef_params = overdensity, 200
+   disable_mass_conversion = True
+   delta_c = 1.686
+   transfer_model = CAMB
+   small_k_damping_for1h = damped
+
+This section defines the parameterswhich are required for halomodel evaluations and usually do not need any modifications. 
+
+::
+
+   [powspec evaluation]
+   non_linear_model = mead2020
+   HMCode_logT_AGN = 7.3
+   log10k_bins = 200
+   log10k_min = -3.49
+   log10k_max = 2.15
+
+Here the matter power spectrum parameters are defined. Note that the wavenumber range might be updated internally depending on the multipole range.
+``non_linear_model`` specifies the nonlinear model used for the power spectrum and takes the same keywords as ``camb`` and thus ``cosmosis``.
+
+::
+
+   [trispec evaluation]
+   log10k_bins = 100
+   log10k_min = -3.49
+   log10k_max = 2.
+   matter_klim = 0.001
+   matter_mulim = 0.001
+   small_k_damping_for1h = damped
+   lower_calc_limit = 1e-200
+
+Specifies a few parameters for trispectrum calculation (if the non-Gaussian covariance is required), such as the wavenumber range on which it is evaluated.
+Note that it will always be inter- and extrapolated onto the required wavenumber range for the projections.
+
+::
+
+   [tabulated inputs files]
+   Cell_directory = ./input/Cell
+   Cgg_file = Cell_gg.ascii
+   Cgm_file = Cell_gkappa.ascii
+   Cmm_file = Cell_kappakappa.ascii
+
+For this case, we want to use external angular power spectra for the Gaussian covariance. These are passed from the directory ``./input/Cell`` for all required 
+tracers. Make sure that these have the correct format, otherwise the code will complain.
+
+::
+
+   [misc]
+   num_cores = 8
+
+Lastly, we are running the whole code on 8 cores. Running
+
+:: 
+   
+   python3 covariance.py config_files/config_3x2pt.ini
+
+Will then execute the covariance and produce some terminal outputs notifying the user about the current process. As output two files will be generated. First the ``covariance_list.dat`` containing all elements
+in a long list:
+
+.. image:: covariance_list_3times2_Cell.png
+   :width: 790
+
+Since ``split_gauss = True`` was specified, the Gaussian terms are splitted into the different contributions. The first column labels the tracers, column 2 and 3 the spatial variable,
+4 and 5 are the stellar mass sample bins (which is just one since no HoD was used) and column 6-9 label the tomographic bin combination associated with the tracers.
+The ``cov`` column is the final covariance. The Gaussian covariance would be the sum of the columns ``covg sva``,	``covg mix`` and ``covg sn``, labeling sample variance, mixed term and shot noise respectively.
+``covng`` is the non-Gaussian covariance and ``covssc`` the super-sample covariance. 
+Furthermore, a matrix file, ``covariance_matrix.mat`` is produced whose general shape is described in the header and can generally be deduced by looking at the plot, ``correlation_coefficient.pdf``.
 
 KiDS-1000 covariance
 --------------------

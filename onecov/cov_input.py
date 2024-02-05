@@ -1973,8 +1973,13 @@ class Input:
                                     "array. Must be adjusted in config file " +
                                     config_name + ".")
         else:
-            ...
-
+            self.hod_model_mor_cen = 'self.double_powerlaw'
+            self.hod_model_mor_sat = 'self.double_powerlaw'
+            self.hod_model_scatter_cen = 'self.lognormal'
+            self.hod_model_scatter_sat = 'self.modschechter'
+            self.dpow_logM0_cen = 10.6
+            self.dpow_logM1_cen = 11.2
+            
         if self.hod_model_mor_cen is not None and \
            self.hod_model_mor_cen != 'self.double_powerlaw':
             raise Exception("ConfigError: The chosen HOD model is " +

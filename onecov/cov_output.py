@@ -4045,7 +4045,18 @@ class Output():
                 hdr_str += str(n_tomo_clust) + ' tomographic clustering bins and '
             if n_tomo_lens is not None:
                 hdr_str += str(n_tomo_lens) + ' tomographic lensing bins and '
-            hdr_str += str(len(proj_quant)) + ' elements per tomographic bin'
+            alternative = False
+            if self.projected_clust is not None:
+                hdr_str += str(len(self.projected_clust)) + ' elements per tomographic clustering bin '
+                alternative = True
+            if self.projected_lens is not None:
+                if not alternative:
+                    hdr_str += str(len(self.projected_lens)) + ' elements per tomographic lensing bin '
+                else:
+                    hdr_str += str(len(self.projected_lens)) + ' elements per tomographic lensing bin and'
+                alternative = True
+            if not alternative:
+                hdr_str += str(len(proj_quant)) + ' elements per tomographic bin'
             if 'matrix' in self.style:
                 print("Writing matrix output file.")
                 fn = self.filename[self.style.index('matrix')]

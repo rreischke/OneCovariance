@@ -985,7 +985,7 @@ class CovELLSpace(PolySpectra):
         self.los_chi = self.cosmology.comoving_distance(
             self.los_z).value * self.cosmology.h
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
-        if (self.mm or self.gm or self.unbiased_clustering) and not tab_bools[2] and prec['hm']['transfer_model'] == 'CAMB':
+        if (self.mm or self.gm or self.unbiased_clustering) and prec['hm']['transfer_model'] == 'CAMB':
             self.camb_pars_new.set_matter_power(redshifts = self.los_z[::-1], kmax=self.mass_func.k[-1])
             results = camb.get_results(self.camb_pars_new)
             self.camb_pars_new.NonLinear = model.NonLinear_pk
@@ -1010,25 +1010,16 @@ class CovELLSpace(PolySpectra):
             aux_ngal[zet, :] = self.ngal
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
-                    if (self.gg or  self.gm) and not tab_bools[0]:
-                        if self.unbiased_clustering:
-                            aux_gg[zet, :, i_sample, j_sample] = aux_mm[zet,:]
-                        else:
-                            aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
-                    else:
-                        aux_gg[zet, :, i_sample, j_sample] = np.ones_like(self.mass_func.k)
-                if not tab_bools[1] and self.gm or (self.mm and self.gm):
                     if self.unbiased_clustering:
-                        aux_gm[zet, :, i_sample] = aux_mm[zet,:]
+                        aux_gg[zet, :, i_sample, j_sample] = aux_mm[zet,:]
                     else:
-                        aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
+                        aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
+                if self.unbiased_clustering:
+                    aux_gm[zet, :, i_sample] = aux_mm[zet,:]
                 else:
-                    aux_gm[zet, :, i_sample] = np.ones_like(self.mass_func.k)
+                    aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
             if prec['hm']['transfer_model'] != 'CAMB':
-                if (self.mm or self.gm) and not tab_bools[2]:
-                    aux_mm[zet, :] = self.Pmm[:, 0]
-                else:
-                    aux_mm[zet, :] = np.ones_like(self.mass_func.k)
+                aux_mm[zet, :] = self.Pmm[:, 0]
             self.power_mm_lin_z[zet, :] = self.mass_func.power[:]
             eta = (time.time()-t0) * \
                 (self.los_interpolation_sampling/(zet+1)-1)
@@ -1339,6 +1330,7 @@ class CovELLSpace(PolySpectra):
             nongauss_new = []
             if self.gg:
                 if self.ellrange_clustering_ul is not None:
+                    print("Binning non-Gaussian gggg contribution")
                     nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1353,6 +1345,7 @@ class CovELLSpace(PolySpectra):
                 nongauss_new.append(0)
             if self.gg and self.gm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None:
+                    print("Binning non-Gaussian gggm contribution")
                     nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1367,6 +1360,7 @@ class CovELLSpace(PolySpectra):
                 nongauss_new.append(0)
             if self.gg and self.mm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    print("Binning non-Gaussian ggmm contribution")
                     nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_clustering,
@@ -1381,6 +1375,7 @@ class CovELLSpace(PolySpectra):
                 nongauss_new.append(0)
             if self.gm:
                 if self.ellrange_clustering_ul is not None:
+                    print("Binning non-Gaussian gmgm contribution")
                     nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1395,6 +1390,7 @@ class CovELLSpace(PolySpectra):
                 nongauss_new.append(0)
             if self.mm and self.gm and self.cross_terms:           
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    print("Binning non-Gaussian mmgm contribution")
                     nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_lensing,
@@ -1409,6 +1405,7 @@ class CovELLSpace(PolySpectra):
                 nongauss_new.append(0)
             if self.mm:
                 if self.ellrange_lensing_ul is not None:
+                    print("Binning non-Gaussian mmmm contribution")
                     nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_lensing,
@@ -1694,6 +1691,7 @@ class CovELLSpace(PolySpectra):
             ssc_new = []    
             if self.gg:
                 if self.ellrange_clustering_ul is not None:
+                    print("Binning SSC gggg contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1706,6 +1704,7 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.gg and self.gm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None:
+                    print("Binning SSC gggm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1718,6 +1717,7 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.gg and self.mm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    print("Binning SSC ggmm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_clustering,
@@ -1730,6 +1730,7 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.gm:
                 if self.ellrange_clustering_ul is not None:
+                    print("Binning SSC gmgm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1742,6 +1743,7 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.mm and self.gm and self.cross_terms:           
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
+                    print("Binning SSC mmgm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_lensing,
@@ -1754,6 +1756,7 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.mm:
                 if self.ellrange_lensing_ul is not None:
+                    print("Binning SSC mmmm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_lensing,
@@ -2254,9 +2257,8 @@ class CovELLSpace(PolySpectra):
         full_sky_angle = 1 * self.deg2torad2
 
         binned_covariance = np.zeros((len(ellrange_12_ul) - 1, len(ellrange_34_ul) - 1, len(cov[0,0,:,0,0,0,0,0]), len(cov[0,0,0,:,0,0,0,0]), len(cov[0,0,0,0,:,0,0,0]), len(cov[0,0,0,0,0,:,0,0]), len(cov[0,0,0,0,0,0,:,0]), len(cov[0,0,0,0,0,0,0,:])))
-        original_shape = binned_covariance[0, 0, :, :, :, :, :, :].shape
-        flat_length = len(cov[0,0,:,0,0,0,0,0])*len(cov[0,0,0,:,0,0,0,0])*len(cov[0,0,0,0,:,0,0,0])*len(cov[0,0,0,0,0,:,0,0])*len(cov[0,0,0,0,0,0,:,0])*len(cov[0,0,0,0,0,0,0,:])
-        flat_cov = np.reshape(cov, (len(self.ellrange), len(self.ellrange), flat_length))     
+        t0, tomos = time.time(), 0
+        tomos_comb = (len(ellrange_12_ul) - 1)*(len(ellrange_34_ul) - 1)   
         for i_ell in range(len(ellrange_12_ul) - 1):
             for j_ell in range(len(ellrange_34_ul) - 1):
                 area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]
@@ -2270,7 +2272,6 @@ class CovELLSpace(PolySpectra):
                                 for j_tomo in range(len(cov[0,0,0,0,0,:,0,0])):
                                     for k_tomo in range(len(cov[0,0,0,0,0,0,:,0])):
                                         for l_tomo in range(len(cov[0,0,0,0,0,0,0,:])):
-
                                             if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
                                                 if(np.all(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] > 0)):
                                                     spline = RegularGridInterpolator((self.ellrange,self.ellrange), np.log(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]),bounds_error= False, fill_value = None)
@@ -2282,6 +2283,13 @@ class CovELLSpace(PolySpectra):
                                                 if connected:
                                                     result *= full_sky_angle / max(area_12,area_34)
                                                 binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result    
+                tomos += 1
+                eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
+                print('\rAt ' +
+                    str(round(tomos/tomos_comb*100, 1)) + '% in ' +
+                    str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                    str(round(eta, 1)) + 'min', end="")
+        print("")
         return binned_covariance
     
 
@@ -4471,7 +4479,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLgggg = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
                                         self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))
             t0, tomos = time.time(), 0
-            tomos_comb = self.n_tomo_clust*(self.n_tomo_clust + 1)*self.sample_dim**2
+            tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim**2
             for i_sample in range(self.sample_dim):
@@ -4512,7 +4520,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLgggm = np.zeros((len(self.ellrange), len(self.ellrange),  self.sample_dim, self.sample_dim, self.n_tomo_clust,
                                         self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens))
             t0, tomos = time.time(), 0
-            tomos_comb = self.n_tomo_clust*(self.n_tomo_clust + 1)*self.sample_dim**2
+            tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim**2
             for i_sample in range(self.sample_dim):
@@ -4549,7 +4557,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, 1, self.n_tomo_clust,
                                         self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))
             t0, tomos = time.time(), 0
-            tomos_comb = self.n_tomo_clust*(self.n_tomo_clust + 1)*self.sample_dim
+            tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim
             for i_sample in range(self.sample_dim):
