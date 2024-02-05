@@ -338,6 +338,7 @@ class CovELLSpace(PolySpectra):
 
         """
         self.ellrange_clustering_ul = None
+        self.ellrange_clustering = None
         if covELLspacesettings['ell_type_clustering'] is not None and covELLspacesettings['ell_bins_clustering'] is not None and covELLspacesettings['ell_max_clustering'] is not None and covELLspacesettings['ell_min_clustering'] is not None:
             if (self.est_clust == "C_ell" and self.gg) or (self.est_ggl == "C_ell" and self.gm): 
                 if covELLspacesettings['ell_type_clustering'] == 'lin':
@@ -351,6 +352,7 @@ class CovELLSpace(PolySpectra):
                     self.ellrange_clustering = np.exp(.5 * (np.log(self.ellrange_clustering_ul[1:])
                                         + np.log(self.ellrange_clustering_ul[:-1])))
         self.ellrange_lensing_ul = None
+        self.ellrange_lensing = None
         if covELLspacesettings['ell_type_lensing'] is not None and covELLspacesettings['ell_bins_lensing'] is not None and covELLspacesettings['ell_max_lensing'] is not None and covELLspacesettings['ell_min_lensing'] is not None:
             if (self.est_shear == "C_ell" and self.mm): 
                 if covELLspacesettings['ell_type_lensing'] == 'lin':
@@ -1407,7 +1409,6 @@ class CovELLSpace(PolySpectra):
                 nongauss_new.append(0)
             if self.mm:
                 if self.ellrange_lensing_ul is not None:
-                    t0 = time.time()
                     nongauss_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_lensing,
@@ -1416,7 +1417,6 @@ class CovELLSpace(PolySpectra):
                                                               survey_params_dict['survey_area_lens'],
                                                               nongauss[5],
                                                               True))
-                    print(time.time() - t0)
                 else:
                     nongauss[5][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
             else:

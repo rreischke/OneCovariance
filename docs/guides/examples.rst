@@ -46,4 +46,22 @@ In the directory ``input/Cell`` files for precomputed angular power spectra, :ma
 in the ini-file. In this way one can use the code to produce the covariance of the implemented summary statistic for any tracer for which a harmonic covariance has been calculated. 
 
 
-  
+3x2pt for :math:`C_\ell`:
+We will calculate the full 3x2pt covariance matrix in harmonic space by running the covariance code with the in ``config_3x2pt.ini`` in the ``/config_files`` directory.
+To obtain a good understanding, we will go through the ``.ini`` file section by section:
+
+``[observables]
+cosmic_shear = True
+est_shear = C_ell
+ggl = True
+est_ggl = C_ell
+clustering = True
+est_clust = C_ell
+cstellar_mf = False
+cross_terms = True
+unbiased_clustering = False``
+
+
+
+
+
