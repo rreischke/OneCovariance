@@ -51,6 +51,17 @@ We will calculate the full 3x2pt covariance matrix in harmonic space by running 
 To obtain a good understanding, we will go through the ``.ini`` file section by section:
 
 ::
+
+   [covariance terms]
+   gauss = True
+   split_gauss = True
+   nongauss = True
+   ssc = True
+
+These settings ensure that all terms in the covariance are calculated, that is the Gaussian, non-Gaussian and super-sample covariance terms. The option ``split_gauss = True`` results into
+a further splitting of the Gaussian term into sample-variance, mixed and shot-noise terms in the list output. 
+
+::
  
    [observables]
    cosmic_shear = True
@@ -63,6 +74,9 @@ To obtain a good understanding, we will go through the ``.ini`` file section by 
    cross_terms = True
    unbiased_clustering = False
 
+Clearly we have switched on all observables and choose ``C_ell`` as the required summary statistic. Furthermore, ``unbiased_clustering`` is ``False`` since a bias model will
+be used to describe the clustering. Since we do not require the stellar mass function, it is set to ``False``. Setting ``cross_terms = True`` ensures that all cross-covariances
+between the observables are calculated. 
 
 
 
