@@ -78,8 +78,46 @@ Clearly we have switched on all observables and choose ``C_ell`` as the required
 be used to describe the clustering. Since we do not require the stellar mass function, it is set to ``False``. Setting ``cross_terms = True`` ensures that all cross-covariances
 between the observables are calculated. 
 
+::
+   [output settings]
+   directory = ./output/
+   file = covariance_list.dat, covariance_matrix.mat
+   style = list, matrix
+   list_style_spatial_first = True
+   corrmatrix_plot = correlation_coefficient.pdf
+   save_configs = save_configs.ini
+   save_Cells = True
+   save_trispectra = False
+   save_alms = True
+   use_tex = False
 
+This section specifies the output setting and is in general pretty self-explanatory. It should be said, however, ``list_style_spatial_first = True`` will lead to the spatial index,
+:math:`\ell` in this case, to vary fastest in the list output.  Furthermore, ``save_alms = True`` ensures that the suvey modes of the SSC term are
+saved on disk if a mask file is specified. ``use_tex = False`` is just for cosmetics of the output plot, only switch it on if ``LaTeX`` is installed.
 
+::
+   [covELLspace settings]
+   delta_z = 0.08
+   tri_delta_z = 0.5
+   integration_steps = 500
+   nz_interpolation_polynom_order = 1
+   mult_shear_bias = 0, 0, 0, 0, 0
+  
+   ell_min_clustering = 2
+   ell_max_clustering = 1000
+   ell_bins_clustering = 10
+   ell_type_clustering = log
+
+   ell_min_lensing = 2
+   ell_max_lensing = 5000
+   ell_bins_lensing = 15
+   ell_type_lensing = log
+
+Here are the most important settings for the :math:`C_\ell`: covariance, apart from a few accuracy settings the multipole ranges for clustering and lensing are specified.
+It should be noted that GGL always assumes the binning for clustering due to the galaxy bias. Here the code will assume 10 equidistant bins (in log) between multipoles 10 and 1000.
+Note that the centre of the first bin is therefore not :math:`\ell = 10`. The averaging over the multipoles is carried out internally. ``mult_shear_bias`` specifies the values for the
+multiplicative shear bias uncertainty. Note that, if one uses input :math:`C_\ell` which contain already residual shear bias uncertainties, this should be set to zero. Here we deal with 5 lensing
+bins and therefore specify 5 values.
 
 
 
