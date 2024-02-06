@@ -12,8 +12,9 @@ __pycache__
 levin.egg-info
 .vscode
 /input/catalogue_mixed/*
-/config_files/*
-!/config_files/config_cz.ini
-!/config_files/config_legacy_231114.ini
-!/config_files/config_kids_legacy_validation.ini
+/output*
+/my_config_files/*
 !/input/catalogue_mixed/tmptripletcounts_test.fits
+!/output/Cell_gg.ascii
+!/output/Cell_gkappa.ascii
+!/output/Cell_kappakappa.ascii
