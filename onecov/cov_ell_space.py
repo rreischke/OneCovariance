@@ -1008,16 +1008,17 @@ class CovELLSpace(PolySpectra):
         for zet in range(self.los_interpolation_sampling):
             self.update_mass_func(self.los_z[zet], bias_dict, hod_dict, prec)
             aux_ngal[zet, :] = self.ngal
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(self.sample_dim):
+            if self.gg or self.gm:
+                for i_sample in range(self.sample_dim):
+                    for j_sample in range(self.sample_dim):
+                        if self.unbiased_clustering:
+                            aux_gg[zet, :, i_sample, j_sample] = aux_mm[zet,:]
+                        else:
+                            aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
                     if self.unbiased_clustering:
-                        aux_gg[zet, :, i_sample, j_sample] = aux_mm[zet,:]
+                        aux_gm[zet, :, i_sample] = aux_mm[zet,:]
                     else:
-                        aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
-                if self.unbiased_clustering:
-                    aux_gm[zet, :, i_sample] = aux_mm[zet,:]
-                else:
-                    aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
+                        aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
             if prec['hm']['transfer_model'] != 'CAMB':
                 aux_mm[zet, :] = self.Pmm[:, 0]
             self.power_mm_lin_z[zet, :] = self.mass_func.power[:]
@@ -1050,18 +1051,18 @@ class CovELLSpace(PolySpectra):
             for tomo_i in range(self.n_tomo_clust):
                 prob = self.spline_zclust[tomo_i](self.los_integration_chi)*np.append((self.los_integration_chi[1:] -self.los_integration_chi[:-1]),0)
                 self.Ngal[i_sample,tomo_i] = simpson(prob*self.los_integration_chi**2*spline_nbar(self.los_integration_chi),self.los_integration_chi)
-        spline_Pgg, spline_Pgm = [], []
-        for i_sample in range(self.sample_dim):
-            for j_sample in range(self.sample_dim):
-                spline_Pgg.append(RegularGridInterpolator((self.los_chi, np.log10(self.mass_func.k)),
-                                        np.log10(aux_gg[:, :, i_sample, j_sample]),bounds_error= False, fill_value = None))
-            spline_Pgm.append(RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
+        if self.gg or self.gm:
+            spline_Pgg, spline_Pgm = [], []
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
+                    spline_Pgg.append(RegularGridInterpolator((self.los_chi, np.log10(self.mass_func.k)),
+                                            np.log10(aux_gg[:, :, i_sample, j_sample]),bounds_error= False, fill_value = None))
+                spline_Pgm.append(RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
+            self.spline_Pgg = spline_Pgg
+    
         if (self.mm or self.gm) and not tab_bools[2]:
             spline_Pmm = RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_mm[:, :]),bounds_error= False, fill_value = None)
         self.__set_lensweight_splines(covELLspacesettings, iA_dict)
-        self.spline_Pgg = spline_Pgg
-        self.aux_gm = aux_gm
-        self.aux_gg = aux_gg
         if Cells is not None:
             if ((self.gg and tab_bools[0]) or not self.gg) and ((self.mm and tab_bools[2]) or not self.mm) and ((self.gm and np.all(tab_bools)) or not self.gm):
                 return Cells[0], Cells[1], Cells[2]
