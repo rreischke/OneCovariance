@@ -598,7 +598,7 @@ class Output():
             if obs_dict['observables']['est_shear'] == 'cosebi':
                 labels_text.append(r'$E_n$')
                 labels_text.append(r'$B_n$')
-            if obs_dict['observables']['est_ggl'] == 'bandpowers':
+            if obs_dict['observables']['est_shear'] == 'bandpowers':
                 labels_text.append(r'$\mathcal{C}_\mathrm{E}(L)$')
                 labels_text.append(r'$\mathcal{C}_\mathrm{B}(L)$')
             ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
@@ -1219,7 +1219,7 @@ class Output():
                     obs_copy = 'CE_ggCB_mm'
                 if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
                     obs_copy = 'CE_gmCE_mm'
-                if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
+                if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'CE_gmCB_mm'
                 
 
@@ -1241,7 +1241,7 @@ class Output():
                     obs_copy = 'PsiBggmm'
                 if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
                     obs_copy = 'EEgmmm'
-                if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'EBgmmm'
                 
                 
@@ -1994,7 +1994,7 @@ class Output():
                     obs_copy = 'CE_ggCB_mm'
                 if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
                     obs_copy = 'CE_gmCE_mm'
-                if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
+                if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'CE_gmCB_mm'
                 
 
@@ -2016,7 +2016,7 @@ class Output():
                     obs_copy = 'PsiBggmm'
                 if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
                     obs_copy = 'EEgmmm'
-                if obs == 'gmxiM' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+                if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'EBgmmm'
                 
                 if not obsbool[oidx]:
@@ -4238,7 +4238,27 @@ class Output():
                                 fct_args):
         obslist, obsbool, obslength, mult, gg, gm, mm, xipp, xipm, ximm = \
             fct_args
-        gauss = [gauss[0]+gauss[1]+gauss[2], 
+        if obslength == 6 and mult == 3:
+            gauss = [gauss[0]+gauss[1]+gauss[2], 
+                     gauss[3]+gauss[4]+gauss[5],
+                     gauss[6]+gauss[7]+gauss[8], 
+                     gauss[9]+gauss[10]+gauss[11],
+                     gauss[12]+gauss[13]+gauss[14], 
+                     gauss[15]+gauss[16]+gauss[17]]
+        elif obslength == 10 and mult == 3:
+            gauss = [gauss[0]+gauss[1]+gauss[2], 
+                     gauss[3]+gauss[4]+gauss[5],
+                     gauss[6]+gauss[7]+gauss[8], 
+                     gauss[9]+gauss[10]+gauss[11],
+                     gauss[12]+gauss[13]+gauss[14], 
+                     gauss[15]+gauss[16]+gauss[17],
+                     gauss[18]+gauss[19]+gauss[20], 
+                     gauss[21]+gauss[22]+gauss[23], 
+                     gauss[24]+gauss[25]+gauss[26], 
+                     gauss[27]+gauss[28]+gauss[29]]
+        
+        
+        '''gauss = [gauss[0]+gauss[1]+gauss[2], 
                 gauss[3]+gauss[4]+gauss[5],
                 gauss[6]+gauss[7]+gauss[8], 
                 gauss[9]+gauss[10]+gauss[11],
@@ -4247,7 +4267,7 @@ class Output():
                 gauss[18]+gauss[19]+gauss[20], 
                 gauss[21]+gauss[22]+gauss[23], 
                 gauss[24]+gauss[25]+gauss[26], 
-                gauss[27]+gauss[28]+gauss[29]]
+                gauss[27]+gauss[28]+gauss[29]]'''
 
         cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(obslength)]
         cov_diag = []

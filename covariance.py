@@ -48,7 +48,7 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
                                 cosmo, bias, iA,  hod, survey_params, prec, read_in_tables)
         covariance_in_theta_space = covtheta.calc_covTHETA(
             observables, output, bias,  hod, survey_params, prec, read_in_tables)
-        out = Output(output)
+        out = Output(output, covtheta.theta_bins_clustering, covtheta.theta_bins_lensing)
         out.write_cov(covterms, observables, covtheta.n_tomo_clust,
                     covtheta.n_tomo_lens, covtheta.thetabins,
                     covariance_in_theta_space[0],
@@ -73,9 +73,9 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
         covbp = CovBandPowers(covterms, observables, output,
                             cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
         covariance_bp = covbp.calc_covbandpowers(observables, output, bias,  hod, survey_params, prec, read_in_tables)
-        out = Output(output)
+        out = Output(output, covbp.ell_bins_clustering, covbp.ell_bins_lensing)
         out.write_cov(covterms, observables, covbp.n_tomo_clust,
-                    covbp.n_tomo_lens, covbp.ell_bins,
+                    covbp.n_tomo_lens, covbp.ellrange,
                     covariance_bp[0],
                     covariance_bp[1],
                     covariance_bp[2])

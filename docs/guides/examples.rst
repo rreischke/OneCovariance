@@ -1,8 +1,8 @@
 Some examples
 =============
 
-3x2pt for :math:`C_\ell`:
--------------------------
+3x2pt for pure :math:`C_\ell`:
+------------------------------
 We will calculate the full 3x2pt covariance matrix in harmonic space by running the covariance code with the in ``config_3x2pt.ini`` in the ``/config_files`` directory.
 To obtain a good understanding, we will go through the ``.ini`` file section by section:
 
@@ -213,6 +213,11 @@ Since ``split_gauss = True`` was specified, the Gaussian terms are splitted into
 The ``cov`` column is the final covariance. The Gaussian covariance would be the sum of the columns ``covg sva``,	``covg mix`` and ``covg sn``, labeling sample variance, mixed term and shot noise respectively.
 ``covng`` is the non-Gaussian covariance and ``covssc`` the super-sample covariance. 
 Furthermore, a matrix file, ``covariance_matrix.mat`` is produced whose general shape is described in the header and can generally be deduced by looking at the plot, ``correlation_coefficient.pdf``.
+
+3x2pt for bandpowers:
+---------------------
+Repeating the same exercise as in the previous section but now we use bandpowers.
+
 
 KiDS-1000 covariance
 --------------------

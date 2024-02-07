@@ -118,6 +118,14 @@ class Input:
         self.theta_max = None
         self.theta_bins = None
         self.theta_type = None
+        self.theta_min_clustering = None
+        self.theta_max_clustering = None
+        self.theta_bins_clustering = None
+        self.theta_type_clustering = None
+        self.theta_min_lensing = None
+        self.theta_max_lensing = None
+        self.theta_bins_lensing = None
+        self.theta_type_lensing = None
         self.xi_pp = None
         self.xi_pm = None
         self.xi_mm = None
@@ -155,15 +163,23 @@ class Input:
         # for bandpowers
         self.covbandpowers_settings = dict()
         self.covbandpowers_settings_abr = dict()
-        self.apodisation_log_width = None
-        self.theta_lo = None
-        self.theta_up = None
+        self.apodisation_log_width_clustering = None
+        self.theta_lo_clustering = None
+        self.theta_up_clustering = None
+        self.bp_ell_min_clustering = None
+        self.bp_ell_max_clustering = None
+        self.bp_ell_bins_clustering = None
+        self.bp_ell_type_clustering = None
+        self.apodisation_log_width_lensing = None
+        self.theta_lo_lensing = None
+        self.theta_up_lensing = None
+        self.bp_ell_min_lensing = None
+        self.bp_ell_max_lensing = None
+        self.bp_ell_bins_lensing = None
+        self.bp_ell_type_lensing = None
+        
         self.theta_binning = None
         self.bandpower_accuracy = None
-        self.bp_ell_min = None
-        self.bp_ell_max = None
-        self.bp_ell_bins = None
-        self.bp_ell_type = None
         
         # for arbitrary summary statistics
         self.arbitrary_summary_settings = dict()
@@ -514,6 +530,27 @@ class Input:
                                 "specified. Must be adjusted in file " + config_name +
                                 ", [observables]: 'est_clust = " +
                                 ' / '.join(map(str, obs_str)) + ".")
+        if self.clustering and self.ggl:
+            if self.est_clust != self.est_ggl:
+                if not (self.est_clust == "w" and self.est_ggl == "gamma_t"):
+                    raise Exception("ConfigError: The observable 'clustering' and 'ggl " +
+                                "are supposed to be calculated but no valid estimator combination is " +
+                                "specified. Must be adjusted in file " + config_name)
+        if self.clustering and self.cosmicshear:
+            if self.est_clust != self.est_shear:
+                if not (self.est_clust == "w" and self.est_shear == "xi_pm"):
+                    raise Exception("ConfigError: The observable 'clustering' and 'lensing " +
+                                "are supposed to be calculated but no valid estimator combination is " +
+                                "specified. Must be adjusted in file " + config_name)
+        if self.ggl and self.cosmicshear:
+            if self.est_ggl != self.est_shear:
+                if not (self.est_ggl == "gamma_t" and self.est_shear == "xi_pm"):
+                    raise Exception("ConfigError: The observable 'ggl' and 'lensing " +
+                                "are supposed to be calculated but no valid estimator combination is " +
+                                "specified. Must be adjusted in file " + config_name)
+        
+        
+                
 
         return True
 
@@ -781,6 +818,33 @@ class Input:
             if 'theta_type' in config['covTHETAspace settings']:
                 self.theta_type = \
                     config['covTHETAspace settings']['theta_type']
+            
+            if 'theta_min_clustering' in config['covTHETAspace settings']:
+                self.theta_min_clustering = float(
+                    config['covTHETAspace settings']['theta_min_clustering'])
+            if 'theta_max_clustering' in config['covTHETAspace settings']:
+                self.theta_max_clustering = float(
+                    config['covTHETAspace settings']['theta_max_clustering'])
+            if 'theta_bins_clustering' in config['covTHETAspace settings']:
+                self.theta_bins_clustering = int(
+                    config['covTHETAspace settings']['theta_bins_clustering'])
+            if 'theta_type_clustering' in config['covTHETAspace settings']:
+                self.theta_type_clustering = \
+                    config['covTHETAspace settings']['theta_type_clustering']
+            
+            if 'theta_min_lensing' in config['covTHETAspace settings']:
+                self.theta_min_lensing = float(
+                    config['covTHETAspace settings']['theta_min_lensing'])
+            if 'theta_max_lensing' in config['covTHETAspace settings']:
+                self.theta_max_lensing = float(
+                    config['covTHETAspace settings']['theta_max_lensing'])
+            if 'theta_bins_lensing' in config['covTHETAspace settings']:
+                self.theta_bins_lensing = int(
+                    config['covTHETAspace settings']['theta_bins_lensing'])
+            if 'theta_type_lensing' in config['covTHETAspace settings']:
+                self.theta_type_lensing = \
+                    config['covTHETAspace settings']['theta_type_lensing']
+
             if 'theta_list' in config['covTHETAspace settings'] and self.theta_type == 'list':
                 self.theta_list = np.array(
                     config['covTHETAspace settings']['theta_list'].split(','))
@@ -878,27 +942,111 @@ class Input:
             if self.cosmicshear and self.est_shear == 'xi_pm':
                 self.xi_pp = True
                 self.xi_mm = True
-
+        
+        if (self.clustering and self.est_clust == 'w') or (self.ggl and self.est_ggl == 'gamma_t'):
+            if self.theta_min is None:
+                if self.theta_min_clustering is None:
+                    raise Exception("ConfigError: The clustering is " +
+                                    "'w' or 'gamma_t' but no minimum theta for the projection is " +
+                                    "specified. Must be adjusted in config file " +
+                                    config_name + ", [covTHETAspace settings]: 'theta_min = " +
+                                    "10' [arcmin].")
+            if self.theta_min_clustering is None:
+                self.theta_min_clustering = self.theta_min
+            if self.theta_max is None:
+                if self.theta_max_clustering is None:
+                    raise Exception("ConfigError: The clustering is " +
+                                    "'w' or 'gamma_t' but no maximum theta for the projection is " +
+                                    "specified. Must be adjusted in config file " +
+                                    config_name + ", [covTHETAspace settings]: 'theta_max = " +
+                                    "100'. [arcmax")
+            if self.theta_max_clustering is None:
+                self.theta_max_clustering = self.theta_max      
+            if self.theta_bins is None:
+                if self.theta_bins_clustering is None:
+                    raise Exception("ConfigError: The clustering is " +
+                                    "'w' or 'gamma_t' but no number of theta bins is specified. Must " +
+                                    "be adjusted in config file " + config_name + ", " +
+                                    "[covTHETAspace settings]: 'theta_bins = 10'.")
+            if self.theta_bins_clustering is None:
+                self.theta_bins_clustering = self.theta_bins
+            if self.theta_type is None:
+                self.theta_type = 'log'
+                print("The binning type for theta bins " +
+                      "[covTHETAspace settings]: 'theta_type' is set to " +
+                      "'log'.")
+            if self.theta_type_clustering is None:
+                self.theta_type_clustering = self.theta_type
+                
+            if self.theta_min is None:
+                if self.cosmic_shear:
+                    self.theta_min = self.theta_min_lensing   
+                if self.clustering or self.ggl:
+                    self.theta_min = self.theta_min_clustering
+                if self.cosmic_shear and (self.clustering  or self.ggl):  
+                    self.theta_min = min(self.theta_min_clustering, self.theta_min_lensing)
+            
+            if self.theta_max is None:
+                if self.cosmic_shear:
+                    self.theta_max = self.theta_max_lensing   
+                if self.clustering or self.ggl:
+                    self.theta_max = self.theta_max_clustering
+                if self.cosmic_shear and (self.clustering  or self.ggl):  
+                    self.theta_max = max(self.theta_max_clustering, self.theta_max_lensing)
+            
+            if self.theta_type is None:
+                if self.cosmic_shear:
+                    self.theta_type = self.theta_type_lensing   
+                if self.clustering or self.ggl:
+                    self.theta_type = self.theta_type_clustering
+            
+            if self.theta_bins is None:
+                if self.cosmic_shear:
+                    self.theta_bins = self.theta_bins_lensing   
+                if self.clustering or self.ggl:
+                    self.theta_bins = self.theta_bins_clustering
+                if self.cosmic_shear and (self.clustering  or self.ggl):  
+                    self.theta_bins = max(self.theta_bins_clustering, self.theta_bins_lensing)
         if self.cosmicshear and self.est_shear == 'xi_pm':
             if self.theta_min is None:
-                raise Exception("ConfigError: The cosmic shear estimator is " +
-                                "'xi_pm' but no minimum theta for the projection is " +
-                                "specified. Must be adjusted in config file " +
-                                config_name + ", [covTHETAspace settings]: 'theta_min = " +
-                                "10' [arcmin].")
-
+                if self.theta_min_lensing is None:
+                    raise Exception("ConfigError: The cosmic shear estimator is " +
+                                    "'xi_pm' but no minimum theta for the projection is " +
+                                    "specified. Must be adjusted in config file " +
+                                    config_name + ", [covTHETAspace settings]: 'theta_min = " +
+                                    "10' [arcmin].")
+            if self.theta_min_lensing is None:
+                self.theta_min_lensing = self.theta_min
             if self.theta_max is None:
-                raise Exception("ConfigError: The cosmic shear estimator is " +
-                                "'xi_pm' but no maximum theta for the projection is " +
-                                "specified. Must be adjusted in config file " +
-                                config_name + ", [covTHETAspace settings]: 'theta_max = " +
-                                "100'. [arcmin")
-
+                if self.theta_max_lensing is None:
+                    raise Exception("ConfigError: The cosmic shear estimator is " +
+                                    "'xi_pm' but no maximum theta for the projection is " +
+                                    "specified. Must be adjusted in config file " +
+                                    config_name + ", [covTHETAspace settings]: 'theta_max = " +
+                                    "100'. [arcmax")
+            if self.theta_max_lensing is None:
+                self.theta_max_lensing = self.theta_max      
             if self.theta_bins is None:
-                raise Exception("ConfigError: The cosmic shear estimator is " +
-                                "'xi_pm' but no number of theta bins is specified. Must " +
-                                "be adjusted in config file " + config_name + ", " +
-                                "[covTHETAspace settings]: 'theta_bins = 10'.")
+                if self.theta_bins_lensing is None:
+                    raise Exception("ConfigError: The cosmic shear estimator is " +
+                                    "'xi_pm' but no number of theta bins is specified. Must " +
+                                    "be adjusted in config file " + config_name + ", " +
+                                    "[covTHETAspace settings]: 'theta_bins = 10'.")
+            if self.theta_bins_lensing is None:
+                self.theta_bins_lensing = self.theta_bins
+            if self.theta_type is None:
+                self.theta_type = 'log'
+            if self.theta_type_lensing is None:
+                self.theta_type_lensing = self.theta_type
+                print("The binning type for theta bins " +
+                      "[covTHETAspace settings]: 'theta_type' is set to " +
+                      "'log'.")
+            elif self.theta_type != 'lin' and self.theta_type != 'log':
+                if self.theta_type_lensing_p != 'lin' and self.theta_type_lensing_p != 'log' and self.theta_type_lensing_m != 'lin' and self.theta_type_lensing_m != 'log':
+                    raise Exception("ConfigError: The binning type for theta " +
+                                    "bins [covTHETAspace settings]: 'theta_type = " +
+                                    config['covTHETAspace settings']['theta_type'] + "' is " +
+                                    "not recognised. Must be either 'lin' or 'log'.")
             if self.theta_acc is None:
                 self.theta_acc = 1e-5
                 print("The accuracy for the theta space covariance " +
@@ -909,16 +1057,7 @@ class Input:
                 print("The number of integration intervals for the theta space covariance " +
                       "[covTHETAspace settings]: 'integration_intervals' is set to  " +
                       str(self.integration_intervals))
-            if self.theta_type is None:
-                self.theta_type = 'log'
-                print("The binning type for theta bins " +
-                      "[covTHETAspace settings]: 'theta_type' is set to " +
-                      "'log'.")
-            elif self.theta_type != 'lin' and self.theta_type != 'log':
-                raise Exception("ConfigError: The binning type for theta " +
-                                "bins [covTHETAspace settings]: 'theta_type = " +
-                                config['covTHETAspace settings']['theta_type'] + "' is " +
-                                "not recognised. Must be either 'lin' or 'log'.")
+            
             if self.limber is None:
                 self.limber = True
             if self.nglimber is None:
@@ -1131,81 +1270,185 @@ class Input:
         """
 
         if 'covbandpowers settings' in config:
-            if 'apodisation_log_width' in config['covbandpowers settings']:
-                self.apodisation_log_width = float(config['covbandpowers settings']['apodisation_log_width'])
-            if 'theta_lo' in config['covbandpowers settings']:
-                self.theta_lo = float(config['covbandpowers settings']['theta_lo'])
-            if 'theta_up' in config['covbandpowers settings']:
-                self.theta_up = \
-                    float(config['covbandpowers settings']['theta_up'])
+            if 'apodisation_log_width_clustering' in config['covbandpowers settings']:
+                self.apodisation_log_width_clustering = float(config['covbandpowers settings']['apodisation_log_width_clustering'])
+            if 'theta_lo_clustering' in config['covbandpowers settings']:
+                self.theta_lo_clustering = float(config['covbandpowers settings']['theta_lo_clustering'])
+            if 'theta_up_clustering' in config['covbandpowers settings']:
+                self.theta_up_clustering = \
+                    float(config['covbandpowers settings']['theta_up_clustering'])
+            if 'ell_min_clustering' in config['covbandpowers settings']:
+                self.bp_ell_min_clustering = \
+                    float(config['covbandpowers settings']['ell_min_clustering'])
+            if 'ell_max_clustering' in config['covbandpowers settings']:
+                self.bp_ell_max_clustering = \
+                    float(config['covbandpowers settings']['ell_max_clustering'])
+            if 'ell_bins_clustering' in config['covbandpowers settings']:
+                self.bp_ell_bins_clustering = \
+                    int(config['covbandpowers settings']['ell_bins_clustering'])  
+            if 'ell_type_clustering' in config['covbandpowers settings']:
+                self.bp_ell_type_clustering = \
+                    str(config['covbandpowers settings']['ell_type_clustering'])
+
+            if 'apodisation_log_width_lensing' in config['covbandpowers settings']:
+                self.apodisation_log_width_lensing = float(config['covbandpowers settings']['apodisation_log_width_lensing'])
+            if 'theta_lo_lensing' in config['covbandpowers settings']:
+                self.theta_lo_lensing = float(config['covbandpowers settings']['theta_lo_lensing'])
+            if 'theta_up_lensing' in config['covbandpowers settings']:
+                self.theta_up_lensing = \
+                    float(config['covbandpowers settings']['theta_up_lensing'])
+            if 'ell_min_lensing' in config['covbandpowers settings']:
+                self.bp_ell_min_lensing = \
+                    float(config['covbandpowers settings']['ell_min_lensing'])
+            if 'ell_max_lensing' in config['covbandpowers settings']:
+                self.bp_ell_max_lensing = \
+                    float(config['covbandpowers settings']['ell_max_lensing'])
+            if 'ell_bins_lensing' in config['covbandpowers settings']:
+                self.bp_ell_bins_lensing = \
+                    int(config['covbandpowers settings']['ell_bins_lensing'])  
+            if 'ell_type_lensing' in config['covbandpowers settings']:
+                self.bp_ell_type_lensing = \
+                    str(config['covbandpowers settings']['ell_type_lensing'])    
+            
             if 'theta_binning' in config['covbandpowers settings']:
                 self.theta_binning = \
                     int(config['covbandpowers settings']['theta_binning'])
             if 'bandpower_accuracy' in config['covbandpowers settings']:
                 self.bandpower_accuracy = float(config['covbandpowers settings']['bandpower_accuracy'])
-            if 'ell_min' in config['covbandpowers settings']:
-                self.bp_ell_min = \
-                    float(config['covbandpowers settings']['ell_min'])
-            if 'ell_max' in config['covbandpowers settings']:
-                self.bp_ell_max = \
-                    float(config['covbandpowers settings']['ell_max'])
-            if 'ell_bins' in config['covbandpowers settings']:
-                self.bp_ell_bins = \
-                    int(config['covbandpowers settings']['ell_bins'])  
-            if 'ell_type' in config['covbandpowers settings']:
-                self.bp_ell_type = \
-                    str(config['covbandpowers settings']['ell_type'])    
+
 
         if self.est_shear == 'bandpowers' or self.est_ggl == 'bandpowers' or self.est_clust == self.est_shear == 'bandpowers':
-            if self.apodisation_log_width is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers' " +
-                                "but no apodisation_log_width is specified. Must " +
-                                "be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'apodisation_log_width = ...'.")
-            if self.theta_lo is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers" +
-                                "but the lower limit of the apodisation is not set." +
-                                "Must be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'theta_lo = ...'.")
+            if self.clustering or self.ggl:
+                if self.apodisation_log_width_clustering is None:
+                    if 'apodisation_log_width' in config['covbandpowers settings']:
+                        self.apodisation_log_width_clustering = float(config['covbandpowers settings']['apodisation_log_width'])
+                    else:
+                        raise Exception("ConfigError: A clustering estimator is set to 'bandpowers' " +
+                                        "but no apodisation_log_width_clustering is specified. Must " +
+                                        "be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'apodisation_log_width_clustering = ...'.")
+                if self.theta_lo_clustering is None:
+                    if 'theta_lo' in config['covbandpowers settings']:
+                        self.theta_lo_clustering = float(config['covbandpowers settings']['theta_lo'])
+                    else:
+                        raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
+                                        "but the lower limit of the apodisation for clustering is not set." +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'theta_lo_clustering = ...'.")
 
-            if self.theta_up is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers" +
-                                "but the upper limit of the apodisation is not set. " +
-                                "Must be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'theta_up = ...'.")
+                if self.theta_up_clustering is None:
+                    if 'theta_up' in config['covbandpowers settings']:
+                        self.theta_up_clustering = float(config['covbandpowers settings']['theta_up'])
+                    else:
+                        raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
+                                        "but the upper limit of the apodisation for clustering is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'theta_up_clustering = ...'.")
+                if self.bp_ell_min_clustering is None:
+                    if 'bp_ell_min' in config['covbandpowers settings']:
+                        self.bp_ell_min_clustering = float(config['covbandpowers settings']['bp_ell_min'])
+                    else:
+                        raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
+                                        "but the lower multipole limit of the bandpowers for clustering is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_min_clustering = ...'.")
+                
+                if self.bp_ell_max_clustering is None:
+                    if 'bp_ell_max' in config['covbandpowers settings']:
+                        self.bp_ell_max_clustering = float(config['covbandpowers settings']['bp_ell_max'])
+                    else:
+                        raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
+                                        "but the upper multipole limit of the bandpowers for clustering is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_max_clustering = ...'.")
 
+                if self.bp_ell_bins_clustering is None:
+                    if 'bp_ell_bins' in config['covbandpowers settings']:
+                        self.bp_ell_bins_clustering = int(config['covbandpowers settings']['bp_ell_bins'])
+                    else:
+                        raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
+                                        "but the number of multipoles for the bandpowers for clustering is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_bins_clustering = ...'.")
+                
+                if self.bp_ell_type_clustering is None:
+                    if 'bp_ell_type' in config['covbandpowers settings']:
+                        self.bp_ell_type_clustering = str(config['covbandpowers settings']['bp_ell_type'])
+                    else:
+                        raise Exception("ConfigError: A clustering estimator is set to 'bandpowers' " +
+                                        "but the tpye of multipole spacing for the bandpowers for clustering is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_type_clustering = ...'.")
+            
+            if self.cosmicshear:
+                if self.apodisation_log_width_lensing is None:
+                    if 'apodisation_log_width' in config['covbandpowers settings']:
+                        self.apodisation_log_width_lensing = float(config['covbandpowers settings']['apodisation_log_width'])
+                    else:
+                        raise Exception("ConfigError: A lensing estimator is set to 'bandpowers' " +
+                                        "but no apodisation_log_width_lensing is specified. Must " +
+                                        "be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'apodisation_log_width_lensing = ...'.")
+                if self.theta_lo_lensing is None:
+                    if 'theta_lo' in config['covbandpowers settings']:
+                        self.theta_lo_lensing = float(config['covbandpowers settings']['theta_lo'])
+                    else:
+                        raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
+                                        "but the lower limit of the apodisation for lensing is not set." +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'theta_lo_lensing = ...'.")
+
+                if self.theta_up_lensing is None:
+                    if 'theta_up' in config['covbandpowers settings']:
+                        self.theta_up_lensing = float(config['covbandpowers settings']['theta_up'])
+                    else:
+                        raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
+                                        "but the upper limit of the apodisation for lensing is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'theta_up_lensing = ...'.")
+                if self.bp_ell_min_lensing is None:
+                    if 'bp_ell_min' in config['covbandpowers settings']:
+                        self.bp_ell_min_lensing = float(config['covbandpowers settings']['bp_ell_min'])
+                    else:
+                        raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
+                                        "but the lower multipole limit of the bandpowers for lensing is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_min_lensing = ...'.")
+                
+                if self.bp_ell_max_lensing is None:
+                    if 'bp_ell_max' in config['covbandpowers settings']:
+                        self.bp_ell_max_lensing = float(config['covbandpowers settings']['bp_ell_max'])
+                    else:
+                        raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
+                                        "but the upper multipole limit of the bandpowers for lensing is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_max_lensing = ...'.")
+
+                if self.bp_ell_bins_lensing is None:
+                    if 'bp_ell_bins' in config['covbandpowers settings']:
+                        self.bp_ell_bins_lensing = int(config['covbandpowers settings']['bp_ell_bins'])
+                    else:
+                        raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
+                                        "but the number of multipoles for the bandpowers for lensing is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_bins_lensing = ...'.")
+                
+                if self.bp_ell_type_lensing is None:
+                    if 'bp_ell_type' in config['covbandpowers settings']:
+                        self.bp_ell_type_lensing = str(config['covbandpowers settings']['bp_ell_type'])
+                    else:
+                        raise Exception("ConfigError: A lensing estimator is set to 'bandpowers' " +
+                                        "but the tpye of multipole spacing for the bandpowers for lensing is not set. " +
+                                        "Must be adjusted in config file " + config_name + ", " +
+                                        "[covbandpowers settings]: 'ell_type_lensing = ...'.")
+            
             if self.theta_binning is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers" +
-                                "but the theta binning to avoid discretisation effects is not set." +
-                                "Must be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'theta_binning = ...'.")
+                self.theta_binning = 300
+                print("ConfigWarning: The bandpower theta_binning has not been specified. Using fallback value of", self.theta_binning)
             if self.bandpower_accuracy is None:
                 self.bandpower_accuracy = 1e-7
                 print("ConfigWarning: The bandpower accuracy has not been specified. Using fallback value of", self.bandpower_accuracy)
-            if self.bp_ell_min is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers" +
-                                "but the lower multipole limit of the bandpowers is not set. " +
-                                "Must be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'ell_min = ...'.")
-            
-            if self.bp_ell_max is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers" +
-                                "but the upper multipole limit of the bandpowers is not set. " +
-                                "Must be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'ell_max = ...'.")
 
-            if self.bp_ell_bins is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers" +
-                                "but the number of multipoles for the bandpowers is not set. " +
-                                "Must be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'ell_bins = ...'.")
-            
-            if self.bp_ell_type is None:
-                raise Exception("ConfigError: An estimator is set to 'bandpowers' " +
-                                "but the tpye of multipole spacing for the bandpowers is not set. " +
-                                "Must be adjusted in config file " + config_name + ", " +
-                                "[covbandpowers settings]: 'ell_type = ...'.")
-         
             if self.limber is None:
                 self.limber = True
 
@@ -3299,7 +3542,9 @@ class Input:
         self.covELLspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
-        keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type', 'theta_list', 'xi_pp',
+        keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type',
+                'theta_min_clustering', 'theta_max_clustering', 'theta_bins_clustering', 'theta_type_clustering',
+                'theta_min_lensing', 'theta_max_lensing', 'theta_bins_lensing', 'theta_type_lensing', 'theta_list', 'xi_pp',
                 'xi_pm', 'xi_mm', 'theta_acc', 'integration_intervals', 'mix_term_file_path_catalog',
                 'mix_term_col_name_weight',
                 'mix_term_col_name_pos1', 'mix_term_col_name_pos2', 'mix_term_col_name_zbin',
@@ -3307,8 +3552,10 @@ class Input:
                 'mix_term_do_mix_for', 'mix_term_nbins_phi', 'mix_term_nmax',
                 'mix_term_do_ec', 'mix_term_subsample', 'mix_term_nsubr', 'mix_term_file_path_save_triplets',
                 'mix_term_file_path_load_triplets']
-        values = [self.theta_min, self.theta_max, self.theta_bins,
-                  self.theta_type, self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc,
+        values = [self.theta_min, self.theta_max, self.theta_bins, self.theta_type,
+                  self.theta_min_clustering, self.theta_max_clustering, self.theta_bins_clustering, self.theta_type_clustering,
+                  self.theta_min_lensing, self.theta_max_lensing, self.theta_bins_lensing, self.theta_type_lensing,
+                  self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc,
                   self.integration_intervals, self.mix_term_file_path_catalog, self.mix_term_col_name_weight,
                   self.mix_term_col_name_pos1, self.mix_term_col_name_pos2, self.mix_term_col_name_zbin,
                   self.mix_term_isspherical, self.mix_term_target_patchsize, self.mix_term_do_overlap,
@@ -3329,10 +3576,16 @@ class Input:
         self.covCOESBI_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         
-        keys = ['apodisation_log_width', 'theta_lo', 'theta_up', 'theta_binning', 'ell_min',
-                'ell_max', 'ell_bins', 'ell_type', 'bandpower_accuracy']
-        values = [self.apodisation_log_width, self.theta_lo, self.theta_up, self.theta_binning,
-                  self.bp_ell_min, self.bp_ell_max, self.bp_ell_bins, self.bp_ell_type, self.bandpower_accuracy]
+        keys = ['apodisation_log_width_clustering', 'theta_lo_clustering', 'theta_up_clustering', 'ell_min_clustering',
+                'ell_max_clustering', 'ell_bins_clustering', 'ell_type_clustering',
+                'apodisation_log_width_lensing', 'theta_lo_lensing', 'theta_up_lensing', 'ell_min_lensing',
+                'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing',
+                'bandpower_accuracy', 'theta_binning']
+        values = [self.apodisation_log_width_clustering, self.theta_lo_clustering, self.theta_up_clustering,
+                  self.bp_ell_min_clustering, self.bp_ell_max_clustering, self.bp_ell_bins_clustering, self.bp_ell_type_clustering,
+                  self.apodisation_log_width_lensing, self.theta_lo_lensing, self.theta_up_lensing,
+                  self.bp_ell_min_lensing, self.bp_ell_max_lensing, self.bp_ell_bins_lensing, self.bp_ell_type_lensing,
+                  self.bandpower_accuracy, self.theta_binning]
         self.covbandpowers_settings = dict(zip(keys,values))
         self.covbandpowers_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
