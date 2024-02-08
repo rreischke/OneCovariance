@@ -345,7 +345,7 @@ class CovARBsummary(CovELLSpace):
             survey_params_dict['n_eff_clust'] = save_n_eff_clust
         if self.mm or self.gm:
             survey_params_dict['n_eff_lens'] = save_n_eff_lens
-        if self.mm:
+        if self.mm and self.index_realspace_lensing is not None:
             correction = []
             for i in range(self.index_realspace_lensing[0]):
                 correction.append(np.ones_like(self.SN_integral_mmmm[0,0,:, :, :]))
@@ -360,7 +360,7 @@ class CovARBsummary(CovELLSpace):
                     if j in self.index_realspace_lensing:
                         local_correction *= correction[j, :, :, :]
                     self.SN_integral_mmmm[i,j, : ,: ,:] *= local_correction
-        if self.gm:
+        if self.gm and self.index_realspace_ggl is not None:
             correction = []
             for i in range(self.index_realspace_ggl[0]):
                 correction.append(np.ones_like(self.SN_integral_gmgm[0,0,:, :, :]))
@@ -375,7 +375,7 @@ class CovARBsummary(CovELLSpace):
                     if j in self.index_realspace_ggl:
                         local_correction *= correction[j, :, :, :]
                     self.SN_integral_gmgm[i,j, : ,: ,:] *= local_correction
-        if self.gg:
+        if self.gg and self.index_realspace_clustering is not None:
             correction = []
             for i in range(self.index_realspace_clustering[0]):
                 correction.append(np.ones_like(self.SN_integral_gggg[0,0,:, :, :]))
