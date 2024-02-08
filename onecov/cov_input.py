@@ -1345,8 +1345,8 @@ class Input:
                                         "Must be adjusted in config file " + config_name + ", " +
                                         "[covbandpowers settings]: 'theta_up_clustering = ...'.")
                 if self.bp_ell_min_clustering is None:
-                    if 'bp_ell_min' in config['covbandpowers settings']:
-                        self.bp_ell_min_clustering = float(config['covbandpowers settings']['bp_ell_min'])
+                    if 'ell_min' in config['covbandpowers settings']:
+                        self.bp_ell_min_clustering = float(config['covbandpowers settings']['ell_min'])
                     else:
                         raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
                                         "but the lower multipole limit of the bandpowers for clustering is not set. " +
@@ -1354,8 +1354,8 @@ class Input:
                                         "[covbandpowers settings]: 'ell_min_clustering = ...'.")
                 
                 if self.bp_ell_max_clustering is None:
-                    if 'bp_ell_max' in config['covbandpowers settings']:
-                        self.bp_ell_max_clustering = float(config['covbandpowers settings']['bp_ell_max'])
+                    if 'ell_max' in config['covbandpowers settings']:
+                        self.bp_ell_max_clustering = float(config['covbandpowers settings']['ell_max'])
                     else:
                         raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
                                         "but the upper multipole limit of the bandpowers for clustering is not set. " +
@@ -1363,8 +1363,8 @@ class Input:
                                         "[covbandpowers settings]: 'ell_max_clustering = ...'.")
 
                 if self.bp_ell_bins_clustering is None:
-                    if 'bp_ell_bins' in config['covbandpowers settings']:
-                        self.bp_ell_bins_clustering = int(config['covbandpowers settings']['bp_ell_bins'])
+                    if 'ell_bins' in config['covbandpowers settings']:
+                        self.bp_ell_bins_clustering = int(config['covbandpowers settings']['ell_bins'])
                     else:
                         raise Exception("ConfigError: A clustering estimator is set to 'bandpowers" +
                                         "but the number of multipoles for the bandpowers for clustering is not set. " +
@@ -1372,8 +1372,8 @@ class Input:
                                         "[covbandpowers settings]: 'ell_bins_clustering = ...'.")
                 
                 if self.bp_ell_type_clustering is None:
-                    if 'bp_ell_type' in config['covbandpowers settings']:
-                        self.bp_ell_type_clustering = str(config['covbandpowers settings']['bp_ell_type'])
+                    if 'ell_type' in config['covbandpowers settings']:
+                        self.bp_ell_type_clustering = str(config['covbandpowers settings']['ell_type'])
                     else:
                         raise Exception("ConfigError: A clustering estimator is set to 'bandpowers' " +
                                         "but the tpye of multipole spacing for the bandpowers for clustering is not set. " +
@@ -1407,8 +1407,8 @@ class Input:
                                         "Must be adjusted in config file " + config_name + ", " +
                                         "[covbandpowers settings]: 'theta_up_lensing = ...'.")
                 if self.bp_ell_min_lensing is None:
-                    if 'bp_ell_min' in config['covbandpowers settings']:
-                        self.bp_ell_min_lensing = float(config['covbandpowers settings']['bp_ell_min'])
+                    if 'ell_min' in config['covbandpowers settings']:
+                        self.bp_ell_min_lensing = float(config['covbandpowers settings']['ell_min'])
                     else:
                         raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
                                         "but the lower multipole limit of the bandpowers for lensing is not set. " +
@@ -1416,8 +1416,8 @@ class Input:
                                         "[covbandpowers settings]: 'ell_min_lensing = ...'.")
                 
                 if self.bp_ell_max_lensing is None:
-                    if 'bp_ell_max' in config['covbandpowers settings']:
-                        self.bp_ell_max_lensing = float(config['covbandpowers settings']['bp_ell_max'])
+                    if 'ell_max' in config['covbandpowers settings']:
+                        self.bp_ell_max_lensing = float(config['covbandpowers settings']['ell_max'])
                     else:
                         raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
                                         "but the upper multipole limit of the bandpowers for lensing is not set. " +
@@ -1425,8 +1425,8 @@ class Input:
                                         "[covbandpowers settings]: 'ell_max_lensing = ...'.")
 
                 if self.bp_ell_bins_lensing is None:
-                    if 'bp_ell_bins' in config['covbandpowers settings']:
-                        self.bp_ell_bins_lensing = int(config['covbandpowers settings']['bp_ell_bins'])
+                    if 'ell_bins' in config['covbandpowers settings']:
+                        self.bp_ell_bins_lensing = int(config['covbandpowers settings']['ell_bins'])
                     else:
                         raise Exception("ConfigError: A lensing estimator is set to 'bandpowers" +
                                         "but the number of multipoles for the bandpowers for lensing is not set. " +
@@ -1434,8 +1434,8 @@ class Input:
                                         "[covbandpowers settings]: 'ell_bins_lensing = ...'.")
                 
                 if self.bp_ell_type_lensing is None:
-                    if 'bp_ell_type' in config['covbandpowers settings']:
-                        self.bp_ell_type_lensing = str(config['covbandpowers settings']['bp_ell_type'])
+                    if 'ell_type' in config['covbandpowers settings']:
+                        self.bp_ell_type_lensing = str(config['covbandpowers settings']['ell_type'])
                     else:
                         raise Exception("ConfigError: A lensing estimator is set to 'bandpowers' " +
                                         "but the tpye of multipole spacing for the bandpowers for lensing is not set. " +
