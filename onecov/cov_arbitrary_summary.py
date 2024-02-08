@@ -157,7 +157,6 @@ class CovARBsummary(CovELLSpace):
                              read_in_tables)
         self.__get_fourier_weights(read_in_tables['arb_summary'])
         self.__get_real_weights(read_in_tables['arb_summary'])
-        
         if self.gg or self.gm:
             save_n_eff_clust = survey_params_dict['n_eff_clust']
         if self.mm or self.gm:
@@ -348,6 +347,8 @@ class CovARBsummary(CovELLSpace):
             survey_params_dict['n_eff_lens'] = save_n_eff_lens
         if self.mm:
             correction = []
+            for i in range(self.index_realspace_lensing[0]):
+                correction.append(np.ones_like(self.SN_integral_mmmm[0,0,:, :, :]))
             for i, iv in enumerate(self.index_realspace_lensing):
                 correction.append(np.sqrt(1/(self.SN_integral_mmmm[iv,iv, : ,: ,:]*self.npair_mm[i, :, :, :])))
             correction = np.array(correction)
@@ -361,6 +362,8 @@ class CovARBsummary(CovELLSpace):
                     self.SN_integral_mmmm[i,j, : ,: ,:] *= local_correction
         if self.gm:
             correction = []
+            for i in range(self.index_realspace_ggl[0]):
+                correction.append(np.ones_like(self.SN_integral_gmgm[0,0,:, :, :]))
             for i, iv in enumerate(self.index_realspace_ggl):
                 correction.append(np.sqrt(1/(self.SN_integral_gmgm[iv,iv, : ,: ,:]*self.npair_gm[i, :, :, :])))
             correction = np.array(correction)
@@ -374,6 +377,8 @@ class CovARBsummary(CovELLSpace):
                     self.SN_integral_gmgm[i,j, : ,: ,:] *= local_correction
         if self.gg:
             correction = []
+            for i in range(self.index_realspace_clustering[0]):
+                correction.append(np.ones_like(self.SN_integral_gggg[0,0,:, :, :]))
             for i, iv in enumerate(self.index_realspace_clustering):
                 correction.append(np.sqrt(1/(self.SN_integral_gggg[iv,iv, : ,: ,:]*self.npair_gg[i, :, :, :])))
             correction = np.array(correction)
@@ -646,6 +651,7 @@ class CovARBsummary(CovELLSpace):
                     if len(self.theta_limits[m_mode][:]) < len(self.theta_limits[n_mode][:]):
                         local_theta_limit = self.theta_limits[n_mode][:]
                     if self.theta_limits[n_mode][0] == self.theta_limits[m_mode][-1] or self.theta_limits[m_mode][0] == self.theta_limits[n_mode][-1]:
+                        tcomb += 1
                         continue
                     integrand = 1/(dnpair_gg_flat* 60*180/np.pi)*(self.theta_real_integral[:, None]/60/180*np.pi)**2
                     self.levin_int_real.init_integral(self.theta_real_integral/60/180*np.pi, integrand, True, True)
@@ -671,6 +677,7 @@ class CovARBsummary(CovELLSpace):
                     if len(self.theta_limits[m_mode][:]) < len(self.theta_limits[n_mode][:]):
                         local_theta_limit = self.theta_limits[n_mode][:]
                     if self.theta_limits[n_mode][0] == self.theta_limits[m_mode][-1] or self.theta_limits[m_mode][0] == self.theta_limits[n_mode][-1]:
+                        tcomb += 1
                         continue
                     integrand = 1/(dnpair_gm_flat* 60*180/np.pi)*(self.theta_real_integral[:, None]/60/180*np.pi)**2
                     self.levin_int_real.init_integral(self.theta_real_integral/60/180*np.pi, integrand, True, True)
@@ -690,12 +697,14 @@ class CovARBsummary(CovELLSpace):
             self.SN_integral_mmmm = np.zeros((self.mmE_summaries, self.mmE_summaries,  1, self.n_tomo_lens, self.n_tomo_lens))
             original_shape = (1,self.n_tomo_lens, self.n_tomo_lens)
             dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.theta_real_integral), self.n_tomo_lens*self.n_tomo_lens))
+            
             for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
                 for n_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
                     local_theta_limit = self.theta_limits[m_mode][:]
                     if len(self.theta_limits[m_mode][:]) < len(self.theta_limits[n_mode][:]):
                         local_theta_limit = self.theta_limits[n_mode][:]
                     if self.theta_limits[n_mode][0] == self.theta_limits[m_mode][-1] or self.theta_limits[m_mode][0] == self.theta_limits[n_mode][-1]:
+                        tcomb += 1
                         continue
                     integrand = 1/(dnpair_mm_flat* 60*180/np.pi)*(self.theta_real_integral[:, None]/60/180*np.pi)**2
                     self.levin_int_real.init_integral(self.theta_real_integral/60/180*np.pi, integrand, True, True)
