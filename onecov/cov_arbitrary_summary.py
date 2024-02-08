@@ -157,6 +157,7 @@ class CovARBsummary(CovELLSpace):
                              read_in_tables)
         self.__get_fourier_weights(read_in_tables['arb_summary'])
         self.__get_real_weights(read_in_tables['arb_summary'])
+        
         if self.gg or self.gm:
             save_n_eff_clust = survey_params_dict['n_eff_clust']
         if self.mm or self.gm:
@@ -175,6 +176,7 @@ class CovARBsummary(CovELLSpace):
                                                                                                                         self.theta_real_integral,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
+        
         if self.gg or self.gm:    
             survey_params_dict['n_eff_clust'] = save_n_eff_clust
         if self.mm or self.gm:
@@ -212,7 +214,181 @@ class CovARBsummary(CovELLSpace):
         self.levin_int_real = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.theta_limits, key=len))), 50, self.num_cores)
         self.levin_int_real.init_w_ell(self.theta_real_integral/60/180*np.pi, self.RXY_stack.T)
         self.__get_shotnoise_integrals()
-        
+        self.__detect_rscf(survey_params_dict, read_in_tables)
+
+    def __detect_rscf(self,
+                      survey_params_dict,
+                       read_in_tables):
+        '''
+        Function checking which of the arbitrary summary statistics are real space correlation
+        functions to correct for discreteness effects.
+        '''
+        self.index_realspace_clustering = []
+        self.index_realspace_ggl = []
+        self.index_realspace_lensing = []
+        self.theta_ul_realspace_clustering = []
+        self.theta_ul_realspace_ggl = []
+        self.theta_ul_realspace_lensing = []
+        realspace_counts = 0
+        for i in range(len(self.RXY_stack[:,0])):
+            index = np.where(self.RXY_stack[i,:] != 0)[0]
+            test_array = self.RXY_stack[i,index]*self.theta_real_integral[index]
+            if np.all(np.round(test_array/test_array[0],4) == 1.):
+                if i < self.gg_summaries_real + self.gm_summaries_real + self.mmE_summaries_real:
+                    if i >= self.gg_summaries_real + self.gm_summaries_real and i < self.gg_summaries_real + self.gm_summaries_real + self.mmE_summaries_real:
+                        self.index_realspace_lensing.append(i)
+                        if realspace_counts == 0:
+                            self.theta_ul_realspace_lensing.append(self.theta_real_integral[index[0]])
+                            self.theta_ul_realspace_lensing.append(self.theta_real_integral[index[-1]])
+                        else:
+                            self.theta_ul_realspace_lensing.append(self.theta_real_integral[index[-1]])
+                    if i >= self.gg_summaries_real and i < self.gg_summaries_real + self.gm_summaries_real:
+                        self.index_realspace_ggl.append(i)
+                        if realspace_counts == 0:
+                            self.theta_ul_realspace_ggl.append(self.theta_real_integral[index[0]])
+                            self.theta_ul_realspace_ggl.append(self.theta_real_integral[index[-1]])
+                        else:
+                            self.theta_ul_realspace_ggl.append(self.theta_real_integral[index[-1]])
+                    if  i < self.gg_summaries_real:
+                        self.index_realspace_clustering.append(i)
+                        if realspace_counts == 0:
+                            self.theta_ul_realspace_clustering.append(self.theta_real_integral[index[0]])
+                            self.theta_ul_realspace_clustering.append(self.theta_real_integral[index[-1]])
+                        else:
+                            self.theta_ul_realspace_clustering.append(self.theta_real_integral[index[-1]])
+                    realspace_counts += 1
+        if realspace_counts == 0:
+            self.index_realspace_lensing = None
+            self.index_realspace_ggl = None
+            self.index_realspace_clustering = None
+            self.theta_ul_realspace_lensing = None
+            self.theta_realspace_lensing = None
+            self.theta_ul_realspace_ggl = None
+            self.theta_realspace_ggl = None
+            self.theta_ul_realspace_clustering = None
+            self.theta_realspace_clustering = None
+        else:
+            if len(self.theta_ul_realspace_lensing) != 0:
+                self.index_realspace_lensing = np.array(self.index_realspace_lensing)
+                self.theta_ul_realspace_lensing = np.array(self.theta_ul_realspace_lensing)
+                dtheta = self.theta_ul_realspace_lensing[1:] - self.theta_ul_realspace_lensing[:-1]
+                if np.all(np.round(dtheta/dtheta[0],4) == 1):
+                    self.theta_realspace_lensing = .5 * (self.theta_ul_realspace_lensing[1:] + self.theta_ul_realspace_lensing[:-1])
+                else:
+                    self.theta_realspace_lensing = np.exp(.5 * (np.log(self.theta_ul_realspace_lensing[1:])
+                                        + np.log(self.theta_ul_realspace_lensing[:-1])))
+            else:
+                self.theta_ul_realspace_lensing = None
+                self.theta_realspace_lensing = None
+                self.index_realspace_lensing = None
+            if len(self.theta_ul_realspace_ggl) != 0:
+                self.index_realspace_ggl = np.array(self.index_realspace_ggl)
+                self.theta_ul_realspace_ggl = np.array(self.theta_ul_realspace_ggl)
+                dtheta = self.theta_ul_realspace_ggl[1:] - self.theta_ul_realspace_ggl[:-1]
+                if np.all(np.round(dtheta/dtheta[0],4) == 1):
+                    self.theta_realspace_ggl = .5 * (self.theta_ul_realspace_ggl[1:] + self.theta_ul_realspace_ggl[:-1])
+                else:
+                    self.theta_realspace_ggl = np.exp(.5 * (np.log(self.theta_ul_realspace_ggl[1:])
+                                        + np.log(self.theta_ul_realspace_ggl[:-1])))
+            else:
+                self.theta_ul_realspace_ggl = None
+                self.theta_realspace_ggl = None
+                self.index_realspace_ggl = None
+            if len(self.theta_ul_realspace_clustering) != 0:
+                self.index_realspace_clustering = np.array(self.index_realspace_clustering)
+                self.theta_ul_realspace_clustering = np.array(self.theta_ul_realspace_clustering)
+                dtheta = self.theta_ul_realspace_clustering[1:] - self.theta_ul_realspace_clustering[:-1]
+                if np.all(np.round(dtheta/dtheta[0],4) == 1):
+                    self.theta_realspace_clustering = .5 * (self.theta_ul_realspace_clustering[1:] + self.theta_ul_realspace_clustering[:-1])
+                else:
+                    self.theta_realspace_clustering = np.exp(.5 * (np.log(self.theta_ul_realspace_clustering[1:])
+                                        + np.log(self.theta_ul_realspace_clustering[:-1])))
+            else:
+                self.theta_ul_realspace_clustering = None
+                self.theta_realspace_clustering = None
+                self.index_realspace_clustering = None
+        if self.gg or self.gm:
+            save_n_eff_clust = survey_params_dict['n_eff_clust']
+        if self.mm or self.gm:
+            save_n_eff_lens = survey_params_dict['n_eff_lens']
+        if self.sample_dim > 1:
+            if self.gg or self.gm:
+                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+            if self.mm or self.gm:
+                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
+        else:
+            if self.gg or self.gm:
+                survey_params_dict['n_eff_clust'] = survey_params_dict['n_eff_clust'][:, None]
+            if self.mm or self.gm:
+                survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
+        if self.gg and self.theta_ul_realspace_clustering is not None:
+            self.npair_gg, _, _ = \
+                self.get_npair([self.gg, False, False],
+                            self.theta_ul_realspace_clustering,
+                            self.theta_realspace_clustering,
+                            survey_params_dict,
+                            read_in_tables['npair'])
+        if self.mm and self.theta_ul_realspace_lensing is not None:
+            _, _, self.npair_mm = \
+                self.get_npair([False, False, self.mm],
+                            self.theta_ul_realspace_lensing,
+                            self.theta_realspace_lensing,
+                            survey_params_dict,
+                            read_in_tables['npair'])
+        if self.gm and self.theta_ul_realspace_ggl is not None:
+            _, self.npair_gm, _ = \
+                self.get_npair([False, self.gm, False],
+                            self.theta_ul_realspace_ggl,
+                            self.theta_realspace_ggl,
+                            survey_params_dict,
+                            read_in_tables['npair'])
+        if self.gg or self.gm:    
+            survey_params_dict['n_eff_clust'] = save_n_eff_clust
+        if self.mm or self.gm:
+            survey_params_dict['n_eff_lens'] = save_n_eff_lens
+        if self.mm:
+            correction = []
+            for i, iv in enumerate(self.index_realspace_lensing):
+                correction.append(np.sqrt(1/(self.SN_integral_mmmm[iv,iv, : ,: ,:]*self.npair_mm[i, :, :, :])))
+            correction = np.array(correction)
+            for i in range(len(self.SN_integral_mmmm[:,0,0,0,0])):
+                for j in range(len(self.SN_integral_mmmm[0,:,0,0,0])):
+                    local_correction = 1
+                    if i in self.index_realspace_lensing:
+                        local_correction *= correction[i, :, :, :]
+                    if j in self.index_realspace_lensing:
+                        local_correction *= correction[j, :, :, :]
+                    self.SN_integral_mmmm[i,j, : ,: ,:] *= local_correction
+        if self.gm:
+            correction = []
+            for i, iv in enumerate(self.index_realspace_ggl):
+                correction.append(np.sqrt(1/(self.SN_integral_gmgm[iv,iv, : ,: ,:]*self.npair_gm[i, :, :, :])))
+            correction = np.array(correction)
+            for i in range(len(self.SN_integral_gmgm[:,0,0,0,0])):
+                for j in range(len(self.SN_integral_gmgm[0,:,0,0,0])):
+                    local_correction = 1
+                    if i in self.index_realspace_ggl:
+                        local_correction *= correction[i, :, :, :]
+                    if j in self.index_realspace_ggl:
+                        local_correction *= correction[j, :, :, :]
+                    self.SN_integral_gmgm[i,j, : ,: ,:] *= local_correction
+        if self.gg:
+            correction = []
+            for i, iv in enumerate(self.index_realspace_clustering):
+                correction.append(np.sqrt(1/(self.SN_integral_gggg[iv,iv, : ,: ,:]*self.npair_gg[i, :, :, :])))
+            correction = np.array(correction)
+            for i in range(len(self.SN_integral_gggg[:,0,0,0,0])):
+                for j in range(len(self.SN_integral_gggg[0,:,0,0,0])):
+                    local_correction = 1
+                    if i in self.index_realspace_clustering:
+                        local_correction *= correction[i, :, :, :]
+                    if j in self.index_realspace_clustering:
+                        local_correction *= correction[j, :, :, :]
+                    self.SN_integral_gggg[i,j, : ,: ,:] *= local_correction
+
+
+
+
     def __get_fourier_weights(self,
                               arb_summary_tables):
         """
@@ -336,10 +512,13 @@ class CovARBsummary(CovELLSpace):
         arb_summary_tables: dictionary
             Look-up table for the arbitrary summary statistics filters
         """
+        self.gg_summaries_real = 0
+        self.gm_summaries_real = 0
+        self.mmE_summaries_real = 0
+        self.mmB_summaries_real = 0   
         if self.gg:
             self.real_theta_gg = []
             self.real_weights_gg = []
-            self.gg_summaries_real = 0
             longest_ell = np.zeros(2)
             for ell_summary in arb_summary_tables['theta_gg']:
                 self.real_theta_gg.append(ell_summary)
@@ -361,7 +540,6 @@ class CovARBsummary(CovELLSpace):
         if self.gm:
             self.real_theta_gm = []
             self.real_weights_gm = []
-            self.gm_summaries_real = 0
             longest_ell = np.zeros(2)
             for ell_summary in arb_summary_tables['theta_gm']:
                 self.real_theta_gm.append(ell_summary)
@@ -383,7 +561,6 @@ class CovARBsummary(CovELLSpace):
         if self.mm:
             self.real_theta_mmE = []
             self.real_weights_mmE = []
-            self.mmE_summaries_real = 0
             longest_ell = np.zeros(2)
             for ell_summary in arb_summary_tables['theta_mm_p']:
                 self.real_theta_mmE.append(ell_summary)
@@ -405,7 +582,6 @@ class CovARBsummary(CovELLSpace):
 
             self.real_theta_mmB = []
             self.real_weights_mmB = []
-            self.mmB_summaries_real = 0
             longest_ell = np.zeros(2)
             for ell_summary in arb_summary_tables['theta_mm_m']:
                 self.real_theta_mmB.append(ell_summary)
@@ -511,7 +687,6 @@ class CovARBsummary(CovELLSpace):
         if self.mm:
             t0, tcomb = time.time(), 1
             tcombs = self.mmE_summaries**2
-            import matplotlib.pyplot as plt
             self.SN_integral_mmmm = np.zeros((self.mmE_summaries, self.mmE_summaries,  1, self.n_tomo_lens, self.n_tomo_lens))
             original_shape = (1,self.n_tomo_lens, self.n_tomo_lens)
             dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.theta_real_integral), self.n_tomo_lens*self.n_tomo_lens))
@@ -1189,7 +1364,7 @@ class CovARBsummary(CovELLSpace):
                                                                             + kron_delta_tomo_lens[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_lens[None, None, None, :, :, None]) \
                                                                             * self.SN_integral_mmmm[m_mode, n_mode, None, :, :, : ,None, None]/0.5
-                   # gauss_ASBBmmmm_sn[n_mode - self.gg_summaries - self.gm_summaries, m_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = gauss_ASEEmmmm_sn[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :]
+                    gauss_ASBBmmmm_sn[n_mode - self.gg_summaries - self.gm_summaries, m_mode - self.gg_summaries + self.gm_summaries, :, :, :, :, :, :] = gauss_ASEEmmmm_sn[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rArbitrary summary covariance calculation for the Gaussian '

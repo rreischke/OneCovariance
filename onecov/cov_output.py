@@ -254,11 +254,11 @@ class Output():
         if 'terminal' in self.style or 'list' in self.style:
             fct_args = [obslist, obsbool]
             if self.list_style_spatial_first:
-                self.__write_cov_list_arbitrary(cov_dict, obs_dict, n_tomo_clust, 
+                self.__write_cov_list_arbitrary_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
                                     n_tomo_lens, sampledim, read_in_tables, 
                                     gauss, nongauss, ssc, fct_args)
             else:
-                self.__write_cov_list_arbitrary_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
+                self.__write_cov_list_arbitrary(cov_dict, obs_dict, n_tomo_clust, 
                                     n_tomo_lens, sampledim, read_in_tables, 
                                     gauss, nongauss, ssc, fct_args)
         if 'matrix' in self.style or self.plot:
@@ -1403,8 +1403,8 @@ class Output():
                         nongauss[oidx] = np.zeros_like(gauss[3*oidx])
                     if not isinstance(ssc[oidx], np.ndarray):
                         ssc[oidx] = np.zeros_like(gauss[3*oidx])
-                    r1 = gauss[oidx].shape[0]
-                    r2 = gauss[oidx].shape[1]
+                    r1 = gauss[3*oidx].shape[0]
+                    r2 = gauss[3*oidx].shape[1]
                     for i_r1 in range(r1):
                         for i_r2 in range(r2):
                             ri = proj_quant[i_r1]
