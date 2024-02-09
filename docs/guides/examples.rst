@@ -277,7 +277,7 @@ As a general word of caution: in particular of :math:`\xi_{-}(\theta)`, they are
 :math:`1e-4` (at least by default). For a :math:`\theta_{\mathrm{min}} =0.5\;\mathrm{arcmin}` multipoles up to :math:`\ell\sim 40000` are required to reach the desired precision. On the other hand,
 however, :math:`\xi_{-}(\theta)` contains quite a bit of the E-mode signal.
 
-In any case, we just switch switch on realspace correlation functions by setting the `observables` section to
+In any case, we just switch switch on realspace correlation functions by setting the ``observables`` section to
 
 ::
 
@@ -292,10 +292,10 @@ In any case, we just switch switch on realspace correlation functions by setting
    cross_terms = True
    unbiased_clustering = False
 
-as done already in `config_3x2pt_rcf.ini`. We also add the `covTHETAspace settings` section and specify two :math:`\theta` ranges. Again, omitting the `_clustering` or `_lensing` will just specify a single angular range.
+as done already in ``config_3x2pt_rcf.ini``. We also add the ``covTHETAspace settings`` section and specify two :math:``\theta`` ranges. Again, omitting the ``_clustering`` or ``_lensing`` will just specify a single angular range.
 
 ::
-   
+
    [covTHETAspace settings]
    theta_min_clustering = 50
    theta_max_clustering = 300.0
