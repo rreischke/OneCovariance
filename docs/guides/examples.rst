@@ -280,6 +280,7 @@ however, :math:`\xi_{-}(\theta)` contains quite a bit of the E-mode signal.
 In any case, we just switch switch on realspace correlation functions by setting the `observables` section to
 
 ::
+
    [observables]
    cosmic_shear = True
    est_shear = xi_pm
@@ -294,6 +295,7 @@ In any case, we just switch switch on realspace correlation functions by setting
 as done already in `config_3x2pt_rcf.ini`. We also add the `covTHETAspace settings` section and specify two :math:`\theta` ranges. Again, omitting the `_clustering` or `_lensing` will just specify a single angular range.
 
 ::
+   
    [covTHETAspace settings]
    theta_min_clustering = 50
    theta_max_clustering = 300.0
