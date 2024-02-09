@@ -1359,7 +1359,7 @@ class CovARBsummary(CovELLSpace):
                             local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
                         gauss_ASBBmmmm_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode  - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
                     else:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
                         gauss_ASEEmmmm_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
                         if len(local_ell_limit) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
                             local_ell_limit = self.ell_limits[n_mode + self.mmE_summaries][:]
