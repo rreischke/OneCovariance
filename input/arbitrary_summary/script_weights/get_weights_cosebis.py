@@ -19,11 +19,11 @@ num_cores = 8 #number of cores used
 #define constants
 Nmax = 5 # maximum COSEBI mode
 tmin = 0.5 #theta_min in arcmin
-tmax = 250.0 #theta_max in armin
+tmax = 300.0 #theta_max in armin
 ell_min = 1 # Minimum multipole
 ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
-get_W_ell_as_well = False # If true the Well are calculated
+get_W_ell_as_well = True # If true the Well are calculated
 
 #####################
 zmax = mp.log(tmax/tmin)
