@@ -1525,7 +1525,7 @@ class CovBandPowers(CovTHETASpace):
             if self.gg and self.mm and self.cross_terms:
                 nongaussELLggmm = nongaussELLggmm/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2) + nongaussELLggmm1
             if self.gm:
-                nongaussELLgmgm = nongaussELLggmm/(survey_params_dict['survey_area_ggl'] / self.deg2torad2) + nongaussELLgmgm1
+                nongaussELLgmgm = nongaussELLgmgm/(survey_params_dict['survey_area_ggl'] / self.deg2torad2) + nongaussELLgmgm1
             if self.mm and self.gm and self.cross_terms:
                 nongaussELLmmgm = nongaussELLmmgm/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl']) / self.deg2torad2) + nongaussELLmmgm1
             if self.mm:

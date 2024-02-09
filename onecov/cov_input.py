@@ -979,33 +979,33 @@ class Input:
                 self.theta_type_clustering = self.theta_type
                 
             if self.theta_min is None:
-                if self.cosmic_shear:
+                if self.cosmicshear:
                     self.theta_min = self.theta_min_lensing   
                 if self.clustering or self.ggl:
                     self.theta_min = self.theta_min_clustering
-                if self.cosmic_shear and (self.clustering  or self.ggl):  
+                if self.cosmicshear and (self.clustering  or self.ggl):  
                     self.theta_min = min(self.theta_min_clustering, self.theta_min_lensing)
             
             if self.theta_max is None:
-                if self.cosmic_shear:
+                if self.cosmicshear:
                     self.theta_max = self.theta_max_lensing   
                 if self.clustering or self.ggl:
                     self.theta_max = self.theta_max_clustering
-                if self.cosmic_shear and (self.clustering  or self.ggl):  
+                if self.cosmicshear and (self.clustering  or self.ggl):  
                     self.theta_max = max(self.theta_max_clustering, self.theta_max_lensing)
             
             if self.theta_type is None:
-                if self.cosmic_shear:
+                if self.cosmicshear:
                     self.theta_type = self.theta_type_lensing   
                 if self.clustering or self.ggl:
                     self.theta_type = self.theta_type_clustering
             
             if self.theta_bins is None:
-                if self.cosmic_shear:
+                if self.cosmicshear:
                     self.theta_bins = self.theta_bins_lensing   
                 if self.clustering or self.ggl:
                     self.theta_bins = self.theta_bins_clustering
-                if self.cosmic_shear and (self.clustering  or self.ggl):  
+                if self.cosmicshear and (self.clustering  or self.ggl):  
                     self.theta_bins = max(self.theta_bins_clustering, self.theta_bins_lensing)
         if self.cosmicshear and self.est_shear == 'xi_pm':
             if self.theta_min is None:

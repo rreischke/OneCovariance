@@ -3,7 +3,7 @@ Some examples
 
 3x2pt for pure :math:`C_\ell`:
 ------------------------------
-We will calculate the full 3x2pt covariance matrix in harmonic space by running the covariance code with the in ``config_3x2pt.ini`` in the ``/config_files`` directory.
+We will calculate the full 3x2pt covariance matrix in harmonic space by running the covariance code with the in ``config_3x2pt_pure_Cell.ini`` in the ``/config_files`` directory.
 To obtain a good understanding, we will go through the ``.ini`` file section by section:
 
 ::
@@ -200,7 +200,7 @@ Lastly, we are running the whole code on 8 cores. Running
 
 :: 
    
-   python3 covariance.py config_files/config_3x2pt.ini
+   python3 covariance.py config_files/config_3x2pt_pure_Cell.ini
 
 Will then execute the covariance and produce some terminal outputs notifying the user about the current process. As output two files will be generated. First the ``covariance_list.dat`` containing all elements
 in a long list:
@@ -214,10 +214,58 @@ The ``cov`` column is the final covariance. The Gaussian covariance would be the
 ``covng`` is the non-Gaussian covariance and ``covssc`` the super-sample covariance. 
 Furthermore, a matrix file, ``covariance_matrix.mat`` is produced whose general shape is described in the header and can generally be deduced by looking at the plot, ``correlation_coefficient.pdf``.
 
-3x2pt for bandpowers:
----------------------
-Repeating the same exercise as in the previous section but now we use bandpowers.
+.. image:: correlation_coefficient_3x2pt_Cell.png
+   :width: 790
 
+3x2pt for bandpowers, :math:`\mathcal{C}_L`:
+---------------------
+Repeating the same exercise as in the previous section but now we use bandpowers. To this end one just has to modify the ``observable section`` and switch all estimators to ``bandpowers``
+
+::
+ 
+   [observables]
+   cosmic_shear = True
+   est_shear = bandpowers
+   ggl = True
+   est_ggl = bandpowers
+   clustering = True
+   est_clust = bandpowers
+   cstellar_mf = False
+   cross_terms = True
+   unbiased_clustering = False
+   
+Furthermore we have to add the ``covbandpowers settings`` section to the config for which we choose:
+
+::
+
+   [covbandpowers settings]
+   apodisation_log_width_clustering = 0.5
+
+   apodisation_log_width = 0.5
+   theta_lo = 0.5
+   theta_up = 300
+   ell_min = 100
+   ell_max = 1500
+   ell_bins = 8
+   ell_type = log
+
+   theta_binning = 300
+   bandpower_accuracy = 1e-7
+
+Defining the multipole range in complete analogy to the :math:`C_\ell`. The angular range is specified by ``theta_lo`` and ``theta_up`` with an apodisation log-width of
+``apodisation_log_width`` to avoid unwanted oscillations in the integration kernels. ``theta_binning`` just defines the number of points for the spline of the shot-noise integrals and
+``bandpower_accuracy`` defines the relative accuracy of the integration. The multipole range and apodisation can also be passed with a subscript ``_lensing`` and ``_clustering`` again as for
+the :math:`C_\ell`. If the settings are passed like this, we assume the same multipole bins for cosmic shear, GGL and clustering.
+You will also note that in the ``covariance terms`` section we changed
+
+::
+   split_gauss = False
+
+This leads to a speed up in the calculation since all terms Gaussian terms are calculated at ones and also SSC and non-Gaussian terms are added before being projected.
+The resulting plot can be seen here:
+
+.. image:: correlation_coefficient_3x2pt_bandpowers.png
+   :width: 790
 
 KiDS-1000 covariance
 --------------------
