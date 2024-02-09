@@ -317,6 +317,13 @@ Due to the discussed issues with :math:`\xi_{-}(\theta)` there exists the option
 .. image:: correlation_coefficient_3x2pt_rcf.png
    :width: 790
 
+Here we can clearly see that the :math:`\xi_{-}(\theta)` covariance is not almost just pure shot noise as it is in the case of bandpowers. That being said, it is still very shot-noise dominated and the variable ``integration_intervals = 40`` can be increased to increase computational speed.
+For KiDS-1000 we tested this up to ``integration_intervals = 400`` without significant changes in the result.
+
+3x2pt for COSEBIs and , :math:`\Psi`:-stats
+-------------------------------------------
+
+
 KiDS-1000 covariance
 --------------------
 The standard ``config.ini`` (after you pulled the directory) will run a simplified KiDS-1000-like cosmic shear setup. Not all parameters specified in the ``config.ini`` are used and it is merely used as an explanatory file to explain all the parameters which can be set.
