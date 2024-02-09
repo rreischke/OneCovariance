@@ -218,7 +218,7 @@ Furthermore, a matrix file, ``covariance_matrix.mat`` is produced whose general 
    :width: 790
 
 3x2pt for bandpowers, :math:`\mathcal{C}_L`:
----------------------
+--------------------------------------------
 Repeating the same exercise as in the previous section but now we use bandpowers. To this end one just has to modify the ``observable section`` and switch all estimators to ``bandpowers``
 
 ::
@@ -259,6 +259,7 @@ the :math:`C_\ell`. If the settings are passed like this, we assume the same mul
 You will also note that in the ``covariance terms`` section we changed
 
 ::
+
    split_gauss = False
 
 This leads to a speed up in the calculation since all terms Gaussian terms are calculated at ones and also SSC and non-Gaussian terms are added before being projected.
@@ -266,6 +267,49 @@ The resulting plot can be seen here:
 
 .. image:: correlation_coefficient_3x2pt_bandpowers.png
    :width: 790
+
+Note that, in contrast to the pure :math:`C_\ell`, the B-mode is included in the covariance as there can be leakage of E-modes into the B-modes.
+
+3x2pt for realspace correlation functions, :math:`w(\theta),\; \gamma_\mathrm{t}(\theta),\; \xi_{\pm}(\theta)`:
+---------------------------------------------------------------------------------------------------------------
+Next in line are the realspace correlation functions: :math:`w(\theta),\; \gamma_\mathrm{t}(\theta),\; \xi_{\pm}(\theta)`. It should be noted that, due to their very broad kernels,
+As a general word of caution: in particular of :math:`\xi_{-}(\theta)`, they are influenced by highly non-linear scales. The covariance code integrates contributions until the integral does not change by more theta_binning
+:math:`1e-4` (at least by default). For a :math:`\theta_{\mathrm{min}} =0.5\;\mathrm{arcmin}` multipoles up to :math:`\ell\sim 40000` are required to reach the desired precision. On the other hand,
+however, :math:`\xi_{-}(\theta)` contains quite a bit of the E-mode signal.
+
+In any case, we just switch switch on realspace correlation functions by setting the `observables` section to
+
+::
+   [observables]
+   cosmic_shear = True
+   est_shear = xi_pm
+   ggl = True
+   est_ggl = gamma_t
+   clustering = True
+   est_clust = w
+   cstellar_mf = False
+   cross_terms = True
+   unbiased_clustering = False
+
+as done already in `config_3x2pt_rcf.ini`. We also add the `covTHETAspace settings` section and specify two :math:`\theta` ranges. Again, omitting the `_clustering` or `_lensing` will just specify a single angular range.
+
+::
+   [covTHETAspace settings]
+   theta_min_clustering = 50
+   theta_max_clustering = 300.0
+   theta_bins_clustering = 5
+   theta_type_clustering = lin
+
+   theta_min_lensing = 1
+   theta_max_lensing = 300.0
+   theta_bins_lensing = 8
+   theta_type_lensing = log
+
+   theta_list = 1, 2, 3
+   xi_pp = True
+   xi_mm = True
+   theta_accuracy = 1e-5
+   integration_intervals = 40
 
 KiDS-1000 covariance
 --------------------
