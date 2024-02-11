@@ -222,6 +222,7 @@ class CovTHETASpace(CovELLSpace):
                 limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
                 self.ell_limits.append(limits_at_mode_append)
             self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
+            self.levin_int_fourier.update_Levin(0, 16, 32,1e-3,1e-3)
             self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
             self.__get_signal(obs_dict)
         
@@ -1510,7 +1511,7 @@ class CovTHETASpace(CovELLSpace):
         nongauss_xipxip = None
         nongauss_xipxim = None
         nongauss_ximxim = None
-        self.levin_int_fourier.update_Levin(0, 16, 32,1e-3,1e-4)
+        self.levin_int_fourier.update_Levin(0, 16, 32,1e-3,1e-3)
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
                     covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)

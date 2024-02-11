@@ -274,7 +274,7 @@ Note that, in contrast to the pure :math:`C_\ell`, the B-mode is included in the
 ---------------------------------------------------------------------------------------------------------------
 Next in line are the realspace correlation functions: :math:`w(\theta),\; \gamma_\mathrm{t}(\theta),\; \xi_{\pm}(\theta)`. It should be noted that, due to their very broad kernels,
 As a general word of caution: in particular of :math:`\xi_{-}(\theta)`, they are influenced by highly non-linear scales. The covariance code integrates contributions until the integral does not change by more theta_binning
-:math:`1e-4` (at least by default). For a :math:`\theta_{\mathrm{min}} =0.5\;\mathrm{arcmin}` multipoles up to :math:`\ell\sim 40000` are required to reach the desired precision. On the other hand,
+:math:`1e^{-4}` (at least by default). For a :math:`\theta_{\mathrm{min}} =0.5\;\mathrm{arcmin}` multipoles up to :math:`\ell\sim 40000` are required to reach the desired precision. On the other hand,
 however, :math:`\xi_{-}(\theta)` contains quite a bit of the E-mode signal.
 
 In any case, we just switch switch on realspace correlation functions by setting the ``observables`` section to
@@ -307,11 +307,22 @@ as done already in ``config_3x2pt_rcf.ini``. We also add the ``covTHETAspace set
    theta_bins_lensing = 8
    theta_type_lensing = log
 
-   theta_list = 1, 2, 3
    xi_pp = True
    xi_mm = True
-   theta_accuracy = 1e-5
+   theta_accuracy = 1e-3
    integration_intervals = 40
+
+Due to the discussed issues with :math:`\xi_{-}(\theta)` there exists the option to remove  :math:`\xi_{-}(\theta)` from the computation by setting ``xi_mm = False`` which speeds things up significantly. However, we will keep it here. Again, we show the resulting correlation coefficient
+
+.. image:: correlation_coefficient_3x2pt_rcf.png
+   :width: 790
+
+Here we can clearly see that the :math:`\xi_{-}(\theta)` covariance is not almost just pure shot noise as it is in the case of bandpowers. That being said, it is still very shot-noise dominated and the variable ``integration_intervals = 40`` can be increased to increase computational speed.
+For KiDS-1000 we tested this up to ``integration_intervals = 400`` without significant changes in the result.
+
+3x2pt for COSEBIs and , :math:`\Psi`:-stats
+-------------------------------------------
+
 
 KiDS-1000 covariance
 --------------------

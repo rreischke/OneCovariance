@@ -1038,9 +1038,6 @@ class Input:
                 self.theta_type = 'log'
             if self.theta_type_lensing is None:
                 self.theta_type_lensing = self.theta_type
-                print("The binning type for theta bins " +
-                      "[covTHETAspace settings]: 'theta_type' is set to " +
-                      "'log'.")
             elif self.theta_type != 'lin' and self.theta_type != 'log':
                 if self.theta_type_lensing_p != 'lin' and self.theta_type_lensing_p != 'log' and self.theta_type_lensing_m != 'lin' and self.theta_type_lensing_m != 'log':
                     raise Exception("ConfigError: The binning type for theta " +
