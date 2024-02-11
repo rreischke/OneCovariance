@@ -1253,7 +1253,7 @@ std::vector<double> Levin::double_bessel_many_args(std::vector<double> k1, doubl
         if (k1.at(i_k1) * b > 1000 && k2 * b > 1000)
         {
             uint tid = omp_get_thread_num();
-            int_index_integral[tid] = i_k1;
+            int_index_integral[tid] = tid;
             result.at(i_k1) = iterate_double(integrand, a, b, col, k1.at(i_k1), k2, ell_1, ell_2, nsub, false);
         }
         else
@@ -1263,7 +1263,7 @@ std::vector<double> Levin::double_bessel_many_args(std::vector<double> k1, doubl
             int_k1_double_bessel[tid] = k1.at(i_k1);
             int_ell2_double_bessel[tid] = ell_2;
             int_k2_double_bessel[tid] = k2;
-            int_index_integral[tid] = i_k1;
+            int_index_integral[tid] = tid;
             result.at(i_k1) = 0.0;
             uint N_sum = n_split_rs;
             for (uint j = 0; j < N_sum; j++)
@@ -1283,11 +1283,33 @@ std::vector<double> Levin::single_bessel_many_args(std::vector<double> k, uint e
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k.size());
 #pragma omp parallel for num_threads(N_thread_max)
-    for (uint i = 0; i < k.size(); i++)
+    for (uint ik = 0; ik < k.size(); ik++)
     {
-        uint tid = omp_get_thread_num();
-        int_index_integral[tid] = 0;
-        result.at(i) = iterate_single(integrand, a, b, col, k.at(i), ell, nsub, false);
+        if (k.at(ik) * b > 1000)
+        {
+            uint tid = omp_get_thread_num();
+            int_index_integral[tid] = tid;
+            result.at(ik) = iterate_single(integrand, a, b, col, k.at(ik), ell, nsub, false);
+        }
+        else
+        {
+            uint tid = omp_get_thread_num();
+            int_ell_single_bessel[tid] = ell;
+            int_k_single_bessel[tid] = k.at(ik);
+            int_index_integral[tid] = tid;
+            uint N_sum = uint(n_split_rs / 10);
+            if (N_sum < 2)
+            {
+                N_sum = 2;
+            }
+            result.at(ik) = 0.0;
+            for (uint j = 0; j < N_sum; j++)
+            {
+                double al = exp(log(a) + (log(b) - log(a)) / (N_sum)*j);
+                double bl = exp(log(a) + (log(b) - log(a)) / (N_sum) * (j + 1));
+                result.at(ik) += gslIntegratecquad(single_bessel_integrand, al, bl);
+            }
+        }
     }
     delete int_index_integral;
     return result;

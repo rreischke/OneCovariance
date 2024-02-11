@@ -4,8 +4,21 @@ from scipy.special import jv
 N_fourier = int(1e5) # at how many ells should the Fourier space filter be evaluated
 fourier_ell = np.geomspace(1,1e5,N_fourier) # define the ell, this range is more than enough
 N_real = int(1e5) # at how many theta should the real space filter be evaluated
-theta_type = 'log'
 
+theta_type_gg = 'log' # type of theta binning for clutersing
+theta_min_gg = 0.5 #lowest bound of the first theta bin in arcminutes for clustering
+theta_max_gg = 300.0 #lowest bound of the first theta bin in arcminutes for clustering
+ntheta_bins_gg = 9 #number of theta bins for clustering
+
+theta_type_gm = 'log' # type of theta binning for ggl
+theta_min_gm = 0.5 #lowest bound of the first theta bin in arcminutes for ggl
+theta_max_gm = 300.0 #lowest bound of the first theta bin in arcminutes for ggl
+ntheta_bins_gm = 9 #number of theta bins for ggl
+
+theta_type_mm = 'log' # type of theta binning for lensing
+theta_min_mm = 0.5 #lowest bound of the first theta bin in arcminutes for lensing
+theta_max_mm = 300.0 #lowest bound of the first theta bin in arcminutes for lensing
+ntheta_bins_mm = 9 #number of theta bins for lensing
 
 def top_hat(x,width_low, width_high, location):
     return (np.heaviside(x- (location-width_low),1)- np.heaviside(x-(location + width_high),1))/(width_high + width_low)
@@ -43,7 +56,7 @@ def get_theta_bins(theta_type, theta_min, theta_max, ntheta_bins, theta_list_bou
 
 
 # Define theta-range for w (i.e. gg)
-theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
+theta_bins, theta_ul_bins = get_theta_bins(theta_type=theta_type_gg,theta_min = theta_min_gg, theta_max = theta_max_gg, ntheta_bins=ntheta_bins_gg)
 real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
 # Get fourier and real weights for w covariance
 for i_theta in range(len(theta_bins)):
@@ -63,7 +76,7 @@ for i_theta in range(len(theta_bins)):
     np.savetxt(filename,np.array([real_theta,R]).T)
 
 # Define theta-range for gamma_t (i.e. gm)
-theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
+theta_bins, theta_ul_bins = get_theta_bins(theta_type=theta_type_gm,theta_min = theta_min_gm, theta_max = theta_max_gm, ntheta_bins=ntheta_bins_gm)
 real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
 # Get fourier and real weights for w covariance
 for i_theta in range(len(theta_bins)):
@@ -86,7 +99,7 @@ for i_theta in range(len(theta_bins)):
     np.savetxt(filename,np.array([real_theta,R]).T)
 
 # Define theta-range for xip_m (i.e. mm)
-theta_bins, theta_ul_bins = get_theta_bins(theta_type='log',theta_min = 0.5, theta_max = 300, ntheta_bins=9)
+theta_bins, theta_ul_bins = get_theta_bins(theta_type=theta_type_mm,theta_min = theta_min_mm, theta_max = theta_max_mm, ntheta_bins=ntheta_bins_mm)
 real_theta = np.geomspace(theta_ul_bins[0], theta_ul_bins[-1], N_real)
 
 # Get fourier and real  weights for w covariance
