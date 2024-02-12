@@ -1692,7 +1692,8 @@ class CovELLSpace(PolySpectra):
             ssc_new = []    
             if self.gg:
                 if self.ellrange_clustering_ul is not None:
-                    print("Binning SSC gggg contribution")
+                    if self.cov_dict['ssc']:
+                        print("Binning SSC gggg contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1705,7 +1706,8 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.gg and self.gm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None:
-                    print("Binning SSC gggm contribution")
+                    if self.cov_dict['ssc']:
+                        print("Binning SSC gggm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1718,7 +1720,8 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.gg and self.mm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
-                    print("Binning SSC ggmm contribution")
+                    if self.cov_dict['ssc']:
+                        print("Binning SSC ggmm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_clustering,
@@ -1731,7 +1734,8 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.gm:
                 if self.ellrange_clustering_ul is not None:
-                    print("Binning SSC gmgm contribution")
+                    if self.cov_dict['ssc']:
+                        print("Binning SSC gmgm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1744,7 +1748,8 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.mm and self.gm and self.cross_terms:           
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
-                    print("Binning SSC mmgm contribution")
+                    if self.cov_dict['ssc']:
+                        print("Binning SSC mmgm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_lensing,
@@ -1757,7 +1762,8 @@ class CovELLSpace(PolySpectra):
                 ssc_new.append(0)
             if self.mm:
                 if self.ellrange_lensing_ul is not None:
-                    print("Binning SSC mmmm contribution")
+                    if self.cov_dict['ssc']:
+                        print("Binning SSC mmmm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_lensing,
@@ -2239,8 +2245,8 @@ class CovELLSpace(PolySpectra):
                                     for k_tomo in range(len(cov[0,0,0,0,0,0,:,0])):
                                         for l_tomo in range(len(cov[0,0,0,0,0,0,0,:])):
                                             if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
-                                                spline = UnivariateSpline(self.ellrange,np.log(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo])), k=2, s=0, ext=1)
-                                                result = full_sky_angle / max(area_12,area_34)*np.sum(np.exp(spline(overlapping_elements))/(2.*overlapping_elements + 1))/N_ell_12/N_ell_34
+                                                spline = UnivariateSpline(self.ellrange, np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]), k=2, s=0, ext=1)
+                                                result = full_sky_angle / max(area_12,area_34)*np.sum(spline(overlapping_elements)/(2.*overlapping_elements + 1))/N_ell_12/N_ell_34
                                                 binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result
         return binned_covariance
 
@@ -2264,8 +2270,8 @@ class CovELLSpace(PolySpectra):
             for j_ell in range(len(ellrange_34_ul) - 1):
                 area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]
                 area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
-                integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],100)
-                integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],100)
+                integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],10)
+                integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],10)
                 ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34)
                 for i_sample in range(len(cov[0,0,:,0,0,0,0,0])):
                     for j_sample in range(len(cov[0,0,0,:,0,0,0,0])):        

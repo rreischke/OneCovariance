@@ -19,7 +19,7 @@ ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
 N_theta = int(1e4)
 get_W_ell_as_well = True # If true the Well are calculated
-num_cores = 8 #number of cores used
+num_cores = 100 #number of cores used
 
 
 mp.dps = 160
@@ -241,7 +241,7 @@ for nn in range(1,Nmax_gg+1):
     else:
         file_Ugg = "./../Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
         file_Wn = "./../Wn_psigg"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-    np.savetxt(file_Ugg,np.array([theta_gg/arcmintorad,Ungg[nn-1,:]]).T)
+    np.savetxt(file_Ugg,np.array([theta_gg/arcmintorad,Ungg[nn-1,:]*arcmintorad**2]).T)
     if get_W_ell_as_well:
         np.savetxt(file_Wn, np.array([ell,Wpsigg]).T)
 
@@ -253,7 +253,7 @@ for nn in range(1,Nmax_gm+1):
     else:
         file_Qgm = "./../Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
         file_Wn = "./../Wn_psigm"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-    np.savetxt(file_Qgm,np.array([theta_gm/arcmintorad,Qngm[nn-1,:]]).T)
+    np.savetxt(file_Qgm,np.array([theta_gm/arcmintorad,Qngm[nn-1,:]*arcmintorad**2]).T)
     if get_W_ell_as_well:
         np.savetxt(file_Wn, np.array([ell,Wpsigm]).T)
 

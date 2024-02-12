@@ -60,9 +60,9 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
         covcosebis = CovCOSEBI(covterms, observables, output,
                             cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
         covariance_COSEBIS = covcosebis.calc_covCOSEBI(observables, output, bias,  hod, survey_params, prec, read_in_tables)
-        out = Output(output)
+        out = Output(output , covcosebis.array_En_g_modes, covcosebis.array_En_modes)
         out.write_cov(covterms, observables, covcosebis.n_tomo_clust,
-                    covcosebis.n_tomo_lens, covcosebis.array_En_modes,
+                    covcosebis.n_tomo_lens, covcosebis.ellrange,
                     covariance_COSEBIS[0],
                     covariance_COSEBIS[1],
                     covariance_COSEBIS[2])

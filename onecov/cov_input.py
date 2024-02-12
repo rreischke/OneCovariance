@@ -156,6 +156,13 @@ class Input:
         self.En_modes = None
         self.theta_min_cosebi = None
         self.theta_max_cosebi = None
+        self.En_modes_clustering = None
+        self.theta_min_cosebi_clustering = None
+        self.theta_max_cosebi_clustering = None
+        self.En_modes_lensing = None
+        self.theta_min_cosebi_lensing = None
+        self.theta_max_cosebi_lensing = None
+        
         self.En_acc = None
         self.Wn_style = None
         self.Wn_acc = None
@@ -782,6 +789,15 @@ class Input:
                       "between bins [covELLspace settings]: " +
                       "'nz_interpolation_polynom_order = 1' (put 0 for a " +
                       "histogram interpretation)")
+        if self.ell_min is None:
+            self.ell_min = 2
+        if self.ell_max is None:
+            self.ell_max = int(1e4)
+        if self.ell_bins is None:
+            self.ell_bins = 100
+        if self.ell_type is None:
+            self.ell_type = 'log'
+            
 
         return True
 
@@ -1141,6 +1157,25 @@ class Input:
             if 'theta_max' in config['covCOSEBI settings']:
                 self.theta_max_cosebi = \
                     float(config['covCOSEBI settings']['theta_max'])
+            
+            if 'En_modes_clustering' in config['covCOSEBI settings']:
+                self.En_modes_clustering = int(config['covCOSEBI settings']['En_modes_clustering'])
+            if 'theta_min_clustering' in config['covCOSEBI settings']:
+                self.theta_min_cosebi_clustering = \
+                    float(config['covCOSEBI settings']['theta_min_clustering'])
+            if 'theta_max_clustering' in config['covCOSEBI settings']:
+                self.theta_max_cosebi_clustering = \
+                    float(config['covCOSEBI settings']['theta_max_clustering'])
+            
+            if 'En_modes_lensing' in config['covCOSEBI settings']:
+                self.En_modes_lensing = int(config['covCOSEBI settings']['En_modes_lensing'])
+            if 'theta_min_lensing' in config['covCOSEBI settings']:
+                self.theta_min_cosebi_lensing = \
+                    float(config['covCOSEBI settings']['theta_min_lensing'])
+            if 'theta_max_lensing' in config['covCOSEBI settings']:
+                self.theta_max_cosebi_lensing = \
+                    float(config['covCOSEBI settings']['theta_max_lensing'])
+            
             if 'En_accuracy' in config['covCOSEBI settings']:
                 self.En_acc = \
                     float(config['covCOSEBI settings']['En_accuracy'])
@@ -1205,7 +1240,7 @@ class Input:
                                 "[covCOESBI settings]: 'Wn_style = " +
                                 config['covCOSEBI settings']['Wn_style'] + "' is " +
                                 "not recognised. Must be either 'lin' or 'log'.")
-         
+            
             if self.limber is None:
                 self.limber = True
 
@@ -1243,7 +1278,19 @@ class Input:
                 self.nz_polyorder = 1
             if self.tri_delta_z is None:
                 self.tri_delta_z = 0.5
+        if self.En_modes_clustering is None:
+            self.En_modes_clustering = self.En_modes
+        if self.theta_min_cosebi_clustering is None:
+            self.theta_min_cosebi_clustering = self.theta_min_cosebi
+        if self.theta_max_cosebi_clustering is None:
+            self.theta_max_cosebi_clustering = self.theta_max_cosebi
 
+        if self.En_modes_lensing is None:
+            self.En_modes_lensing = self.En_modes
+        if self.theta_min_cosebi_lensing is None:
+            self.theta_min_cosebi_lensing = self.theta_min_cosebi
+        if self.theta_max_cosebi_lensing is None:
+            self.theta_max_cosebi_lensing = self.theta_max_cosebi
         return True
     
     def __read_in_covbandpowers_settings(self,
@@ -3564,12 +3611,18 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['En_modes', 'theta_min', 'theta_max', 'En_acc', 'Wn_style',
+                'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
+                'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
                 'Wn_acc']
-        values = [self.En_modes, self.theta_min_cosebi, self.theta_max_cosebi,
-                  self.En_acc, self.Wn_style, self.Wn_acc]
+        values = [self.En_modes, self.theta_min_cosebi, self.theta_max_cosebi, self.En_acc, self.Wn_style,
+                  self.En_modes_clustering, self.theta_min_cosebi_clustering, self.theta_max_cosebi_clustering,
+                  self.En_modes_lensing, self.theta_min_cosebi_lensing, self.theta_max_cosebi_lensing,
+                  self.Wn_acc]
         self.covCOSEBI_settings = dict(zip(keys, values))
-        keys = ['En_modes', 'theta_min', 'theta_max', 'En_accuracy',
-                'Wn_style', 'Wn_accuracy']
+        keys = ['En_modes', 'theta_min', 'theta_max', 'En_accuracy', 'Wn_style'
+                'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
+                'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
+                'Wn_accuracy']
         self.covCOESBI_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         
@@ -8118,7 +8171,7 @@ class FileInput:
         self.__get_occprob_tabs(config)
         self.__get_occnum_tabs(config)
         self.__get_trispec_tabs(config)
-        self.__get_cosebi_tabs(config)
+        #self.__get_cosebi_tabs(config)
         self.__get_arbitrary_filter_tabs(config)
         self.__zip_to_dicts()
         self.__write_params()

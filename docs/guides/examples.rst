@@ -1,5 +1,5 @@
-Some examples
-=============
+Basic Examples
+==============
 
 3x2pt for pure :math:`C_\ell`:
 ------------------------------
@@ -320,8 +320,11 @@ Due to the discussed issues with :math:`\xi_{-}(\theta)` there exists the option
 Here we can clearly see that the :math:`\xi_{-}(\theta)` covariance is not almost just pure shot noise as it is in the case of bandpowers. That being said, it is still very shot-noise dominated and the variable ``integration_intervals = 40`` can be increased to increase computational speed.
 For KiDS-1000 we tested this up to ``integration_intervals = 400`` without significant changes in the result.
 
-3x2pt for COSEBIs and , :math:`\Psi`:-stats
+3x2pt for COSEBIs and :math:`\Psi`-stats:
 -------------------------------------------
+The last summary statistic are COSEBIs and their GGL and galaxy clustering equivalent :math:`\Psi`-stats. We do not calculate their weights interally here, but require them as tabulated input files.
+
+
 
 
 KiDS-1000 covariance

@@ -1224,25 +1224,25 @@ class Output():
                 
 
                 if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'EEmmmm'
+                    obs_copy = 'EmmEmm'
                 if obs == 'xipxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'EBmmmm'
+                    obs_copy = 'EmmBmm'
                 if obs == 'ximxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'BBmmmm'
+                    obs_copy = 'BmmBmm'
                 if obs == 'gggg' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['clustering'] == True:
-                    obs_copy = 'PsiPsigggg'
+                    obs_copy = 'PsiggPsigg'
                 if obs == 'gmgm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
-                    obs_copy = 'PsiPsigmgm'
+                    obs_copy = 'PsigmPsigm'
                 if obs == 'gggm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
-                    obs_copy = 'PsiPsigggm'
+                    obs_copy = 'PsiggPsigm'
                 if obs == 'ggxip' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'PsiEggmm'
+                    obs_copy = 'PsiggEmm'
                 if obs == 'ggxim' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'PsiBggmm'
+                    obs_copy = 'PsiggBmm'
                 if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
-                    obs_copy = 'EEgmmm'
+                    obs_copy = 'PsigmEmm'
                 if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'EBgmmm'
+                    obs_copy = 'PsigmBmm'
                 
                 
                 if not obsbool[oidx]:
@@ -1999,25 +1999,25 @@ class Output():
                 
 
                 if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'EEmmmm'
+                    obs_copy = 'EmmEmm'
                 if obs == 'xipxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'EBmmmm'
+                    obs_copy = 'EmmBmm'
                 if obs == 'ximxim' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'BBmmmm'
+                    obs_copy = 'BmmBmm'
                 if obs == 'gggg' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['clustering'] == True:
-                    obs_copy = 'PsiPsigggg'
+                    obs_copy = 'PsiggPsigg'
                 if obs == 'gmgm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
-                    obs_copy = 'PsiPsigmgm'
+                    obs_copy = 'PsigmPsigm'
                 if obs == 'gggm' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
-                    obs_copy = 'PsiPsigggm'
+                    obs_copy = 'PsiggPsigm'
                 if obs == 'ggxip' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'PsiEggmm'
+                    obs_copy = 'PsiggEmm'
                 if obs == 'ggxim' and obs_dict['observables']['est_clust'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'PsiBggmm'
+                    obs_copy = 'PsiggBmm'
                 if obs == 'gmxip' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['ggl'] == True:
-                    obs_copy = 'EEgmmm'
+                    obs_copy = 'PsigmEmm'
                 if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
-                    obs_copy = 'EBgmmm'
+                    obs_copy = 'PsigmBmm'
                 
                 if not obsbool[oidx]:
                     splitidx += 3

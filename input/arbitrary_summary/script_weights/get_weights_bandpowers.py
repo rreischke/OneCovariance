@@ -4,8 +4,8 @@ import time
 import levin
 
 
-num_cores = 8
-N_fourier = int(5e3) # at how many ells should the Bessel functions be evaluated
+num_cores = 100
+N_fourier = int(1e4) # at how many ells should the Bessel functions be evaluated
 n_theta_bins = int(1e4) # How many theta bins used for evaluation
 fourier_ell = np.geomspace(1,1e4,N_fourier) 
 
@@ -248,7 +248,6 @@ def calc_fourier_filters_bp(ell_bins,ell_ul_bins, ell_fourier_integral, thetabin
             filename_gm = "./../fourier_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
             filename_gg = "./../fourier_weight_bandpowers_gg_" + str(i_ell+1) + "table"
         if type == "mm":
-            print(filename_mm)
             np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi/Norm[i_ell]]).T)
         if type == "gm":
             np.savetxt(filename_gm,np.array([ell_fourier_integral,Wl_nE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T)
