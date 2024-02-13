@@ -703,6 +703,22 @@ class Input:
                                 config_name + ", specifiy e.g. [covELLspace settings]: 'pixel_Nside = " +
                                 "2048")
 
+            if self.cosmicshear:
+                if self.ell_min_lensing is not None:
+                    self.ell_min = self.ell_min_lensing
+                if self.ell_max_lensing is not None:
+                    self.ell_max = self.ell_max_lensing
+            if self.clustering or self.ggl:
+                if self.ell_min_clustering is not None:
+                    if self.ell_min is not None:
+                        self.ell_min = min(self.ell_min_clustering, self.ell_min)
+                    else:
+                        self.ell_min = self.ell_min_clustering
+                if self.ell_max_clustering is not None:
+                    if self.ell_min is not None:
+                        self.ell_max = max(self.ell_max_clustering, self.ell_max)
+                    else:
+                        self.ell_max = self.ell_max_clustering
 
             if self.ell_min is None:
                 self.ell_min = 2
@@ -712,6 +728,9 @@ class Input:
                 self.ell_bins = 100
             if self.ell_type is None:
                 self.ell_type = 'log'
+
+                    
+
             elif self.ell_type != 'lin' and self.ell_type != 'log':
                 raise Exception("ConfigError: The binning type for ell bins " +
                                 "[covELLspace settings]: 'ell_type = " +
