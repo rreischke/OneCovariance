@@ -359,7 +359,6 @@ class DiscreteCovTHETASpace:
         # Load triplets from file
         # Does not check for correct format etc!
         triplet_right_format = False
-        print(self.loadpath_triplets)
         if self.loadpath_triplets is not None:
             try:
                 tripletdata = Table.read(self.loadpath_triplets)
@@ -1166,6 +1165,7 @@ def cov_estimate_single(bin_edges, bin_centers, xip_spline, xim_spline, sigma_ep
     sigma2_eps = sigma_eps1**2 + sigma_eps2**2
     _,_,nphibins = multipole_tripletcounts.shape
     dphis = np.linspace(-np.pi,np.pi,nphibins)
+    ddphis = dphis[1] - dphis[0]
     terms = ["xipxip", "xipxim", "ximxim"]
     cov_third_multipole = {}
     for k in terms:
@@ -1187,13 +1187,13 @@ def cov_estimate_single(bin_edges, bin_centers, xip_spline, xim_spline, sigma_ep
             #   cos(4*(phi_jk-phi_ij)) = cos(4*beta)
             #   and beta can be inferred from the three triangle sides
             beta = np.arccos((b3**2+b2**2-b1**2)/(2*b2*b3))
-            norm = sigma2_eps/(2*paircounts_ret12[elb1]*paircounts_ret34[elb2])
+            norm = sigma2_eps/(paircounts_ret12[elb1]*paircounts_ret34[elb2])
             cov_third_multipole["xipxip"][elb1_cov,elb2_cov] = norm * np.nansum(multipole_tripletcounts[elb1,elb2].real*
-                                                                        xip_spline(b3))
+                                                                        xip_spline(b3))*ddphis
             cov_third_multipole["ximxim"][elb1_cov,elb2_cov] = norm * np.nansum(multipole_tripletcounts[elb1,elb2].real*
-                                                                        np.cos(4*dphis)*xip_spline(b3))
+                                                                        np.cos(4*dphis)*xip_spline(b3))*ddphis
             cov_third_multipole["xipxim"][elb1_cov,elb2_cov] = norm * np.nansum(multipole_tripletcounts[elb1,elb2].real*
-                                                                        np.cos(4*beta)*xim_spline(b3))
+                                                                        np.cos(4*beta)*xim_spline(b3))*ddphis
     return cov_shape, cov_third_multipole
 
 def edge_correctiontomo(threepcf_n,threepcf_n_norm,ret_matrices=False):

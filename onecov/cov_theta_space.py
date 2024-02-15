@@ -349,24 +349,45 @@ class CovTHETASpace(CovELLSpace):
                 gt_signal[i_theta, :, :, :] = np.reshape(
                     gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
             self.gt = gt_signal
-          ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
+        if self.mm:
+            self.data_vector_length += len(self.theta_bins_lensing)*self.n_tomo_lens*(self.n_tomo_lens +1)/2
+            mm_signal_shape = (len(self.theta_bins_lensing),
+                              1,
+                              self.n_tomo_lens, self.n_tomo_lens)
+            original_shape = self.Cell_mm[0, :, :, :].shape
+            xip_signal = np.zeros(mm_signal_shape)
+            xim_signal = np.zeros(mm_signal_shape)
+            flat_length = self.sample_dim*self.n_tomo_lens*self.n_tomo_lens
+            Cell_mm_flat = np.reshape(
+                self.Cell_mm, (len(self.ellrange), flat_length))
+            for i_theta in range(len(self.theta_bins_lensing)):
+                integrand = Cell_mm_flat*self.ellrange[:, None]
+                self.levin_int_fourier.init_integral(
+                    self.ellrange, integrand, True, True)
+                xip_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries],i_theta + self.gg_summaries + self.gm_summaries),original_shape)/2.0/np.pi
+                xim_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries],i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries),original_shape)/2.0/np.pi
+            self.xi_plus = xip_signal
+            self.xi_minus = xim_signal
+            np.save("xip_signal_lens",xip_signal)
+            np.save("xim_signal_lens",xim_signal)
+            np.save("theta_lensing",self.theta_bins_lensing)
+        ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
         if obs_dict['THETAspace']['mix_term_do_mix_for'] is not None:
             if 'xipxip' in obs_dict['THETAspace']['mix_term_do_mix_for'][:] or 'ximxim' in obs_dict['THETAspace']['mix_term_do_mix_for'][:]:
                 if self.mm:
-                    self.data_vector_length += len(self.theta_bins_lensing)*self.n_tomo_lens*(self.n_tomo_lens+1)
                     theta_ul_bins = np.geomspace(
                         self.theta_ul_bins[0]/5,
                         self.theta_ul_bins[-1]*40,
-                        100)
+                        40)
                     theta_bins = np.exp(.5 * (np.log(theta_ul_bins[1:])
                                             + np.log(theta_ul_bins[:-1])))
                     xip_signal_shape = (len(theta_bins),
-                                        self.sample_dim,
+                                        1,
                                         self.n_tomo_lens, self.n_tomo_lens)
                     xip_signal = np.zeros(xip_signal_shape)
                     xim_signal = np.zeros(xip_signal_shape)
                     original_shape = self.Cell_mm[0, :, :, :].shape
-                    flat_length = self.sample_dim*self.n_tomo_lens**2
+                    flat_length = self.n_tomo_lens**2
                     Cell_mm_flat = np.reshape(
                         self.Cell_mm, (len(self.ellrange), flat_length))
                     xip_signal_at_thetai_flat = np.zeros(flat_length)
@@ -377,12 +398,9 @@ class CovTHETASpace(CovELLSpace):
                     K_mmE = []
                     K_mmB = []
                     for i_theta in range(len(theta_bins)):
-                        theta_u = theta_ul_bins[i_theta+1]/60/180*np.pi
-                        theta_l = theta_ul_bins[i_theta]/60/180*np.pi
-                        xu = self.ell_fourier_integral*theta_u
-                        xl = self.ell_fourier_integral*theta_l
-                        K_mmE.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
-                        K_mmB.append(2/(xu**2 - xl**2)*((xu - 8/xu)*jv(1,xu) - 8*jv(2,xu) - (xl-8/xl)*jv(1,xl) + 8*jv(2,xl)))
+                        x = self.ell_fourier_integral*theta_bins[i_theta]/60/180*np.pi
+                        K_mmE.append(jv(0,x))
+                        K_mmB.append(jv(4,x))
                     WXY_stack = []
                     K_mmE = np.array(K_mmE)
                     K_mmB = np.array(K_mmB)
@@ -394,37 +412,35 @@ class CovTHETASpace(CovELLSpace):
                     ell_limits = []
                     for mode in range(len(WXY_stack[:,0])):
                         limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
-                        limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]) + 2)
-                        limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ellrange[-2])]
+                        limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ell_fourier_integral[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
+                        limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ell_fourier_integral[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
                         limits_at_mode_append[0] = self.ell_fourier_integral[0]
                         limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
                         ell_limits.append(limits_at_mode_append)
-                    for i_theta in range(len(theta_bins)):
-                        levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
-                        aux_WXY_stack = []
-                        aux_WXY_stack.append(WXY_stack[i_theta, :])
-                        aux_WXY_stack.append(WXY_stack[i_theta + len(theta_bins),:])
-                        aux_WXY_stack = np.array(aux_WXY_stack)
-                        levin_int_fourier.init_w_ell(self.ell_fourier_integral, aux_WXY_stack.T)
-                        integrand = Cell_mm_flat*self.ellrange[:, None]
-                        levin_int_fourier.init_integral(
+                    levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
+                    levin_int_fourier.init_w_ell(self.ell_fourier_integral, WXY_stack.T)
+                    integrand = Cell_mm_flat*self.ellrange[:, None]
+                    levin_int_fourier.init_integral(
                             self.ellrange, integrand, True, True)
-                        xip_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta],0)
+                    for i_theta in range(len(theta_bins)):
+                        xip_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta],i_theta)
                         xip_signal[i_theta, :, :, :] = np.reshape(
                             xip_signal_at_thetai_flat, original_shape)/2.0/np.pi
-                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + len(theta_bins)],1)
+                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + len(theta_bins)],i_theta + len(theta_bins))
                         xim_signal[i_theta, :, :, :] = np.reshape(
                             xim_signal_at_thetai_flat, original_shape)/2.0/np.pi    
                     self.xip = xip_signal
                     self.xim = xim_signal
+                    np.save("xip_signal_new",xip_signal)
+                    np.save("xim_signal_new",xim_signal)
+                    np.save("theta",theta_bins)
                     flat_idx = 0
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
-                            self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0, k= 1)
-                            self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0, k= 1)
+                            self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0, k= 3)
+                            self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0, k= 3)
                             flat_idx += 1
-                    
-                    
+        
     def __get_weights(self):
         N_fourier = int(1e5)
         self.K_gg = []
@@ -493,7 +509,7 @@ class CovTHETASpace(CovELLSpace):
                     colname_pos2=CovTHETASpace_settings['mix_term_col_name_pos2'], 
                     colname_zbin=CovTHETASpace_settings['mix_term_col_name_zbin'], 
                     isspherical=CovTHETASpace_settings['mix_term_isspherical'], 
-                    sigma2_eps= 4*survey_params_dict['ellipticity_dispersion']**2, 
+                    sigma2_eps= survey_params_dict['ellipticity_dispersion']**2, 
                     target_patchsize=CovTHETASpace_settings['mix_term_target_patchsize'], 
                     do_overlap=CovTHETASpace_settings['mix_term_do_overlap'])
             if not thisdata.mixed_fail:
@@ -718,8 +734,8 @@ class CovTHETASpace(CovELLSpace):
                                               hod_dict,
                                               prec,
                                               read_in_tables['tri'], True)
- 
-        #self.cov_dict['ssc'] = False
+        
+       #self.cov_dict['ssc'] = False
         if self.cov_dict['ssc'] and self.cov_dict['nongauss'] and (not self.cov_dict['split_gauss']):
             ssc = []
             for i_list in range(len(nongauss)):
@@ -1081,8 +1097,9 @@ class CovTHETASpace(CovELLSpace):
             gauss_gtgt_sn = \
                 gauss_gtgt_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.theta_bins_clustering))[:, :, None, None, None, None, None, None]
-        
-
+            adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.gt[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
+            gauss_gtgt_sva[:, :, :, :, :, :, :, :] = gauss_gtgt_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
+            
         else:
             gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn = 0, 0, 0
 
@@ -1146,7 +1163,11 @@ class CovTHETASpace(CovELLSpace):
                           'real-space covariance xipmgt at ' +
                           str(round(theta/theta_comb*100, 1)) + '% in ' +
                           str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")   
+                          str(round(eta, 1)) + 'min', end="")
+            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
+            gauss_ximgt_sva[:, :, 0, :, :, :, :, :] = gauss_ximgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
+            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
+            gauss_xipgt_sva[:, :, 0, :, :, :, :, :] = gauss_xipgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
         else:
             gauss_xipgt_sva, gauss_ximgt_sva, gauss_xipgt_mix, gauss_ximgt_mix = 0, 0, 0 ,0
 
@@ -1230,6 +1251,13 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipm_sn = \
                 gauss_xipm_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.theta_bins_lensing))[:, :, None, None, None, None, None, None]
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
+            gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] = gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
+            gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_plus[None, :, None, :, None, None, :, :])
+            gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+     
         else:
             gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, gauss_xipm_sn = 0, 0, 0, 0, 0, 0, 0
 

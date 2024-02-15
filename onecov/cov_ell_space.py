@@ -4092,43 +4092,37 @@ class CovELLSpace(PolySpectra):
             if len(covELLspacesettings['mult_shear_bias']) < self.n_tomo_lens:
                 covELLspacesettings['mult_shear_bias'] = np.zeros(self.n_tomo_lens)
                 print("Multiplicative shear bias needs to be given for every tomographic bin. Is set to zero")
-            else:
-                if self.gm:
-                    gaussELLgmgm_sva_mult_shear_bias = np.zeros_like(gaussELLgmgm_sva)
-                    for i_sample in range(self.sample_dim):
-                        for j_sample in range(self.sample_dim):
-                            for i_tomo in range(self.n_tomo_clust):
-                                for j_tomo in range(self.n_tomo_lens):
-                                    for k_tomo in range(self.n_tomo_clust):
-                                        for l_tomo in range(self.n_tomo_lens):
-                                            gaussELLgmgm_sva_mult_shear_bias[:,:,i_sample, j_sample, i_tomo,j_tomo,k_tomo,l_tomo] = np.diag(self.Cell_gm[:,i_sample, i_tomo,j_tomo]*self.Cell_gm[:,j_sample ,k_tomo,l_tomo]*covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo])
-                    gaussELLgmgm_sva += gaussELLgmgm_sva_mult_shear_bias
-                if self.gm and self.mm and self.cross_terms:
-                    gaussELLmmgm_sva_mult_shear_bias = np.zeros_like(gaussELLmmgm_sva)
-                    for i_sample in range(1):
-                        for j_sample in range(self.sample_dim):
-                            for i_tomo in range(self.n_tomo_lens):
-                                for j_tomo in range(self.n_tomo_lens):
-                                    for k_tomo in range(self.n_tomo_clust):
-                                        for l_tomo in range(self.n_tomo_lens):
-                                            gaussELLmmgm_sva_mult_shear_bias[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = np.diag(self.Cell_mm[:,i_sample, i_tomo,j_tomo]*self.Cell_gm[:,j_sample, k_tomo,l_tomo]*
-                                                                                                                                           (covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
-                                                                                                                                            + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]))
-                    gaussELLmmgm_sva += gaussELLmmgm_sva_mult_shear_bias
-                if self.mm:
-                    gaussELLmmmm_sva_mult_shear_bias = np.zeros_like(gaussELLmmmm_sva)
-                    for i_sample in range(1):
-                        for j_sample in range(1):
-                            for i_tomo in range(self.n_tomo_lens):
-                                for j_tomo in range(self.n_tomo_lens):
-                                    for k_tomo in range(self.n_tomo_lens):
-                                        for l_tomo in range(self.n_tomo_lens):
-                                            gaussELLmmmm_sva_mult_shear_bias[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = np.diag(self.Cell_mm[:,i_sample, i_tomo,j_tomo]*self.Cell_mm[:,j_sample, k_tomo,l_tomo]*
-                                                                                                                                           (covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo] 
-                                                                                                                                            + covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
-                                                                                                                                            + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
-                                                                                                                                            + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo]))
-                    gaussELLmmmm_sva += gaussELLmmmm_sva_mult_shear_bias
+            if self.gm:
+                self.gaussELLgmgm_sva_mult_shear_bias = np.zeros_like(gaussELLgmgm_sva[0,0, :, :, :, :, :, :])
+                for i_sample in range(self.sample_dim):
+                    for j_sample in range(self.sample_dim):
+                        for i_tomo in range(self.n_tomo_clust):
+                            for j_tomo in range(self.n_tomo_lens):
+                                for k_tomo in range(self.n_tomo_clust):
+                                    for l_tomo in range(self.n_tomo_lens):
+                                        self.gaussELLgmgm_sva_mult_shear_bias[i_sample, j_sample, i_tomo,j_tomo,k_tomo,l_tomo] = covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
+            if self.gm and self.mm and self.cross_terms:
+                self.gaussELLmmgm_sva_mult_shear_bias = np.zeros_like(gaussELLmmgm_sva[0,0, :, :, :, :, :, :])
+                for i_sample in range(1):
+                    for j_sample in range(self.sample_dim):
+                        for i_tomo in range(self.n_tomo_lens):
+                            for j_tomo in range(self.n_tomo_lens):
+                                for k_tomo in range(self.n_tomo_clust):
+                                    for l_tomo in range(self.n_tomo_lens):
+                                        self.gaussELLmmgm_sva_mult_shear_bias[i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = (covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
+                                                                                                                                        + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo])
+            if self.mm:
+                self.gaussELLmmmm_sva_mult_shear_bias = np.zeros_like(gaussELLmmmm_sva[0,0, :, :, :, :, :, :])
+                for i_sample in range(1):
+                    for j_sample in range(1):
+                        for i_tomo in range(self.n_tomo_lens):
+                            for j_tomo in range(self.n_tomo_lens):
+                                for k_tomo in range(self.n_tomo_lens):
+                                    for l_tomo in range(self.n_tomo_lens):
+                                        self.gaussELLmmmm_sva_mult_shear_bias[i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] =  (covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo] 
+                                                                                                                                        + covELLspacesettings['mult_shear_bias'][i_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
+                                                                                                                                        + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][l_tomo]
+                                                                                                                                        + covELLspacesettings['mult_shear_bias'][j_tomo]*covELLspacesettings['mult_shear_bias'][k_tomo])
 
         if self.est_shear != "C_ell" and self.mm:
             for i_sample in range(1):
@@ -4706,6 +4700,9 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLgmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+            if self.est_shear == "C_ell":
+                adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_gm[:, None, :, None, :,:, None, None]*self.Cell_gm[None, :, None, :, None, None, :, :])
+                nongaussELLgmgm[:, :, :, :, :, :, :, :] = nongaussELLgmgm[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             print("")
         else:
             nongaussELLgmgm = 0
@@ -4732,6 +4729,9 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLmmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+            if self.est_shear == "C_ell" and self.est_ggl == "C_ell":
+                adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_mm[:, None, :, None, :,:, None, None]*self.Cell_gm[None, :, None, :, None, None, :, :])
+                nongaussELLmmgm[:, :, 0, :, :, :, :, :] = nongaussELLmmgm[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             print("")
         else:
             nongaussELLmmgm = 0
@@ -4761,6 +4761,9 @@ class CovELLSpace(PolySpectra):
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLmmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
             print("")
+            if self.est_shear == "C_ell":
+                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_mm[:, None, :, None, :,:, None, None]*self.Cell_mm[None, :, None, :, None, None, :, :])
+                nongaussELLmmmm[:, :, 0, 0, :, :, :, :] = nongaussELLmmmm[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
         else:
             nongaussELLmmmm = 0
         if not covELLspacesettings['nglimber']:

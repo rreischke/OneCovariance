@@ -501,19 +501,22 @@ class CovCOSEBI(CovELLSpace):
         Calculates the E-mode signal of the COSEBis in all tomographic bin
         combination and all tracers specified using the Gauss Legendre integrator.
 
-        Parameters
-        ----------
-        covCOSEBIsettings : dictionary
-            Specifies the exact details of the COSEBI calculation,
-            e.g., theta_min/max and the number of modes to be
-            calculated.
-
         Returns
         -------
         E_mode_mm : array
             An numpy array containing all E modes for cosmic shear with
             the following shape:
             (E_mode order, sample_bin, tomo_bin_i, tomo_bin_j)
+
+        E_mode_gm : array
+            An numpy array containing all E modes for GGL with
+            the following shape:
+            (E_mode order, sample_bin, tomo_bin_i, tomo_bin_j)
+
+        E_mode_gg : array
+            An numpy array containing all E modes for GGL with
+            the following shape:
+            (E_mode order, sample_bin, sample_bin, tomo_bin_i, tomo_bin_j)
 
         """
 
@@ -1149,6 +1152,8 @@ class CovCOSEBI(CovELLSpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
+            adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_gm[:, None, :, None, :, :, None, None]*self.E_mode_gm[None, :, None, :, None, None, :, :])
+            gaussCOSEBIgmgm_sva[:, :, :, :, :, :, :, :] = gaussCOSEBIgmgm_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             print("")
         else:
             gaussCOSEBIgmgm_sva = 0
@@ -1196,6 +1201,8 @@ class CovCOSEBI(CovELLSpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
+            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_mm[:, None, :, None, :, :, None, None]*self.E_mode_gm[None, :, None, :, None, None, :, :])
+            gaussCOSEBIEmmgm_sva[:, :, 0, :, :, :, :, :] = gaussCOSEBIEmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             print("")
         else:
             gaussCOSEBIEmmgm_sva = 0
@@ -1257,6 +1264,8 @@ class CovCOSEBI(CovELLSpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_mm[:, None, :, None, :, :, None, None]*self.E_mode_mm[None, :, None, :, None, None, :, :])
+            gaussCOSEBIEEmmmm_sva[:, :, 0, 0, :, :, :, :] = gaussCOSEBIEEmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             print("")
         else:
             gaussCOSEBIEEmmmm_sva = 0

@@ -222,8 +222,82 @@ class CovBandPowers(CovTHETASpace):
             limits_at_mode_append[0] = self.ellrange[0]
             limits_at_mode_append[-1] = self.ellrange[-1]
             self.ell_limits.append(limits_at_mode_append)
+        self.__get_bandpowers()
             
+    def __get_bandpowers(self):
+        """
+        Calculates the signal of the Bandpowers in all tomographic bin
+        combination and all tracers specified.
+
+        """
+
+        self.CE_mm = np.zeros((len(self.ell_bins_lensing), self.sample_dim,
+                              self.n_tomo_lens, self.n_tomo_lens))
+        self.CB_mm = np.zeros((len(self.ell_bins_lensing), self.sample_dim,
+                              self.n_tomo_lens, self.n_tomo_lens))
+        self.CE_gm = np.zeros((len(self.ell_bins_clustering), self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_lens))
+        self.CE_gg = np.zeros((len(self.ell_bins_clustering), self.sample_dim, self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_clust))
         
+        if (self.mm or self.gm):
+            t0, tcomb = time.time(), 1
+            tcombs = len(self.ell_bins_lensing)
+            original_shape = self.Cell_mm[0, :, :, :].shape
+            flat_length = self.n_tomo_lens**2*self.sample_dim
+            Cell_mm_flat = np.reshape(self.Cell_mm, (len(
+                self.ellrange), flat_length))
+            for mode in range(len(self.ell_bins_lensing)):
+                self.levin_int.init_integral(self.ellrange, Cell_mm_flat*self.ellrange[:,None], True, True)
+                self.CE_mm[mode,:,:,:] = 1 / 2 / self.N_ell_lensing[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + 2*len(self.ell_bins_clustering)][:], mode + 2*len(self.ell_bins_clustering))),original_shape)
+                self.CB_mm[mode,:,:,:] = 1 / 2 / self.N_ell_lensing[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing)][:], mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
+                eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
+                print('\rBP E/B-mode calculation for lensing at '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
+            print(" ")
+
+        if (self.gm or (self.gg and self.mm and self.cross_terms)):
+            t0, tcomb = time.time(), 1
+            tcombs = len(self.ell_bins_clustering)
+            original_shape = self.Cell_gm[0, :, :, :].shape
+            flat_length = self.sample_dim*self.n_tomo_lens*self.n_tomo_clust
+            Cell_gm_flat = np.reshape(self.Cell_gm, (len(
+                self.ellrange), flat_length))
+            for mode in range(len(self.ell_bins_clustering)):
+                self.levin_int.init_integral(self.ellrange, Cell_gm_flat*self.ellrange[:,None], True, True)
+                self.CE_gm[mode,:,:,:] = 1 / self.N_ell_clustering[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + len(self.ell_bins_clustering)][:], mode + len(self.ell_bins_clustering))),original_shape)
+                eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
+                print('\rBP E-mode calculation for GGL at '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
+                
+            print(" ")
+
+        if (self.gg or self.gm):
+            t0, tcomb = time.time(), 1
+            tcombs = len(self.ell_bins_clustering)
+            original_shape = self.Cell_gg[0, :, :, :, :].shape
+            flat_length = self.sample_dim**2*self.n_tomo_clust**2
+            Cell_gg_flat = np.reshape(self.Cell_gg, (len(
+                self.ellrange), flat_length))
+            for mode in range(len(self.ell_bins_clustering)):
+                self.levin_int.init_integral(self.ellrange, Cell_gg_flat*self.ellrange[:,None], True, True)
+                self.CE_gg[mode,:,:,:] = 1 / self.N_ell_clustering[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode ][:], mode)),original_shape)
+                eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
+                print('\rBP E-mode calculation for clustering at '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
+            print(" ")
         
     def __set_multipoles(self,
                          covbandpowersettings):
@@ -1132,6 +1206,8 @@ class CovBandPowers(CovTHETASpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
+            adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CE_gm[:, None, :, None, :, :, None, None]*self.CE_gm[None, :, None, :, None, None, :, :])
+            gauss_BPgmgm_sva[:, :, :, :, :, :, :, :] = gauss_BPgmgm_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             print("")
         else:
             gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn = 0, 0, 0
@@ -1182,6 +1258,10 @@ class CovBandPowers(CovTHETASpace):
                     tcomb += 1
                     gauss_BPEmmgm_sn = 0
                     gauss_BPBmmgm_sn = 0
+            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CE_mm[:, None, :, None, :, :, None, None]*self.CE_gm[None, :, None, :, None, None, :, :])
+            gauss_BPEmmgm_sva[:, :, 0, :, :, :, :, :] = gauss_BPEmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
+            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CB_mm[:, None, :, None, :, :, None, None]*self.CE_gm[None, :, None, :, None, None, :, :])
+            gauss_BPBmmgm_sva[:, :, 0, :, :, :, :, :] = gauss_BPBmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             print("")
         else:
             gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn = 0, 0, 0
@@ -1249,6 +1329,12 @@ class CovBandPowers(CovTHETASpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
             gauss_BPEBmmmm_sn = 0
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CB_mm[:, None, :, None, :, :, None, None]*self.CB_mm[None, :, None, :, None, None, :, :])
+            gauss_BPBBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_BPBBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CE_mm[:, None, :, None, :, :, None, None]*self.CB_mm[None, :, None, :, None, None, :, :])
+            gauss_BPEBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_BPEBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CE_mm[:, None, :, None, :, :, None, None]*self.CE_mm[None, :, None, :, None, None, :, :])
+            gauss_BPEEmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_BPEEmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             print("")
         else:
             gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn = 0, 0, 0

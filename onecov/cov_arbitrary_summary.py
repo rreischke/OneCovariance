@@ -214,6 +214,82 @@ class CovARBsummary(CovELLSpace):
         self.levin_int_real.init_w_ell(self.theta_real_integral/60/180*np.pi, self.RXY_stack.T)
         self.__get_shotnoise_integrals()
         self.__detect_rscf(survey_params_dict, read_in_tables)
+        self.__get_arbitrary_signal()
+
+    def __get_arbitrary_signal(self):
+        """
+        Calculates the signal of the arbitrary summary in all tomographic bin
+        combination and all tracers specified.
+
+        """
+
+        self.arbE_mm = np.zeros((self.mmE_summaries, self.sample_dim,
+                              self.n_tomo_lens, self.n_tomo_lens))
+        self.arbB_mm = np.zeros((self.mmB_summaries, self.sample_dim,
+                              self.n_tomo_lens, self.n_tomo_lens))
+        self.arbE_gm = np.zeros((self.gm_summaries, self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_lens))
+        self.arbE_gg = np.zeros((self.gg_summaries, self.sample_dim, self.sample_dim,
+                              self.n_tomo_clust, self.n_tomo_clust))
+        
+        if (self.mm or self.gm):
+            t0, tcomb = time.time(), 1
+            tcombs = self.mmE_summaries
+            original_shape = self.Cell_mm[0, :, :, :].shape
+            flat_length = self.n_tomo_lens**2*self.sample_dim
+            Cell_mm_flat = np.reshape(self.Cell_mm, (len(
+                self.ellrange), flat_length))
+            for mode in range(self.mmE_summaries):
+                self.levin_int.init_integral(self.ellrange, Cell_mm_flat*self.ellrange[:,None], True, True)
+                self.arbE_mm[mode,:,:,:] = 1 / 2 / np.pi * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + self.gg_summaries + self.gm_summaries][:], mode + self.gg_summaries + self.gm_summaries)),original_shape)
+                self.arbB_mm[mode,:,:,:] = 1 / 2 / np.pi * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + self.gg_summaries + self.gm_summaries + self.mmE_summaries][:], mode + self.gg_summaries + self.gm_summaries + self.mmE_summaries)),original_shape)
+                eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
+                print('\rArbitrary E/B-mode calculation for lensing at '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
+            print(" ")
+
+        if (self.gm or (self.gg and self.mm and self.cross_terms)):
+            t0, tcomb = time.time(), 1
+            tcombs = self.gm_summaries
+            original_shape = self.Cell_gm[0, :, :, :].shape
+            flat_length = self.sample_dim*self.n_tomo_lens*self.n_tomo_clust
+            Cell_gm_flat = np.reshape(self.Cell_gm, (len(
+                self.ellrange), flat_length))
+            for mode in range(self.gm_summaries):
+                self.levin_int.init_integral(self.ellrange, Cell_gm_flat*self.ellrange[:,None], True, True)
+                self.arbE_gm[mode,:,:,:] = 1 / 2 / np.pi * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + self.gg_summaries][:], mode + self.gg_summaries)),original_shape)
+                eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
+                print('\rArbitrary E-mode calculation for GGL at '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
+                
+            print(" ")
+
+        if (self.gg or self.gm):
+            t0, tcomb = time.time(), 1
+            tcombs = self.gm_summaries
+            original_shape = self.Cell_gg[0, :, :, :, :].shape
+            flat_length = self.sample_dim**2*self.n_tomo_clust**2
+            Cell_gg_flat = np.reshape(self.Cell_gg, (len(
+                self.ellrange), flat_length))
+            for mode in range(self.gm_summaries):
+                self.levin_int.init_integral(self.ellrange, Cell_gg_flat*self.ellrange[:,None], True, True)
+                self.CE_gg[mode,:,:,:] = 1 / 2 / np.pi * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode ][:], mode)),original_shape)
+                eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
+                print('\rArbitrary E-mode calculation for clustering at '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
+            print(" ")
 
     def __detect_rscf(self,
                       survey_params_dict,
@@ -1253,6 +1329,8 @@ class CovARBsummary(CovELLSpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
+            adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbE_gm[:, None, :, None, :, :, None, None]*self.arbE_gm[None, :, None, :, None, None, :, :])
+            gauss_ASgmgm_sva[:, :, :, :, :, :, :, :] = gauss_ASgmgm_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             print("")
         else:
             gauss_ASgmgm_sva, gauss_ASgmgm_mix, gauss_ASgmgm_sn = 0, 0, 0
@@ -1309,6 +1387,10 @@ class CovARBsummary(CovELLSpace):
                     tcomb += 1
                     gauss_ASEmmgm_sn = 0
                     gauss_ASBmmgm_sn = 0
+            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbE_mm[:, None, :, None, :, :, None, None]*self.arbE_gm[None, :, None, :, None, None, :, :])
+            gauss_ASEmmgm_sva[:, :, 0, :, :, :, :, :] = gauss_ASEmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
+            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbB_mm[:, None, :, None, :, :, None, None]*self.arbE_gm[None, :, None, :, None, None, :, :])
+            gauss_ASBmmgm_sva[:, :, 0, :, :, :, :, :] = gauss_ASBmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             print("")
         else:
             gauss_ASEmmgm_sva, gauss_ASEmmgm_mix, gauss_ASEmmgm_sn = 0, 0, 0
@@ -1384,6 +1466,12 @@ class CovARBsummary(CovELLSpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
             gauss_ASEBmmmm_sn = 0
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbB_mm[:, None, :, None, :, :, None, None]*self.arbB_mm[None, :, None, :, None, None, :, :])
+            gauss_ASBBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_ASBBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbE_mm[:, None, :, None, :, :, None, None]*self.arbB_mm[None, :, None, :, None, None, :, :])
+            gauss_ASEBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_ASEBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbE_mm[:, None, :, None, :, :, None, None]*self.arbE_mm[None, :, None, :, None, None, :, :])
+            gauss_ASEEmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_ASEEmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             print("")        
         else:
             gauss_ASEEmmmm_sva, gauss_ASEEmmmm_mix, gauss_ASEEmmmm_sn = 0, 0, 0
