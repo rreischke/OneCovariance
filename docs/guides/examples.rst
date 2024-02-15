@@ -322,10 +322,29 @@ For KiDS-1000 we tested this up to ``integration_intervals = 400`` without signi
 
 3x2pt for COSEBIs and :math:`\Psi`-stats:
 -------------------------------------------
-The last summary statistic are COSEBIs and their GGL and galaxy clustering equivalent :math:`\Psi`-stats. We do not calculate their weights interally here, but require them as tabulated input files.
+The last summary statistic are COSEBIs and their GGL and galaxy clustering equivalent :math:`\Psi`-stats. In this example we only compute the Gaussian covariance terms, so in the config we set:
 
+::
 
+   gauss = True
+   split_gauss = True
+   nongauss = False
+   ssc = False
 
+Specifying the COSEBIs works very similar, all estimators in the ``observable section`` are set to ``cosebi`` and the following section is added:
+
+::
+
+   [covCOSEBI settings]
+   En_modes = 5
+   theta_min = 0.5
+   theta_max = 300
+   En_accuracy = 1e-4
+
+For the variables ``En_modes``, ``theta_min`` and ``theta_max`` there exist, in full analogy to the other summaries, equivalent variables with ``_clustering`` and ``_lensing``. With the setting choosen now, they are assumed to be equal. Again, running the covariance code yields the following plot along with the list and amtrix outputfile as before:
+
+.. image:: correlation_coefficient_3x2pt_cosebi.png
+   :width: 790
 
 KiDS-1000 covariance
 --------------------

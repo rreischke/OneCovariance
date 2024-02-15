@@ -1208,9 +1208,6 @@ class Input:
                     config['covCOSEBI settings']['Wn_style']
             else:
                 self.Wn_style = 'log'
-                print("The COSEBIs will be based on logarithmic kernel " +
-                      "functions. Can be specified in " +
-                      "'[covCOSEBI settings]: 'Wn_style'. It is set to 'log'.")
             if 'Wn_accuracy' in config['covCOSEBI settings']:
                 self.Wn_acc = \
                     float(config['covCOSEBI settings']['Wn_accuracy'])
