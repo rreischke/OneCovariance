@@ -1214,6 +1214,7 @@ class Input:
             else:
                 self.Wn_acc = 1e-6
         else:
+            print(self.cosmicshear, self.est_shear)
             if self.cosmicshear and self.est_shear == 'cosebi':
                 self.En_acc = 1e-4
                 print("The precision for the En calculation is not " +
@@ -5096,14 +5097,20 @@ class FileInput:
         try:
             data = ascii.read(path.join(self.npair_dir, nfile))
         except:
-            1
+            print("InputWarning: The file " +
+                  path.join(self.npair_dir, nfile) + " in keyword " +
+                  "'npair_XX_file' was not found. The data file " +
+                  "should provide the angular bins in the first column, and " +
+                  "the next (last) column should hold the number of galaxy " +
+                  "pairs. All npair files for XX will be ignored.")
+            return False, False
         if len(data.colnames) < 2:
             print("InputWarning: The file " +
                   path.join(self.npair_dir, nfile) + " in keyword " +
-                  "'npair_gg_file' has less than 2 columns. The data file " +
+                  "'npair_XX_file' has less than 2 columns. The data file " +
                   "should provide the angular bins in the first column, and " +
                   "the next (last) column should hold the number of galaxy " +
-                  "pairs. All npair files for galaxyclustering will be ignored.")
+                  "pairs. All npair files for XX will be ignored.")
             return False, False
 
         theta_npair = np.array(data[data.colnames[0]])
