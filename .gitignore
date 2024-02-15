@@ -18,3 +18,6 @@ levin.egg-info
 !/output/Cell_gg.ascii
 !/output/Cell_gkappa.ascii
 !/output/Cell_kappakappa.ascii
+output_ISTF/
+output_ISTF_v2/
+output_SPV3/
