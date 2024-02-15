@@ -368,9 +368,6 @@ class CovTHETASpace(CovELLSpace):
                 xim_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries],i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries),original_shape)/2.0/np.pi
             self.xi_plus = xip_signal
             self.xi_minus = xim_signal
-            np.save("xip_signal_lens",xip_signal)
-            np.save("xim_signal_lens",xim_signal)
-            np.save("theta_lensing",self.theta_bins_lensing)
         ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
         if obs_dict['THETAspace']['mix_term_do_mix_for'] is not None:
             if 'xipxip' in obs_dict['THETAspace']['mix_term_do_mix_for'][:] or 'ximxim' in obs_dict['THETAspace']['mix_term_do_mix_for'][:]:
@@ -431,9 +428,6 @@ class CovTHETASpace(CovELLSpace):
                             xim_signal_at_thetai_flat, original_shape)/2.0/np.pi    
                     self.xip = xip_signal
                     self.xim = xim_signal
-                    np.save("xip_signal_new",xip_signal)
-                    np.save("xim_signal_new",xim_signal)
-                    np.save("theta",theta_bins)
                     flat_idx = 0
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):

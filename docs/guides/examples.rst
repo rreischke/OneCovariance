@@ -343,7 +343,7 @@ Specifying the COSEBIs works very similar, all estimators in the ``observable se
 
 For the variables ``En_modes``, ``theta_min`` and ``theta_max`` there exist, in full analogy to the other summaries, equivalent variables with ``_clustering`` and ``_lensing``. With the setting choosen now, they are assumed to be equal. Again, running the covariance code yields the following plot along with the list and amtrix outputfile as before:
 
-.. image:: correlation_coefficient_3x2pt_cosebi.png
+.. image:: correlation_coefficient_3x2pt_cosebis.png
    :width: 790
 
 KiDS-1000 covariance
