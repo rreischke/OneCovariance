@@ -469,7 +469,6 @@ class Input:
                 self.cstellar_mf = config['observables'].getboolean('cstellar_mf')
             else:
                 self.cstellar_mf = False
-            
         else:
             raise Exception("ConfigError: The section [observables] is " +
                             "missing in config file " + config_name + ". Compulsory " +
@@ -816,8 +815,19 @@ class Input:
             self.ell_bins = 100
         if self.ell_type is None:
             self.ell_type = 'log'
-            
-
+        if self.cosmicshear and self.est_shear == 'C_ell' and (self.ell_min_lensing is not None and self.ell_bins_lensing is not None and self.ell_max_lensing is not None and self.ell_type_lensing is not None):
+            self.ell_min = self.ell_min_lensing
+            self.ell_max = self.ell_max_lensing
+            self.ell_bins = 100
+            self.ell_type = 'log'
+        if ((self.ggl and self.est_ggl == 'C_ell') or (self.clustering and self.est_clust == 'C_ell')) and (self.ell_min_lensing is not None and self.ell_bins_lensing is not None and self.ell_max_lensing is not None and self.ell_type_lensing is not None):
+            if self.ell_min > self.ell_min_clustering:
+                self.ell_min = self.ell_min_clustering
+            if self.ell_max < self.ell_max_clustering:
+                self.ell_max = self.ell_max_clustering
+            self.ell_bins = 100
+            self.ell_type = 'log'
+        
         return True
 
     def __read_in_covTHETAspace_settings(self,
@@ -1214,7 +1224,6 @@ class Input:
             else:
                 self.Wn_acc = 1e-6
         else:
-            print(self.cosmicshear, self.est_shear)
             if self.cosmicshear and self.est_shear == 'cosebi':
                 self.En_acc = 1e-4
                 print("The precision for the En calculation is not " +

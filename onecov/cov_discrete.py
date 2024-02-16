@@ -1187,7 +1187,7 @@ def cov_estimate_single(bin_edges, bin_centers, xip_spline, xim_spline, sigma_ep
             #   cos(4*(phi_jk-phi_ij)) = cos(4*beta)
             #   and beta can be inferred from the three triangle sides
             beta = np.arccos((b3**2+b2**2-b1**2)/(2*b2*b3))
-            norm = sigma2_eps/(2*paircounts_ret12[elb1]*paircounts_ret34[elb2])
+            norm = sigma2_eps/(2*paircounts_ret12[elb1]*paircounts_ret34[elb2]*4)
             cov_third_multipole["xipxip"][elb1_cov,elb2_cov] += norm * np.nansum(multipole_tripletcounts[elb1,elb2].real*
                                                                         xip_spline(b3))*ddphis
             cov_third_multipole["ximxim"][elb1_cov,elb2_cov] += norm * np.nansum(multipole_tripletcounts[elb1,elb2].real*
