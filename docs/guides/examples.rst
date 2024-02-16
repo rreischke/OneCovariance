@@ -346,6 +346,11 @@ For the variables ``En_modes``, ``theta_min`` and ``theta_max`` there exist, in 
 .. image:: correlation_coefficient_3x2pt_cosebis.png
    :width: 790
 
+Combining different summary statistics
+--------------------------------------
+
+
+
 KiDS-1000 covariance
 --------------------
 The standard ``config.ini`` (after you pulled the directory) will run a simplified KiDS-1000-like cosmic shear setup. Not all parameters specified in the ``config.ini`` are used and it is merely used as an explanatory file to explain all the parameters which can be set.
