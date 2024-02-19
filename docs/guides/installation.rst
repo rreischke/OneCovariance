@@ -37,4 +37,5 @@ You can install both via ``conda``:
     cd OneCovariance    
     pip install .
 
-Once you have carried out these steps, you are ready to run the code.
+Once you have carried out these steps, you are ready to run the code. 
+Lastly, since the code uses simpson instead of trapezoidal rules for some integrations, ``scipy`` should be at least version 1.11.

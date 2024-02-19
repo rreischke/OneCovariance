@@ -217,10 +217,11 @@ class CovBandPowers(CovTHETASpace):
         self.ell_limits = []
         for mode in range(len(self.WXY_stack[:,0])):
             limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode, :], np.less)[0][:]])
-            limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
+            #limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
+            limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ell_fourier_integral[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
             limits_at_mode_append[1:-1] = limits_at_mode
-            limits_at_mode_append[0] = self.ellrange[0]
-            limits_at_mode_append[-1] = self.ellrange[-1]
+            limits_at_mode_append[0] = self.ell_fourier_integral[0]
+            limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
             self.ell_limits.append(limits_at_mode_append)
         self.__get_bandpowers()
             
@@ -240,7 +241,7 @@ class CovBandPowers(CovTHETASpace):
         self.CE_gg = np.zeros((len(self.ell_bins_clustering), self.sample_dim, self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_clust))
         
-        if (self.mm or self.gm):
+        if self.mm:
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_lensing)
             original_shape = self.Cell_mm[0, :, :, :].shape
@@ -260,7 +261,7 @@ class CovBandPowers(CovTHETASpace):
                 tcomb += 1
             print(" ")
 
-        if (self.gm or (self.gg and self.mm and self.cross_terms)):
+        if self.gm:
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)
             original_shape = self.Cell_gm[0, :, :, :].shape
@@ -280,7 +281,7 @@ class CovBandPowers(CovTHETASpace):
                 
             print(" ")
 
-        if (self.gg or self.gm):
+        if self.gg:
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)
             original_shape = self.Cell_gg[0, :, :, :, :].shape
@@ -352,7 +353,7 @@ class CovBandPowers(CovTHETASpace):
                                         + np.log(ell_ul_bins_lensing[:-1])))
             self.ell_bins_lensing = ell_bins_lensing
             self.ell_ul_bins_lensing = ell_ul_bins_lensing
-        self.ell_fourier_integral = np.geomspace(self.ellrange[0]-1, self.ellrange[-1]+1,3000)
+        self.ell_fourier_integral = np.geomspace(self.ellrange[0]-1, self.ellrange[-1]+1,10000)
     
     def __get_Hann_window(self,
                            obs_dict):
@@ -1295,22 +1296,24 @@ class CovBandPowers(CovTHETASpace):
                     if len(self.ell_limits[m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing)][:]) < len(self.ell_limits[n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing)][:]):
                         local_ell_limit_B = self.ell_limits[n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing)][:]   
                     local_ell_limit  = local_ell_limit_E
-                    if len(local_ell_limit_B) > len(local_ell_limit):
-                        local_ell_limit = local_ell_limit_B
                     if self.cov_dict['split_gauss']:
                         self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
                         gauss_BPEEmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering), n_mode + 2*len(self.ell_bins_clustering))),original_shape)
-                        gauss_BPEBmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering), n_mode +  + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
-                        gauss_BPBBmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
+                        if len(local_ell_limit_B) > len(local_ell_limit):
+                            local_ell_limit = local_ell_limit_B
+                        gauss_BPEBmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
+                        gauss_BPBBmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit_B, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
                         self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                        gauss_BPEEmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering), n_mode + 2*len(self.ell_bins_clustering))),original_shape)
+                        gauss_BPEEmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit_E, m_mode + 2*len(self.ell_bins_clustering), n_mode + 2*len(self.ell_bins_clustering))),original_shape)
                         gauss_BPEBmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
-                        gauss_BPBBmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
+                        gauss_BPBBmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit_B, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
                     else:
                         self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
                         gauss_BPEEmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering), n_mode + 2*len(self.ell_bins_clustering))),original_shape)
+                        if len(local_ell_limit_B) > len(local_ell_limit):
+                            local_ell_limit = local_ell_limit_B
                         gauss_BPEBmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
-                        gauss_BPBBmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
+                        gauss_BPBBmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = np.pi/2./self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit_B, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
                         
 
                     gauss_BPEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :] = 2*np.pi**2/self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]*(kron_delta_tomo_lens[None, None, :, None, :, None]

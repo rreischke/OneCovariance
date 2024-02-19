@@ -4255,6 +4255,8 @@ class FileInput:
         self.Cgm_file = None
         self.Cgg_file = None
         self.Cxy_ell = None
+        self.Cxy_ell_clust = None
+        self.Cxy_ell_lens = None
         self.Cxy_tomo_clust = None
         self.Cxy_tomo_lens = None
         self.Cmm_tab = None
@@ -5361,7 +5363,6 @@ class FileInput:
                                                         len(self.bias_dict['logmass_bins']) - 1)
                             self.theta_npair_gm = theta_npair_gm
                             self.npair_gm[:, bin1, bin2, bin_sample] = npair_gm
-                            
                             fidx += 1
 
         if self.cosmicshear and self.npair_mm_file is not None:
@@ -5416,7 +5417,8 @@ class FileInput:
                     self.npair_mm[:, bin1, bin2] = npair_mm
                     self.npair_mm[:, bin2, bin1] = npair_mm
                     fidx += 1
-            self.npair_mm = self.npair_mm[:,:,:,None]
+            if self.npair_mm is not None:
+                self.npair_mm = self.npair_mm[:,:,:,None]
           
     def __read_in_powspec_files(self,
                                 Pfile):
@@ -5768,11 +5770,17 @@ class FileInput:
             if type == "gg":
                 sampledim = int(np.sqrt(len(data.colnames[1:])))
                 self.sampledim = max(self.sampledim, sampledim)
+                self.Cxy_ell_clust = np.array(data[data.colnames[0]])
             if type == "gm":
                 sampledim = len(data.colnames[1:])
                 self.sampledim = max(self.sampledim, sampledim)
+                if self.Cxy_ell_clust is not None:
+                    if len(self.Cxy_ell_clust) != len(np.array(data[data.colnames[0]])):
+                        raise Exception("GGL and clustering C_ell files do not have the same support")
+                self.Cxy_ell_clust = np.array(data[data.colnames[0]])
             if type == "mm":
                 sampledim = 1
+                self.Cxy_ell_lens = np.array(data[data.colnames[0]])
             self.Cxy_ell = np.array(data[data.colnames[0]])
             Ctab = np.array(data[data.colnames[1]])
             for colname in data.colnames[3:]:
@@ -5892,6 +5900,8 @@ class FileInput:
                         data[data.colnames[0]][::n_tomo_1*n_tomo_2])
                     Ctab = np.array(data[data.colnames[3]].reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2)))
                     if type == "gg":
+                        self.Cxy_ell_clust = np.array(
+                            data[data.colnames[0]][::n_tomo_1*n_tomo_2])
                         Ctab_aux = np.zeros((len(self.Cxy_ell),sampledim,sampledim,n_tomo_1,n_tomo_2))
                         Ctab_aux[:,0,0,:,:] = Ctab
                         counter = 4
@@ -5903,6 +5913,11 @@ class FileInput:
                                     Ctab_aux[:,i_sample, j_sample,:,:] = data[data.colnames[counter]].reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2))
                                     counter +=1
                     if type == "gm":
+                        self.Cxy_ell_clust = np.array(
+                            data[data.colnames[0]][::n_tomo_1*n_tomo_2])
+                        if self.Cxy_ell_clust is not None:
+                            if len(self.Cxy_ell_clust) != len(np.array(data[data.colnames[0]][::n_tomo_1*n_tomo_2])):
+                                raise Exception("GGL and clustering C_ell files do not have the same support")
                         Ctab_aux = np.zeros((len(self.Cxy_ell),sampledim,n_tomo_1,n_tomo_2))
                         Ctab_aux[:,0,:,:] = Ctab
                         counter = 4
@@ -5917,6 +5932,8 @@ class FileInput:
                     if type == "gm":
                         Ctab = Ctab_aux
                     if type == "mm":
+                        self.Cxy_ell_lens = np.array(
+                            data[data.colnames[0]][::n_tomo_1*n_tomo_2])
                         Ctab = Ctab.reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2))[:,None, :,:]*np.ones(sampledim)[None, :, None, None]
                     return Ctab, elldim, sampledim, n_tomo_1, n_tomo_2
                 else:
@@ -7868,8 +7885,8 @@ class FileInput:
                   self.Pgg_tab, ]
         self.Pxy_tab = dict(zip(keys, values))
 
-        keys = ['ell', 'tomo_clust', 'tomo_lens', 'mm', 'gm', 'gg']
-        values = [self.Cxy_ell, self.Cxy_tomo_clust, self.Cxy_tomo_lens,
+        keys = ['ell','ell_clust', 'ell_lens', 'tomo_clust', 'tomo_lens', 'mm', 'gm', 'gg']
+        values = [self.Cxy_ell, self.Cxy_ell_clust, self.Cxy_ell_lens, self.Cxy_tomo_clust, self.Cxy_tomo_lens,
                   self.Cmm_tab, self.Cgm_tab, self.Cgg_tab, ]
         self.Cxy_tab = dict(zip(keys, values))
 
