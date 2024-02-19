@@ -346,6 +346,28 @@ For the variables ``En_modes``, ``theta_min`` and ``theta_max`` there exist, in 
 .. image:: correlation_coefficient_3x2pt_cosebis.png
    :width: 790
 
+Combining different summary statistics
+--------------------------------------
+
+Since we now know how to run with the standard settings, we can get a bit more adventureous and calculate the covarinace matrix between different summary statistics.
+To this end we switch on the ``arbitrary summary`` section via:
+
+::
+   
+   [arbitrary_summary]
+   do_arbitrary_obs = True
+   oscillations_straddle = 20
+   arbitrary_accuracy = 1e-5
+
+This will overwrite the estimators set in the ``observables``. However, you still have to specify the tracers required. Next, the corresponding files for the weight functions need to be added to the 
+``tabulated inputs files`` section. The OneCovariance code requires the following structure for arbitrary summary statistics:
+
+.. math::
+   \mathcal{O}_{\mathrm{g}_1\mathrm{g}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{gg}_L(\ell) C_{\mathrm{g}_1\mathrm{g}_2}(\ell) \\
+   \mathcal{O}_{\mathrm{g}_1\mathrm{m}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{gm}_L(\ell) C_{\mathrm{g}_1\mathrm{m}_2}(\ell)\;,
+
+for galaxy clustering and galaxy-galaxy lensing respecitvely.
+
 KiDS-1000 covariance
 --------------------
 The standard ``config.ini`` (after you pulled the directory) will run a simplified KiDS-1000-like cosmic shear setup. Not all parameters specified in the ``config.ini`` are used and it is merely used as an explanatory file to explain all the parameters which can be set.

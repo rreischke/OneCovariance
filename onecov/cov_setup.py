@@ -706,7 +706,8 @@ class Setup():
                                                 cosmo_dict,
                                                 powspec_prec,
                                                 ellrange,
-                                                los_chi):
+                                                los_chi,
+                                                do_not_update_ell):
 
         if abs(cosmo_dict['omega_m'] + cosmo_dict['omega_de'] - 1) > 1e-5:
             print("SetupWarning: The cosmology is not flat and the Cell " +
@@ -752,7 +753,7 @@ class Setup():
         ellmin, ellmax = ellrange[0], ellrange[-1]
         ell_bins = len(ellrange)
         if calc_cosebi or calc_bandpower:
-            if ellrange[0] > 2:
+            if ellrange[0] > 2 and not do_not_update_ell:
                 print("SetupWarning: The COSEBI covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -760,17 +761,17 @@ class Setup():
                       "to '[covELLspace settings]: ell_min = 2'.")
                 ellmin = 2
                 update_ellrange = True
-            elif ellrange[0] < 2:
+            elif ellrange[0] < 2 and not do_not_update_ell:
                 ellmin = 2
                 update_ellrange = True
-            elif ellrange[0] == 0:
+            elif ellrange[0] == 0 and not do_not_update_ell:
                 print("SetupWarning: Setting to minimum ell mode to 0 is " +
                       "quite brave. For numerical safety reasons, we adjust " +
                       "it to '[covELLspace settings]: ell_min = 2'.")
                 ellmin = 2
                 update_ellrange = True
 
-            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell']:
+            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell'] and not do_not_update_ell:
                 print("SetupWarning: The COSEBI covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -778,7 +779,7 @@ class Setup():
                       "to '[covELLspace settings]: ell_max = 1e4'.")
                 ellmax = 1e4
                 update_ellrange = True
-            if len(ellrange) < 100:
+            if len(ellrange) < 100 and not do_not_update_ell:
                 print("SetupWarning: The COSEBI covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -787,7 +788,7 @@ class Setup():
                 ell_bins = 100
                 update_ellrange = True
         if calc_theta:
-            if ellrange[0] > 2:
+            if ellrange[0] > 2 and not do_not_update_ell:
                 print("SetupWarning: The xi_pm covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -795,17 +796,17 @@ class Setup():
                       "to '[covELLspace settings]: ell_min = 2'.")
                 ellmin = 2
                 update_ellrange = True
-            elif ellrange[0] < 2:
+            elif ellrange[0] < 2 and not do_not_update_ell:
                 ellmin = 2
                 update_ellrange = True
-            elif ellrange[0] == 0:
+            elif ellrange[0] == 0 and not do_not_update_ell:
                 print("SetupWarning: Setting to minimum ell mode to 0 is " +
                       "quite brave. For numerical safety reasons, we adjust " +
                       "it to '[covELLspace settings]: ell_min = 2'.")
                 ellmin = 2
                 update_ellrange = True
 
-            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell']:
+            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell'] and not do_not_update_ell:
                 print("SetupWarning: The xi_pm covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -813,7 +814,7 @@ class Setup():
                       "to '[covELLspace settings]: ell_max = 1e4'.")
                 ellmax = 1e4
                 update_ellrange = True
-            if len(ellrange) < 100:
+            if len(ellrange) < 100 and not do_not_update_ell:
                 print("SetupWarning: The xi_pm covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -822,7 +823,7 @@ class Setup():
                 ell_bins = 100
                 update_ellrange = True
         if obs_dict['arbitrary_summary']['do_arbitrary_summary']:
-            if ellrange[0] > 2:
+            if ellrange[0] > 2 and not do_not_update_ell:
                 print("SetupWarning: The arbitrary summary covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -830,17 +831,17 @@ class Setup():
                       "to '[covELLspace settings]: ell_min = 2'.")
                 ellmin = 2
                 update_ellrange = True
-            elif ellrange[0] < 2:
+            elif ellrange[0] < 2 and not do_not_update_ell:
                 ellmin = 2
                 update_ellrange = True
-            elif ellrange[0] == 0:
+            elif ellrange[0] == 0 and not do_not_update_ell:
                 print("SetupWarning: Setting to minimum ell mode to 0 is " +
                       "quite brave. For numerical safety reasons, we adjust " +
                       "it to '[covELLspace settings]: ell_min = 2'.")
                 ellmin = 2
                 update_ellrange = True
 
-            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell']:
+            if ellrange[-1] < 1e4 and not obs_dict['ELLspace']['pixelised_cell'] and not do_not_update_ell:
                 print("SetupWarning: The arbitrary summary covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +
@@ -848,7 +849,7 @@ class Setup():
                       "to '[covELLspace settings]: ell_max = 1e4'.")
                 ellmax = 1e4
                 update_ellrange = True
-            if len(ellrange) < 100:
+            if len(ellrange) < 100 and not do_not_update_ell:
                 print("SetupWarning: The arbitrary summary covariance is currently " +
                       "calculated via the projected powerspectra (C_ells), " +
                       "the projection integral runs formally from 0 to " +

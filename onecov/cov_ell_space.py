@@ -198,6 +198,8 @@ class CovELLSpace(PolySpectra):
                              survey_params_dict,
                              prec,
                              read_in_tables)
+        self.do_not_update_ell = False
+        self.checked_input_cells = False
         self.ellrange_spec = None
         self.ellrange_photo = None
         self.est_shear = obs_dict['observables']['est_shear']
@@ -213,6 +215,8 @@ class CovELLSpace(PolySpectra):
             self.f_tomo[:] = read_in_tables['csmf']['f_tomo']
             
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
+        self.Cells, self.tab_bools = self.__check_for_tabulated_Cells(read_in_tables['Cxy'])
+        
         if (self.mm and self.est_shear == 'C_ell') and ((self.gm and self.est_ggl == 'C_ell') or (self.gg and self.est_clust == 'C_ell')):
             if (self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is None) or (self.ellrange_clustering_ul is None and self.ellrange_lensing_ul is not None):
                 raise Exception("ConfigError: You require the C_ell covariance for lensing and clustering or ggl. However, you only specified the ellrange for lensing and not for clustering/GGL or vice versa. Please fix this in the config file under covELLspace settings.")     
@@ -222,6 +226,7 @@ class CovELLSpace(PolySpectra):
             integer_ell = np.copy(self.ellrange.astype(int))
             pixel_weight = (hp.sphtfunc.pixwin(obs_dict['ELLspace']['pixel_Nside']))[integer_ell]
             self.pixelweight_matrix = (pixel_weight**2)[:,None]*(pixel_weight**2)[None,:]
+            self.Cells, self.tab_bools = None, [False, False, False]
         self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
@@ -237,11 +242,10 @@ class CovELLSpace(PolySpectra):
         self.calc_survey_area(survey_params_dict)
         self.get_Cells(obs_dict, output_dict,
                        bias_dict, iA_dict, hod_dict, prec, read_in_tables)
-        
-            
         if not self.cov_dict['gauss']:
             self.__set_lensweight_splines(obs_dict['ELLspace'], iA_dict)
-            
+    
+    
     def __check_krange_support(self,
                                obs_dict,
                                cosmo_dict,
@@ -302,7 +306,7 @@ class CovELLSpace(PolySpectra):
         update_massfunc, update_ellrange, kmin, kmax, ellmin, ellmax, ellbins = \
             self.consistency_checks_for_Cell_calculation(
                 obs_dict, cosmo_dict, prec['powspec'],
-                self.ellrange, self.los_integration_chi)
+                self.ellrange, self.los_integration_chi, self.do_not_update_ell)
         if update_massfunc:
             self.mass_func.update(lnk_min=np.log(10**kmin),
                                   lnk_max=np.log(10**kmax))
@@ -315,7 +319,6 @@ class CovELLSpace(PolySpectra):
             obs_dict['ELLspace']['ell_bins'] = ellbins
             obs_dict['ELLspace']['ell_type'] = 'log'
             self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
-
         return True
 
     def __set_multipoles(self,
@@ -579,45 +582,94 @@ class CovELLSpace(PolySpectra):
             Flags whether the input files have been specified and read
 
         """
-        if Cxy_tab['ell'] is None:
-            return None, [False, False, False]
-
-        if abs(self.ellrange[0] - Cxy_tab['ell'][0]) > 1e-3 or \
-           abs(self.ellrange[-1] - Cxy_tab['ell'][-1]) > 1e-3 or \
-           len(self.ellrange) != len(Cxy_tab['ell']):
-            print("FileInputWarning: The tabulated angular modes (ells) from " +
-                  "the angular power spectra file(s) do not match the ones " +
-                  "currently in use, the ells will now be overwritten to " +
-                  "the tabulated ones.")
-        self.ellrange = Cxy_tab['ell']
-
-        gg_tab_bool, gm_tab_bool, mm_tab_bool = False, False, False
-        if self.gg or self.gm and Cxy_tab['gg'] is not None:
-            gg_tab_bool = True
-        if (self.mm or self.gm) and Cxy_tab['mm'] is not None:
-            mm_tab_bool = True
-        if (self.gm or (self.gg and self.mm and self.cross_terms)) and \
-           Cxy_tab['gm'] is not None:
-            gm_tab_bool = True
-            if not gg_tab_bool or not mm_tab_bool:
-                print("FileInputWarning: To calculate the cross " +
-                      "galaxy-matter covariance the three angular power " +
-                      "spectra 'galaxy-galaxy', 'galaxy-kappa' and " +
-                      "'kappa-kappa' are needed. The missing C_ells will be " +
-                      "calculated which may cause a biased result.")
-        Cgg, Cgm, Cmm = None, None, None
-        if gg_tab_bool:
-            Cgg = Cxy_tab['gg']
-        if mm_tab_bool:
-            Cmm = Cxy_tab['mm']
-        if gm_tab_bool:
-            Cgm = Cxy_tab['gm']
+        if not self.checked_input_cells:
+            ellrange_clustering = None
+            ellrange_lensing = None
+            if Cxy_tab['ell'] is None:
+                self.do_not_update_ell = False 
+                return None, [False, False, False]
+            self.do_not_update_ell = True
+            if abs(self.ellrange[0] - Cxy_tab['ell'][0]) > 1e-3 or \
+            abs(self.ellrange[-1] - Cxy_tab['ell'][-1]) > 1e-3 or \
+            len(self.ellrange) != len(Cxy_tab['ell']):
+                print("FileInputWarning: The tabulated angular modes (ells) from " +
+                    "the angular power spectra file(s) do not match the ones " +
+                    "currently in use, the ells will now be overwritten to " +
+                    "the tabulated ones.")
+              
+            self.ellrange = Cxy_tab['ell']
+            gg_tab_bool, gm_tab_bool, mm_tab_bool = False, False, False
+            if self.gg or self.gm and Cxy_tab['gg'] is not None:
+                gg_tab_bool = True
+                ellrange_clustering = Cxy_tab['ell_clust']
+            if (self.mm or self.gm) and Cxy_tab['mm'] is not None:
+                mm_tab_bool = True
+                ellrange_lensing = Cxy_tab['ell_lens']
+            if (self.gm or (self.gg and self.mm and self.cross_terms)) and \
+            Cxy_tab['gm'] is not None:
+                ellrange_clustering = Cxy_tab['ell_clust']
+                gm_tab_bool = True
+                if not gg_tab_bool or not mm_tab_bool:
+                    print("FileInputWarning: To calculate the cross " +
+                        "galaxy-matter covariance the three angular power " +
+                        "spectra 'galaxy-galaxy', 'galaxy-kappa' and " +
+                        "'kappa-kappa' are needed. The missing C_ells will be " +
+                        "calculated which may cause a biased result.")
+            Cgg, Cgm, Cmm = None, None, None
             if gg_tab_bool:
                 Cgg = Cxy_tab['gg']
             if mm_tab_bool:
                 Cmm = Cxy_tab['mm']
-        return [Cgg, Cgm, Cmm], [gg_tab_bool, gm_tab_bool, mm_tab_bool]
-    
+            if gm_tab_bool:
+                Cgm = Cxy_tab['gm']
+                if gg_tab_bool:
+                    Cgg = Cxy_tab['gg']
+                if mm_tab_bool:
+                    Cmm = Cxy_tab['mm']
+            if ellrange_clustering is not None and ellrange_lensing is not None:
+                if not np.array_equal(ellrange_clustering, ellrange_lensing):
+                    ellmin = ellrange_clustering[0]
+                    ellmax = ellrange_clustering[-1]
+                    if ellrange_lensing[0] < ellmin and ellrange_lensing[-1] > ellmax :
+                        ellmin = ellrange_lensing[0]
+                        ellmax = ellrange_lensing[-1]
+                        Cgg_aux = np.zeros((len(Cmm[:,0,0,0]), len(Cgg[0,:,0,0,0]), len(Cgg[0,0, :,0,0]), len(Cgg[0,0, 0, :,0]), len(Cgg[0,0,0,0,:])))
+                        for i_sample in range(len(Cgg[0,:,0,0,0])):
+                            for j_sample in range(len(Cgg[0,0, :, 0,0])):
+                                for i_tomo in range(len(Cgg[0,0,0,:,0])):
+                                    for j_tomo in range(len(Cgg[0,0,0,0,:])):
+                                        Cggspline = UnivariateSpline(ellrange_clustering, Cgg[:,i_sample, j_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
+                                        Cgg_aux[i_sample, j_sample, i_tomo,j_tomo] = Cggspline(ellrange_lensing)
+                        Cgg = Cgg_aux
+                        Cgm_aux = np.zeros((len(Cmm[:,0,0,0]), len(Cgm[0, :,0,0]), len(Cgm[0, 0, :,0]), len(Cgm[0,0,0,:])))
+                        for i_sample in range(len(Cgm[0,:,0,0])):
+                            for i_tomo in range(len(Cgm[0,0,:,0])):
+                                for j_tomo in range(len(Cgm[0,0,0,:])):
+                                        Cgmspline = UnivariateSpline(ellrange_clustering, Cgm[:,i_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
+                                        Cmm_aux[i_sample, i_tomo,j_tomo] = Cgmspline(ellrange_lensing)
+                        Cgm = Cgm_aux
+                        self.ellrange = ellrange_lensing
+                    else:
+                        Cmm_aux = np.zeros((len(Cmm[:,0,0,0]), len(Cmm[0, :,0,0]), len(Cmm[0, 0, :,0]), len(Cmm[0,0,0,:])))
+                        for i_sample in range(len(Cmm[0,:,0,0])):
+                            for i_tomo in range(len(Cmm[0,0,:,0])):
+                                for j_tomo in range(len(Cmm[0,0,0,:])):
+                                        Cmmspline = UnivariateSpline(ellrange_lensing, Cmm[:,i_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
+                                        Cmm_aux[i_sample, i_tomo,j_tomo] = Cgmspline(ellrange_clustering)
+                        Cmm = Cmm_aux
+                        self.ellrange = ellrange_clustering
+                else:
+                    self.ellrange = ellrange_lensing
+            else:
+                if ellrange_clustering is None:
+                    self.ellrange = ellrange_lensing
+                else:
+                    self.ellrange = ellrange_clustering
+            self.checked_input_cells = True
+            return [Cgg, Cgm, Cmm], [gg_tab_bool, gm_tab_bool, mm_tab_bool]
+        else:
+            self.checked_input_cells = True
+        
     def __check_for_tabulated_Tells(self,
                                     Tuvxy_tab):
         r"""
@@ -837,12 +889,11 @@ class CovELLSpace(PolySpectra):
             for multipoles below 2000
         """
 
-        Cells, tab_bools = self.__check_for_tabulated_Cells(Cxy_tab)
-        if Cells is not None:
-            if ((self.gg and tab_bools[0]) or not self.gg) and \
-               ((self.mm and tab_bools[2]) or not self.mm) and \
-               ((self.gm and np.all(tab_bools)) or not self.gm):
-                return Cells[0], Cells[1], Cells[2]
+        if self.Cells is not None:
+            if ((self.gg and self.tab_bools[0]) or not self.gg) and \
+               ((self.mm and self.tab_bools[2]) or not self.mm) and \
+               ((self.gm and np.all(self.tab_bools)) or not self.gm):
+                return self.Cells[0], self.Cells[1], self.Cells[2]
 
         print("Calculating non-limber angular power spectra (C_ell's).")
         n_tomo_clust_copy = np.copy(self.n_tomo_clust)
@@ -852,7 +903,7 @@ class CovELLSpace(PolySpectra):
             ellmax = 1000
         
                     
-        if (self.gg or self.gm) and not tab_bools[0]:
+        if (self.gg or self.gm) and not self.tab_bools[0]:
             for eidx, ell in enumerate(self.ellrange):
                 if (int(ell) < ellmax):
                     if ell < 100:
@@ -913,8 +964,8 @@ class CovELLSpace(PolySpectra):
         
         if self.clustering_z:
             self.n_tomo_clust = n_tomo_clust_copy
-        elif tab_bools[0]:
-            self.Cell_gg = Cells[0]
+        elif self.tab_bools[0]:
+            self.Cell_gg = self.Cells[0]
         else:
             self.Cell_gg = 0
 
@@ -964,8 +1015,6 @@ class CovELLSpace(PolySpectra):
             self.n_tomo_clust, self.n_tomo_clust)
 
         """
-        Cells, tab_bools = self.__check_for_tabulated_Cells(Cxy_tab)
-        self.tab_bools = tab_bools
         
         self.los_interpolation_sampling = int(
             (self.zet_max - 0) / covELLspacesettings['delta_z'])
@@ -1060,16 +1109,16 @@ class CovELLSpace(PolySpectra):
                 spline_Pgm.append(RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
             self.spline_Pgg = spline_Pgg
     
-        if (self.mm or self.gm) and not tab_bools[2]:
+        if (self.mm or self.gm) and not self.tab_bools[2]:
             spline_Pmm = RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_mm[:, :]),bounds_error= False, fill_value = None)
         self.__set_lensweight_splines(covELLspacesettings, iA_dict)
-        if Cells is not None:
-            if ((self.gg and tab_bools[0]) or not self.gg) and ((self.mm and tab_bools[2]) or not self.mm) and ((self.gm and np.all(tab_bools)) or not self.gm):
-                return Cells[0], Cells[1], Cells[2]
+        if self.Cells is not None:
+            if ((self.gg and self.tab_bools[0]) or not self.gg) and ((self.mm and self.tab_bools[2]) or not self.mm) and ((self.gm and np.all(self.tab_bools)) or not self.gm):
+                return self.Cells[0], self.Cells[1], self.Cells[2]
 
         print("Calculating angular power spectra (C_ell's).")
 
-        if (self.gg or self.gm) and not tab_bools[0]:
+        if (self.gg or self.gm) and not self.tab_bools[0]:
             Cell_gg = np.zeros((len(self.ellrange), self.sample_dim, self.sample_dim,
                                 self.n_tomo_clust, self.n_tomo_clust))
             for i_sample in range(self.sample_dim):
@@ -1098,13 +1147,13 @@ class CovELLSpace(PolySpectra):
                                 Cell_gg[:, i_sample, j_sample,  tomo_i, tomo_j]
                             self.__update_los_integration_chi(
                                 self.chimin, self.chimax, covELLspacesettings)
-        elif tab_bools[0]:
-            Cell_gg = Cells[0]
+        elif self.tab_bools[0]:
+            Cell_gg = self.Cells[0]
         else:
             Cell_gg = 0
 
         if (self.gm or (self.gg and self.mm and self.cross_terms)) and \
-           not tab_bools[1]:
+           not self.tab_bools[1]:
             Cell_gm = np.zeros((len(self.ellrange), self.sample_dim,
                                 self.n_tomo_clust, self.n_tomo_lens))
             for i_sample in range(self.sample_dim):
@@ -1127,11 +1176,11 @@ class CovELLSpace(PolySpectra):
                         Cell_gm[:, i_sample, tomo_i, tomo_j] = simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None],np.log(self.los_integration_chi), axis = 0)
                         self.__update_los_integration_chi(
                             self.chimin, self.chimax, covELLspacesettings)
-        elif tab_bools[1]:
-            Cell_gm = Cells[1]
+        elif self.tab_bools[1]:
+            Cell_gm = self.Cells[1]
         else:
             Cell_gm = 0
-        if (self.mm or self.gm) and not tab_bools[2]:
+        if (self.mm or self.gm) and not self.tab_bools[2]:
             Cell_mm = np.zeros((len(self.ellrange),
                                 self.n_tomo_lens, self.n_tomo_lens))
             x_values = np.zeros((2,len(self.ellrange)*len(self.los_integration_chi)))
@@ -1150,8 +1199,8 @@ class CovELLSpace(PolySpectra):
             Cell_mm = Cell_mm[:, None, :, :] \
                 * np.ones(self.sample_dim)[None, :, None, None]
             
-        elif tab_bools[2]:
-            Cell_mm = Cells[2]
+        elif self.tab_bools[2]:
+            Cell_mm = self.Cells[2]
         else:
             Cell_mm = 0
 
@@ -1319,7 +1368,6 @@ class CovELLSpace(PolySpectra):
         else:
             gauss = self.covELL_gaussian(obs_dict['ELLspace'],
                                          survey_params_dict, True)
-
         nongauss = self.covELL_non_gaussian(obs_dict['ELLspace'],
                                             output_dict,
                                             bias_dict,
@@ -2300,45 +2348,50 @@ class CovELLSpace(PolySpectra):
         binned_covariance = np.zeros((len(ellrange_12_ul) - 1, len(ellrange_34_ul) - 1, len(cov[0,0,:,0,0,0,0,0]), len(cov[0,0,0,:,0,0,0,0]), len(cov[0,0,0,0,:,0,0,0]), len(cov[0,0,0,0,0,:,0,0]), len(cov[0,0,0,0,0,0,:,0]), len(cov[0,0,0,0,0,0,0,:])))
         t0, tomos = time.time(), 0
         tomos_comb = (len(ellrange_12_ul) - 1)*(len(ellrange_34_ul) - 1)   
-        for i_ell in range(len(ellrange_12_ul) - 1):
-            for j_ell in range(len(ellrange_34_ul) - 1):
-                area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]
-                area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
-                Numberi = int((np.abs(self.ellrange - ellrange_12_ul[i_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_12_ul[i_ell])).argmin())
-                Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())
-                integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
-                integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],Numberj)
-                ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34,indexing='ij')
-                for i_sample in range(len(cov[0,0,:,0,0,0,0,0])):
-                    for j_sample in range(len(cov[0,0,0,:,0,0,0,0])):        
-                         for i_tomo in range(len(cov[0,0,0,0,:,0,0,0])):
-                            j_tomo_start = 0
-                            if unique_12:
-                                j_tomo_start = i_tomo
-                            for j_tomo in range(j_tomo_start, len(cov[0,0,0,0,0,:,0,0])):
-                                for k_tomo in range(len(cov[0,0,0,0,0,0,:,0])):
-                                    l_tomo_start = 0
-                                    if unique_34:
-                                        l_tomo_start = k_tomo
-                                    for l_tomo in range(l_tomo_start, len(cov[0,0,0,0,0,0,0,:])):
-                                        if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
-                                            if(np.all(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] > 0)):
-                                                spline = RegularGridInterpolator((self.ellrange,self.ellrange), np.log(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]),bounds_error= False, fill_value = None)
+        for i_sample in range(len(cov[0,0,:,0,0,0,0,0])):
+            for j_sample in range(len(cov[0,0,0,:,0,0,0,0])):        
+                for i_tomo in range(len(cov[0,0,0,0,:,0,0,0])):
+                    j_tomo_start = 0
+                    if unique_12:
+                        j_tomo_start = i_tomo
+                    for j_tomo in range(j_tomo_start, len(cov[0,0,0,0,0,:,0,0])):
+                        for k_tomo in range(len(cov[0,0,0,0,0,0,:,0])):
+                            l_tomo_start = 0
+                            if unique_34:
+                                l_tomo_start = k_tomo
+                            for l_tomo in range(l_tomo_start, len(cov[0,0,0,0,0,0,0,:])):
+                                if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
+                                    islog = True
+                                    if(np.all(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] > 0)):
+                                        spline = RegularGridInterpolator((self.ellrange,self.ellrange), np.log(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]),bounds_error= False, fill_value = None)
+                                    else:
+                                        islog = False
+                                        spline = RegularGridInterpolator((self.ellrange,self.ellrange), cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
+                                    for i_ell in range(len(ellrange_12_ul) - 1):
+                                        area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]                                            
+                                        Numberi = int((np.abs(self.ellrange - ellrange_12_ul[i_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_12_ul[i_ell])).argmin())
+                                        if Numberi < 3:
+                                                Numberi = 3
+                                        if Numberi > 10:
+                                            Numberi = 10
+                                        integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
+                                        for j_ell in range(len(ellrange_34_ul) - 1):
+                                            area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
+                                            Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())                
+                                            if Numberj < 3:
+                                                Numberj = 3
+                                            if Numberj > 10:
+                                                Numberj = 10
+                                            integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],Numberj)
+                                            ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34,indexing='ij')
+                                            if islog:
                                                 result = simpson(simpson(np.exp(spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[None, :],integration_ell_34), integration_ell_12)
                                             else:
-                                                spline = RegularGridInterpolator((self.ellrange,self.ellrange), cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
                                                 result = simpson(simpson((spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[None, :],integration_ell_34), integration_ell_12)
                                             result /= (area12_ell*area34_ell)
                                             if connected:
                                                 result *= full_sky_angle / max(area_12,area_34)
                                             binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result    
-                tomos += 1
-                eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
-                print('\rAt ' +
-                    str(round(tomos/tomos_comb*100, 1)) + '% in ' +
-                    str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                    str(round(eta, 1)) + 'min', end="")
-        print("")
         return binned_covariance
     
 
@@ -4402,7 +4455,6 @@ class CovELLSpace(PolySpectra):
                                    no_tomo_clust\lens, no_tomo_clust\lens,
                                    no_tomo_clust\lens, no_tomo_clust\lens)
         """
-        self.ellrange = self.__set_multipoles(covELLspacesettings)
         if not self.cov_dict['nongauss']:
             return 0, 0, 0, 0, 0, 0
         print("Calculating non-Gaussian covariance in ell space")
@@ -4627,6 +4679,7 @@ class CovELLSpace(PolySpectra):
                                 str(round(tomos/tomos_comb*100, 1)) + '% in ' +
                                 str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                                 str(round(eta, 1)) + 'min', end="")
+                
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLgggm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
             print("")
@@ -4636,6 +4689,7 @@ class CovELLSpace(PolySpectra):
         if self.gg and self.mm and self.cross_terms:
             nongaussELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, 1, self.n_tomo_clust,
                                         self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))
+            
             t0, tomos = time.time(), 0
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim)
             if self.ellrange_photo is not None:
@@ -4832,7 +4886,6 @@ class CovELLSpace(PolySpectra):
                                    no_tomo_clust\lens, no_tomo_clust\lens)
         """
 
-        self.ellrange = self.__set_multipoles(covELLspacesettings)
         if not self.cov_dict['ssc']:
             return 0, 0, 0, 0, 0, 0
         print("Calculating the SSC terms in ell space.")

@@ -56,7 +56,7 @@ setup(
         'healpy',
         'pip>=20.0',
         'gsl',
-        'scipy',
+        'scipy>=1.11.0',
         'wget',
         'matplotlib',
         'hmf']
