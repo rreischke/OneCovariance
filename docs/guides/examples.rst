@@ -366,7 +366,18 @@ This will overwrite the estimators set in the ``observables``. However, you stil
    \mathcal{O}_{\mathrm{g}_1\mathrm{g}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{gg}_L(\ell) C_{\mathrm{g}_1\mathrm{g}_2}(\ell) \\
    \mathcal{O}_{\mathrm{g}_1\mathrm{m}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{gm}_L(\ell) C_{\mathrm{g}_1\mathrm{m}_2}(\ell)\;,
 
-for galaxy clustering and galaxy-galaxy lensing respecitvely.
+for galaxy clustering and galaxy-galaxy lensing respecitvely. For cosmic shear the situations is slightly different due to its spin-1 structure. We assume that there is no intrinsic B-mode signal in the pure
+angular power spectrum covariance. However, we allow for B-mode leakage in the summary statistic:
+
+.. math::
+   \mathcal{O}_{E,\mathrm{m}_1\mathrm{m}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{mmE}_L(\ell) C_{\mathrm{m}_1\mathrm{m}_2}(\ell) \\
+   \mathcal{O}_{B,\mathrm{m}_1\mathrm{m}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{mmB}_L(\ell) C_{\mathrm{m}_1\mathrm{m}_2}(\ell) \;,
+
+note that :math:`C_{\mathrm{m}_1\mathrm{m}_2}(\ell)` is the theoretical E-mode signal. It is now up to the user to provide the files for the weights: :math:`W^\mathrm{gg}_L(\ell), ...`. 
+
+
+
+
 
 KiDS-1000 covariance
 --------------------
