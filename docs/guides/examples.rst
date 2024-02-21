@@ -408,8 +408,11 @@ structured filenames. In this case we use realspace correlation functions for ga
 Note that the corresponding scales over which the 2-point summaries are measured are implicit in the weight functions. You can always rerun the scripts for these weights for different settings.
 Running the code with ``config_3x2pt_arbitrary_summary.ini`` then gives the following output:
 
+.. image:: correlation_coefficient_3x2pt_arbitrary.png
+   :width: 790
 
-
+Note that in the output list file the spatial variables will just be labeled by indices and the probe names are the filenames of the filters.
+   
 
 KiDS-1000 covariance
 --------------------
