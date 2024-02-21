@@ -373,8 +373,40 @@ angular power spectrum covariance. However, we allow for B-mode leakage in the s
    \mathcal{O}_{E,\mathrm{m}_1\mathrm{m}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{mmE}_L(\ell) C_{\mathrm{m}_1\mathrm{m}_2}(\ell) \\
    \mathcal{O}_{B,\mathrm{m}_1\mathrm{m}_2}(L) =&\; \int\frac{\ell\mathrm{d}\ell}{2\pi} W^\mathrm{mmB}_L(\ell) C_{\mathrm{m}_1\mathrm{m}_2}(\ell) \;,
 
-note that :math:`C_{\mathrm{m}_1\mathrm{m}_2}(\ell)` is the theoretical E-mode signal. It is now up to the user to provide the files for the weights: :math:`W^\mathrm{gg}_L(\ell), ...`. 
+note that :math:`C_{\mathrm{m}_1\mathrm{m}_2}(\ell)` is the theoretical E-mode signal. In order to aacurately account for the shot-noise contribution which itself is most accurately computed
+in real space, we also require the mapping of the summary statistic from realspace:
 
+.. math::
+   \mathcal{O}_{\mathrm{g}_1\mathrm{g}_2}(L) =&\; \int{\theta\mathrm{d}\theta} R^\mathrm{gg}_L(\theta) w_{\mathrm{g}_1\mathrm{g}_2}(\theta) \\
+   \mathcal{O}_{\mathrm{g}_1\mathrm{m}_2}(L) =&\; \int{\theta\mathrm{d}\theta} R^\mathrm{gm}_L(\theta) \gamma^{\mathrm{g}_1\mathrm{m}_2}_\mathrm{t}(\theta) \\
+   \mathcal{O}_{E,\mathrm{m}_1\mathrm{m}_2}(L) = &\; \int{\theta\mathrm{d}\theta} R^\mathrm{mmE}_L(\theta) \xi^{\mathrm{m}_1\mathrm{m}_2}_+(\theta) \\
+   \mathcal{O}_{B,\mathrm{m}_1\mathrm{m}_2}(L) =  &\; \int{\theta\mathrm{d}\theta} R^\mathrm{mmE}_L(\theta) \xi^{\mathrm{m}_1\mathrm{m}_2}_-(\theta)˜;.
+
+It is now up to the user to provide the files for the weights: :math:`W^\mathrm{gg}_L(\ell), ...`. In the directory ``input/arbitrary_summary/script_weights/`` there
+are scripts to generate these weight functions for the most commonly used summary statistics, but you can of course add your own. Now we just have to pass the corresponding files to the code. For this navigate to the
+``tabulated input files`` (see the file ``config_3x2pt_arbitrary_summary.ini``) and add:
+
+::
+
+   [tabulated inputs files]
+   arb_summary_directory = ./input/arbitrary_summary/
+
+   arb_fourier_filter_gg_file = fourier_weight_realspace_cf_gg_?.table
+   arb_real_filter_gg_file = real_weight_realspace_cf_gg_?.table
+
+   arb_fourier_filter_gm_file = fourier_weight_bandpowers_gm_?.table
+   arb_real_filter_gm_file = real_weight_bandpowers_gm_?.table
+
+   arb_fourier_filter_mmE_file = Wn_0.5_to_300.0_?.table
+   arb_fourier_filter_mmB_file = Wn_0.5_to_300.0_?.table
+   arb_real_filter_mm_p_file = Tp_0.5_to_300.0_?.table
+   arb_real_filter_mm_m_file = Tm_0.5_to_300.0_?.table
+
+In this case first specify the directory where all the filter :math:`W^\mathrm{gg}_L(\ell), ...` and :math:`R^\mathrm{gg}_L(\theta), ...` are stored and then we specify the filenames:
+``arb_fourier...`` corresponds to :math:`W` and ``arb_real...`` corresponds to :math:`R`. The  ``?`` labels the spatial index which is looped over by the code for all files with the specified
+structured filenames. In this case we use realspace correlation functions for galaxy clustering (measured at 9 theta bins), badpowers for GGL (measured at 8 multipole bins) and COSEBIs for cosmic shear (measured for 5 modes).
+Note that the corresponding scales over which the 2-point summaries are measured are implicit in the weight functions. You can always rerun the scripts for these weights for different settings.
+Running the code with ``config_3x2pt_arbitrary_summary.ini`` then gives the following output:
 
 
 

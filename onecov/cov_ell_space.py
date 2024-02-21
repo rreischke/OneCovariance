@@ -1034,7 +1034,7 @@ class CovELLSpace(PolySpectra):
         self.los_chi = self.cosmology.comoving_distance(
             self.los_z).value * self.cosmology.h
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
-        if (self.mm or self.gm or self.unbiased_clustering) and prec['hm']['transfer_model'] == 'CAMB':
+        if (self.mm or self.gm or self.unbiased_clustering) and prec['hm']['transfer_model'] == 'CAMB' and self.Pxy_tab['mm'] is None:
             self.camb_pars_new.set_matter_power(redshifts = self.los_z[::-1], kmax=self.mass_func.k[-1])
             results = camb.get_results(self.camb_pars_new)
             self.camb_pars_new.NonLinear = model.NonLinear_pk
@@ -1068,7 +1068,7 @@ class CovELLSpace(PolySpectra):
                         aux_gm[zet, :, i_sample] = aux_mm[zet,:]
                     else:
                         aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
-            if prec['hm']['transfer_model'] != 'CAMB':
+            if prec['hm']['transfer_model'] != 'CAMB' or self.Pxy_tab['mm'] is not None :
                 aux_mm[zet, :] = self.Pmm[:, 0]
             self.power_mm_lin_z[zet, :] = self.mass_func.power[:]
             eta = (time.time()-t0) * \
@@ -5425,7 +5425,7 @@ class CovELLSpace(PolySpectra):
                                     SSCELLmmmm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(integrand*weight[:, None, None], self.los_integration_chi, axis = 0)
                                     flat_tomo += 1
                                     if covELLspacesettings['pixelised_cell']:
-                                        SSCELLmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                                        SSCELLmmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
         else:
             SSCELLmmmm = 0
 
