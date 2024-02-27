@@ -4,10 +4,15 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import sys
-sys.path.append('/home/davide/Documenti/Lavoro/Programmi/Spaceborne/bin')
-import my_module as mm
 import scipy
 import matplotlib
+
+
+import os
+ROOT = os.getenv('ROOT')
+sys.path.append(f'{ROOT}/Spaceborne')
+import bin.my_module as mm
+
 
 # nbl = 20
 # zbins = 10
@@ -21,7 +26,7 @@ zbins = 13
 ellmax = 5000
 load_mat_files = False
 chunk_size = 500000
-cov_folder = 'output_SPV3'
+cov_folder = 'output_SPV3_v2'
 
 ind = mm.build_full_ind('triu', 'row-major', zbins)
 
@@ -66,18 +71,19 @@ if load_mat_files:
 # ! consistency check for the output cls
 cl_input_folder = 'input/inputs_SPV3'
 
-cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cell_ll_CLOE.ascii')
-cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cell_gl_CLOE.ascii')
-cl_gg_in = np.genfromtxt(f'{cl_input_folder}/Cell_gg_CLOE.ascii')
+cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cell_ll_CLOE_ccl.ascii')
+cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cell_gl_CLOE_ccl.ascii')
+cl_gg_in = np.genfromtxt(f'{cl_input_folder}/Cell_gg_CLOE_ccl.ascii')
 
 cl_ll_out = np.genfromtxt(f'{cov_folder}/Cell_kappakappa.ascii')
 cl_gl_out = np.genfromtxt(f'{cov_folder}/Cell_gkappa.ascii')
 cl_gg_out = np.genfromtxt(f'{cov_folder}/Cell_gg.ascii')
 
 
-ell = np.unique(cl_ll_in[:, 0])
-
+ell = np.unique(cl_ll_out[:, 0])
 print('nbl:', len(ell))
+
+# assert False, 'there seems to be a problem with the ell bins, the output files doesnt have 32 bins!!'
 
 assert np.allclose(ell, np.unique(cl_ll_out[:, 0]), atol=0, rtol=1e-4)
 np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
@@ -101,11 +107,8 @@ cov_ssc_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_cng_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 
 
-# Initialize an empty DataFrame or any other structure to hold aggregated results if needed
-aggregated_results = None  # Example, adjust based on your needs
 
 # df_chunk = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1)
-
 for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
 
     print('entered chunk loop')
@@ -184,9 +187,13 @@ for cov_term in cov_10d_dict.keys():
     del cov_llll_4d, cov_llgl_4d, cov_llgg_4d, cov_glgl_4d, cov_glgg_4d, cov_gggg_4d
     gc.collect()
 
-
+# TODO the line below is wrong
+# TODO check nbl issue
+# TODO check the total cov reshaped in this way against the 2D outputted one
 cov_tot_10d = np.sum([cov_10d_dict[key] for key in cov_10d_dict.keys()])
 cov_tot_3x2pt_4d = mm.cov_3x2pt_10D_to_4D(cov_tot_10d, probe_ordering, nbl, zbins, ind.copy(), GL_or_LG)
 cov_tot_3x2pt_2d = mm.cov_4D_to_2D(cov_tot_3x2pt_4d, block_index='vincenzo', optimize=True)
 
 mm.matshow(cov_tot_3x2pt_2d, log=True)
+
+print('done')
