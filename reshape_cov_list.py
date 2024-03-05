@@ -1,4 +1,5 @@
 import gc
+import time
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -27,6 +28,7 @@ ellmax = 5000
 load_mat_files = False
 chunk_size = 500000
 cov_folder = 'output_SPV3_v2'
+cl_input_folder = 'input/inputs_SPV3'
 
 ind = mm.build_full_ind('triu', 'row-major', zbins)
 
@@ -69,7 +71,6 @@ if load_mat_files:
     gc.collect()
 
 # ! consistency check for the output cls
-cl_input_folder = 'input/inputs_SPV3'
 
 cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cell_ll_CLOE_ccl.ascii')
 cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cell_gl_CLOE_ccl.ascii')
@@ -105,9 +106,10 @@ cov_mix_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_sn_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_ssc_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_cng_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+cov_tot_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 
 
-
+start = time.perf_counter()
 # df_chunk = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1)
 for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
 
@@ -142,6 +144,8 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covssc']
         cov_cng_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covng']
+        cov_tot_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
+                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['cov']
 
 
 cov_10d_dict = {
@@ -151,7 +155,7 @@ cov_10d_dict = {
     'G': cov_g_10d,
     'SSC': cov_ssc_10d,
     'cNG': cov_cng_10d,
-
+    'tot': cov_tot_10d,
 }
 
 for cov_term in cov_10d_dict.keys():
@@ -190,10 +194,10 @@ for cov_term in cov_10d_dict.keys():
 # TODO the line below is wrong
 # TODO check nbl issue
 # TODO check the total cov reshaped in this way against the 2D outputted one
-cov_tot_10d = np.sum([cov_10d_dict[key] for key in cov_10d_dict.keys()])
+
 cov_tot_3x2pt_4d = mm.cov_3x2pt_10D_to_4D(cov_tot_10d, probe_ordering, nbl, zbins, ind.copy(), GL_or_LG)
-cov_tot_3x2pt_2d = mm.cov_4D_to_2D(cov_tot_3x2pt_4d, block_index='vincenzo', optimize=True)
+cov_tot_3x2pt_2dcloe = mm.cov_4D_to_2DCLOE_3x2pt(cov_tot_3x2pt_4d, zbins, block_index='vincenzo')
 
-mm.matshow(cov_tot_3x2pt_2d, log=True)
+mm.compare_arrays(cov_mat_fmt_2dcloe, cov_tot_3x2pt_2dcloe, 'cov_mat_fmt_2dcloe', 'cov_list_fmt_2dcloe', log=True)
 
-print('done')
+print('done in ', time.perf_counter() - start, ' seconds')
