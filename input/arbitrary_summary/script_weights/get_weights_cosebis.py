@@ -45,7 +45,7 @@ tmax_gg *= arcmintorad
 tmin_gm *= arcmintorad
 tmax_gm *= arcmintorad
 theta_gg = np.geomspace(tmin_gg,tmax_gg, N_theta)
-theta_mm = np.geomspace(tmin_gg,tmax_gg, N_theta)
+theta_mm = np.geomspace(tmin_mm,tmax_mm, N_theta)
 theta_gm = np.geomspace(tmin_gm,tmax_gm, N_theta)
 
 

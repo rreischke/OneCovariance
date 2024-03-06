@@ -224,9 +224,11 @@ class CovELLSpace(PolySpectra):
             obs_dict['ELLspace']['ellmax'] = int(3*obs_dict['ELLspace']['pixel_Nside'] + 1)
             self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
             integer_ell = np.copy(self.ellrange.astype(int))
-            pixel_weight = (hp.sphtfunc.pixwin(obs_dict['ELLspace']['pixel_Nside']))[integer_ell]
-            self.pixelweight_matrix = (pixel_weight**2)[:,None]*(pixel_weight**2)[None,:]
+            self.pixel_weight = (hp.sphtfunc.pixwin(obs_dict['ELLspace']['pixel_Nside']))[integer_ell]
+            self.pixelweight_matrix = (self.pixel_weight**2)[:,None]*(self.pixel_weight**2)[None,:]
             self.Cells, self.tab_bools = None, [False, False, False]
+        else:
+            self.pixel_weight = np.ones_like(self.ellrange)
         self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
@@ -1067,7 +1069,8 @@ class CovELLSpace(PolySpectra):
                     if self.unbiased_clustering:
                         aux_gm[zet, :, i_sample] = aux_mm[zet,:]
                     else:
-                        aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
+                        if self.gm or (self.gg and self.mm):
+                            aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
             if prec['hm']['transfer_model'] != 'CAMB' or self.Pxy_tab['mm'] is not None :
                 aux_mm[zet, :] = self.Pmm[:, 0]
             self.power_mm_lin_z[zet, :] = self.mass_func.power[:]
@@ -1082,7 +1085,6 @@ class CovELLSpace(PolySpectra):
                     + '% in ' + str(round((time.time()-t0), 1)
                                     ) + 'sek  ETA in '
                     + str(round(eta, 1)) + 'sek', end="")
-        
         print(" ")
         self.update_mass_func(0, bias_dict, hod_dict, prec)
         if self.csmf:
@@ -1106,8 +1108,10 @@ class CovELLSpace(PolySpectra):
                 for j_sample in range(self.sample_dim):
                     spline_Pgg.append(RegularGridInterpolator((self.los_chi, np.log10(self.mass_func.k)),
                                             np.log10(aux_gg[:, :, i_sample, j_sample]),bounds_error= False, fill_value = None))
-                spline_Pgm.append(RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
-            self.spline_Pgg = spline_Pgg
+                if self.gm or self.mm:
+                    spline_Pgm.append(RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
+            if self.gm or self.mm:
+                self.spline_Pgg = spline_Pgg
     
         if (self.mm or self.gm) and not self.tab_bools[2]:
             spline_Pmm = RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_mm[:, :]),bounds_error= False, fill_value = None)
@@ -1116,6 +1120,8 @@ class CovELLSpace(PolySpectra):
             if ((self.gg and self.tab_bools[0]) or not self.gg) and ((self.mm and self.tab_bools[2]) or not self.mm) and ((self.gm and np.all(self.tab_bools)) or not self.gm):
                 return self.Cells[0], self.Cells[1], self.Cells[2]
 
+        fil = np.sqrt((self.ellrange + 2)*(self.ellrange + 1)*(self.ellrange)*(self.ellrange -1))
+        fijl = fil**2*(self.ellrange+0.5)**(-4)
         print("Calculating angular power spectra (C_ell's).")
 
         if (self.gg or self.gm) and not self.tab_bools[0]:
@@ -1173,7 +1179,7 @@ class CovELLSpace(PolySpectra):
                                 x_values[1,flat_idx] = ki
                                 flat_idx +=1
                         integrand = spline_Pgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                        Cell_gm[:, i_sample, tomo_i, tomo_j] = simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None],np.log(self.los_integration_chi), axis = 0)
+                        Cell_gm[:, i_sample, tomo_i, tomo_j] = np.sqrt(fijl)*simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None],np.log(self.los_integration_chi), axis = 0)
                         self.__update_los_integration_chi(
                             self.chimin, self.chimax, covELLspacesettings)
         elif self.tab_bools[1]:
@@ -1194,7 +1200,7 @@ class CovELLSpace(PolySpectra):
             for tomo_i in range(self.n_tomo_lens):
                 for tomo_j in range(tomo_i, self.n_tomo_lens):
                     integrand = spline_Pmm((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                    Cell_mm[:, tomo_i, tomo_j] = simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None],np.log(self.los_integration_chi), axis = 0)
+                    Cell_mm[:, tomo_i, tomo_j] = fijl*simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None],np.log(self.los_integration_chi), axis = 0)
                     Cell_mm[:, tomo_j, tomo_i] = Cell_mm[:, tomo_i, tomo_j]
             Cell_mm = Cell_mm[:, None, :, :] \
                 * np.ones(self.sample_dim)[None, :, None, None]

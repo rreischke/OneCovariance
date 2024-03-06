@@ -21,12 +21,12 @@ class HOD():
     Private Variables
     -----------------
     Mrange : array
-        with unit M_sun
+        with unit M_sun/h
         with shape (M_bins)
         logarithmically spaced masses in the range 
         [hm_prec['log10M_min'], hm_prec['log10M_max']]
     Mbins : array
-        with unit M_sun
+        with unit M_sun/h
         with shape (sample_dims, 300)
         logarithmically spaced masses in the range 
         [bias_dict['logmass_bins'][:-1], bias_dict['logmass_bins'][1:]],
@@ -164,7 +164,7 @@ class HOD():
         Returns
         -------
         Mobs : array
-            with unit M_sun
+            with unit M_sun/h
             with shape (M_bins)
         """
         mrange = self.Mrange / 10**hod_dict['dpow_logM1_'+pop]

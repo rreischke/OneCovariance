@@ -6,7 +6,6 @@ from scipy.integrate import simpson
 
 from mpmath import mp
 import mpmath
-from scipy import pi,sqrt,exp
 from scipy.special import p_roots
 from scipy.special import eval_legendre
 
@@ -206,6 +205,7 @@ class CovCOSEBI(CovELLSpace):
                                                                                                                         self.theta_integral,
                                                                                                                         survey_params_dict,
                                                                                                                         read_in_tables['npair'])
+        
         self.array_En_modes = None
         self.array_En_g_modes = None                                                                                                                
         if self.mm:

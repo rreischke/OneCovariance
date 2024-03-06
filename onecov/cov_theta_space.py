@@ -222,7 +222,6 @@ class CovTHETASpace(CovELLSpace):
                 limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
                 self.ell_limits.append(limits_at_mode_append)
             self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
-            self.levin_int_fourier.update_Levin(0, 16, 32,1e-3,1e-3)
             self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
             self.__get_signal(obs_dict)
         
@@ -323,7 +322,7 @@ class CovTHETASpace(CovELLSpace):
                 self.Cell_gg, (len(self.ellrange), flat_length))
             w_signal_at_thetai_flat = np.zeros(flat_length)
             for i_theta in range(len(self.theta_bins_clustering)):
-                integrand = Cell_gg_flat*self.ellrange[:, None]
+                integrand = Cell_gg_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
                 self.levin_int_fourier.init_integral(
                     self.ellrange, integrand, True, True)
                 w_signal_at_thetai_flat = self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta],i_theta)
@@ -342,7 +341,7 @@ class CovTHETASpace(CovELLSpace):
                 self.Cell_gm, (len(self.ellrange), flat_length))
             gt_signal_at_thetai_flat = np.zeros(flat_length)
             for i_theta in range(len(self.theta_bins_clustering)):
-                integrand = Cell_gm_flat*self.ellrange[:, None]
+                integrand = Cell_gm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
                 self.levin_int_fourier.init_integral(
                     self.ellrange, integrand, True, True)
                 gt_signal_at_thetai_flat = self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries],i_theta + self.gg_summaries)
@@ -361,7 +360,7 @@ class CovTHETASpace(CovELLSpace):
             Cell_mm_flat = np.reshape(
                 self.Cell_mm, (len(self.ellrange), flat_length))
             for i_theta in range(len(self.theta_bins_lensing)):
-                integrand = Cell_mm_flat*self.ellrange[:, None]
+                integrand = Cell_mm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
                 self.levin_int_fourier.init_integral(
                     self.ellrange, integrand, True, True)
                 xip_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries],i_theta + self.gg_summaries + self.gm_summaries),original_shape)/2.0/np.pi
