@@ -1,0 +1,13 @@
+READING INPUT
+#############
+Omitting clustering mask file /home/cosmo/davide.sciotti/data/common_data/mask/mask_circular_1pole_14700deg2_nside2048.fits since [survey specs]: 'survey_area_clust_in_deg2' is given.
+Omitting galaxy-galaxy lensing mask file /home/cosmo/davide.sciotti/data/common_data/mask/mask_circular_1pole_14700deg2_nside2048.fits since [survey specs]: 'survey_area_ggl_in_deg2' is given.
+Omitting lensing mask file /home/cosmo/davide.sciotti/data/common_data/mask/mask_circular_1pole_14700deg2_nside2048.fits since [survey specs]: 'survey_area_lensing_in_deg2' is given.
+Reading in redshift distributions for clustering from file /home/cosmo/davide.sciotti/data/OneCovariance/input/inputs_SPV3/nzTab-EP13-zedMin02-zedMax25-mag245.ascii.
+Reading in redshift distributions for lensing from file /home/cosmo/davide.sciotti/data/OneCovariance/input/inputs_SPV3/nzTab-EP13-zedMin02-zedMax25-mag245.ascii.
+Using redshft dependent bias and NOT HoD for galaxy count modelling from file /home/cosmo/davide.sciotti/data/OneCovariance/input/inputs_SPV3/gal_bias_table_SPV3.ascii...
+Reading in tabulated C_ells from file /home/cosmo/davide.sciotti/data/OneCovariance/input/inputs_SPV3/Cell_gg_SPV3_ccl.ascii.
+Reading in tabulated C_ells from file /home/cosmo/davide.sciotti/data/OneCovariance/input/inputs_SPV3/Cell_gl_SPV3_ccl.ascii.
+Reading in tabulated C_ells from file /home/cosmo/davide.sciotti/data/OneCovariance/input/inputs_SPV3/Cell_ll_SPV3_ccl.ascii.
+CALCULATING COVARIANCE FOR ANGULAR POWER SPECTRA
+################################################
