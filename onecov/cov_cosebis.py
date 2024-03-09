@@ -180,7 +180,8 @@ class CovCOSEBI(CovELLSpace):
         self.ell_limits = []
         for mode in range(self.total_modes):
             limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::30]
-            limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
+            #limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
+            limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.wn_ells[1]) & (limits_at_mode < self.wn_ells[-2])]) + 2)
             limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.wn_ells[1]) & (limits_at_mode < self.wn_ells[-2])]
             limits_at_mode_append[0] = self.wn_ells[0]
             limits_at_mode_append[-1] = self.wn_ells[-1]
