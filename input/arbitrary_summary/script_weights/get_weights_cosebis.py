@@ -6,7 +6,6 @@ import mpmath
 from scipy.interpolate import interp1d
 import multiprocessing as mpi
 from scipy.signal import argrelextrema
-from scipy import pi,sqrt,exp
 from scipy.special import p_roots
 from numpy.polynomial.legendre import legcompanion, legval, legder
 import numpy.linalg as la
