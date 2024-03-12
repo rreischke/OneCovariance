@@ -25,7 +25,7 @@ num_cores = 100 #number of cores used
 mp.dps = 160
 arcmintorad = 1./60./180.*np.pi
 #define constants
-Nmax_mm = 5 # maximum COSEBI mode
+Nmax_mm = 20 # maximum COSEBI mode
 tmin_mm = 0.5 #theta_min in arcmin
 tmax_mm = 300.0 #theta_max in armin
 
@@ -111,7 +111,7 @@ if Nmax_mm > 0:
         temp_sum = mp.mpf(0)
         for i in range(nn+2):
             for j in range(nn+2):
-                temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*J(1,i+j,zmax)
+                temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*J(2,i+j,zmax)
 
         temp_Nn = 1./(temp_sum)
         #N_n chosen to be > 0.  
@@ -140,14 +140,14 @@ def tplus(tmin,tmax,n,norm,root,ntheta=N_theta):
     tplus[:,1]=result
     return tplus
 
-def tminus(tmin,tmax,n,norm,root,tp,ntheta=10000):
+def tminus(tmin,tmax,n,norm,root,tp,ntheta=N_theta):
     tplus_func=interp1d(np.log(tp[:,0]/tmin),tp[:,1])
     rtminus = np.zeros_like(tp)
     rtminus[:,0] = tp[:,0]
     z=np.log(theta/tmin)
     rtminus[:,1]= tplus_func(z)
     lev = levin.Levin(0, 16, 32, 1e-8, 200, num_cores)
-    wide_theta = np.linspace(theta[0]*0.999, theta[-1]*1.001,int(1e4))
+    wide_theta = np.linspace(theta[0]*0.999, theta[-1]*1.001,int(N_theta))
     lev.init_w_ell(np.log(wide_theta/tmin_mm), np.ones_like(wide_theta)[:,None])
     z=np.log(theta/tmin)
     for i_z, val_z in enumerate(z[1:]):
