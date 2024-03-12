@@ -15,34 +15,21 @@ import bin.my_module as mm
 # matplotlib.use('Agg')
 
 
-cov_folder = 'output_ISTF_v2'
-cl_input_folder = 'input/inputs_ISTF'
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_ISTF_v2'
+
 cfg = configparser.ConfigParser()
 cfg.read(cov_folder + '/save_configs.ini')
-nbl = cfg['covELLspace settings']['ell_bins_clustering']
-zbins = 10
-theta_max = cfg['covELLspace settings']['theta_max']
 
-# ISTF
-# nbl = 20
-# zbins = 10
-# ellmax = 3000
-
-
-# SPV3
-# nbl = 32
-# zbins = 13
-# ellmax = 5000
-
-# 2PCF
-nbl = 40
-zbins = 10
-ellmax = 5000
+zbins = len(cfg['survey specs']['ellipticity_dispersion'].split(', '))
+nbl = int(float(cfg['covELLspace settings']['ell_bins_clustering']))
+ellmax = int(float(cfg['covELLspace settings']['ell_max']))
+cl_input_folder = cfg['tabulated inputs files']['cell_directory']
+cl_ll_name = cfg['tabulated inputs files']['cmm_file'].strip("['").strip("']")
+cl_gl_name = cfg['tabulated inputs files']['cgm_file'].strip("['").strip("']")
+cl_gg_name = cfg['tabulated inputs files']['cgg_file'].strip("['").strip("']")
 
 
-cl_input_folder = '/home/cosmo/davide.sciotti/data/CLOE_validation/output/v2.0.2/C01'
-
-chunk_size = 500000
+chunk_size = 5000000
 load_mat_files = False
 
 
@@ -68,7 +55,12 @@ GL_or_LG = 'GL'
 
 # ! get, show and reshape the .mat file, for a later check
 if load_mat_files:
+
+    print('Loading covariance matrix from .mat file...')
+    start_time = time.perf_counter()
+
     cov_mat_fmt_2dcloe = np.genfromtxt(f'{cov_folder}/covariance_matrix.mat')
+    print('Covariance matrix loaded in ', time.perf_counter() - start_time, ' seconds')
 
     mm.matshow(cov_mat_fmt_2dcloe, log=True, title='original, 2d CLOE')
 
@@ -80,21 +72,21 @@ if load_mat_files:
     mm.matshow(cov_mat_fmt_2dcloe, log=True, title='flipped, 2d CLOE')
     mm.matshow(cov_mat_fmt_2ddav, log=True, title='flipped, 2d Dav')
 
-    np.savez_compressed(f'{cov_folder}/cov_tot_2dCLOE.npz', cov_mat_fmt_2dcloe)
-    np.savez_compressed(f'{cov_folder}/cov_tot_2ddav.npz', cov_mat_fmt_2ddav)
+    corr_2dcloe = mm.cov2corr(cov_mat_fmt_2dcloe)
 
-    del cov_mat_fmt_2ddav, cov_mat_fmt_2dcloe
-    gc.collect()
+    mm.matshow(corr_2dcloe, log=False, title=' corr flipped, 2d CLOE',
+               matshow_kwargs={'cmap': 'RdBu_r', 'vmin': -1, 'vmax': 1})
+
+    # np.savez_compressed(f'{cov_folder}/cov_tot_2dCLOE.npz', cov_mat_fmt_2dcloe)
+    # np.savez_compressed(f'{cov_folder}/cov_tot_2ddav.npz', cov_mat_fmt_2ddav)
+
+    # del cov_mat_fmt_2ddav, cov_mat_fmt_2dcloe
+    # gc.collect()
 
 # ! consistency check for the output cls
-
-# cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cell_ll_CLOE_ccl.ascii')
-# cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cell_gl_CLOE_ccl.ascii')
-# cl_gg_in = np.genfromtxt(f'{cl_input_folder}/Cell_gg_CLOE_ccl.ascii')
-
-cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cij-LL-PyCCLforOneCov-C01.ascii')
-cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cij-GL-PyCCLforOneCov-C01.ascii')
-cl_gg_in = np.genfromtxt(f'{cl_input_folder}/Cij-GG-PyCCLforOneCov-C01.ascii')
+cl_ll_in = np.genfromtxt(f'{cl_input_folder}/{cl_ll_name}')
+cl_gl_in = np.genfromtxt(f'{cl_input_folder}/{cl_ll_name}')
+cl_gg_in = np.genfromtxt(f'{cl_input_folder}/{cl_ll_name}')
 
 cl_ll_out = np.genfromtxt(f'{cov_folder}/Cell_kappakappa.ascii')
 cl_gl_out = np.genfromtxt(f'{cov_folder}/Cell_gkappa.ascii')
@@ -112,12 +104,6 @@ assert np.allclose(ell, np.unique(cl_ll_out[:, 0]), atol=0, rtol=1e-4), 'ell val
 # np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
 
 
-# plt.plot(cl_ll_in[:, 3], label='in', ls='--')
-# plt.plot(cl_ll_out[:, 3], label='out')
-# plt.legend()
-
-
-
 zpairs_auto, zpairs_cross, zpairs_3x2pt = mm.get_zpairs(zbins)
 ind_auto = ind[:zpairs_auto, :]
 ind_cross = ind[zpairs_auto:zpairs_cross + zpairs_auto, :]
@@ -131,25 +117,31 @@ cov_ssc_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_cng_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_tot_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 
+cov_g_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+cov_sva_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+cov_mix_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+cov_sn_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+cov_ssc_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+cov_cng_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+cov_tot_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
+
+
+ells = pd.read_csv(f'{cov_folder}/covariance_list.dat', usecols=['ell1'], delim_whitespace=True)['ell1'].unique()
+ell_indices = {ell: idx for idx, ell in enumerate(ells)}
+assert len(ells) == nbl, 'number of ells in the list file does not match the number of ell bins'
+
 
 start = time.perf_counter()
-# df_chunk = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1)
 for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
 
     print('entered chunk loop')
-    
-    ells = df_chunk['ell1'].unique()
-    ell_indices = {ell: idx for idx, ell in enumerate(ells)}
-    assert len(ells) == nbl, 'number of ells in the list file does not match the number of ell bins'
 
     # ! get the individual terms from the list file
-    print('number of rows in the dataframe: ', df_chunk.shape[0])
-
     for index, row in tqdm(df_chunk.iterrows()):
 
-        probe = row['#obs']
-        probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d = probe_idx_dict[probe[0]
-                                                                            ], probe_idx_dict[probe[1]], probe_idx_dict[probe[2]], probe_idx_dict[probe[3]]
+        probe_str = row['#obs']
+        probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d = probe_idx_dict[probe_str[0]
+                                                                            ], probe_idx_dict[probe_str[1]], probe_idx_dict[probe_str[2]], probe_idx_dict[probe_str[3]]
 
         ell1_idx = ell_indices[row['ell1']]
         ell2_idx = ell_indices[row['ell2']]
@@ -171,13 +163,54 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['cov']
 
 
+for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
+
+    # Vectorize the extraction of probe indices
+    probe_idx_a = df_chunk['#obs'].str[0].map(probe_idx_dict).values
+    probe_idx_b = df_chunk['#obs'].str[1].map(probe_idx_dict).values
+    probe_idx_c = df_chunk['#obs'].str[2].map(probe_idx_dict).values
+    probe_idx_d = df_chunk['#obs'].str[3].map(probe_idx_dict).values
+
+    # Map 'ell' values to their corresponding indices
+    ell1_idx = df_chunk['ell1'].map(ell_indices).values
+    ell2_idx = df_chunk['ell2'].map(ell_indices).values
+
+    # Compute z indices
+    z_indices = df_chunk[['tomoi', 'tomoj', 'tomok', 'tomol']].sub(1).values
+
+    # Vectorized assignment to the arrays
+    index_tuple = (probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d, ell1_idx, ell2_idx,
+                   z_indices[:, 0], z_indices[:, 1], z_indices[:, 2], z_indices[:, 3])
+
+    cov_sva_10d_test[index_tuple] = df_chunk['covg sva'].values
+    cov_mix_10d_test[index_tuple] = df_chunk['covg mix'].values
+    cov_sn_10d_test[index_tuple] = df_chunk['covg sn'].values
+    cov_g_10d_test[index_tuple] = df_chunk['covg sva'].values + df_chunk['covg mix'].values + df_chunk['covg sn'].values
+    cov_ssc_10d_test[index_tuple] = df_chunk['covssc'].values
+    cov_cng_10d_test[index_tuple] = df_chunk['covng'].values
+    cov_tot_10d_test[index_tuple] = df_chunk['cov'].values
+
+end = time.perf_counter()
+print(f"Processed in {end - start:.2f} seconds")
+
+np.testing.assert_allclose(cov_g_10d, cov_g_10d_test, atol=0, rtol=1e-5)
+np.testing.assert_allclose(cov_sva_10d, cov_sva_10d_test, atol=0, rtol=1e-5)
+np.testing.assert_allclose(cov_mix_10d, cov_mix_10d_test, atol=0, rtol=1e-5)
+np.testing.assert_allclose(cov_sn_10d, cov_sn_10d_test, atol=0, rtol=1e-5)
+np.testing.assert_allclose(cov_ssc_10d, cov_ssc_10d_test, atol=0, rtol=1e-5)
+np.testing.assert_allclose(cov_cng_10d, cov_cng_10d_test, atol=0, rtol=1e-5)
+np.testing.assert_allclose(cov_tot_10d, cov_tot_10d_test, atol=0, rtol=1e-5)
+
+
+assert False, 'stop here to check consistency of two methods'
+
 cov_10d_dict = {
-    # 'SVA': cov_sva_10d,
-    # 'MIX': cov_mix_10d,
-    # 'SN': cov_sn_10d,
-    # 'G': cov_g_10d,
-    # 'SSC': cov_ssc_10d,
-    # 'cNG': cov_cng_10d,
+    'SVA': cov_sva_10d,
+    'MIX': cov_mix_10d,
+    'SN': cov_sn_10d,
+    'G': cov_g_10d,
+    'SSC': cov_ssc_10d,
+    'cNG': cov_cng_10d,
     'tot': cov_tot_10d,
 }
 
@@ -210,7 +243,7 @@ for cov_term in cov_10d_dict.keys():
         f'{cov_folder}/cov_{cov_term}_onecovariance_GLGG_4D_nbl{nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_glgg_4d)
     np.savez_compressed(
         f'{cov_folder}/cov_{cov_term}_onecovariance_GGGG_4D_nbl{nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_gggg_4d)
-    
+
     del cov_llll_4d, cov_llgl_4d, cov_llgg_4d, cov_glgl_4d, cov_glgg_4d, cov_gggg_4d
     gc.collect()
 
