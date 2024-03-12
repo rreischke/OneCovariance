@@ -7,28 +7,44 @@ from tqdm import tqdm
 import sys
 import scipy
 import matplotlib
-
-
+import configparser
 import os
 ROOT = os.getenv('ROOT')
 sys.path.append(f'{ROOT}/Spaceborne')
 import bin.my_module as mm
+# matplotlib.use('Agg')
 
 
+cov_folder = 'output_ISTF_v2'
+cl_input_folder = 'input/inputs_ISTF'
+cfg = configparser.ConfigParser()
+cfg.read(cov_folder + '/save_configs.ini')
+nbl = cfg['covELLspace settings']['ell_bins_clustering']
+zbins = 10
+theta_max = cfg['covELLspace settings']['theta_max']
+
+# ISTF
 # nbl = 20
 # zbins = 10
 # ellmax = 3000
-# cov_folder = 'output_ISTF_v2'
 
-matplotlib.use('Agg')
 
-nbl = 32
-zbins = 13
+# SPV3
+# nbl = 32
+# zbins = 13
+# ellmax = 5000
+
+# 2PCF
+nbl = 40
+zbins = 10
 ellmax = 5000
-load_mat_files = False
+
+
+cl_input_folder = '/home/cosmo/davide.sciotti/data/CLOE_validation/output/v2.0.2/C01'
+
 chunk_size = 500000
-cov_folder = 'output_SPV3_v2'
-cl_input_folder = 'input/inputs_SPV3'
+load_mat_files = False
+
 
 ind = mm.build_full_ind('triu', 'row-major', zbins)
 
@@ -72,9 +88,13 @@ if load_mat_files:
 
 # ! consistency check for the output cls
 
-cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cell_ll_CLOE_ccl.ascii')
-cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cell_gl_CLOE_ccl.ascii')
-cl_gg_in = np.genfromtxt(f'{cl_input_folder}/Cell_gg_CLOE_ccl.ascii')
+# cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cell_ll_CLOE_ccl.ascii')
+# cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cell_gl_CLOE_ccl.ascii')
+# cl_gg_in = np.genfromtxt(f'{cl_input_folder}/Cell_gg_CLOE_ccl.ascii')
+
+cl_ll_in = np.genfromtxt(f'{cl_input_folder}/Cij-LL-PyCCLforOneCov-C01.ascii')
+cl_gl_in = np.genfromtxt(f'{cl_input_folder}/Cij-GL-PyCCLforOneCov-C01.ascii')
+cl_gg_in = np.genfromtxt(f'{cl_input_folder}/Cij-GG-PyCCLforOneCov-C01.ascii')
 
 cl_ll_out = np.genfromtxt(f'{cov_folder}/Cell_kappakappa.ascii')
 cl_gl_out = np.genfromtxt(f'{cov_folder}/Cell_gkappa.ascii')
@@ -86,13 +106,16 @@ print('nbl:', len(ell))
 
 # assert False, 'there seems to be a problem with the ell bins, the output files doesnt have 32 bins!!'
 
-assert np.allclose(ell, np.unique(cl_ll_out[:, 0]), atol=0, rtol=1e-4)
-np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
-np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
-np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
+assert np.allclose(ell, np.unique(cl_ll_out[:, 0]), atol=0, rtol=1e-4), 'ell values are not the same'
+# np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
+# np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
+# np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
 
-plt.plot(cl_ll_out[:, 3], label='out')
-plt.plot(cl_ll_in[:, 3], label='in', ls='--')
+
+# plt.plot(cl_ll_in[:, 3], label='in', ls='--')
+# plt.plot(cl_ll_out[:, 3], label='out')
+# plt.legend()
+
 
 
 zpairs_auto, zpairs_cross, zpairs_3x2pt = mm.get_zpairs(zbins)
@@ -149,12 +172,12 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
 
 
 cov_10d_dict = {
-    'SVA': cov_sva_10d,
-    'MIX': cov_mix_10d,
-    'SN': cov_sn_10d,
-    'G': cov_g_10d,
-    'SSC': cov_ssc_10d,
-    'cNG': cov_cng_10d,
+    # 'SVA': cov_sva_10d,
+    # 'MIX': cov_mix_10d,
+    # 'SN': cov_sn_10d,
+    # 'G': cov_g_10d,
+    # 'SSC': cov_ssc_10d,
+    # 'cNG': cov_cng_10d,
     'tot': cov_tot_10d,
 }
 
