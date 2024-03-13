@@ -30,7 +30,7 @@ cl_gg_name = cfg['tabulated inputs files']['cgg_file'].strip("['").strip("']")
 
 
 chunk_size = 5000000
-load_mat_files = False
+load_mat_files = True
 
 
 ind = mm.build_full_ind('triu', 'row-major', zbins)
@@ -63,14 +63,6 @@ if load_mat_files:
     print('Covariance matrix loaded in ', time.perf_counter() - start_time, ' seconds')
 
     mm.matshow(cov_mat_fmt_2dcloe, log=True, title='original, 2d CLOE')
-
-    cov_mat_fmt_2dcloe = np.fliplr(cov_mat_fmt_2dcloe)
-    cov_mat_fmt_2dcloe = np.flipud(cov_mat_fmt_2dcloe)
-
-    cov_mat_fmt_2ddav = mm.cov_2d_cloe_to_dav(cov_mat_fmt_2dcloe, nbl, zbins, 'ell', 'ell')
-
-    mm.matshow(cov_mat_fmt_2dcloe, log=True, title='flipped, 2d CLOE')
-    mm.matshow(cov_mat_fmt_2ddav, log=True, title='flipped, 2d Dav')
 
     corr_2dcloe = mm.cov2corr(cov_mat_fmt_2dcloe)
 
@@ -117,52 +109,45 @@ cov_ssc_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_cng_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 cov_tot_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 
-cov_g_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
-cov_sva_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
-cov_mix_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
-cov_sn_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
-cov_ssc_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
-cov_cng_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
-cov_tot_10d_test = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
-
 
 ells = pd.read_csv(f'{cov_folder}/covariance_list.dat', usecols=['ell1'], delim_whitespace=True)['ell1'].unique()
 ell_indices = {ell: idx for idx, ell in enumerate(ells)}
 assert len(ells) == nbl, 'number of ells in the list file does not match the number of ell bins'
 
+# start = time.perf_counter()
+# for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
+
+#     print('entered chunk loop')
+
+#     # ! get the individual terms from the list file
+#     for index, row in tqdm(df_chunk.iterrows()):
+
+#         probe_str = row['#obs']
+#         probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d = probe_idx_dict[probe_str[0]
+#                                                                             ], probe_idx_dict[probe_str[1]], probe_idx_dict[probe_str[2]], probe_idx_dict[probe_str[3]]
+
+#         ell1_idx = ell_indices[row['ell1']]
+#         ell2_idx = ell_indices[row['ell2']]
+#         z1_idx, z2_idx, z3_idx, z4_idx = row['tomoi'] - 1, row['tomoj'] - 1, row['tomok'] - 1, row['tomol'] - 1
+
+#         cov_sva_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
+#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sva']
+#         cov_mix_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
+#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg mix']
+#         cov_sn_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
+#                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sn']
+#         cov_g_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d, ell1_idx, ell2_idx,
+#                   z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sva'] + row['covg mix'] + row['covg sn']
+#         cov_ssc_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
+#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covssc']
+#         cov_cng_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
+#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covng']
+#         cov_tot_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
+#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['cov']
+# print(f"Processed in {time.perf_counter() - start:.2f} seconds")
+
 
 start = time.perf_counter()
-for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
-
-    print('entered chunk loop')
-
-    # ! get the individual terms from the list file
-    for index, row in tqdm(df_chunk.iterrows()):
-
-        probe_str = row['#obs']
-        probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d = probe_idx_dict[probe_str[0]
-                                                                            ], probe_idx_dict[probe_str[1]], probe_idx_dict[probe_str[2]], probe_idx_dict[probe_str[3]]
-
-        ell1_idx = ell_indices[row['ell1']]
-        ell2_idx = ell_indices[row['ell2']]
-        z1_idx, z2_idx, z3_idx, z4_idx = row['tomoi'] - 1, row['tomoj'] - 1, row['tomok'] - 1, row['tomol'] - 1
-
-        cov_sva_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sva']
-        cov_mix_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg mix']
-        cov_sn_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-                   ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sn']
-        cov_g_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d, ell1_idx, ell2_idx,
-                  z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sva'] + row['covg mix'] + row['covg sn']
-        cov_ssc_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covssc']
-        cov_cng_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covng']
-        cov_tot_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['cov']
-
-
 for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
 
     # Vectorize the extraction of probe indices
@@ -182,27 +167,16 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
     index_tuple = (probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d, ell1_idx, ell2_idx,
                    z_indices[:, 0], z_indices[:, 1], z_indices[:, 2], z_indices[:, 3])
 
-    cov_sva_10d_test[index_tuple] = df_chunk['covg sva'].values
-    cov_mix_10d_test[index_tuple] = df_chunk['covg mix'].values
-    cov_sn_10d_test[index_tuple] = df_chunk['covg sn'].values
-    cov_g_10d_test[index_tuple] = df_chunk['covg sva'].values + df_chunk['covg mix'].values + df_chunk['covg sn'].values
-    cov_ssc_10d_test[index_tuple] = df_chunk['covssc'].values
-    cov_cng_10d_test[index_tuple] = df_chunk['covng'].values
-    cov_tot_10d_test[index_tuple] = df_chunk['cov'].values
+    cov_sva_10d[index_tuple] = df_chunk['covg sva'].values
+    cov_mix_10d[index_tuple] = df_chunk['covg mix'].values
+    cov_sn_10d[index_tuple] = df_chunk['covg sn'].values
+    cov_g_10d[index_tuple] = df_chunk['covg sva'].values + df_chunk['covg mix'].values + df_chunk['covg sn'].values
+    cov_ssc_10d[index_tuple] = df_chunk['covssc'].values
+    cov_cng_10d[index_tuple] = df_chunk['covng'].values
+    cov_tot_10d[index_tuple] = df_chunk['cov'].values
 
-end = time.perf_counter()
-print(f"Processed in {end - start:.2f} seconds")
+print(f"df loaded in {time.perf_counter() - start:.2f} seconds")
 
-np.testing.assert_allclose(cov_g_10d, cov_g_10d_test, atol=0, rtol=1e-5)
-np.testing.assert_allclose(cov_sva_10d, cov_sva_10d_test, atol=0, rtol=1e-5)
-np.testing.assert_allclose(cov_mix_10d, cov_mix_10d_test, atol=0, rtol=1e-5)
-np.testing.assert_allclose(cov_sn_10d, cov_sn_10d_test, atol=0, rtol=1e-5)
-np.testing.assert_allclose(cov_ssc_10d, cov_ssc_10d_test, atol=0, rtol=1e-5)
-np.testing.assert_allclose(cov_cng_10d, cov_cng_10d_test, atol=0, rtol=1e-5)
-np.testing.assert_allclose(cov_tot_10d, cov_tot_10d_test, atol=0, rtol=1e-5)
-
-
-assert False, 'stop here to check consistency of two methods'
 
 cov_10d_dict = {
     'SVA': cov_sva_10d,
@@ -247,13 +221,17 @@ for cov_term in cov_10d_dict.keys():
     del cov_llll_4d, cov_llgl_4d, cov_llgg_4d, cov_glgl_4d, cov_glgg_4d, cov_gggg_4d
     gc.collect()
 
-# TODO the line below is wrong
-# TODO check nbl issue
-# TODO check the total cov reshaped in this way against the 2D outputted one
-
+# test mat vs list format
 cov_tot_3x2pt_4d = mm.cov_3x2pt_10D_to_4D(cov_tot_10d, probe_ordering, nbl, zbins, ind.copy(), GL_or_LG)
 cov_tot_3x2pt_2dcloe = mm.cov_4D_to_2DCLOE_3x2pt(cov_tot_3x2pt_4d, zbins, block_index='vincenzo')
 
-mm.compare_arrays(cov_mat_fmt_2dcloe, cov_tot_3x2pt_2dcloe, 'cov_mat_fmt_2dcloe', 'cov_list_fmt_2dcloe', log=True)
+cov_llll_6d = cov_tot_10d[0, 0, 0, 0, ...]
+cov_llll_4d = mm.cov_6D_to_4D(cov_llll_6d, nbl, zpairs_auto, ind_auto)
+cov_llll_2d = mm.cov_4D_to_2D(cov_llll_4d, block_index='ij')
+
+elem_auto = nbl * zpairs_auto
+mm.compare_arrays(cov_mat_fmt_2dcloe[-elem_auto:, -elem_auto:], cov_llll_2d,
+                  'cov_mat_fmt_2dcloe', 'cov_llll_2d', log_array=True)
+
 
 print('done in ', time.perf_counter() - start, ' seconds')
