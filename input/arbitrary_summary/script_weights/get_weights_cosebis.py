@@ -6,7 +6,6 @@ import mpmath
 from scipy.interpolate import interp1d
 import multiprocessing as mpi
 from scipy.signal import argrelextrema
-from scipy import pi,sqrt,exp
 from scipy.special import p_roots
 from numpy.polynomial.legendre import legcompanion, legval, legder
 import numpy.linalg as la
@@ -45,7 +44,7 @@ tmax_gg *= arcmintorad
 tmin_gm *= arcmintorad
 tmax_gm *= arcmintorad
 theta_gg = np.geomspace(tmin_gg,tmax_gg, N_theta)
-theta_mm = np.geomspace(tmin_gg,tmax_gg, N_theta)
+theta_mm = np.geomspace(tmin_mm,tmax_mm, N_theta)
 theta_gm = np.geomspace(tmin_gm,tmax_gm, N_theta)
 
 

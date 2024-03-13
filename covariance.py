@@ -19,7 +19,6 @@ if len(sys.argv) > 1:
     covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(config)
     fileinp = FileInput(bias)
     read_in_tables = fileinp.read_input(config)
-
 else:
     covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input()
     fileinp = FileInput(bias)
