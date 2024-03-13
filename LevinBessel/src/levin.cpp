@@ -1099,12 +1099,18 @@ double Levin::single_bessel_integrand(double x, void *p)
     if (lp->logx)
     {
         x = log(x);
-        result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        if (x <= lp->x_max && x >= lp->x_min)
+        {
+            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        }
         x = exp(x);
     }
     else
     {
-        result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        if (x <= lp->x_max && x >= lp->x_min)
+        {
+            result = gsl_spline_eval(lp->spline_integrand.at(lp->int_index_integral[tid]), x, lp->acc_integrand.at(lp->int_index_integral[tid]));
+        }
     }
     if (lp->logy[lp->int_index_integral[tid]])
     {
