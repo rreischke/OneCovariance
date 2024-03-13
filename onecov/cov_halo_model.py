@@ -154,6 +154,22 @@ class HaloModel(Setup):
         self.mass_func = \
             self.calc_mass_func(zet, cosmo_dict, prec['hm'], prec['powspec'])
         self.hod = HOD(bias_dict, prec['hm'])
+        '''if zet == 0:
+            np.savetxt("occ_num_sat", self.hod.occ_num_and_prob_per_pop(
+                            hod_dict,
+                            'sat',
+                            self.mor_tab,
+                            self.occprob_tab,
+                            self.occnum_tab
+                        )[0])
+            np.savetxt("occ_num_cen", self.hod.occ_num_and_prob_per_pop(
+                            hod_dict,
+                            'cen',
+                            self.mor_tab,
+                            self.occprob_tab,
+                            self.occnum_tab
+                        )[0])
+            np.savetxt("mass", self.hod.Mrange)'''
         self.ngal = self.nbar(hod_dict)
         self.ncen = self.nbar_cen(hod_dict)
         self.nsat = self.nbar_sat(hod_dict)

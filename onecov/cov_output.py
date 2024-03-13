@@ -1198,7 +1198,7 @@ class Output():
         else:
             olist = []
             splitidx = 0
-            write_header = True        
+            write_header = True
             for oidx, obs in enumerate(obslist):
                 obs_copy = np.copy(obs)
                 if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
@@ -1325,7 +1325,7 @@ class Output():
                                                             nongauss[oidx][idxs],
                                                             ssc[oidx][idxs])
                                                         olist.append(ostr)
-                            elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                            elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
                                 tomo1 = gauss[oidx].shape[4]
                                 tomo3 = gauss[oidx].shape[6]
                                 tomo4 = gauss[oidx].shape[7]
@@ -1969,6 +1969,7 @@ class Output():
                             file.write("%s\n" % ostr)
                 
         else:
+            
             idxlist = self.__get_idxlist(proj_quant, sampledim)
             olist = []
             splitidx = 0
@@ -2018,7 +2019,7 @@ class Output():
                     obs_copy = 'PsigmEmm'
                 if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'PsigmBmm'
-                
+
                 if not obsbool[oidx]:
                     splitidx += 3
                     continue
@@ -2122,7 +2123,7 @@ class Output():
                                                             nongauss_aux,
                                                             ssc_aux)
                                                         olist.append(ostr)
-                    elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                    elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
                         tomo1 = gauss[oidx].shape[4]
                         tomo3 = gauss[oidx].shape[6]
                         tomo4 = gauss[oidx].shape[7]
@@ -2656,7 +2657,7 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                        elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                        elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
                             tomo1 = gauss[oidx].shape[4]
                             tomo3 = gauss[oidx].shape[6]
                             tomo4 = gauss[oidx].shape[7]
@@ -3145,7 +3146,7 @@ class Output():
                                                         nongauss[oidx][idxs],
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
-                elif obs == ['gggm', 'mmgm', 'gmxip', 'gmxim']:
+                elif obs in ['gggm', 'mmgm', 'gmxip', 'gmxim']:
                     tomo1 = gauss[oidx].shape[4]
                     tomo3 = gauss[oidx].shape[6]
                     tomo4 = gauss[oidx].shape[7]
