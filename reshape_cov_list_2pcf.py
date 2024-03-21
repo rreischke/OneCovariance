@@ -1,6 +1,6 @@
 import gc
 import time
-from matplotlib import pyplot as plt
+from matplotlib import cm, pyplot as plt
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -40,6 +40,7 @@ def extract_probes(probe_string, probe_names):
 
 cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_2pcf'
 cl_input_folder = '/home/cosmo/davide.sciotti/data/CLOE_validation/output/v2.0.2/C01'
+
 
 cfg = configparser.ConfigParser()
 cfg.read(cov_folder + '/save_configs.ini')
@@ -207,8 +208,40 @@ for probe_idx in range(4):
     variance = np.diag(cov_g_2d)
     np.savetxt(cov_folder + '/variance_' + probe_names[probe_idx] + '.dat', variance)
 
+colors = cm.rainbow(np.linspace(0, 1, zbins))
+
+# ! plot 2PCF and errors
+xi_gg_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-GG-PyCCL-C01.dat')
+xi_gl_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-GL-PyCCL-C01.dat')
+xi_pp_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-Lplus-PyCCL-C01.dat')
+xi_mm_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-Lminus-PyCCL-C01.dat')
+
+theta_arr = xi_gg_2d[:, 0]
+xi_gg_2d = xi_gg_2d[:, 1:]
+xi_gl_2d = xi_gl_2d[:, 1:]
+xi_pp_2d = xi_pp_2d[:, 1:]
+xi_mm_2d = xi_mm_2d[:, 1:]
+
+xi_gg_3D = mm.cl_2D_to_3D_symmetric(xi_gg_2d, theta_bins, zpairs_auto, zbins)
+xi_gl_3D = mm.cl_2D_to_3D_asymmetric(xi_gl_2d, theta_bins, zbins=zbins, order='row-major')
+xi_pp_3D = mm.cl_2D_to_3D_symmetric(xi_pp_2d, theta_bins, zpairs_auto, zbins)
+xi_mm_3D = mm.cl_2D_to_3D_symmetric(xi_mm_2d, theta_bins, zpairs_auto, zbins)
+
+for zi in range(zbins):
+    cov_vs_theta = np.sqrt([cov_g_10d[0, 0, theta_idx, theta_idx, zi, zi, zi, zi] for theta_idx in range(theta_bins)])
+    plt.errorbar(theta_arr, xi_gg_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}')
 
 
+for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)):
+    plt.figure()
+    plt.title(probe_names[probe_idx])
+    for zi in range(zbins):
+        cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi] for theta_idx in range(theta_bins)])
+        # plt.errorbar(theta_arr, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}')
+        plt.loglog(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
+        plt.loglog(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
+    plt.xlabel('theta [arcmin]')
+    plt.ylabel('2PCF')
 
 
 print('done in ', time.perf_counter() - start, ' seconds')
