@@ -38,9 +38,8 @@ def extract_probes(probe_string, probe_names):
     return matched_probes
 
 
-cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_2pcf'
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_2pcf_v2'
 cl_input_folder = '/home/cosmo/davide.sciotti/data/CLOE_validation/output/v2.0.2/C01'
-
 
 cfg = configparser.ConfigParser()
 cfg.read(cov_folder + '/save_configs.ini')
@@ -56,9 +55,10 @@ load_mat_files = True
 ind = mm.build_full_ind('triu', 'row-major', zbins)
 
 probe_names = ['gg', 'gm', 'xip', 'xim']
+df_header = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=False, nrows=0)
 column_names = [
     '#obs', 'theta1', 'theta2', 's1', 's2', 'tomoi', 'tomoj', 'tomok', 'tomol',
-    'cov', 'covg', 'covng', 'covssc',
+    'cov', 'covg sva', 'covg mix', 'covg sn', 'covng', 'covssc',
 ]
 
 
@@ -125,11 +125,14 @@ ind_cross = ind[zpairs_auto:zpairs_cross + zpairs_auto, :]
 cov_g_10d = np.zeros((4, 4, theta_bins, theta_bins, zbins, zbins, zbins, zbins))
 # cov_g_10d_test = np.zeros((4, 4, theta_bins, theta_bins, zbins, zbins, zbins, zbins))
 
-thetas = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True,
-                     usecols=['theta1'], names=column_names, header=0)['theta1'].unique()
+thetas = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, usecols=['theta1'])['theta1'].unique()
+
 theta_indices = {theta: idx for idx, theta in enumerate(thetas)}
 assert len(thetas) == theta_bins, 'Number of thetas does not match the number of theta bins'
 
+print('Loading the dataframe in chunks...')
+
+# ! load the dataframe in chunks - unoptimised version
 # start = time.perf_counter()
 # for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
 
@@ -139,7 +142,7 @@ assert len(thetas) == theta_bins, 'Number of thetas does not match the number of
 #     theta_indices = {theta: idx for idx, theta in enumerate(thetas)}
 #     assert len(thetas) == theta_bins, 'number of thetas in the list file does not match the number of theta bins'
 
-#     # ! get the individual terms from the list file
+#     #  get the individual terms from the list file
 #     print('number of rows in the dataframe: ', df_chunk.shape[0])
 
 #     for index, row in tqdm(df_chunk.iterrows()):
@@ -156,7 +159,7 @@ assert len(thetas) == theta_bins, 'Number of thetas does not match the number of
 #                   theta1_idx, theta2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg']
 # print('df loaded in ', time.perf_counter() - start, ' seconds')
 
-print('Loading the dataframe in chunks...')
+# ! load the dataframe in chunks - optimised version
 start = time.perf_counter()
 for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
 
@@ -172,7 +175,7 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
     index_tuple = (probe_idxs[:, 0], probe_idxs[:, 1], theta1_indices, theta2_indices,
                    z_indices[:, 0], z_indices[:, 1], z_indices[:, 2], z_indices[:, 3])
 
-    cov_g_10d[index_tuple] = df_chunk['covg'].values
+    cov_g_10d[index_tuple] = df_chunk['cov'].values
 
 print('df optimized loaded in ', time.perf_counter() - start, ' seconds')
 
@@ -194,14 +197,13 @@ mm.compare_arrays(cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto], cov_g_2d_gggg,
 # save vectors of variances for Matteo
 for probe_idx in range(4):
     cov_g_6d = cov_g_10d[probe_idx, probe_idx, ...]
-    
+
     zpairs = zpairs_auto
     ind_here = ind_auto
     if probe_idx == 1:
         zpairs = zpairs_cross
         ind_here = ind_cross
-        
-        
+
     cov_g_4d = mm.cov_6D_to_4D(cov_g_6d, theta_bins, zpairs, ind_here)
     cov_g_2d = mm.cov_4D_to_2D(cov_g_4d, block_index='vincenzo')
     mm.matshow(cov_g_2d, log=True)
@@ -227,21 +229,20 @@ xi_gl_3D = mm.cl_2D_to_3D_asymmetric(xi_gl_2d, theta_bins, zbins=zbins, order='r
 xi_pp_3D = mm.cl_2D_to_3D_symmetric(xi_pp_2d, theta_bins, zpairs_auto, zbins)
 xi_mm_3D = mm.cl_2D_to_3D_symmetric(xi_mm_2d, theta_bins, zpairs_auto, zbins)
 
-for zi in range(zbins):
-    cov_vs_theta = np.sqrt([cov_g_10d[0, 0, theta_idx, theta_idx, zi, zi, zi, zi] for theta_idx in range(theta_bins)])
-    plt.errorbar(theta_arr, xi_gg_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}')
-
 
 for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)):
     plt.figure()
     plt.title(probe_names[probe_idx])
     for zi in range(zbins):
-        cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi] for theta_idx in range(theta_bins)])
-        # plt.errorbar(theta_arr, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}')
-        plt.loglog(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
-        plt.loglog(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
+        cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
+                               for theta_idx in range(theta_bins)])
+        plt.errorbar(theta_arr, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+        # plt.plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
+        # plt.plot(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
     plt.xlabel('theta [arcmin]')
     plt.ylabel('2PCF')
+    plt.yscale('log')
+    plt.xscale('log')
 
 
 print('done in ', time.perf_counter() - start, ' seconds')
