@@ -15,7 +15,7 @@ import bin.my_module as mm
 # matplotlib.use('Agg')
 
 
-cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_ISTF_v2'
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_SPV3_std'
 
 cfg = configparser.ConfigParser()
 cfg.read(cov_folder + '/save_configs.ini')
