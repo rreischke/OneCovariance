@@ -62,11 +62,11 @@ if load_mat_files:
     cov_mat_fmt_2dcloe = np.genfromtxt(f'{cov_folder}/covariance_matrix.mat')
     print('Covariance matrix loaded in ', time.perf_counter() - start_time, ' seconds')
 
-    mm.matshow(cov_mat_fmt_2dcloe, log=True, title='original, 2d CLOE')
+    mm.matshow(cov_mat_fmt_2dcloe, log=True, title='cov, 2dCLOE')
 
     corr_2dcloe = mm.cov2corr(cov_mat_fmt_2dcloe)
 
-    mm.matshow(corr_2dcloe, log=False, title=' corr flipped, 2d CLOE',
+    mm.matshow(corr_2dcloe, log=False, title=' corr 2dCLOE',
                matshow_kwargs={'cmap': 'RdBu_r', 'vmin': -1, 'vmax': 1})
 
     # np.savez_compressed(f'{cov_folder}/cov_tot_2dCLOE.npz', cov_mat_fmt_2dcloe)
@@ -87,8 +87,6 @@ cl_gg_out = np.genfromtxt(f'{cov_folder}/Cell_gg.ascii')
 
 ell = np.unique(cl_ll_out[:, 0])
 print('nbl:', len(ell))
-
-# assert False, 'there seems to be a problem with the ell bins, the output files doesnt have 32 bins!!'
 
 assert np.allclose(ell, np.unique(cl_ll_out[:, 0]), atol=0, rtol=1e-4), 'ell values are not the same'
 # np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
@@ -232,6 +230,29 @@ cov_llll_2d = mm.cov_4D_to_2D(cov_llll_4d, block_index='ij')
 elem_auto = nbl * zpairs_auto
 mm.compare_arrays(cov_mat_fmt_2dcloe[-elem_auto:, -elem_auto:], cov_llll_2d,
                   'cov_mat_fmt_2dcloe', 'cov_llll_2d', log_array=True)
+
+# ! plot errorbars
+for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)):
+    plt.figure()
+    plt.title(probe_names[probe_idx])
+    # for zi in range(zbins):
+    for zi in (9, ):
+        
+        cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
+                               for theta_idx in range(theta_bins)])
+        
+        # errorbars
+        plt.errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+        
+        # plot signal and error separately
+        # plt.plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
+        # plt.plot(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
+        
+    plt.xlabel(f'theta [{theta_unit}]')
+    plt.ylabel('2PCF')
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.legend()
 
 
 print('done in ', time.perf_counter() - start, ' seconds')

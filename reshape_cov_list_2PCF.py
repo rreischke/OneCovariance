@@ -50,6 +50,7 @@ theta_max = int(float(cfg['covTHETAspace settings']['theta_max']))
 
 chunk_size = 5000000
 load_mat_files = True
+theta_unit = 'arcmin'
 
 
 ind = mm.build_full_ind('triu', 'row-major', zbins)
@@ -218,7 +219,16 @@ xi_gl_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-GL-PyCCL-C01.dat')
 xi_pp_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-Lplus-PyCCL-C01.dat')
 xi_mm_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-Lminus-PyCCL-C01.dat')
 
-theta_arr = xi_gg_2d[:, 0]
+theta_deg = xi_gg_2d[:, 0]
+theta_arcmin = theta_deg*60
+
+if theta_unit == 'arcmin':
+    theta_arr = theta_arcmin
+elif theta_unit == 'deg':
+    theta_arr = theta_deg
+else:
+    raise ValueError('theta unit not recognised')
+
 xi_gg_2d = xi_gg_2d[:, 1:]
 xi_gl_2d = xi_gl_2d[:, 1:]
 xi_pp_2d = xi_pp_2d[:, 1:]
@@ -233,16 +243,23 @@ xi_mm_3D = mm.cl_2D_to_3D_symmetric(xi_mm_2d, theta_bins, zpairs_auto, zbins)
 for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)):
     plt.figure()
     plt.title(probe_names[probe_idx])
-    for zi in range(zbins):
+    # for zi in range(zbins):
+    for zi in (9, ):
+        
         cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
                                for theta_idx in range(theta_bins)])
-        plt.errorbar(theta_arr, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+        
+        # errorbars
+        plt.errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+        
+        # plot signal and error separately
         # plt.plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
         # plt.plot(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
-    plt.xlabel('theta [arcmin]')
+        
+    plt.xlabel(f'theta [{theta_unit}]')
     plt.ylabel('2PCF')
     plt.yscale('log')
     plt.xscale('log')
-
+    plt.legend()
 
 print('done in ', time.perf_counter() - start, ' seconds')
