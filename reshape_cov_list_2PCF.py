@@ -38,7 +38,7 @@ def extract_probes(probe_string, probe_names):
     return matched_probes
 
 
-cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_2pcf_v2'
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_2PCF_C01'
 cl_input_folder = '/home/cosmo/davide.sciotti/data/CLOE_validation/output/v2.0.2/C01'
 
 cfg = configparser.ConfigParser()
@@ -51,7 +51,6 @@ theta_max = int(float(cfg['covTHETAspace settings']['theta_max']))
 chunk_size = 5000000
 load_mat_files = True
 theta_unit = 'arcmin'
-
 
 ind = mm.build_full_ind('triu', 'row-major', zbins)
 
