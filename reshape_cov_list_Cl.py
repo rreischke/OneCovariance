@@ -15,14 +15,15 @@ import bin.my_module as mm
 # matplotlib.use('Agg')
 
 
-cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_SPV3_std'
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_Cl_C01'
 
 cfg = configparser.ConfigParser()
 cfg.read(cov_folder + '/save_configs.ini')
 
 zbins = len(cfg['survey specs']['ellipticity_dispersion'].split(', '))
-nbl = int(float(cfg['covELLspace settings']['ell_bins_clustering']))
+nbl = int(float(cfg['covELLspace settings']['ell_bins']))
 ellmax = int(float(cfg['covELLspace settings']['ell_max']))
+ellmin = int(float(cfg['covELLspace settings']['ell_min']))
 cl_input_folder = cfg['tabulated inputs files']['cell_directory']
 cl_ll_name = cfg['tabulated inputs files']['cmm_file'].strip("['").strip("']")
 cl_gl_name = cfg['tabulated inputs files']['cgm_file'].strip("['").strip("']")
@@ -53,6 +54,31 @@ probe_name_dict = {
 probe_ordering = (('L', 'L'), ('G', 'L'), ('G', 'G'))
 GL_or_LG = 'GL'
 
+
+# ! consistency check for the output cls
+cl_ll_in = np.genfromtxt(f'{cl_input_folder}/{cl_ll_name}')
+cl_gl_in = np.genfromtxt(f'{cl_input_folder}/{cl_gl_name}')
+cl_gg_in = np.genfromtxt(f'{cl_input_folder}/{cl_gg_name}')
+
+cl_ll_out = np.genfromtxt(f'{cov_folder}/Cell_kappakappa.ascii')
+cl_gl_out = np.genfromtxt(f'{cov_folder}/Cell_gkappa.ascii')
+cl_gg_out = np.genfromtxt(f'{cov_folder}/Cell_gg.ascii')
+
+ell_in = np.unique(cl_ll_in[:, 0])
+ell_out = np.unique(cl_ll_out[:, 0])
+
+print('nbl_in:', len(ell_in))
+print('nbl_out:', len(ell_out))
+
+assert np.allclose(ell_in, ell_out, atol=0, rtol=1e-4), 'ell values are not the same'
+np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
+np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
+np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
+
+cov_ells = np.geomspace(ellmin, ellmax, nbl)
+print('covariance computed at ell values:\n', cov_ells)
+
+
 # ! get, show and reshape the .mat file, for a later check
 if load_mat_files:
 
@@ -75,24 +101,6 @@ if load_mat_files:
     # del cov_mat_fmt_2ddav, cov_mat_fmt_2dcloe
     # gc.collect()
 
-# ! consistency check for the output cls
-cl_ll_in = np.genfromtxt(f'{cl_input_folder}/{cl_ll_name}')
-cl_gl_in = np.genfromtxt(f'{cl_input_folder}/{cl_ll_name}')
-cl_gg_in = np.genfromtxt(f'{cl_input_folder}/{cl_ll_name}')
-
-cl_ll_out = np.genfromtxt(f'{cov_folder}/Cell_kappakappa.ascii')
-cl_gl_out = np.genfromtxt(f'{cov_folder}/Cell_gkappa.ascii')
-cl_gg_out = np.genfromtxt(f'{cov_folder}/Cell_gg.ascii')
-
-
-ell = np.unique(cl_ll_out[:, 0])
-print('nbl:', len(ell))
-
-assert np.allclose(ell, np.unique(cl_ll_out[:, 0]), atol=0, rtol=1e-4), 'ell values are not the same'
-# np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
-# np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
-# np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
-
 
 zpairs_auto, zpairs_cross, zpairs_3x2pt = mm.get_zpairs(zbins)
 ind_auto = ind[:zpairs_auto, :]
@@ -109,7 +117,7 @@ cov_tot_10d = np.zeros((2, 2, 2, 2, nbl, nbl, zbins, zbins, zbins, zbins))
 
 
 ells = pd.read_csv(f'{cov_folder}/covariance_list.dat', usecols=['ell1'], delim_whitespace=True)['ell1'].unique()
-ell_indices = {ell: idx for idx, ell in enumerate(ells)}
+ell_indices = {ell_out: idx for idx, ell_out in enumerate(ells)}
 assert len(ells) == nbl, 'number of ells in the list file does not match the number of ell bins'
 
 # start = time.perf_counter()
@@ -237,17 +245,17 @@ for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)
     plt.title(probe_names[probe_idx])
     # for zi in range(zbins):
     for zi in (9, ):
-        
+
         cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
                                for theta_idx in range(theta_bins)])
-        
+
         # errorbars
         plt.errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
-        
+
         # plot signal and error separately
         # plt.plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
         # plt.plot(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
-        
+
     plt.xlabel(f'theta [{theta_unit}]')
     plt.ylabel('2PCF')
     plt.yscale('log')
