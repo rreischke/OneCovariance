@@ -104,7 +104,6 @@ cl_gg_out = np.genfromtxt(f'{cov_folder}/Cell_gg.ascii')
 ell = np.unique(cl_ll_out[:, 0])
 print('nbl:', len(ell))
 
-# assert False, 'there seems to be a problem with the ell bins, the output files doesnt have 32 bins!!'
 
 assert np.allclose(ell, np.unique(cl_ll_out[:, 0]), atol=0, rtol=1e-4), 'ell values are not the same'
 # np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
@@ -123,12 +122,20 @@ ind_cross = ind[zpairs_auto:zpairs_cross + zpairs_auto, :]
 
 # ! import _list covariance file
 cov_g_10d = np.zeros((4, 4, theta_bins, theta_bins, zbins, zbins, zbins, zbins))
-# cov_g_10d_test = np.zeros((4, 4, theta_bins, theta_bins, zbins, zbins, zbins, zbins))
+cov_sva_10d = np.zeros((4, 4, theta_bins, theta_bins, zbins, zbins, zbins, zbins))
+cov_mix_10d = np.zeros((4, 4, theta_bins, theta_bins, zbins, zbins, zbins, zbins))
+cov_sn_10d = np.zeros((4, 4, theta_bins, theta_bins, zbins, zbins, zbins, zbins))
 
 thetas = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, usecols=['theta1'])['theta1'].unique()
 
 theta_indices = {theta: idx for idx, theta in enumerate(thetas)}
 assert len(thetas) == theta_bins, 'Number of thetas does not match the number of theta bins'
+
+# read and print the header
+with open(f'{cov_folder}/covariance_list.dat', 'r') as file:
+    header = file.readline().strip()  # Read the first line and strip newline characters
+print('.dat file header: ')
+print(header)
 
 print('Loading the dataframe in chunks...')
 
@@ -149,6 +156,9 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
                    z_indices[:, 0], z_indices[:, 1], z_indices[:, 2], z_indices[:, 3])
 
     cov_g_10d[index_tuple] = df_chunk['cov'].values
+    cov_sva_10d[index_tuple] = df_chunk['covg sva'].values
+    cov_mix_10d[index_tuple] = df_chunk['covg mix'].values
+    cov_sn_10d[index_tuple] = df_chunk['covg sn'].values
 
 print('df optimized loaded in ', time.perf_counter() - start, ' seconds')
 
@@ -161,10 +171,11 @@ cov_g_2d_gggg = mm.cov_4D_to_2D(cov_g_4d_gggg, block_index='ij')
 n_elem_auto = theta_bins * zpairs_auto
 assert n_elem_auto == cov_g_2d_gggg.shape[0], 'number of elements in the 2d cov matrix does not match the expected one'
 
-mm.matshow(cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto], log=True)
-mm.matshow(cov_g_2d_gggg, log=True)
+if load_mat_files:
+    mm.matshow(cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto], log=True)
+    mm.matshow(cov_g_2d_gggg, log=True)
 
-mm.compare_arrays(cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto], cov_g_2d_gggg,
+    mm.compare_arrays(cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto], cov_g_2d_gggg,
                   'cov_mat_fmt_2dcloe', 'cov_list_fmt_2d')
 
 # save vectors of variances for Matteo
@@ -179,6 +190,7 @@ for probe_idx in range(4):
 
     cov_g_4d = mm.cov_6D_to_4D(cov_g_6d, theta_bins, zpairs, ind_here)
     cov_g_2d = mm.cov_4D_to_2D(cov_g_4d, block_index='vincenzo')
+    
     mm.matshow(cov_g_2d, log=True)
     variance = np.diag(cov_g_2d)
     np.savetxt(cov_folder + '/variance_' + probe_names[probe_idx] + '.dat', variance)
@@ -219,18 +231,27 @@ for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)
     row = probe_idx // cols
     col = probe_idx % cols
 
-    for zi in range(zbins):
-        # for zi in (0, 9, ):
+    # for zi in range(zbins):
+    for zi in (5, ):
 
-        cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
-                               for theta_idx in range(theta_bins)])
+        cov_g_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
+                                  for theta_idx in range(theta_bins)])
+        cov_sva_vs_theta = np.sqrt([cov_sva_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
+                                    for theta_idx in range(theta_bins)])
+        cov_mix_vs_theta = np.sqrt([cov_mix_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
+                                    for theta_idx in range(theta_bins)])
+        cov_sn_vs_theta = np.sqrt([cov_sn_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
+                                   for theta_idx in range(theta_bins)])
 
         # errorbars
         # ax[row, col].errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
 
         # plot signal and error separately
-        ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
-        ax[row, col].plot(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
+        ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c='tab:blue')
+        # ax[row, col].plot(theta_arr, cov_g_vs_theta, label=f'z{zi}', c='tab:blue', ls='--')
+        ax[row, col].plot(theta_arr, cov_sva_vs_theta, label=f'z{zi}, sva', c='tab:blue', ls=':')
+        ax[row, col].plot(theta_arr, cov_mix_vs_theta, label=f'z{zi}, mix', c='tab:blue', ls='--')
+        ax[row, col].plot(theta_arr, cov_sn_vs_theta, label=f'z{zi}, sn', c='tab:blue', ls='-.')
 
     ax[row, col].set_title(probe_names[probe_idx])
     ax[row, col].set_xlabel(f'theta [{theta_unit}]')
