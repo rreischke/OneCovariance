@@ -239,6 +239,7 @@ elem_auto = nbl * zpairs_auto
 mm.compare_arrays(cov_mat_fmt_2dcloe[-elem_auto:, -elem_auto:], cov_llll_2d,
                   'cov_mat_fmt_2dcloe', 'cov_llll_2d', log_array=True)
 
+# TODO do this fot the cls to have a visual check against the 2PCF errors
 # ! plot errorbars
 for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)):
     plt.figure()
