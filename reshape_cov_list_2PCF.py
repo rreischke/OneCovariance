@@ -49,7 +49,7 @@ theta_bins = int(float(cfg['covTHETAspace settings']['theta_bins']))
 theta_max = int(float(cfg['covTHETAspace settings']['theta_max']))
 
 chunk_size = 5000000
-load_mat_files = True
+load_mat_files = False
 theta_unit = 'arcmin'
 
 ind = mm.build_full_ind('triu', 'row-major', zbins)
@@ -132,33 +132,6 @@ assert len(thetas) == theta_bins, 'Number of thetas does not match the number of
 
 print('Loading the dataframe in chunks...')
 
-# ! load the dataframe in chunks - unoptimised version
-# start = time.perf_counter()
-# for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
-
-#     print('entered chunk loop')
-
-#     thetas = df_chunk['theta1'].unique()
-#     theta_indices = {theta: idx for idx, theta in enumerate(thetas)}
-#     assert len(thetas) == theta_bins, 'number of thetas in the list file does not match the number of theta bins'
-
-#     #  get the individual terms from the list file
-#     print('number of rows in the dataframe: ', df_chunk.shape[0])
-
-#     for index, row in tqdm(df_chunk.iterrows()):
-#         probe_str = row['#obs']
-
-#         extracted_probes = extract_probes(probe_str, probe_names)
-#         probe_idx_a, probe_idx_b = probe_idx_dict[extracted_probes[0]], probe_idx_dict[extracted_probes[1]], \
-
-#         theta1_idx = theta_indices[row['theta1']]
-#         theta2_idx = theta_indices[row['theta2']]
-#         z1_idx, z2_idx, z3_idx, z4_idx = row['tomoi'] - 1, row['tomoj'] - 1, row['tomok'] - 1, row['tomol'] - 1
-
-#         cov_g_10d[probe_idx_a, probe_idx_b,
-#                   theta1_idx, theta2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg']
-# print('df loaded in ', time.perf_counter() - start, ' seconds')
-
 # ! load the dataframe in chunks - optimised version
 start = time.perf_counter()
 for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
@@ -219,7 +192,7 @@ xi_pp_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-Lplus-PyCCL-C01.dat')
 xi_mm_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-Lminus-PyCCL-C01.dat')
 
 theta_deg = xi_gg_2d[:, 0]
-theta_arcmin = theta_deg*60
+theta_arcmin = theta_deg * 60
 
 if theta_unit == 'arcmin':
     theta_arr = theta_arcmin
@@ -238,27 +211,32 @@ xi_gl_3D = mm.cl_2D_to_3D_asymmetric(xi_gl_2d, theta_bins, zbins=zbins, order='r
 xi_pp_3D = mm.cl_2D_to_3D_symmetric(xi_pp_2d, theta_bins, zpairs_auto, zbins)
 xi_mm_3D = mm.cl_2D_to_3D_symmetric(xi_mm_2d, theta_bins, zpairs_auto, zbins)
 
-
+cols = 2
+rows = 2
+fig, ax = plt.subplots(rows, cols, figsize=(12, 10))
 for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)):
-    plt.figure()
-    plt.title(probe_names[probe_idx])
-    # for zi in range(zbins):
-    for zi in (9, ):
-        
+
+    row = probe_idx // cols
+    col = probe_idx % cols
+
+    for zi in range(zbins):
+        # for zi in (0, 9, ):
+
         cov_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
                                for theta_idx in range(theta_bins)])
-        
+
         # errorbars
-        plt.errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
-        
+        # ax[row, col].errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+
         # plot signal and error separately
-        # plt.plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
-        # plt.plot(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
-        
-    plt.xlabel(f'theta [{theta_unit}]')
-    plt.ylabel('2PCF')
-    plt.yscale('log')
-    plt.xscale('log')
-    plt.legend()
+        ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
+        ax[row, col].plot(theta_arr, cov_vs_theta, label=f'z{zi}', c=colors[zi], ls='--')
+
+    ax[row, col].set_title(probe_names[probe_idx])
+    ax[row, col].set_xlabel(f'theta [{theta_unit}]')
+    ax[row, col].set_ylabel('2PCF')
+    ax[row, col].set_yscale('log')
+    ax[row, col].set_xscale('log')
+ax[row, col].legend(bbox_to_anchor=(1.22, 1), loc='center right')
 
 print('done in ', time.perf_counter() - start, ' seconds')
