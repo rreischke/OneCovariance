@@ -78,6 +78,12 @@ np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
 cov_ells = np.geomspace(ellmin, ellmax, nbl)
 print('covariance computed at ell values:\n', cov_ells)
 
+# read and print the header
+with open(f'{cov_folder}/covariance_list.dat', 'r') as file:
+    header = file.readline().strip()  # Read the first line and strip newline characters
+print('.dat file header: ')
+print(header)
+
 
 # ! get, show and reshape the .mat file, for a later check
 if load_mat_files:
