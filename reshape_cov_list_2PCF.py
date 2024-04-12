@@ -56,6 +56,8 @@ ind = mm.build_full_ind('triu', 'row-major', zbins)
 
 probe_names = ['gg', 'gm', 'xip', 'xim']
 df_header = pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=False, nrows=0)
+print('df_header:')
+print(df_header)
 column_names = [
     '#obs', 'theta1', 'theta2', 's1', 's2', 'tomoi', 'tomoj', 'tomok', 'tomol',
     'cov', 'covg sva', 'covg mix', 'covg sn', 'covng', 'covssc',
@@ -136,6 +138,9 @@ with open(f'{cov_folder}/covariance_list.dat', 'r') as file:
     header = file.readline().strip()  # Read the first line and strip newline characters
 print('.dat file header: ')
 print(header)
+header_list = re.split('\t', header.strip().replace('\t\t', '\t').replace('\t\t', '\t'))
+assert column_names == header_list, 'column names from .dat file do not match with the expected ones'
+
 
 print('Loading the dataframe in chunks...')
 
@@ -176,7 +181,7 @@ if load_mat_files:
     mm.matshow(cov_g_2d_gggg, log=True)
 
     mm.compare_arrays(cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto], cov_g_2d_gggg,
-                  'cov_mat_fmt_2dcloe', 'cov_list_fmt_2d')
+                      'cov_mat_fmt_2dcloe', 'cov_list_fmt_2d')
 
 # save vectors of variances for Matteo
 for probe_idx in range(4):
@@ -190,7 +195,7 @@ for probe_idx in range(4):
 
     cov_g_4d = mm.cov_6D_to_4D(cov_g_6d, theta_bins, zpairs, ind_here)
     cov_g_2d = mm.cov_4D_to_2D(cov_g_4d, block_index='vincenzo')
-    
+
     mm.matshow(cov_g_2d, log=True)
     variance = np.diag(cov_g_2d)
     np.savetxt(cov_folder + '/variance_' + probe_names[probe_idx] + '.dat', variance)
