@@ -16,6 +16,31 @@ import bin.my_module as mm
 import bin.ell_values as ell_utils
 
 
+def cl_oc_to_3d(probe_oc_name):
+
+    cl_col_name = ['#ell', 'tomoi', 'tomoj', probe_oc_name]
+
+    cl_out_ells = pd.read_csv(f'{cov_folder}/{probe_oc_name}.ascii',
+                              usecols=['#ell'], delim_whitespace=True)['#ell'].unique()
+    cl_out_ell_indices = {ell_out: idx for idx, ell_out in enumerate(cl_out_ells)}
+
+    cl_out_oc_3d = np.zeros((len(cl_out_ells), zbins, zbins))
+
+    df_cl = pd.read_csv(f'{cov_folder}/{probe_oc_name}.ascii', delim_whitespace=True, names=cl_col_name, skiprows=1)
+
+    # Map 'ell' values to their corresponding indices
+    ell_idx = df_cl['#ell'].map(cl_out_ell_indices).values
+
+    # Compute z indices
+    z_indices = df_cl[['tomoi', 'tomoj']].sub(1).values
+
+    # Vectorized assignment to the arrays
+    index_tuple = (ell_idx, z_indices[:, 0], z_indices[:, 1])
+
+    cl_out_oc_3d[index_tuple] = df_cl[probe_oc_name].values
+    return cl_out_oc_3d
+
+
 cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_Cl_C01'
 
 cfg = configparser.ConfigParser()
@@ -94,28 +119,29 @@ assert column_names == header_list, 'column names from .dat file do not match wi
 # ! get, show and reshape the .mat file, for a later check
 if load_mat_files:
 
-    print('Loading covariance matrix from .mat file...')
     start_time = time.perf_counter()
-
-    cov_mat_fmt_2dcloe = np.genfromtxt(f'{cov_folder}/covariance_matrix.mat')
+    print('Loading covariance matrix from .mat file...')
+    cov_mat_fmt = np.genfromtxt(f'{cov_folder}/covariance_matrix.mat')
+    corr_mat_fmt = mm.cov2corr(cov_mat_fmt)
     print('Covariance matrix loaded in ', time.perf_counter() - start_time, ' seconds')
 
-    mm.matshow(cov_mat_fmt_2dcloe, log=True, title='cov, 2dCLOE')
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    # Display the logarithm of the covariance matrix
+    cax1 = ax[0].matshow(np.log10(cov_mat_fmt), cmap='viridis')
+    ax[0].set_title('Log10 Covariance .mat fmt')
+    fig.colorbar(cax1, ax=ax[0])  # Add colorbar to the first plot
 
-    corr_2dcloe = mm.cov2corr(cov_mat_fmt_2dcloe)
+    # Display the correlation matrix
+    cax2 = ax[1].matshow(corr_mat_fmt, cmap='RdBu_r', vmin=-1, vmax=1)
+    ax[1].set_title('Correlation .mat fmt')
+    fig.colorbar(cax2, ax=ax[1])  # Add colorbar to the second plot
 
-    mm.matshow(corr_2dcloe, log=False, title=' corr 2dCLOE',
-               matshow_kwargs={'cmap': 'RdBu_r', 'vmin': -1, 'vmax': 1})
+    plt.show()
 
-    # np.savez_compressed(f'{cov_folder}/cov_tot_2dCLOE.npz', cov_mat_fmt_2dcloe)
-    # np.savez_compressed(f'{cov_folder}/cov_tot_2ddav.npz', cov_mat_fmt_2ddav)
-
-    # del cov_mat_fmt_2ddav, cov_mat_fmt_2dcloe
-    # gc.collect()
 
 # ! load anche check ell values from the .dat covariance file
 cov_ells = pd.read_csv(f'{cov_folder}/covariance_list.dat', usecols=['ell1'], delim_whitespace=True)['ell1'].unique()
-ell_indices = {ell_out: idx for idx, ell_out in enumerate(cov_ells)}
+cov_ell_indices = {ell_out: idx for idx, ell_out in enumerate(cov_ells)}
 # assert len(cov_ells) == nbl, 'number of ells in the list file does not match the number of ell bins'
 
 # this is taken from OC (in cov_ell_space.py)
@@ -176,8 +202,8 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
     probe_idx_d = df_chunk['#obs'].str[3].map(probe_idx_dict).values
 
     # Map 'ell' values to their corresponding indices
-    ell1_idx = df_chunk['ell1'].map(ell_indices).values
-    ell2_idx = df_chunk['ell2'].map(ell_indices).values
+    ell1_idx = df_chunk['ell1'].map(cov_ell_indices).values
+    ell2_idx = df_chunk['ell2'].map(cov_ell_indices).values
 
     # Compute z indices
     z_indices = df_chunk[['tomoi', 'tomoj', 'tomok', 'tomol']].sub(1).values
@@ -195,6 +221,11 @@ for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespac
     cov_tot_10d[index_tuple] = df_chunk['cov'].values
 
 print(f"df loaded in {time.perf_counter() - start:.2f} seconds")
+
+# ! do the same for the cls, to get a consistent plot of the signal +- errorbars
+cl_oc_out_ll_3d = cl_oc_to_3d('Cell_kappakappa')
+cl_oc_out_gl_3d = cl_oc_to_3d('Cell_gkappa')
+cl_oc_out_gg_3d = cl_oc_to_3d('Cell_gg')
 
 
 cov_10d_dict = {
@@ -271,10 +302,10 @@ mm.compare_arrays(cov_tot_3x2pt_2dcloe_load, cov_tot_3x2pt_2dcloe,
 n_elem_auto = cov_nbl * zpairs_auto
 n_elem_cross = cov_nbl * zpairs_cross
 
-cov_mat_fmt_2dcloe_llll = cov_mat_fmt_2dcloe[-n_elem_auto:, -n_elem_auto:]
-cov_mat_fmt_2dcloe_glgl = cov_mat_fmt_2dcloe[n_elem_auto:n_elem_auto +
-                                             n_elem_cross, n_elem_auto:n_elem_auto + n_elem_cross]
-cov_mat_fmt_2dcloe_gggg = cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto]
+cov_mat_fmt_2dcloe_llll = cov_mat_fmt[-n_elem_auto:, -n_elem_auto:]
+cov_mat_fmt_2dcloe_glgl = cov_mat_fmt[n_elem_auto:n_elem_auto +
+                                      n_elem_cross, n_elem_auto:n_elem_auto + n_elem_cross]
+cov_mat_fmt_2dcloe_gggg = cov_mat_fmt[:n_elem_auto, :n_elem_auto]
 
 cov_tot_3x2pt_2dcloe_llll = cov_tot_3x2pt_2dcloe[:n_elem_auto, :n_elem_auto]
 cov_tot_3x2pt_2dcloe_glgl = cov_tot_3x2pt_2dcloe[n_elem_auto:n_elem_auto +
@@ -287,70 +318,48 @@ for cov_mat_fmt_block, cov_dat_fmt_bloc in zip((cov_mat_fmt_2dcloe_llll, cov_mat
                       'cov_mat_fmt_2dcloe_llll', 'cov_tot_3x2pt_2dcloe_llll', log_array=True)
 
 
-# TODO do this fot the cls to have a visual check against the 2PCF errors
+# ! plot Cl and errors
+probe_names = ['Cl_LL', 'Cl_GL', 'Cl_GG']
+cols = 3
+rows = 1
+fig, ax = plt.subplots(rows, cols, figsize=(15, 4))
+for probe_idx, probe in zip((range(cols)), (cl_oc_out_ll_3d, cl_oc_out_gl_3d, cl_oc_out_gg_3d)):
 
-# ! plot 2PCF and errors
-# xi_mm_2d = np.genfromtxt(f'{cl_input_folder}/xi-ij-Lminus-PyCCL-C01.dat')
-
-print(cl_ll_out.shape)
-assert False, 'stop here'
-
-theta_deg = xi_gg_2d[:, 0]
-theta_arcmin = theta_deg * 60
-
-if theta_unit == 'arcmin':
-    theta_arr = theta_arcmin
-elif theta_unit == 'deg':
-    theta_arr = theta_deg
-else:
-    raise ValueError('theta unit not recognised')
-
-xi_gg_2d = xi_gg_2d[:, 1:]
-xi_gl_2d = xi_gl_2d[:, 1:]
-xi_pp_2d = xi_pp_2d[:, 1:]
-xi_mm_2d = xi_mm_2d[:, 1:]
-
-xi_gg_3D = mm.cl_2D_to_3D_symmetric(xi_gg_2d, theta_bins, zpairs_auto, zbins)
-xi_gl_3D = mm.cl_2D_to_3D_asymmetric(xi_gl_2d, theta_bins, zbins=zbins, order='row-major')
-xi_pp_3D = mm.cl_2D_to_3D_symmetric(xi_pp_2d, theta_bins, zpairs_auto, zbins)
-xi_mm_3D = mm.cl_2D_to_3D_symmetric(xi_mm_2d, theta_bins, zpairs_auto, zbins)
-
-cols = 2
-rows = 2
-fig, ax = plt.subplots(rows, cols, figsize=(12, 10))
-for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)):
-
-    row = probe_idx // cols
-    col = probe_idx % cols
+    if probe_idx == 0:
+        probe_idx_list = (0, 0, 0, 0)
+    elif probe_idx == 1:
+        probe_idx_list = (1, 0, 1, 0)
+    elif probe_idx == 2:
+        probe_idx_list = (1, 1, 1, 1)
 
     # for zi in range(zbins):
     for zi in (5, ):
 
-        cov_g_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
-                                  for theta_idx in range(theta_bins)])
-        cov_sva_vs_theta = np.sqrt([cov_sva_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
-                                    for theta_idx in range(theta_bins)])
-        cov_mix_vs_theta = np.sqrt([cov_mix_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
-                                    for theta_idx in range(theta_bins)])
-        cov_sn_vs_theta = np.sqrt([cov_sn_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
-                                   for theta_idx in range(theta_bins)])
+        cov_g_vs_ell = np.sqrt([cov_g_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
+                                          ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
+        cov_sva_vs_ell = np.sqrt([cov_sva_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
+                                              ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
+        cov_mix_vs_ell = np.sqrt([cov_mix_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
+                                              ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
+        cov_sn_vs_ell = np.sqrt([cov_sn_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
+                                            ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
 
         # errorbars
-        # ax[row, col].errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+        # ax[col].errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_ell, label=f'z{zi}', c=colors[zi], alpha=0.5)
 
         # plot signal and error separately
-        ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c='tab:blue')
-        # ax[row, col].plot(theta_arr, cov_g_vs_theta, label=f'z{zi}', c='tab:blue', ls='--')
-        ax[row, col].plot(theta_arr, cov_sva_vs_theta, label=f'z{zi}, sva', c='tab:blue', ls=':')
-        ax[row, col].plot(theta_arr, cov_mix_vs_theta, label=f'z{zi}, mix', c='tab:blue', ls='--')
-        ax[row, col].plot(theta_arr, cov_sn_vs_theta, label=f'z{zi}, sn', c='tab:blue', ls='-.')
+        # ax[probe_idx].plot(cl_out_ells, probe[:, zi, zi], label=f'z{zi}', c='red', marker='.')
+        ax[probe_idx].plot(cov_ells, cov_g_vs_ell, label=f'z{zi}, g tot', c='k', ls='--', marker='.')
+        ax[probe_idx].plot(cov_ells, cov_sva_vs_ell, label=f'z{zi}, sva', c='tab:green', ls=':', marker='.')
+        ax[probe_idx].plot(cov_ells, cov_mix_vs_ell, label=f'z{zi}, mix', c='tab:orange', ls=':', marker='.')
+        ax[probe_idx].plot(cov_ells, cov_sn_vs_ell, label=f'z{zi}, sn', c='tab:purple', ls=':', marker='.')
 
-    ax[row, col].set_title(probe_names[probe_idx])
-    ax[row, col].set_xlabel(f'theta [{theta_unit}]')
-    ax[row, col].set_ylabel('2PCF')
-    ax[row, col].set_yscale('log')
-    ax[row, col].set_xscale('log')
-ax[row, col].legend(bbox_to_anchor=(1.22, 1), loc='center right')
+    ax[probe_idx].set_title(probe_names[probe_idx])
+    ax[probe_idx].set_xlabel('$\ell$')
+    ax[probe_idx].set_ylabel('$C(\ell)$')
+    ax[probe_idx].set_yscale('log')
+    ax[probe_idx].set_xscale('log')
+ax[probe_idx].legend(bbox_to_anchor=(1.22, 1), loc='center right')
 
 
 print('done in ', time.perf_counter() - start, ' seconds')
