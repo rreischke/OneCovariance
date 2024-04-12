@@ -144,7 +144,7 @@ ells_oc_float = np.exp(.5 * (np.log(ell_bin_edges_oc_float[1:])
 
 # ell_sb can also be obtained as
 # ells_sb, _ = ell_utils.compute_ells(nbl=cov_nbl, ell_min=ellmin, ell_max=ellmax,
-                                        # recipe='ISTF', output_ell_bin_edges=False)
+# recipe='ISTF', output_ell_bin_edges=False)
 try:
     np.testing.assert_allclose(ells_sb, ells_oc_float, atol=0, rtol=1e-6)
 except AssertionError:
@@ -164,38 +164,6 @@ cov_ssc_10d = np.zeros((2, 2, 2, 2, cov_nbl, cov_nbl, zbins, zbins, zbins, zbins
 cov_cng_10d = np.zeros((2, 2, 2, 2, cov_nbl, cov_nbl, zbins, zbins, zbins, zbins))
 cov_tot_10d = np.zeros((2, 2, 2, 2, cov_nbl, cov_nbl, zbins, zbins, zbins, zbins))
 
-
-# start = time.perf_counter()
-# for df_chunk in pd.read_csv(f'{cov_folder}/covariance_list.dat', delim_whitespace=True, names=column_names, skiprows=1, chunksize=chunk_size):
-
-#     print('entered chunk loop')
-
-#     # ! get the individual terms from the list file
-#     for index, row in tqdm(df_chunk.iterrows()):
-
-#         probe_str = row['#obs']
-#         probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d = probe_idx_dict[probe_str[0]
-#                                                                             ], probe_idx_dict[probe_str[1]], probe_idx_dict[probe_str[2]], probe_idx_dict[probe_str[3]]
-
-#         ell1_idx = ell_indices[row['ell1']]
-#         ell2_idx = ell_indices[row['ell2']]
-#         z1_idx, z2_idx, z3_idx, z4_idx = row['tomoi'] - 1, row['tomoj'] - 1, row['tomok'] - 1, row['tomol'] - 1
-
-#         cov_sva_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sva']
-#         cov_mix_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg mix']
-#         cov_sn_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-#                    ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sn']
-#         cov_g_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d, ell1_idx, ell2_idx,
-#                   z1_idx, z2_idx, z3_idx, z4_idx] = row['covg sva'] + row['covg mix'] + row['covg sn']
-#         cov_ssc_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covssc']
-#         cov_cng_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['covng']
-#         cov_tot_10d[probe_idx_a, probe_idx_b, probe_idx_c, probe_idx_d,
-#                     ell1_idx, ell2_idx, z1_idx, z2_idx, z3_idx, z4_idx] = row['cov']
-# print(f"Processed in {time.perf_counter() - start:.2f} seconds")
 
 print('loading dataframe in chunks...')
 start = time.perf_counter()
