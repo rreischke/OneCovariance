@@ -38,7 +38,7 @@ def extract_probes(probe_string, probe_names):
     return matched_probes
 
 
-cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_2PCF_C01'
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_2PCF_C01_cfgFix'
 cl_input_folder = '/home/cosmo/davide.sciotti/data/CLOE_validation/output/v2.0.2/C01'
 
 cfg = configparser.ConfigParser()
@@ -183,7 +183,7 @@ if load_mat_files:
     mm.compare_arrays(cov_mat_fmt_2dcloe[:n_elem_auto, :n_elem_auto], cov_g_2d_gggg,
                       'cov_mat_fmt_2dcloe', 'cov_list_fmt_2d')
 
-# save vectors of variances for Matteo
+# ! save vectors of variances for Matteo
 for probe_idx in range(4):
     cov_g_6d = cov_g_10d[probe_idx, probe_idx, ...]
 
@@ -196,7 +196,8 @@ for probe_idx in range(4):
     cov_g_4d = mm.cov_6D_to_4D(cov_g_6d, theta_bins, zpairs, ind_here)
     cov_g_2d = mm.cov_4D_to_2D(cov_g_4d, block_index='vincenzo')
 
-    mm.matshow(cov_g_2d, log=True)
+    # mm.matshow(cov_g_2d, log=True)
+    
     variance = np.diag(cov_g_2d)
     np.savetxt(cov_folder + '/variance_' + probe_names[probe_idx] + '.dat', variance)
 
@@ -249,14 +250,14 @@ for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)
                                    for theta_idx in range(theta_bins)])
 
         # errorbars
-        # ax[row, col].errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+        ax[row, col].errorbar(theta_arcmin, probe[:, zi, zi], yerr=cov_g_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
 
         # plot signal and error separately
-        ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c='tab:blue')
-        # ax[row, col].plot(theta_arr, cov_g_vs_theta, label=f'z{zi}', c='tab:blue', ls='--')
-        ax[row, col].plot(theta_arr, cov_sva_vs_theta, label=f'z{zi}, sva', c='tab:blue', ls=':')
-        ax[row, col].plot(theta_arr, cov_mix_vs_theta, label=f'z{zi}, mix', c='tab:blue', ls='--')
-        ax[row, col].plot(theta_arr, cov_sn_vs_theta, label=f'z{zi}, sn', c='tab:blue', ls='-.')
+        # ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c='red')
+        # ax[row, col].plot(theta_arr, cov_g_vs_theta, label=f'z{zi}, g', c='k', ls=':')
+        # ax[row, col].plot(theta_arr, cov_sva_vs_theta, label=f'z{zi}, sva', c='tab:green', ls=':', marker='.')
+        # ax[row, col].plot(theta_arr, cov_mix_vs_theta, label=f'z{zi}, mix', c='tab:orange', ls=':', marker='.')
+        # ax[row, col].plot(theta_arr, cov_sn_vs_theta, label=f'z{zi}, sn', c='tab:purple', ls=':', marker='.')
 
     ax[row, col].set_title(probe_names[probe_idx])
     ax[row, col].set_xlabel(f'theta [{theta_unit}]')
