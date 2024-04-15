@@ -1865,7 +1865,6 @@ class CovELLSpace(PolySpectra):
             else:
                 ssc_new.append(0)
             ssc = ssc_new
-        print(ssc)
 
         if self.ellrange_photo is not None:
             sscELLgggg_ssss_new = 0
