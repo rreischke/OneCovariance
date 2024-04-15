@@ -1398,6 +1398,7 @@ class CovELLSpace(PolySpectra):
                                                               True))
                 else:
                     nongauss[0][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[0][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_clust']/self.deg2torad2)
+                    nongauss_new.append(nongauss[0][:, :, :, :, :, :, :, :])
             else:
                 nongauss_new.append(0)
             if self.gg and self.gm and self.cross_terms:
@@ -1415,6 +1416,7 @@ class CovELLSpace(PolySpectra):
                                                               False))
                 else:
                     nongauss[1][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[1][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+                    nongauss_new.append(nongauss[1][:, :, :, :, :, :, :, :])
             else:
                 nongauss_new.append(0)
             if self.gg and self.mm and self.cross_terms:
@@ -1432,6 +1434,7 @@ class CovELLSpace(PolySpectra):
                                                               True))
                 else:
                     nongauss[2][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[2][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])/self.deg2torad2)
+                    nongauss_new.append(nongauss[2][:, :, :, :, :, :, :, :])
             else:
                 nongauss_new.append(0)
             if self.gm:
@@ -1449,6 +1452,7 @@ class CovELLSpace(PolySpectra):
                                                               False))
                 else:
                     nongauss[3][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[3][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_ggl']/self.deg2torad2)
+                    nongauss_new.append(nongauss[3][:, :, :, :, :, :, :, :])
             else:
                 nongauss_new.append(0)
             if self.mm and self.gm and self.cross_terms:           
@@ -1466,6 +1470,7 @@ class CovELLSpace(PolySpectra):
                                                               False))
                 else:
                     nongauss[4][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[4][:, :, :, :, :, :, :, :])/(max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2)
+                    nongauss_new.append(nongauss[4][:, :, :, :, :, :, :, :])
             else:
                 nongauss_new.append(0)
             if self.mm:
@@ -1483,6 +1488,7 @@ class CovELLSpace(PolySpectra):
                                                               True))
                 else:
                     nongauss[5][:, :, :, :, :, :, :, :] *= np.ones_like(nongauss[5][:, :, :, :, :, :, :, :])/(survey_params_dict['survey_area_lens']/self.deg2torad2)
+                    nongauss_new.append(nongauss[5][:, :, :, :, :, :, :, :])
             else:
                 nongauss_new.append(0)
             nongauss = nongauss_new
@@ -1754,12 +1760,11 @@ class CovELLSpace(PolySpectra):
                               prec,
                               survey_params_dict,
                               obs_dict['ELLspace'])
-        if self.ellrange_photo is None:
+        if self.ellrange_photo is None and self.cov_dict['ssc']:
             ssc_new = []    
             if self.gg:
                 if self.ellrange_clustering_ul is not None:
-                    if self.cov_dict['ssc']:
-                        print("Binning SSC gggg contribution")
+                    print("Binning SSC gggg contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1770,12 +1775,13 @@ class CovELLSpace(PolySpectra):
                                                               False,
                                                               True,
                                                               True))
+                else:
+                    ssc_new.append(ssc[0])
             else:
                 ssc_new.append(0)
             if self.gg and self.gm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None:
-                    if self.cov_dict['ssc']:
-                        print("Binning SSC gggm contribution")
+                    print("Binning SSC gggm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1786,12 +1792,13 @@ class CovELLSpace(PolySpectra):
                                                               False,
                                                               True,
                                                               False))
+                else:
+                    ssc_new.append(ssc[1])
             else:
                 ssc_new.append(0)
             if self.gg and self.mm and self.cross_terms:
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
-                    if self.cov_dict['ssc']:
-                        print("Binning SSC ggmm contribution")
+                    print("Binning SSC ggmm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_clustering,
@@ -1802,12 +1809,13 @@ class CovELLSpace(PolySpectra):
                                                               False,
                                                               True,
                                                               True))
+                else:
+                    ssc_new.append(ssc[2])
             else:
                 ssc_new.append(0)
             if self.gm:
                 if self.ellrange_clustering_ul is not None:
-                    if self.cov_dict['ssc']:
-                        print("Binning SSC gmgm contribution")
+                    print("Binning SSC gmgm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_clustering_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_clustering,
@@ -1818,12 +1826,13 @@ class CovELLSpace(PolySpectra):
                                                               False,
                                                               False,
                                                               False))
+                else:
+                    ssc_new.append(ssc[3])
             else:
                 ssc_new.append(0)
             if self.mm and self.gm and self.cross_terms:           
                 if self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:
-                    if self.cov_dict['ssc']:
-                        print("Binning SSC mmgm contribution")
+                    print("Binning SSC mmgm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_clustering_ul,
                                                               self.ellrange_lensing,
@@ -1834,12 +1843,13 @@ class CovELLSpace(PolySpectra):
                                                               False,
                                                               True,
                                                               False))
+                else:
+                    ssc_new.append(ssc[4])
             else:
                 ssc_new.append(0)
             if self.mm:
                 if self.ellrange_lensing_ul is not None:
-                    if self.cov_dict['ssc']:
-                        print("Binning SSC mmmm contribution")
+                    print("Binning SSC mmmm contribution")
                     ssc_new.append(self.__bin_cov_ell_nongauss(self.ellrange_lensing_ul,
                                                               self.ellrange_lensing_ul,
                                                               self.ellrange_lensing,
@@ -1850,10 +1860,12 @@ class CovELLSpace(PolySpectra):
                                                               False,
                                                               True,
                                                               True))
+                else:
+                    ssc_new.append(ssc[5])
             else:
                 ssc_new.append(0)
             ssc = ssc_new
-            
+
         if self.ellrange_photo is not None:
             sscELLgggg_ssss_new = 0
             sscELLgggg_sssp_new = 0

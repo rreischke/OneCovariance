@@ -162,6 +162,7 @@ class Input:
         self.En_modes_lensing = None
         self.theta_min_cosebi_lensing = None
         self.theta_max_cosebi_lensing = None
+        self.dimensionless_cosebi = None
         
         self.En_acc = None
         self.Wn_style = None
@@ -228,6 +229,8 @@ class Input:
         self.bias_2h = None
         self.Mc_relation_cen = None
         self.Mc_relation_sat = None
+        self.norm_Mc_relation_cen = None
+        self.norm_Mc_relation_sat = None
         self.logmass_bins = None
         self.sampledim = None
 
@@ -1223,6 +1226,9 @@ class Input:
                     float(config['covCOSEBI settings']['Wn_accuracy'])
             else:
                 self.Wn_acc = 1e-6
+            if 'dimensionless_cosebi' in config['covCOSEBI settings']:
+                self.dimensionless_cosebi = \
+                    config['covCOSEBI settings'].getboolean('dimensionless_cosebi')
         else:
             if self.cosmicshear and self.est_shear == 'cosebi':
                 self.En_acc = 1e-4
@@ -1235,7 +1241,7 @@ class Input:
                       "'[covCOSEBI settings]: 'Wn_style'. It is set to 'log'.")
                 self.Wn_acc = 1e-6
 
-        if self.cosmicshear and self.est_shear == 'cosebi':
+        if self.cosmicshear and self.est_shear == 'cosebi' and not self.do_arbitrary_obs:
             if self.En_modes is None:
                 raise Exception("ConfigError: The cosmic shear estimator is " +
                                 "'cosebi' but no number of E modes is specified. Must " +
@@ -1267,6 +1273,9 @@ class Input:
                                 config['covCOSEBI settings']['Wn_style'] + "' is " +
                                 "not recognised. Must be either 'lin' or 'log'.")
             
+            if self.dimensionless_cosebi is None:
+                self.dimensionless_cosebi = False
+
             if self.limber is None:
                 self.limber = True
 
@@ -1387,7 +1396,7 @@ class Input:
                 self.bandpower_accuracy = float(config['covbandpowers settings']['bandpower_accuracy'])
 
 
-        if self.est_shear == 'bandpowers' or self.est_ggl == 'bandpowers' or self.est_clust == self.est_shear == 'bandpowers':
+        if self.est_shear == 'bandpowers' or self.est_ggl == 'bandpowers' or self.est_clust == self.est_shear == 'bandpowers' and not self.do_arbitrary_obs:
             if self.clustering or self.ggl:
                 if self.apodisation_log_width_clustering is None:
                     if 'apodisation_log_width' in config['covbandpowers settings']:
@@ -2098,7 +2107,15 @@ class Input:
                 self.Mc_relation_sat = config['bias']['Mc_relation_sat']
             if self.Mc_relation_sat is None:
                 self.Mc_relation_sat = 'duffy08'
-
+            if 'norm_Mc_relation_cen' in config['bias']:
+                self.norm_Mc_relation_cen = config['bias']['norm_Mc_relation_cen']
+            else:
+                self.norm_Mc_relation_cen = 1.0
+            if 'norm_Mc_relation_sat' in config['bias']:
+                self.norm_Mc_relation_sat = config['bias']['norm_Mc_relation_sat']
+            else:
+                self.norm_Mc_relation_sat = 1.0
+            
             if 'log10mass_bins' in config['bias']:
                 self.logmass_bins = \
                     np.array(config['bias']['log10mass_bins'].split(','))
@@ -2128,6 +2145,8 @@ class Input:
                   "to 1.")
             self.Mc_relation_cen = 'duffy08'
             self.Mc_relation_sat = 'duffy08'
+            self.norm_Mc_relation_cen = 1.0
+            self.norm_Mc_relation_sat = 1.0
             print("The mass-concentration relation for the centrals [bias]: " +
                   "'Mc_relation_cen' is set to duffy08.")
             self.sampledim = 1
@@ -3639,16 +3658,16 @@ class Input:
         keys = ['En_modes', 'theta_min', 'theta_max', 'En_acc', 'Wn_style',
                 'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
                 'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
-                'Wn_acc']
+                'Wn_acc', 'dimensionless_cosebi']
         values = [self.En_modes, self.theta_min_cosebi, self.theta_max_cosebi, self.En_acc, self.Wn_style,
                   self.En_modes_clustering, self.theta_min_cosebi_clustering, self.theta_max_cosebi_clustering,
                   self.En_modes_lensing, self.theta_min_cosebi_lensing, self.theta_max_cosebi_lensing,
-                  self.Wn_acc]
+                  self.Wn_acc, self.dimensionless_cosebi]
         self.covCOSEBI_settings = dict(zip(keys, values))
         keys = ['En_modes', 'theta_min', 'theta_max', 'En_accuracy', 'Wn_style'
                 'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
                 'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
-                'Wn_accuracy']
+                'Wn_accuracy', 'dimensionless_cosebi']
         self.covCOESBI_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         
@@ -3697,9 +3716,9 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'log10mass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins']
         values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                  self.Mc_relation_sat, self.logmass_bins]
+                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
         self.bias_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.logmass_bins is not None:
@@ -3708,9 +3727,9 @@ class Input:
         else:
             self.logmass_bins = np.array([0, 0])
             values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                      self.Mc_relation_sat, self.logmass_bins]
+                      self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'logmass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins']
         self.bias = dict(zip(keys, values))
 
         keys = ['A_IA', 'eta_IA', 'z_pivot_IA']
