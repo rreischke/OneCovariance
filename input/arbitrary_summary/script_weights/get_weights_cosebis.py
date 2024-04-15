@@ -17,7 +17,7 @@ ell_min = 1 # Minimum multipole
 ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
 N_theta = int(1e4)
-get_W_ell_as_well = True # If true the Well are calculated
+get_W_ell_as_well = False # If true the Well are calculated
 num_cores = 100 #number of cores used
 
 
@@ -26,7 +26,7 @@ arcmintorad = 1./60./180.*np.pi
 #define constants
 Nmax_mm = 5 # maximum COSEBI mode
 tmin_mm = 0.5 #theta_min in arcmin
-tmax_mm = 300.0 #theta_max in armin
+tmax_mm = 30. #theta_max in armin
 
 Nmax_gg = 5 # maximum COSEBI mode for gg
 tmin_gg = 0.5 #theta_min in arcmin for gg
