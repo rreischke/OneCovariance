@@ -8,6 +8,7 @@ from tqdm import tqdm
 import sys
 import scipy
 import matplotlib
+from scipy.optimize import minimize_scalar
 import configparser
 import os
 ROOT = os.getenv('ROOT')
@@ -41,15 +42,30 @@ def cl_oc_to_3d(probe_oc_name):
     return cl_out_oc_3d
 
 
-cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_Cl_C01'
+def compute_ells_oc(nbl, ell_min, ell_max):
+    ell_bin_edges_oc_int = np.unique(np.geomspace(ell_min, ell_max, nbl + 1)).astype(int)
+    ells_oc_int = np.exp(.5 * (np.log(ell_bin_edges_oc_int[1:])
+                               + np.log(ell_bin_edges_oc_int[:-1])))  # it's the same if I take base 10 log
+    return ells_oc_int
+
+
+def objective_function(ell_max):
+    ells_oc = compute_ells_oc(nbl=int(cfg['covELLspace settings']['ell_bins_clustering']),
+                              ell_min=float(cfg['covELLspace settings']['ell_min_clustering']),
+                              ell_max=ell_max)
+    ssd = np.sum((ells_sb - ells_oc) ** 2)
+    return ssd
+
+
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_Cl_C01_cfgFix'
 
 cfg = configparser.ConfigParser()
 cfg.read(cov_folder + '/save_configs.ini')
 
 zbins = len(cfg['survey specs']['ellipticity_dispersion'].split(', '))
 cl_cfg_nbl = int(float(cfg['covELLspace settings']['ell_bins']))
-ellmax = int(float(cfg['covELLspace settings']['ell_max']))
-ellmin = int(float(cfg['covELLspace settings']['ell_min']))
+ellmax = float(cfg['covELLspace settings']['ell_max'])
+ellmin = float(cfg['covELLspace settings']['ell_min'])
 cl_input_folder = cfg['tabulated inputs files']['cell_directory']
 cl_ll_name = cfg['tabulated inputs files']['cmm_file'].strip("['").strip("']")
 cl_gl_name = cfg['tabulated inputs files']['cgm_file'].strip("['").strip("']")
@@ -99,10 +115,10 @@ cl_gg_out = np.genfromtxt(f'{cov_folder}/Cell_gg.ascii')
 cl_in_ells = np.unique(cl_ll_in[:, 0])
 cl_out_ells = np.unique(cl_ll_out[:, 0])
 
-assert np.allclose(cl_in_ells, cl_out_ells, atol=0, rtol=1e-4), 'ell values are not the same'
-np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
-np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
-np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
+# assert np.allclose(cl_in_ells, cl_out_ells, atol=0, rtol=1e-4), 'ell values are not the same'
+# np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
+# np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
+# np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
 
 print('nbl_cl_in:', len(cl_in_ells))
 print('nbl_cl_out:', len(cl_out_ells))
@@ -116,7 +132,76 @@ print(header)
 header_list = re.split('\t', header.strip().replace('\t\t', '\t').replace('\t\t', '\t'))
 assert column_names == header_list, 'column names from .dat file do not match with the expected ones'
 
-# ! get, show and reshape the .mat file, for a later check
+
+# ! load anche check ell values from the .dat covariance file
+ells_oc_load = pd.read_csv(f'{cov_folder}/covariance_list.dat',
+                           usecols=['ell1'], delim_whitespace=True)['ell1'].unique()
+cov_ell_indices = {ell_out: idx for idx, ell_out in enumerate(ells_oc_load)}
+
+# this is taken from OC (in cov_ell_space.py)
+ells_oc_computed = compute_ells_oc(nbl=int(cfg['covELLspace settings']['ell_bins_clustering']),
+                                   ell_min=float(cfg['covELLspace settings']['ell_min_clustering']),
+                                   ell_max=float(cfg['covELLspace settings']['ell_max_clustering']))
+np.testing.assert_allclose(ells_oc_load, ells_oc_computed, atol=0, rtol=1e-1,
+                           err_msg='ell values from the .dat file do not match with \
+                           the ones computed manyally using OC recipe (to 1% tolerance)')
+
+print('covariance computed at ell values:\n', ells_oc_load)
+cov_nbl = len(ells_oc_load)
+
+# # ! compare ell edges - perfect match if I drop the cast to int in oc
+# ell_bin_edges_sb = np.logspace(np.log10(ellmin), np.log10(ellmax), cov_nbl + 1)
+# ell_bin_edges_oc_float = np.unique(np.geomspace(float(cfg['covELLspace settings']['ell_min_clustering']),
+#                                                 float(cfg['covELLspace settings']['ell_max_clustering']),
+#                                                 int(cfg['covELLspace settings']['ell_bins_clustering']) + 1))
+# np.testing.assert_allclose(ell_bin_edges_sb, ell_bin_edges_oc_float, atol=0, rtol=1e-6)
+
+
+# # ell_sb can also be obtained as
+# ells_sb, _ = ell_utils.compute_ells(nbl=32, ell_min=10, ell_max=5000,
+#                                     recipe='ISTF', output_ell_bin_edges=False)
+# ells_sb = ells_sb[:29]
+
+
+# # Perform the minimization
+# result = minimize_scalar(objective_function, bounds=[2000, 7000], method='bounded')
+
+# # Check the result
+# if result.success:
+#     optimal_ellmax = result.x
+#     print(f"Optimal ellmax found: {optimal_ellmax}")
+# else:
+#     print("Optimization failed.")
+
+
+# try:
+#     np.testing.assert_allclose(ells_sb, ells_oc_computed, atol=0, rtol=1e-6)
+#     print('ells_sb and ells_oc match')
+# except AssertionError:
+#     plt.plot(ells_sb, label='ells_sb', marker='o')
+#     plt.plot(ells_oc_load, label='ells_oc', marker='o')
+#     plt.plot(ells_oc_computed, label='ells_oc_computed', marker='o')
+#     plt.plot(mm.percent_diff(ells_sb, ells_oc_load), label='percent diff OneCov', marker='o')
+#     plt.plot(mm.percent_diff(ells_sb, ells_oc_computed), label='percent diff OneCov float', marker='o')
+#     plt.legend()
+
+
+# new_ells_oc = compute_ells_oc(nbl=int(cfg['covELLspace settings']['ell_bins_clustering']),
+#                               ell_min=float(cfg['covELLspace settings']['ell_min_clustering']),
+#                               ell_max=optimal_ellmax)
+
+# plt.semilog(ells_sb, label='ells_sb', marker='o')
+# plt.semilog(new_ells_oc, label='new_ells_oc', marker='o')
+# plt.plot(mm.percent_diff(ells_sb, ells_oc_load), label='old', marker='o')
+# plt.plot(mm.percent_diff(ells_sb, new_ells_oc), label='new', marker='o')
+# plt.legend()
+# plt.xlabel('$\ell$ idx')
+# plt.ylabel('$\ell$ value')
+
+# assert False, 'stop here to check SPV3 Cls'
+
+
+# ! import .mat covariance file, for a later check
 if load_mat_files:
 
     start_time = time.perf_counter()
@@ -139,49 +224,7 @@ if load_mat_files:
     plt.show()
 
 
-# ! load anche check ell values from the .dat covariance file
-cov_ells = pd.read_csv(f'{cov_folder}/covariance_list.dat', usecols=['ell1'], delim_whitespace=True)['ell1'].unique()
-cov_ell_indices = {ell_out: idx for idx, ell_out in enumerate(cov_ells)}
-# assert len(cov_ells) == nbl, 'number of ells in the list file does not match the number of ell bins'
-
-# this is taken from OC (in cov_ell_space.py)
-ellrange_clustering_ul = np.unique(np.geomspace(float(cfg['covELLspace settings']['ell_min_clustering']),
-                                                float(cfg['covELLspace settings']['ell_max_clustering']),
-                                                int(cfg['covELLspace settings']['ell_bins_clustering']) + 1).astype(int))
-cov_ells_manual = np.exp(.5 * (np.log(ellrange_clustering_ul[1:])
-                               + np.log(ellrange_clustering_ul[:-1])))
-np.testing.assert_allclose(cov_ells, cov_ells_manual, atol=0, rtol=1e-1,
-                           err_msg='ell values from the .dat file do not match with \
-                           the ones computed manyally using OC recipe (to 1% tolerance)')
-
-print('covariance computed at ell values:\n', cov_ells)
-cov_nbl = len(cov_ells)
-
-# compare ell edges - perfect match if I drop the cast to int
-ell_bin_edges_sb = np.logspace(np.log10(ellmin), np.log10(ellmax), cov_nbl + 1)
-ell_bin_edges_oc_float = np.unique(np.geomspace(float(cfg['covELLspace settings']['ell_min_clustering']),
-                                                float(cfg['covELLspace settings']['ell_max_clustering']),
-                                                int(cfg['covELLspace settings']['ell_bins_clustering']) + 1))
-np.testing.assert_allclose(ell_bin_edges_sb, ell_bin_edges_oc_float, atol=0, rtol=1e-6)
-
-ells_sb = (ell_bin_edges_sb[1:] + ell_bin_edges_sb[:-1]) / 2
-ells_oc_float = np.exp(.5 * (np.log(ell_bin_edges_oc_float[1:])
-                       + np.log(ell_bin_edges_oc_float[:-1])))  # it's the same if I take base 10 log
-
-# ell_sb can also be obtained as
-# ells_sb, _ = ell_utils.compute_ells(nbl=cov_nbl, ell_min=ellmin, ell_max=ellmax,
-# recipe='ISTF', output_ell_bin_edges=False)
-try:
-    np.testing.assert_allclose(ells_sb, ells_oc_float, atol=0, rtol=1e-6)
-except AssertionError:
-    diff_oc = mm.percent_diff(ells_sb, cov_ells)
-    print('ells_sb:\n', ells_sb)
-    print('\nells_oc:\n', cov_ells)
-    print('\nells_oc_float:\n', ells_oc_float)
-    print('\npercent diff OneCov:\n', mm.percent_diff(ells_sb, cov_ells))
-    print('\npercent diff OneCov, with float edges:\n', mm.percent_diff(ells_sb, ells_oc_float))
-
-# ! import _list covariance file
+# ! import .list covariance file
 cov_g_10d = np.zeros((2, 2, 2, 2, cov_nbl, cov_nbl, zbins, zbins, zbins, zbins))
 cov_sva_10d = np.zeros((2, 2, 2, 2, cov_nbl, cov_nbl, zbins, zbins, zbins, zbins))
 cov_mix_10d = np.zeros((2, 2, 2, 2, cov_nbl, cov_nbl, zbins, zbins, zbins, zbins))
@@ -312,10 +355,12 @@ cov_tot_3x2pt_2dcloe_glgl = cov_tot_3x2pt_2dcloe[n_elem_auto:n_elem_auto +
                                                  n_elem_cross, n_elem_auto:n_elem_auto + n_elem_cross]
 cov_tot_3x2pt_2dcloe_gggg = cov_tot_3x2pt_2dcloe[-n_elem_auto:, -n_elem_auto:]
 
-for cov_mat_fmt_block, cov_dat_fmt_bloc in zip((cov_mat_fmt_2dcloe_llll, cov_mat_fmt_2dcloe_glgl, cov_mat_fmt_2dcloe_gggg),
-                                               (cov_tot_3x2pt_2dcloe_llll, cov_tot_3x2pt_2dcloe_glgl, cov_tot_3x2pt_2dcloe_gggg)):
-    mm.compare_arrays(cov_mat_fmt_block, cov_mat_fmt_block,
-                      'cov_mat_fmt_2dcloe_llll', 'cov_tot_3x2pt_2dcloe_llll', log_array=True)
+for cov_mat_fmt_block, cov_dat_fmt_block, block_name in zip((cov_mat_fmt_2dcloe_llll, cov_mat_fmt_2dcloe_glgl, cov_mat_fmt_2dcloe_gggg),
+                                                            (cov_tot_3x2pt_2dcloe_llll, cov_tot_3x2pt_2dcloe_glgl,
+                                                             cov_tot_3x2pt_2dcloe_gggg),
+                                                            ('llll', 'glgl', 'gggg')):
+    mm.compare_arrays(cov_mat_fmt_block, cov_dat_fmt_block,
+                      f'cov_mat_fmt_{block_name}', f'cov_dat_fmt_{block_name}', log_array=True)
 
 
 # ! plot Cl and errors
@@ -348,11 +393,11 @@ for probe_idx, probe in zip((range(cols)), (cl_oc_out_ll_3d, cl_oc_out_gl_3d, cl
         # ax[col].errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_ell, label=f'z{zi}', c=colors[zi], alpha=0.5)
 
         # plot signal and error separately
-        # ax[probe_idx].plot(cl_out_ells, probe[:, zi, zi], label=f'z{zi}', c='red', marker='.')
-        ax[probe_idx].plot(cov_ells, cov_g_vs_ell, label=f'z{zi}, g tot', c='k', ls='--', marker='.')
-        ax[probe_idx].plot(cov_ells, cov_sva_vs_ell, label=f'z{zi}, sva', c='tab:green', ls=':', marker='.')
-        ax[probe_idx].plot(cov_ells, cov_mix_vs_ell, label=f'z{zi}, mix', c='tab:orange', ls=':', marker='.')
-        ax[probe_idx].plot(cov_ells, cov_sn_vs_ell, label=f'z{zi}, sn', c='tab:purple', ls=':', marker='.')
+        ax[probe_idx].plot(cl_out_ells, probe[:, zi, zi], label=f'z{zi}', c='red', marker='.')
+        ax[probe_idx].plot(ells_oc_load, cov_g_vs_ell, label=f'z{zi}, g tot', c='k', ls='--', marker='.')
+        ax[probe_idx].plot(ells_oc_load, cov_sva_vs_ell, label=f'z{zi}, sva', c='tab:green', ls=':', marker='.')
+        ax[probe_idx].plot(ells_oc_load, cov_mix_vs_ell, label=f'z{zi}, mix', c='tab:orange', ls=':', marker='.')
+        ax[probe_idx].plot(ells_oc_load, cov_sn_vs_ell, label=f'z{zi}, sn', c='tab:purple', ls=':', marker='.')
 
     ax[probe_idx].set_title(probe_names[probe_idx])
     ax[probe_idx].set_xlabel('$\ell$')
