@@ -14,22 +14,30 @@ from scipy import integrate
 from scipy.special import eval_legendre
 import sys
 from argparse import ArgumentParser
+import os
 
 
 parser = ArgumentParser(description='Map COSEBIs to pure E/B mode correlation functions')
-parser.add_argument('--data', dest='data', type=str, required=True, help="File containing E and B COSEBIS measurements")
+parser.add_argument('--data', dest='data', type=str, required=True, nargs=2, help="File containing E and B COSEBIS measurements")
 parser.add_argument('--covariance', dest='covariance', type=str, required=True, help="File containing E and B COSEBIS covariance")
 parser.add_argument('--ncores', dest='ncores', type=int, required=True, help="Number of cores")
 parser.add_argument('--ntomo', dest='ntomo', type=int, required=True, help="Number of tomographic bins")
-parser.add_argument('--thetamin', dest='thetamin', type=int, required=True, help="Minimum theta in arcmin")
-parser.add_argument('--thetamax', dest='thetamax', type=int, required=True, help="Maximum theta in arcmin")
+parser.add_argument('--thetamin', dest='thetamin', type=float, required=True, help="Minimum theta in arcmin")
+parser.add_argument('--thetamax', dest='thetamax', type=float, required=True, help="Maximum theta in arcmin")
 parser.add_argument('--ntheta', dest='ntheta', type=int, required=True, help="Number of theta bins")
 parser.add_argument('--binning', dest='binning', type=str, required=True, help="Type of theta binning. Must be either lin or log.", choices = ['lin', 'log'])
-parser.add_argument('--output_data', dest='output_data', type=str, required=True, help="Output directory for the data vector")
-parser.add_argument('--output_cov', dest='output_cov', type=str, required=True, help="Output directory for the covariance matrix")
+parser.add_argument('--output_data_E', dest='output_data_E', type=str, required=True, help="Output directory for the E-mode data vector")
+parser.add_argument('--output_data_B', dest='output_data_B', type=str, required=True, help="Output directory for the B_mode data vector")
+parser.add_argument('--output_cov_E', dest='output_cov_E', type=str, required=True, help="Output directory for the E-mode covariance matrix")
+parser.add_argument('--output_cov_B', dest='output_cov_B', type=str, required=True, help="Output directory for the B-mode covariance matrix")
 parser.add_argument('--filename_data', dest='filename_data', type=str, required=True, help="Output filename of the combined xi_EB data vector")
 parser.add_argument('--filename_cov', dest='filename_cov', type=str, required=True, help="Output filename of the combined xi_EB covariance matrix")
-
+parser.add_argument('--tfoldername', dest="tfoldername", default="Tplus_minus", required=True,
+    help='name and full address of the folder for Tplus Tminus files for COSEBIs, will not make it if it does not exist')
+parser.add_argument('--tplusfile', dest="tplusfile", default="Tplus", required=False,
+    help='name of Tplus file for COSEBIs, will look for it before running the code')
+parser.add_argument('--tminusfile', dest="tminusfile", default="Tminus", required=False,
+    help='name of Tplus file for COSEBIs, will look for it before running the code')
 
 
 args = parser.parse_args()
@@ -39,28 +47,22 @@ tmin_mm = args.thetamin #theta_min in arcmin
 tmax_mm = args.thetamax #theta_max in armin
 ntheta_bins_mm = args.ntheta #number of theta bins for lensing
 theta_type_mm = args.binning # type of theta binning for lensing
-output_data = args.output_data
-output_cov = args.output_cov
+output_data_E = args.output_data_E
+output_data_B = args.output_data_B
+output_cov_E = args.output_cov_E
+output_cov_B = args.output_cov_B
 filename_data = args.filename_data
 filename_cov = args.filename_cov
-
-
-
+tfoldername = args.tfoldername
+tplusfile=args.tplusfile
+tminusfile=args.tminusfile
 
 theta_min_mm = args.thetamin 
 theta_max_mm = args.thetamax
-N_theta = 1000
 arcmintorad = 1./60./180.*np.pi
+thetaRange=str(args.thetamin)+'-'+str(args.thetamax)
 
-# if len(sys.argv) == 4:
-#     signalfile = str(sys.argv[1])
-#     covfile = str(sys.argv[2])
-#     n_tomo = int(sys.argv[3])
-# else:
-#     print(r"Please pass first the signal file, then the covariance matrix file of the COSEBIs and last the number of tomographic bins")
-#     print(r"I.e.: python mapping_cosebis_to_pureEBmode_cf.py signal_file.txt covariance_file.txt 6")
-
-signalfile = args.data
+signalfile = args.data[1]
 covfile = args.covariance
 n_tomo = args.ntomo
 
@@ -74,7 +76,6 @@ Nmax_mm = int(len(covariance_cosebi)/2/n_data)
 
 tmin_mm *= arcmintorad
 tmax_mm *= arcmintorad
-theta_mm = np.geomspace(tmin_mm,tmax_mm, N_theta)
 
 B = (tmax_mm - tmin_mm)/(tmax_mm + tmin_mm)
 bar_theta = (tmin_mm + tmax_mm)/2
@@ -115,23 +116,44 @@ theta_bins, theta_ul_bins = get_theta_bins(theta_type=theta_type_mm,theta_min = 
 
 
 ### get Tpm and theta from file here
+theta = np.loadtxt(tfoldername+'/'+tplusfile+'_n'+str(1)+'_'+thetaRange+'.table',comments='#').T[0]
+N_theta = len(theta)
 Tplus = np.zeros((Nmax_mm,N_theta))
 Tminus = np.zeros((Nmax_mm,N_theta))
 
-
-
+for n in range(1,Nmax_mm+1):
+    TplusFileName= tfoldername+'/'+tplusfile+'_n'+str(n)+'_'+thetaRange+'.table'
+    TminusFileName= tfoldername+'/'+tminusfile+'_n'+str(n)+'_'+thetaRange+'.table'
+    if(os.path.isfile(TplusFileName)):
+        file = open(TplusFileName)
+        Tplus[n-1]=np.loadtxt(file,comments='#').T[1]
+    if(os.path.isfile(TminusFileName)):
+        file = open(TminusFileName)
+        Tminus[n-1]=np.loadtxt(file,comments='#').T[1]
 
 En_to_E_plus = np.zeros((len(theta_bins), Nmax_mm))
 En_to_E_minus = np.zeros((len(theta_bins), Nmax_mm))
 Bn_to_B_plus = np.zeros((len(theta_bins), Nmax_mm))
 Bn_to_B_minus = np.zeros((len(theta_bins), Nmax_mm))
 
-for i_theta in range(len(theta_bins)):
-    for n in range(Nmax_mm):
-        En_to_E_plus[i_theta, n] = 2*bar_theta**2/B*np.interp(theta_bins[i_theta],theta/arcmintorad,Tplus[n,:])
-        En_to_E_minus[i_theta, n] = 2*bar_theta**2/B*np.interp(theta_bins[i_theta],theta/arcmintorad,Tminus[n,:])
-        Bn_to_B_plus[i_theta, n] = 2*bar_theta**2/B*np.interp(theta_bins[i_theta],theta/arcmintorad,Tplus[n,:])
-        Bn_to_B_minus[i_theta, n] = 2*bar_theta**2/B*np.interp(theta_bins[i_theta],theta/arcmintorad,Tminus[n,:])
+for n in range(Nmax_mm):
+    for i_theta in range(len(theta_bins)):
+        theta_int = np.geomspace(theta_ul_bins[i_theta] , theta_ul_bins[i_theta + 1], 100)
+        Tplus_inter = np.interp(theta_int,theta,Tplus[n,:])
+        Tminus_inter = np.interp(theta_int,theta,Tminus[n,:])
+        Tplus_binned = 1/(theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta])*np.trapz(Tplus_inter,theta_int)
+        Tminus_binned = 1/(theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta])*np.trapz(Tminus_inter,theta_int)
+        En_to_E_plus[i_theta, n] = 1/bar_theta**2/B*Tplus_binned
+        En_to_E_minus[i_theta, n] = 1/bar_theta**2/B*Tminus_binned
+        Bn_to_B_plus[i_theta, n] = 1/bar_theta**2/B*Tplus_binned
+        Bn_to_B_minus[i_theta, n] = 1/bar_theta**2/B*Tminus_binned
+
+# for i_theta in range(len(theta_bins)):
+#     for n in range(Nmax_mm):
+#         En_to_E_plus[i_theta, n] = bar_theta**2/B*np.interp(theta_bins[i_theta],theta,Tplus[n,:])
+#         En_to_E_minus[i_theta, n] = bar_theta**2/B*np.interp(theta_bins[i_theta],theta,Tminus[n,:])
+#         Bn_to_B_plus[i_theta, n] = bar_theta**2/B*np.interp(theta_bins[i_theta],theta,Tplus[n,:])
+#         Bn_to_B_minus[i_theta, n] = bar_theta**2/B*np.interp(theta_bins[i_theta],theta,Tminus[n,:])
 
 covariance_xiE_p = np.zeros((n_data*len(theta_bins), n_data*len(theta_bins)))
 covariance_xiE_m = np.zeros((n_data*len(theta_bins), n_data*len(theta_bins)))
@@ -148,10 +170,10 @@ signal_xiB_m = np.zeros(n_data*len(theta_bins))
 
 for i in range(n_data):
     for m in range(Nmax_mm):
-        signal_xiE_p[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_plus[:, None, m]*signal_cosebi[i*Nmax_mm + m]
-        signal_xiE_m[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_minus[:, None, m]*signal_cosebi[i*Nmax_mm + m]
-        signal_xiB_p[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_plus[:, None, m]*signal_cosebi[i*Nmax_mm + m + n_data*Nmax_mm]
-        signal_xiB_m[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_minus[:, None, m]*signal_cosebi[i*Nmax_mm + m + n_data*Nmax_mm]
+        signal_xiE_p[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_plus[:, m]*signal_cosebi[i*Nmax_mm + m]
+        signal_xiE_m[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_minus[:, m]*signal_cosebi[i*Nmax_mm + m]
+        signal_xiB_p[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_plus[:, m]*signal_cosebi[i*Nmax_mm + m + n_data*Nmax_mm]
+        signal_xiB_m[i*len(theta_bins) : (i+1)*len(theta_bins)] +=  En_to_E_minus[:, m]*signal_cosebi[i*Nmax_mm + m + n_data*Nmax_mm]
 
 
 for i in range(n_data):
@@ -170,22 +192,25 @@ for i in range(n_data):
                 covariance_xiB_m[i*len(theta_bins) : (i+1)*len(theta_bins), j*len(theta_bins) : (j+1)*len(theta_bins)] += Bn_to_B_minus[:, None, m]*Bn_to_B_minus[None, :,n]*covariance_cosebi[i*Nmax_mm + m + n_data*Nmax_mm, j*Nmax_mm  + n + n_data*Nmax_mm]
                 covariance_xiB_pm[i*len(theta_bins) : (i+1)*len(theta_bins), j*len(theta_bins) : (j+1)*len(theta_bins)] += Bn_to_B_plus[:, None, m]*Bn_to_B_minus[None, :,n]*covariance_cosebi[i*Nmax_mm + m + n_data*Nmax_mm, j*Nmax_mm  + n + n_data*Nmax_mm]
 
-
-signal_XiE_pm = np.block([signal_xiE_p,signal_xiE_m]).T/arcmintorad**2
-signal_XiB_pm = np.block([signal_xiB_p,signal_xiB_m]).T/arcmintorad**2
-covariance_XiE_pm = np.block([[covariance_xiE_p, covariance_xiE_pm],[covariance_xiE_pm.T,covariance_xiE_m]])/arcmintorad**4
-covariance_XiB_pm = np.block([[covariance_xiB_p, covariance_xiB_pm],[covariance_xiB_pm.T,covariance_xiB_m]])/arcmintorad**4
+signal_XiE_pm = np.block([signal_xiE_p,signal_xiE_m]).T
+signal_XiB_pm = np.block([signal_xiB_p,signal_xiB_m]).T
+covariance_XiE_pm = np.block([[covariance_xiE_p, covariance_xiE_pm],[covariance_xiE_pm.T,covariance_xiE_m]])
+covariance_XiB_pm = np.block([[covariance_xiB_p, covariance_xiB_pm],[covariance_xiB_pm.T,covariance_xiB_m]])
+# signal_XiE_pm = np.block([signal_xiE_p,signal_xiE_m]).T/arcmintorad**2
+# signal_XiB_pm = np.block([signal_xiB_p,signal_xiB_m]).T/arcmintorad**2
+# covariance_XiE_pm = np.block([[covariance_xiE_p, covariance_xiE_pm],[covariance_xiE_pm.T,covariance_xiE_m]])/arcmintorad**4
+# covariance_XiB_pm = np.block([[covariance_xiB_p, covariance_xiB_pm],[covariance_xiB_pm.T,covariance_xiB_m]])/arcmintorad**4
 
 signal_XiEB_pm = np.concatenate((signal_XiE_pm,signal_XiB_pm))
 covariance_XiEB_pm = np.block([[covariance_XiE_pm, np.zeros(covariance_XiE_pm.shape)],[np.zeros(covariance_XiE_pm.shape),covariance_XiB_pm]])
 
-np.savetxt(output_data+'/signal_XiE_pm.dat',signal_XiE_pm)
-np.savetxt(output_data+'/signal_XiB_pm.dat',signal_XiB_pm)
-np.savetxt(output_data+'/'+filename_data,signal_XiEB_pm)
+np.savetxt(output_data_E+'/'+filename_data,signal_XiE_pm)
+np.savetxt(output_data_E+'/combined_vector_no_m_bias.txt',signal_XiE_pm)
+np.savetxt(output_data_B+'/'+filename_data,signal_XiB_pm)
+np.savetxt(output_data_B+'/combined_vector_no_m_bias.txt',signal_XiB_pm)
 
-np.savetxt(output_cov+'/covariance_XiE_pm.mat',covariance_XiE_pm)
-np.savetxt(output_cov+'/covariance_XiB_pm.mat',covariance_XiB_pm)
-np.savetxt(output_cov+'/'+filename_cov,covariance_XiEB_pm)
+np.savetxt(output_cov_E+'/'+filename_cov,covariance_XiE_pm)
+np.savetxt(output_cov_B+'/'+filename_cov,covariance_XiB_pm)
 
 # np.savetxt("signal_XiE_pm.dat", np.block([signal_xiE_p,signal_xiE_m]).T/arcmintorad**2)
 # np.savetxt("signal_XiB_pm.dat", np.block([signal_xiB_p,signal_xiB_m]).T/arcmintorad**2)
