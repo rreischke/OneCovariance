@@ -229,6 +229,8 @@ class Input:
         self.bias_2h = None
         self.Mc_relation_cen = None
         self.Mc_relation_sat = None
+        self.norm_Mc_relation_cen = None
+        self.norm_Mc_relation_sat = None
         self.logmass_bins = None
         self.sampledim = None
 
@@ -2105,7 +2107,15 @@ class Input:
                 self.Mc_relation_sat = config['bias']['Mc_relation_sat']
             if self.Mc_relation_sat is None:
                 self.Mc_relation_sat = 'duffy08'
-
+            if 'norm_Mc_relation_cen' in config['bias']:
+                self.norm_Mc_relation_cen = config['bias']['norm_Mc_relation_cen']
+            else:
+                self.norm_Mc_relation_cen = 1.0
+            if 'norm_Mc_relation_sat' in config['bias']:
+                self.norm_Mc_relation_sat = config['bias']['norm_Mc_relation_sat']
+            else:
+                self.norm_Mc_relation_sat = 1.0
+            
             if 'log10mass_bins' in config['bias']:
                 self.logmass_bins = \
                     np.array(config['bias']['log10mass_bins'].split(','))
@@ -2135,6 +2145,8 @@ class Input:
                   "to 1.")
             self.Mc_relation_cen = 'duffy08'
             self.Mc_relation_sat = 'duffy08'
+            self.norm_Mc_relation_cen = 1.0
+            self.norm_Mc_relation_sat = 1.0
             print("The mass-concentration relation for the centrals [bias]: " +
                   "'Mc_relation_cen' is set to duffy08.")
             self.sampledim = 1
@@ -3704,9 +3716,9 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'log10mass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins']
         values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                  self.Mc_relation_sat, self.logmass_bins]
+                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
         self.bias_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.logmass_bins is not None:
@@ -3715,9 +3727,9 @@ class Input:
         else:
             self.logmass_bins = np.array([0, 0])
             values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                      self.Mc_relation_sat, self.logmass_bins]
+                      self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'logmass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins']
         self.bias = dict(zip(keys, values))
 
         keys = ['A_IA', 'eta_IA', 'z_pivot_IA']
