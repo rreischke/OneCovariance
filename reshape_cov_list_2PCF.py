@@ -237,8 +237,8 @@ for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)
     row = probe_idx // cols
     col = probe_idx % cols
 
-    # for zi in range(zbins):
-    for zi in (5, ):
+    for zi in range(zbins):
+    # for zi in (5, ):
 
         cov_g_vs_theta = np.sqrt([cov_g_10d[probe_idx, probe_idx, theta_idx, theta_idx, zi, zi, zi, zi]
                                   for theta_idx in range(theta_bins)])
@@ -250,11 +250,11 @@ for probe_idx, probe in zip((range(4)), (xi_gg_3D, xi_gl_3D, xi_pp_3D, xi_mm_3D)
                                    for theta_idx in range(theta_bins)])
 
         # errorbars
-        ax[row, col].errorbar(theta_arcmin, probe[:, zi, zi], yerr=cov_g_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
+        # ax[row, col].errorbar(theta_arcmin, probe[:, zi, zi], yerr=cov_g_vs_theta, label=f'z{zi}', c=colors[zi], alpha=0.5)
 
         # plot signal and error separately
-        # ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c='red')
-        # ax[row, col].plot(theta_arr, cov_g_vs_theta, label=f'z{zi}, g', c='k', ls=':')
+        ax[row, col].plot(theta_arr, probe[:, zi, zi], label=f'z{zi}', c=colors[zi])
+        ax[row, col].plot(theta_arr, cov_g_vs_theta, label=f'z{zi}, G', c=colors[zi], ls=':')
         # ax[row, col].plot(theta_arr, cov_sva_vs_theta, label=f'z{zi}, sva', c='tab:green', ls=':', marker='.')
         # ax[row, col].plot(theta_arr, cov_mix_vs_theta, label=f'z{zi}, mix', c='tab:orange', ls=':', marker='.')
         # ax[row, col].plot(theta_arr, cov_sn_vs_theta, label=f'z{zi}, sn', c='tab:purple', ls=':', marker='.')

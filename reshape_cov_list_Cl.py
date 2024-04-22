@@ -1,7 +1,7 @@
 import gc
 import re
 import time
-from matplotlib import pyplot as plt
+from matplotlib import cm, pyplot as plt
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -54,25 +54,32 @@ def objective_function(ell_max):
                               ell_min=float(cfg['covELLspace settings']['ell_min_clustering']),
                               ell_max=ell_max)
     ssd = np.sum((ells_sb - ells_oc) ** 2)
+    ssd = np.sum(mm.percent_diff(ells_sb, ells_oc))  # TODO test this
     return ssd
 
 
-cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_Cl_C01_cfgFix'
+cov_folder = '/home/cosmo/davide.sciotti/data/OneCovariance/output_SPV3_v3_dense_LiFECls'
+chunk_size = 5000000
+load_mat_files = False
 
 cfg = configparser.ConfigParser()
 cfg.read(cov_folder + '/save_configs.ini')
 
 zbins = len(cfg['survey specs']['ellipticity_dispersion'].split(', '))
-cl_cfg_nbl = int(float(cfg['covELLspace settings']['ell_bins']))
-ellmax = float(cfg['covELLspace settings']['ell_max'])
-ellmin = float(cfg['covELLspace settings']['ell_min'])
+cl_cfg_nbl = int(float(cfg['covELLspace settings']['ell_bins_clustering']))
+ellmax = float(cfg['covELLspace settings']['ell_max_clustering'])
+ellmin = float(cfg['covELLspace settings']['ell_min_clustering'])
 cl_input_folder = cfg['tabulated inputs files']['cell_directory']
 cl_ll_name = cfg['tabulated inputs files']['cmm_file'].strip("['").strip("']")
 cl_gl_name = cfg['tabulated inputs files']['cgm_file'].strip("['").strip("']")
 cl_gg_name = cfg['tabulated inputs files']['cgg_file'].strip("['").strip("']")
 
-chunk_size = 5000000
-load_mat_files = True
+assert cl_cfg_nbl == int(float(cfg['covELLspace settings']['ell_bins_lensing'])), \
+    'ell_bins_lensing and ell_bins_clustering do not match'
+assert np.allclose(ellmax, float(cfg['covELLspace settings']['ell_max_lensing']), atol=0, rtol=1e-4), \
+    'ell_max_lensing and ell_max_clustering do not match'
+assert np.allclose(ellmin, float(cfg['covELLspace settings']['ell_min_lensing']), atol=0, rtol=1e-4), \
+    'ell_min_lensing and ell_min_clustering do not match'
 
 column_names = [
     '#obs', 'ell1', 'ell2', 's1', 's2', 'tomoi', 'tomoj', 'tomok', 'tomol',
@@ -115,10 +122,10 @@ cl_gg_out = np.genfromtxt(f'{cov_folder}/Cell_gg.ascii')
 cl_in_ells = np.unique(cl_ll_in[:, 0])
 cl_out_ells = np.unique(cl_ll_out[:, 0])
 
-# assert np.allclose(cl_in_ells, cl_out_ells, atol=0, rtol=1e-4), 'ell values are not the same'
-# np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
-# np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
-# np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
+assert np.allclose(cl_in_ells, cl_out_ells, atol=0, rtol=1e-4), 'ell values are not the same'
+np.testing.assert_allclose(cl_ll_out, cl_ll_in, atol=0, rtol=1e-4)
+np.testing.assert_allclose(cl_gl_out, cl_gl_in, atol=0, rtol=1e-4)
+np.testing.assert_allclose(cl_gg_out, cl_gg_in, atol=0, rtol=1e-4)
 
 print('nbl_cl_in:', len(cl_in_ells))
 print('nbl_cl_out:', len(cl_out_ells))
@@ -157,10 +164,18 @@ cov_nbl = len(ells_oc_load)
 # np.testing.assert_allclose(ell_bin_edges_sb, ell_bin_edges_oc_float, atol=0, rtol=1e-6)
 
 
-# # ell_sb can also be obtained as
-# ells_sb, _ = ell_utils.compute_ells(nbl=32, ell_min=10, ell_max=5000,
-#                                     recipe='ISTF', output_ell_bin_edges=False)
-# ells_sb = ells_sb[:29]
+# ell_sb can also be obtained as
+if 'SPV3' in cov_folder:
+    ells_sb, _ = ell_utils.compute_ells(nbl=32, ell_min=10, ell_max=5000,
+                                        recipe='ISTF', output_ell_bin_edges=False)
+    ells_sb = ells_sb[:cl_cfg_nbl]
+    ellmax_save_filename = 3000
+
+else:
+    ells_sb, _ = ell_utils.compute_ells(nbl=cov_nbl, ell_min=ellmin, ell_max=ellmax,
+                                        recipe='ISTF', output_ell_bin_edges=False)
+    ellmax_save_filename = ellmax
+    # TODO test this with ISTF 
 
 
 # # Perform the minimization
@@ -192,11 +207,11 @@ cov_nbl = len(ells_oc_load)
 
 # plt.semilog(ells_sb, label='ells_sb', marker='o')
 # plt.semilog(new_ells_oc, label='new_ells_oc', marker='o')
-# plt.plot(mm.percent_diff(ells_sb, ells_oc_load), label='old', marker='o')
+plt.plot(mm.percent_diff(ells_sb, ells_oc_load), label='old', marker='o')
 # plt.plot(mm.percent_diff(ells_sb, new_ells_oc), label='new', marker='o')
-# plt.legend()
-# plt.xlabel('$\ell$ idx')
-# plt.ylabel('$\ell$ value')
+plt.legend()
+plt.xlabel('$\ell$ idx')
+plt.ylabel('$\ell$ value')
 
 # assert False, 'stop here to check SPV3 Cls'
 
@@ -309,17 +324,17 @@ for cov_term in cov_10d_dict.keys():
     cov_10d_dict[cov_term][1, 0, 1, 1] = mm.cov_4D_to_6D_blocks(cov_glgg_4d, cov_nbl, zbins, ind_cross, ind_auto)
 
     np.savez_compressed(
-        f'{cov_folder}/cov_{cov_term}_onecovariance_LLLL_4D_nbl{cov_nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_llll_4d)
+        f'{cov_folder}/cov_{cov_term}_onecovariance_LLLL_4D_nbl{cov_nbl}_ellmax{ellmax_save_filename}_zbinsEP{zbins}.npz', cov_llll_4d)
     np.savez_compressed(
-        f'{cov_folder}/cov_{cov_term}_onecovariance_LLGL_4D_nbl{cov_nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_llgl_4d)
+        f'{cov_folder}/cov_{cov_term}_onecovariance_LLGL_4D_nbl{cov_nbl}_ellmax{ellmax_save_filename}_zbinsEP{zbins}.npz', cov_llgl_4d)
     np.savez_compressed(
-        f'{cov_folder}/cov_{cov_term}_onecovariance_LLGG_4D_nbl{cov_nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_llgg_4d)
+        f'{cov_folder}/cov_{cov_term}_onecovariance_LLGG_4D_nbl{cov_nbl}_ellmax{ellmax_save_filename}_zbinsEP{zbins}.npz', cov_llgg_4d)
     np.savez_compressed(
-        f'{cov_folder}/cov_{cov_term}_onecovariance_GLGL_4D_nbl{cov_nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_glgl_4d)
+        f'{cov_folder}/cov_{cov_term}_onecovariance_GLGL_4D_nbl{cov_nbl}_ellmax{ellmax_save_filename}_zbinsEP{zbins}.npz', cov_glgl_4d)
     np.savez_compressed(
-        f'{cov_folder}/cov_{cov_term}_onecovariance_GLGG_4D_nbl{cov_nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_glgg_4d)
+        f'{cov_folder}/cov_{cov_term}_onecovariance_GLGG_4D_nbl{cov_nbl}_ellmax{ellmax_save_filename}_zbinsEP{zbins}.npz', cov_glgg_4d)
     np.savez_compressed(
-        f'{cov_folder}/cov_{cov_term}_onecovariance_GGGG_4D_nbl{cov_nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz', cov_gggg_4d)
+        f'{cov_folder}/cov_{cov_term}_onecovariance_GGGG_4D_nbl{cov_nbl}_ellmax{ellmax_save_filename}_zbinsEP{zbins}.npz', cov_gggg_4d)
 
     del cov_llll_4d, cov_llgl_4d, cov_llgg_4d, cov_glgl_4d, cov_glgg_4d, cov_gggg_4d, cov_ggll_4d, cov_glll_4d, cov_gggl_4d
     gc.collect()
@@ -328,7 +343,7 @@ for cov_term in cov_10d_dict.keys():
 # ! construct 2d Cov as you do in spaceborne, from input blocks
 block_index = 'ij'
 cov_filename = 'cov_tot_onecovariance_{probe_a:s}{probe_b:s}{probe_c:s}{probe_d:s}_4D_' + \
-    f'nbl{cov_nbl}_ellmax{ellmax}_zbinsEP{zbins}.npz'
+    f'nbl{cov_nbl}_ellmax{ellmax_save_filename}_zbinsEP{zbins}.npz'
 cov_3x2pt_dict_8D_load = mm.load_cov_from_probe_blocks(cov_folder, cov_filename, probe_ordering)
 cov_3x2pt_dict_10D_load = mm.cov_3x2pt_dict_8d_to_10d(cov_3x2pt_dict_8D_load, cov_nbl, zbins, ind_dict, probe_ordering)
 cov_tot_3x2pt_4d_load = mm.cov_3x2pt_10D_to_4D(
@@ -345,28 +360,30 @@ mm.compare_arrays(cov_tot_3x2pt_2dcloe_load, cov_tot_3x2pt_2dcloe,
 n_elem_auto = cov_nbl * zpairs_auto
 n_elem_cross = cov_nbl * zpairs_cross
 
-cov_mat_fmt_2dcloe_llll = cov_mat_fmt[-n_elem_auto:, -n_elem_auto:]
-cov_mat_fmt_2dcloe_glgl = cov_mat_fmt[n_elem_auto:n_elem_auto +
-                                      n_elem_cross, n_elem_auto:n_elem_auto + n_elem_cross]
-cov_mat_fmt_2dcloe_gggg = cov_mat_fmt[:n_elem_auto, :n_elem_auto]
+if load_mat_files:
+    cov_mat_fmt_2dcloe_llll = cov_mat_fmt[-n_elem_auto:, -n_elem_auto:]
+    cov_mat_fmt_2dcloe_glgl = cov_mat_fmt[n_elem_auto:n_elem_auto +
+                                        n_elem_cross, n_elem_auto:n_elem_auto + n_elem_cross]
+    cov_mat_fmt_2dcloe_gggg = cov_mat_fmt[:n_elem_auto, :n_elem_auto]
 
-cov_tot_3x2pt_2dcloe_llll = cov_tot_3x2pt_2dcloe[:n_elem_auto, :n_elem_auto]
-cov_tot_3x2pt_2dcloe_glgl = cov_tot_3x2pt_2dcloe[n_elem_auto:n_elem_auto +
-                                                 n_elem_cross, n_elem_auto:n_elem_auto + n_elem_cross]
-cov_tot_3x2pt_2dcloe_gggg = cov_tot_3x2pt_2dcloe[-n_elem_auto:, -n_elem_auto:]
+    cov_tot_3x2pt_2dcloe_llll = cov_tot_3x2pt_2dcloe[:n_elem_auto, :n_elem_auto]
+    cov_tot_3x2pt_2dcloe_glgl = cov_tot_3x2pt_2dcloe[n_elem_auto:n_elem_auto +
+                                                    n_elem_cross, n_elem_auto:n_elem_auto + n_elem_cross]
+    cov_tot_3x2pt_2dcloe_gggg = cov_tot_3x2pt_2dcloe[-n_elem_auto:, -n_elem_auto:]
 
-for cov_mat_fmt_block, cov_dat_fmt_block, block_name in zip((cov_mat_fmt_2dcloe_llll, cov_mat_fmt_2dcloe_glgl, cov_mat_fmt_2dcloe_gggg),
-                                                            (cov_tot_3x2pt_2dcloe_llll, cov_tot_3x2pt_2dcloe_glgl,
-                                                             cov_tot_3x2pt_2dcloe_gggg),
-                                                            ('llll', 'glgl', 'gggg')):
-    mm.compare_arrays(cov_mat_fmt_block, cov_dat_fmt_block,
-                      f'cov_mat_fmt_{block_name}', f'cov_dat_fmt_{block_name}', log_array=True)
+    for cov_mat_fmt_block, cov_dat_fmt_block, block_name in zip((cov_mat_fmt_2dcloe_llll, cov_mat_fmt_2dcloe_glgl, cov_mat_fmt_2dcloe_gggg),
+                                                                (cov_tot_3x2pt_2dcloe_llll, cov_tot_3x2pt_2dcloe_glgl,
+                                                                cov_tot_3x2pt_2dcloe_gggg),
+                                                                ('llll', 'glgl', 'gggg')):
+        mm.compare_arrays(cov_mat_fmt_block, cov_dat_fmt_block,
+                        f'cov_mat_fmt_{block_name}', f'cov_dat_fmt_{block_name}', log_array=True)
 
 
 # ! plot Cl and errors
 probe_names = ['Cl_LL', 'Cl_GL', 'Cl_GG']
 cols = 3
 rows = 1
+colors = cm.rainbow(np.linspace(0, 1, zbins))
 fig, ax = plt.subplots(rows, cols, figsize=(15, 4))
 for probe_idx, probe in zip((range(cols)), (cl_oc_out_ll_3d, cl_oc_out_gl_3d, cl_oc_out_gg_3d)):
 
@@ -377,8 +394,8 @@ for probe_idx, probe in zip((range(cols)), (cl_oc_out_ll_3d, cl_oc_out_gl_3d, cl
     elif probe_idx == 2:
         probe_idx_list = (1, 1, 1, 1)
 
-    # for zi in range(zbins):
-    for zi in (5, ):
+    for zi in range(zbins):
+    # for zi in (5, ):
 
         cov_g_vs_ell = np.sqrt([cov_g_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
                                           ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
@@ -388,16 +405,23 @@ for probe_idx, probe in zip((range(cols)), (cl_oc_out_ll_3d, cl_oc_out_gl_3d, cl
                                               ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
         cov_sn_vs_ell = np.sqrt([cov_sn_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
                                             ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
+        cov_ssc_vs_ell = np.sqrt([cov_ssc_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
+                                            ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
+        cov_cng_vs_ell = np.sqrt([cov_cng_10d[probe_idx_list[0], probe_idx_list[1], probe_idx_list[2], probe_idx_list[3],
+                                            ell_idx, ell_idx, zi, zi, zi, zi] for ell_idx in range(cov_nbl)])
 
         # errorbars
         # ax[col].errorbar(theta_arcmin, xi_pp_3D[:, zi, zi], yerr=cov_vs_ell, label=f'z{zi}', c=colors[zi], alpha=0.5)
 
         # plot signal and error separately
-        ax[probe_idx].plot(cl_out_ells, probe[:, zi, zi], label=f'z{zi}', c='red', marker='.')
-        ax[probe_idx].plot(ells_oc_load, cov_g_vs_ell, label=f'z{zi}, g tot', c='k', ls='--', marker='.')
-        ax[probe_idx].plot(ells_oc_load, cov_sva_vs_ell, label=f'z{zi}, sva', c='tab:green', ls=':', marker='.')
-        ax[probe_idx].plot(ells_oc_load, cov_mix_vs_ell, label=f'z{zi}, mix', c='tab:orange', ls=':', marker='.')
-        ax[probe_idx].plot(ells_oc_load, cov_sn_vs_ell, label=f'z{zi}, sn', c='tab:purple', ls=':', marker='.')
+        ax[probe_idx].plot(cl_out_ells, probe[:, zi, zi], label=f'z{zi}', c=colors[zi], marker='')
+        ax[probe_idx].plot(ells_oc_load, cov_g_vs_ell, label=f'z{zi}, G', c=colors[zi], ls='--', marker='')
+        # ax[probe_idx].plot(ells_oc_load, cov_sva_vs_ell, label=f'z{zi}, SVA', c='tab:green', ls=':', marker='.')
+        # ax[probe_idx].plot(ells_oc_load, cov_mix_vs_ell, label=f'z{zi}, MIX', c='tab:orange', ls=':', marker='.')
+        # ax[probe_idx].plot(ells_oc_load, cov_sn_vs_ell, label=f'z{zi}, SN', c='tab:purple', ls=':', marker='.')
+        # ax[probe_idx].plot(ells_oc_load, cov_ssc_vs_ell, label=f'z{zi}, SSC', c='tab:red', ls='-', marker='.')
+        # ax[probe_idx].plot(ells_oc_load, cov_cng_vs_ell, label=f'z{zi}, cNG', c='tab:blue', ls='-', marker='.')
+        
 
     ax[probe_idx].set_title(probe_names[probe_idx])
     ax[probe_idx].set_xlabel('$\ell$')
