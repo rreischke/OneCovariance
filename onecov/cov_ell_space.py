@@ -2665,7 +2665,18 @@ class CovELLSpace(PolySpectra):
                                             survey_params_dict,
                                             False)
         else:
-            gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+            if self.ellrange_clustering_ul is not None or self.ellrange_lensing_ul is not None:
+                gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+                    gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
+                    gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
+                    gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
+                    gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
+                    gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
+                    self.__covELL_split_gaussian(covELLspacesettings,
+                                                survey_params_dict,
+                                                False)
+            else:
+                gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
                 gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
                 gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
                 gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
@@ -2673,7 +2684,7 @@ class CovELLSpace(PolySpectra):
                 gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
                 self.__covELL_split_gaussian(covELLspacesettings,
                                             survey_params_dict,
-                                            False)
+                                            True)
         if covELLspacesettings['pixelised_cell']:
             
             gaussELLgggg_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
@@ -2694,7 +2705,6 @@ class CovELLSpace(PolySpectra):
             gaussELLmmmm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_sn  *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
-
         if calc_prefac or self.ellrange_spec is None:
             if self.gg and self.ellrange_clustering_ul is not None:
                 gaussELLgggg_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
