@@ -2108,11 +2108,11 @@ class Input:
             if self.Mc_relation_sat is None:
                 self.Mc_relation_sat = 'duffy08'
             if 'norm_Mc_relation_cen' in config['bias']:
-                self.norm_Mc_relation_cen = config['bias']['norm_Mc_relation_cen']
+                self.norm_Mc_relation_cen = float(config['bias']['norm_Mc_relation_cen'])
             else:
                 self.norm_Mc_relation_cen = 1.0
             if 'norm_Mc_relation_sat' in config['bias']:
-                self.norm_Mc_relation_sat = config['bias']['norm_Mc_relation_sat']
+                self.norm_Mc_relation_sat = float(config['bias']['norm_Mc_relation_sat'])
             else:
                 self.norm_Mc_relation_sat = 1.0
             
@@ -3664,7 +3664,7 @@ class Input:
                   self.En_modes_lensing, self.theta_min_cosebi_lensing, self.theta_max_cosebi_lensing,
                   self.Wn_acc, self.dimensionless_cosebi]
         self.covCOSEBI_settings = dict(zip(keys, values))
-        keys = ['En_modes', 'theta_min', 'theta_max', 'En_accuracy', 'Wn_style'
+        keys = ['En_modes', 'theta_min', 'theta_max', 'En_accuracy', 'Wn_style',
                 'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
                 'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
                 'Wn_accuracy', 'dimensionless_cosebi']
@@ -3948,7 +3948,7 @@ class Input:
 
         return True
 
-    def __write_save_configs_file(self):
+    def __write_save_configs_file(self, config_pars):
         """
         This methods creates a save_configs file which contains all the
         parameters that are not None, whether they have been explicitly
@@ -3986,7 +3986,11 @@ class Input:
         if self.nongauss:
             params_used['trispec evaluation'] = self.trispec_prec_abr
         params_used['misc '] = self.misc
-
+        #all_section_names: list[str] = config_pars.sections()
+        #all_section_names.append("DEFAULT")
+        #for section_name in all_section_names:
+        #    for key, value in config_pars.items(section_name):
+        #        print(key, value)
         if self.output_dir is None:
             self.output_dir = ''
         with open(
@@ -4157,7 +4161,8 @@ class Input:
         self.__read_in_trispec_prec(config)
         self.__read_in_misc(config)
         self.__zip_to_dicts()
-        self.__write_save_configs_file()
+        
+        self.__write_save_configs_file(config)
 
         observables = {'observables': self.observables,
                        'ELLspace': self.covELLspace_settings,
