@@ -401,7 +401,7 @@ class PolySpectra(HaloModel):
             hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
             hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
             integral = simpson(
-                hurlyX*hurlyY*self.mass_func.dndm, self.mass_func.m)
+                hurlyX*hurlyY*self.mass_func.dndm, x = self.mass_func.m)
 
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
@@ -413,7 +413,7 @@ class PolySpectra(HaloModel):
             hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
             hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
             integral = simpson(hurlyX[:,:,None,:]*hurlyY[:,None,:,:]*self.mass_func.dndm,
-                                self.mass_func.m)
+                               x = self.mass_func.m)
 
         return integral
 
@@ -483,9 +483,9 @@ class PolySpectra(HaloModel):
 
 
         integralX = bias_fac*simpson(self.mass_func.dndm * bias * hurlyX,
-                                      self.mass_func.m)
+                                      x = self.mass_func.m)
         integralY = bias_fac*simpson(self.mass_func.dndm * bias * hurlyY,
-                                      self.mass_func.m)
+                                      x = self.mass_func.m)
 
         return integralX[:,:,None]*integralY[:,None,:]*self.mass_func.power[:,None,None]
 
@@ -1490,7 +1490,7 @@ class PolySpectra(HaloModel):
                     * (4 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]**3
                         + hurly_s[None, :, None, :, :]**4)) \
                     * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(4)
-            trispec1h_gggg = simpson(integrand, self.mass_func.m)
+            trispec1h_gggg = simpson(integrand, x = self.mass_func.m)
         if self.gg and self.gm and self.cross_terms and tri_gggm:
             integrand = np.sqrt(
                     (3 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**2
@@ -1500,7 +1500,7 @@ class PolySpectra(HaloModel):
                         + hurly_s[None, :, None, :, :]**3)
                     * hurly_m[None, :, None, :, :]) \
                     * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(3)
-            trispec1h_gggm = simpson(integrand, self.mass_func.m)
+            trispec1h_gggm = simpson(integrand, x = self.mass_func.m)
         
         if self.gg and self.mm and self.cross_terms and tri_ggmm:
             integrand = np.sqrt(
@@ -1508,7 +1508,7 @@ class PolySpectra(HaloModel):
                     + hurly_s[None, :, None, :, :]**4)
                 * hurly_m[None, :, None, :, :]**4) \
                 * self.mass_func.dndm[None, None, None, None, :] 
-            trispec1h_ggmm = simpson(integrand, self.mass_func.m)
+            trispec1h_ggmm = simpson(integrand, x = self.mass_func.m)
  
         if self.gm and tri_gmgm:
             integrand = np.sqrt(
@@ -1519,7 +1519,7 @@ class PolySpectra(HaloModel):
                     + hurly_s[None, :, None, :, :]**2)
                 * hurly_m[None, :, None, :, :]**2) \
                 * self.mass_func.dndm[None, None, None, None, :] 
-            trispec1h_gmgm = simpson(integrand, self.mass_func.m)
+            trispec1h_gmgm = simpson(integrand, x = self.mass_func.m)
        
         if self.mm and self.gm and self.cross_terms and tri_mmgm:
             integrand = np.sqrt(
@@ -1528,7 +1528,7 @@ class PolySpectra(HaloModel):
                     + hurly_s[None, :, None, :, :]**2)
                 * hurly_m[None, :, None, :, :]**2) \
                 * self.mass_func.dndm[None, None, None, None, :] 
-            trispec1h_mmgm = simpson(integrand, self.mass_func.m)
+            trispec1h_mmgm = simpson(integrand, x = self.mass_func.m)
 
         if self.mm and tri_mmmm:
             # update mass range of the halo mass function
@@ -1551,7 +1551,7 @@ class PolySpectra(HaloModel):
             
             
             integrand = hurly_m[:, None, 0, :]**2 * hurly_m[None, :, 0, :]**2 * self.mass_func.dndm[None, None, :]
-            trispec1h_mmmm = simpson(integrand, self.mass_func.m)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
+            trispec1h_mmmm = simpson(integrand, x = self.mass_func.m)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
@@ -1926,7 +1926,7 @@ class PolySpectra(HaloModel):
                             for idx, phi in enumerate(phis):
                                 integrand[idx] = \
                                     self.__calc_int_for_trispec_2h(phi, ki, kj)
-                            self.int_2h[i,j] = 2/np.pi * simpson(integrand, phis)
+                            self.int_2h[i,j] = 2/np.pi * simpson(integrand, x = phis)
                         try:
                             self.int_3h[i,j] = 2/np.pi \
                                 * quad(self.__calc_int_for_trispec_3h, 0, .5*np.pi,
@@ -1936,7 +1936,7 @@ class PolySpectra(HaloModel):
                             for idx, phi in enumerate(phis):
                                 integrand[idx] = \
                                     self.__calc_int_for_trispec_3h(phi, ki, kj)
-                            self.int_3h[i,j] = 2/np.pi * simpson(integrand, phis)
+                            self.int_3h[i,j] = 2/np.pi * simpson(integrand, x = phis)
 
                         try:
                             self.int_4h[i,j] = 2/np.pi \
@@ -1947,7 +1947,7 @@ class PolySpectra(HaloModel):
                             for idx, phi in enumerate(phis):
                                 integrand[idx] = \
                                     self.__calc_int_for_trispec_4h(phi, ki, kj)
-                            self.int_4h[i,j] = 2/np.pi * simpson(integrand, phis)  
+                            self.int_4h[i,j] = 2/np.pi * simpson(integrand, x = phis)  
                         self.int_4h[j,i] = self.int_4h[i,j]
                         self.int_3h[j,i] = self.int_3h[i,j]
                         self.int_2h[j,i] = self.int_2h[i,j]
