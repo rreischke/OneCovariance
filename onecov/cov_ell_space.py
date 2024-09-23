@@ -4506,6 +4506,8 @@ class CovELLSpace(PolySpectra):
         gmgm_z = []
         mmgm_z = []
         mmmm_z = []
+
+        zet_list = []
         if self.num_cores > 16:
             self.num_cores = 16
         while zet < self.zet_max:
@@ -4529,9 +4531,12 @@ class CovELLSpace(PolySpectra):
             gmgm_z.append(aux_tri[3])
             mmgm_z.append(aux_tri[4])
             mmmm_z.append(aux_tri[5])
+            zet_list.append(zet)
         zet += covELLspacesettings['tri_delta_z']
         chi_list.append(self.cosmology.comoving_distance(
             zet).value * self.cosmology.h)
+        zet_list.append(zet)
+
         self.update_mass_func(
             zet, bias_dict, hod_dict, prec)
         aux_tri = self.trispectra(
@@ -4829,7 +4834,6 @@ class CovELLSpace(PolySpectra):
                                 str(round(tomos/tomos_comb*100, 1)) + '% in ' +
                                 str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                                 str(round(eta, 1)) + 'min', end="")
-            
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLmmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
             print("")

@@ -239,10 +239,6 @@ class PolySpectra(HaloModel):
         self.Pmm = self.P_mm(bias_dict, hod_dict, prec)
         self.Pgm = self.P_gm(bias_dict, hod_dict, prec['hm'])
         self.Pgg = self.P_gg(bias_dict, hod_dict, prec['hm'])
-       # if zet == 0:
-       #     np.savetxt("Pgm",self.Pgm[:,0])
-        #    np.savetxt("Pgg",self.Pgg[:,0,0])
-        #    np.savetxt("k",self.mass_func.k)
         self.Plin_spline = UnivariateSpline(np.log(self.mass_func.k),
                                             np.log(self.mass_func.power),
                                             k=2, s=0, ext=0)

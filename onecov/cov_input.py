@@ -4922,7 +4922,7 @@ class FileInput:
                 bin_idx += 1
             self.zet_lens_photoz = self.zet_lens_photoz.reshape((bin_idx-1,
                                                                  hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
-
+        
         if self.zet_clust_z is not None:
             if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
                 self.zet_clust_z = self.zet_clust_z[1:]
@@ -4936,8 +4936,8 @@ class FileInput:
         if self.zet_lens_z is not None:
             if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
                 try:
-                    self.zet_lens_z = self.zet_lens_z[1:]
                     self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
+                    self.zet_lens_z = self.zet_lens_z[1:]
                 except:
                     self.zet_lens_z = self.zet_lens_z[1:]
                     self.zet_lens_photoz = self.zet_lens_photoz[1:]
@@ -5032,6 +5032,7 @@ class FileInput:
             self.zet_csmf_pz = self.zet_csmf_pz.reshape((bin_idx-1,
                                                                  hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
 
+        
         if self.zet_clust_z is not None:
             if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
                 self.zet_clust_z = self.zet_clust_z[1:]
@@ -5056,7 +5057,6 @@ class FileInput:
             if len(self.zet_lens_photoz.shape) == 1:
                 self.zet_lens_photoz = np.array([self.zet_lens_photoz])
             self.n_tomo_lens = len(self.zet_lens_photoz)
-
         return True
     
     def __read_in_csmf_files(self, config):
