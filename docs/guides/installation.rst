@@ -25,7 +25,7 @@ If this is the case just install it by typing
 
 and redo ``pip install .``  .
 
-If you do not want to use the conda environment, make sure that you have ``gfortran`` and ``gsl`` installed.
+If you do not want to use the conda environment, make sure that you have ``gfortran`` and ``gsl`` installed. **Note that there is an issue with pybind11 when using python >= 3.13, so make sure to use a version below that for the moment.**
 You can install both via ``conda``:
 
 .. code-block:: bash
