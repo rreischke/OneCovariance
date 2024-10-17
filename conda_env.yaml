@@ -1,8 +1,9 @@
-name: cov20_env
+name: cov20_env_test
 channels:
   - conda-forge
   - defaults
 dependencies:
+  - python<3.13
   - gfortran
   - gsl
   - pybind11
