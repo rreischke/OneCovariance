@@ -18,7 +18,6 @@ except:
 
 
 
-mp.set_start_method("fork")
 
 
 class PolySpectra(HaloModel):
