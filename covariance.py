@@ -6,6 +6,12 @@ from onecov.cov_cosebis import CovCOSEBI
 from onecov.cov_bandpowers import CovBandPowers
 from onecov.cov_arbitrary_summary import CovARBsummary
 import sys
+import os
+import platform
+if platform.processor() == 'arm':
+    os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
+
 
 print("READING INPUT")
 print("#############")
