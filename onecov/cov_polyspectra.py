@@ -1091,6 +1091,9 @@ class PolySpectra(HaloModel):
                                  tri_gmgm, tri_mmgm, tri_mmmm)
         trispectra234h = \
             self.__trispectra_234h(bias_dict, hod_dict, hm_prec)
+        self.trispectra234h = trispectra234h
+        self.trispec1h_gggg = trispec1h_gggg
+        self.trispec1h_mmmm = trispec1h_mmmm
         if output_dict['trispec']:
             out = Output(output_dict)
             trispecs = [trispec1h_gggg + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2*self.effective_bias[None,None,None, :]**2,

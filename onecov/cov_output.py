@@ -70,6 +70,7 @@ class Output():
         self.trispecfile = output_dict['trispec']
         self.Cellfile = output_dict['Cell']
         self.tex = output_dict['use_tex']
+        self.save_as_binary = output_dict['save_as_binary']
         self.list_style_spatial_first = output_dict['list_style_spatial_first']
         self.projected_lens = projected_lens
         self.projected_clust = projected_clust
@@ -253,7 +254,8 @@ class Output():
             if isinstance(ssc[idx], np.ndarray):
                 ssc[idx] = self.__check_for_empty_input(ssc[idx], ssc[idx].shape)
 
-        if 'terminal' in self.style or 'list' in self.style:
+        
+        if ('terminal' in self.style or 'list' in self.style):
             fct_args = [obslist, obsbool]
             if self.list_style_spatial_first:
                 self.__write_cov_list_arbitrary_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
@@ -417,7 +419,7 @@ class Output():
             if isinstance(ssc[idx], np.ndarray):
                 ssc[idx] = self.__check_for_empty_input(ssc[idx], ssc[idx].shape)
 
-        if 'terminal' in self.style or 'list' in self.style:
+        if ('terminal' in self.style or 'list' in self.style):
             fct_args = [obslist, obsbool]
             if self.list_style_spatial_first:
                 self.__write_cov_list_cosmosis_style(cov_dict, obs_dict, n_tomo_clust, 
@@ -1186,16 +1188,17 @@ class Output():
                                                             nongauss_aux,
                                                             ssc_aux)
                                                         olist.append(ostr)
-                if 'terminal' in self.style:
-                        print("Writing result to terminal. (Brace yourself...).'")
-                        for ostr in olist:
-                            print(ostr)
-                elif 'list' in self.style:
-                    fn = self.filename[self.style.index('list')]
-                    with open(fn, 'w') as file:
-                        print("Writing '" + fn + "'.")
-                        for ostr in olist:
-                            file.write("%s\n" % ostr)
+                if not self.save_as_binary:
+                    if 'terminal' in self.style:
+                            print("Writing result to terminal. (Brace yourself...).'")
+                            for ostr in olist:
+                                print(ostr)
+                    elif 'list' in self.style:
+                        fn = self.filename[self.style.index('list')]
+                        with open(fn, 'w') as file:
+                            print("Writing '" + fn + "'.")
+                            for ostr in olist:
+                                file.write("%s\n" % ostr)
                 
         else:
             olist = []
@@ -1552,17 +1555,17 @@ class Output():
                                                             ssc[oidx][idxs])
                                                         olist.append(ostr)
                     splitidx += 3
-
-            if 'terminal' in self.style:
-                print("Writing result to terminal. (Brace yourself...).'")
-                for ostr in olist:
-                    print(ostr)
-            elif 'list' in self.style:
-                fn = self.filename[self.style.index('list')]
-                with open(fn, 'w') as file:
-                    print("Writing '" + fn + "'.")
+            if not self.save_as_binary:
+                if 'terminal' in self.style:
+                    print("Writing result to terminal. (Brace yourself...).'")
                     for ostr in olist:
-                        file.write("%s\n" % ostr)
+                        print(ostr)
+                elif 'list' in self.style:
+                    fn = self.filename[self.style.index('list')]
+                    with open(fn, 'w') as file:
+                        print("Writing '" + fn + "'.")
+                        for ostr in olist:
+                            file.write("%s\n" % ostr)
         return True
     
     def __write_cov_list_cosmosis_style(self,
@@ -1749,16 +1752,17 @@ class Output():
                                                             nongauss[i_probe][idxs],
                                                             ssc[i_probe][idxs])
                                                         olist.append(ostr)
-                if 'terminal' in self.style:
-                    print("Writing result to terminal. (Brace yourself...).'")
-                    for ostr in olist:
-                        print(ostr)
-                elif 'list' in self.style:
-                    fn = self.filename[self.style.index('list')]
-                    with open(fn, 'w') as file:
-                        print("Writing '" + fn + "'.")
+                if not self.save_as_binary:
+                    if 'terminal' in self.style:
+                        print("Writing result to terminal. (Brace yourself...).'")
                         for ostr in olist:
-                            file.write("%s\n" % ostr)
+                            print(ostr)
+                    elif 'list' in self.style:
+                        fn = self.filename[self.style.index('list')]
+                        with open(fn, 'w') as file:
+                            print("Writing '" + fn + "'.")
+                            for ostr in olist:
+                                file.write("%s\n" % ostr)
             else:
                 if write_header:
                     olist.append('#obs\t' +proj_quant_str+ '\t\ts1\ts2\t' +
@@ -1959,16 +1963,17 @@ class Output():
                                                             nongauss_aux,
                                                             ssc_aux)
                                                         olist.append(ostr)
-                if 'terminal' in self.style:
-                        print("Writing result to terminal. (Brace yourself...).'")
-                        for ostr in olist:
-                            print(ostr)
-                elif 'list' in self.style:
-                    fn = self.filename[self.style.index('list')]
-                    with open(fn, 'w') as file:
-                        print("Writing '" + fn + "'.")
-                        for ostr in olist:
-                            file.write("%s\n" % ostr)
+                if not self.save_as_binary:
+                    if 'terminal' in self.style:
+                            print("Writing result to terminal. (Brace yourself...).'")
+                            for ostr in olist:
+                                print(ostr)
+                    elif 'list' in self.style:
+                        fn = self.filename[self.style.index('list')]
+                        with open(fn, 'w') as file:
+                            print("Writing '" + fn + "'.")
+                            for ostr in olist:
+                                file.write("%s\n" % ostr)
                 
         else:
             
@@ -2471,17 +2476,17 @@ class Output():
                                                             ssc_aux)
                                                         olist.append(ostr)
                     splitidx += 3
-
-            if 'terminal' in self.style:
-                print("Writing result to terminal. (Brace yourself...).'")
-                for ostr in olist:
-                    print(ostr)
-            elif 'list' in self.style:
-                fn = self.filename[self.style.index('list')]
-                with open(fn, 'w') as file:
-                    print("Writing '" + fn + "'.")
+            if not self.save_as_binary:
+                if 'terminal' in self.style:
+                    print("Writing result to terminal. (Brace yourself...).'")
                     for ostr in olist:
-                        file.write("%s\n" % ostr)
+                        print(ostr)
+                elif 'list' in self.style:
+                    fn = self.filename[self.style.index('list')]
+                    with open(fn, 'w') as file:
+                        print("Writing '" + fn + "'.")
+                        for ostr in olist:
+                            file.write("%s\n" % ostr)
         return True
 
     def __write_cov_list_arbitrary(self,
@@ -2908,16 +2913,17 @@ class Output():
                                                     olist.append(ostr)
                 splitidx += 3
 
-        if 'terminal' in self.style:
-            print("Writing result to terminal. (Brace yourself...).'")
-            for ostr in olist:
-                print(ostr)
-        elif 'list' in self.style:
-            fn = self.filename[self.style.index('list')]
-            with open(fn, 'w') as file:
-                print("Writing '" + fn + "'.")
+        if not self.save_as_binary:
+            if 'terminal' in self.style:
+                print("Writing result to terminal. (Brace yourself...).'")
                 for ostr in olist:
-                    file.write("%s\n" % ostr)
+                    print(ostr)
+            elif 'list' in self.style:
+                fn = self.filename[self.style.index('list')]
+                with open(fn, 'w') as file:
+                    print("Writing '" + fn + "'.")
+                    for ostr in olist:
+                        file.write("%s\n" % ostr)
         return True
     
     def __write_cov_list_arbitrary_cosmosis_style(self,
@@ -3653,17 +3659,17 @@ class Output():
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
                 splitidx += 3
-
-        if 'terminal' in self.style:
-            print("Writing result to terminal. (Brace yourself...).'")
-            for ostr in olist:
-                print(ostr)
-        elif 'list' in self.style:
-            fn = self.filename[self.style.index('list')]
-            with open(fn, 'w') as file:
-                print("Writing '" + fn + "'.")
+        if not self.save_as_binary:
+            if 'terminal' in self.style:
+                print("Writing result to terminal. (Brace yourself...).'")
                 for ostr in olist:
-                    file.write("%s\n" % ostr)
+                    print(ostr)
+            elif 'list' in self.style:
+                fn = self.filename[self.style.index('list')]
+                with open(fn, 'w') as file:
+                    print("Writing '" + fn + "'.")
+                    for ostr in olist:
+                        file.write("%s\n" % ostr)
         return True
 
 
@@ -4498,26 +4504,44 @@ class Output():
             if 'matrix' in self.style:
                 if not cov_dict['split_gauss']:
                     print("Writing matrix output file.")
-                    fn = self.filename[self.style.index('matrix')]
-                    np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
-                            newline='\n', header=hdr_str, comments='# ')
+                    if self.save_as_binary:
+                        fn = self.filename[self.style.index('matrix')]
+                        name, extension = os.path.splitext(fn)
+                        np.save(name, cov2d_total)
+                    else:
+                        fn = self.filename[self.style.index('matrix')]
+                        np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
+                                newline='\n', header=hdr_str, comments='# ')
                 else:
                     print("Writing matrix output file.")
-                    fn = self.filename[self.style.index('matrix')]
-                    np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
-                            newline='\n', header=hdr_str, comments='# ')
-                    name, extension = os.path.splitext(fn)
-                    fn_gauss = name + "_gauss" + extension
-                    fn_nongauss = name + "_nongauss" + extension
-                    fn_ssc = name + "_SSC" + extension
-                    np.savetxt(fn_gauss, cov2d_gauss, fmt='%.6e', delimiter=' ',
-                            newline='\n', header=hdr_str, comments='# ')
-                    if self.has_nongauss:
-                        np.savetxt(fn_nongauss, cov2d_nongauss, fmt='%.6e', delimiter=' ',
+                    if self.save_as_binary:
+                        fn = self.filename[self.style.index('matrix')]
+                        name, extension = os.path.splitext(fn)
+                        np.save(name, cov2d_total)
+                        fn_gauss = name + "_gauss"
+                        fn_nongauss = name + "_nongauss"
+                        fn_ssc = name + "_SSC"
+                        np.save(fn_gauss, cov2d_gauss)
+                        if self.has_nongauss:
+                            np.save(fn_nongauss, cov2d_nongauss)
+                        if self.has_ssc:
+                            np.save(fn_ssc, cov2d_ssc)
+                    else:
+                        fn = self.filename[self.style.index('matrix')]
+                        np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
                                 newline='\n', header=hdr_str, comments='# ')
-                    if self.has_ssc:
-                        np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
+                        name, extension = os.path.splitext(fn)
+                        fn_gauss = name + "_gauss" + extension
+                        fn_nongauss = name + "_nongauss" + extension
+                        fn_ssc = name + "_SSC" + extension
+                        np.savetxt(fn_gauss, cov2d_gauss, fmt='%.6e', delimiter=' ',
                                 newline='\n', header=hdr_str, comments='# ')
+                        if self.has_nongauss:
+                            np.savetxt(fn_nongauss, cov2d_nongauss, fmt='%.6e', delimiter=' ',
+                                    newline='\n', header=hdr_str, comments='# ')
+                        if self.has_ssc:
+                            np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
+                                    newline='\n', header=hdr_str, comments='# ')
         else:
             gauss = [gauss[0]+gauss[1]+gauss[2],
                      gauss[3]+gauss[4]+gauss[5],
@@ -5461,25 +5485,42 @@ class Output():
             if not cov_dict['split_gauss']:
                 print("Writing matrix output file.")
                 fn = self.filename[self.style.index('matrix')]
-                np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
-                        newline='\n', header=hdr_str, comments='# ')
+                if self.save_as_binary:
+                    name, extension = os.path.splitext(fn)
+                    np.save(name, cov2d_total)
+                else:
+                    np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
+                            newline='\n', header=hdr_str, comments='# ')
             else:
                 print("Writing matrix output file.")
-                fn = self.filename[self.style.index('matrix')]
-                np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
-                        newline='\n', header=hdr_str, comments='# ')
-                name, extension = os.path.splitext(fn)
-                fn_gauss = name + "_gauss" + extension
-                fn_nongauss = name + "_nongauss" + extension
-                fn_ssc = name + "_SSC" + extension
-                np.savetxt(fn_gauss, cov2d_gauss, fmt='%.6e', delimiter=' ',
-                        newline='\n', header=hdr_str, comments='# ')
-                if self.has_nongauss:
-                    np.savetxt(fn_nongauss, cov2d_nongauss, fmt='%.6e', delimiter=' ',
+                if self.save_as_binary:
+                    fn = self.filename[self.style.index('matrix')]
+                    name, extension = os.path.splitext(fn)
+                    np.save(name, cov2d_total)
+                    fn_gauss = name + "_gauss"
+                    fn_nongauss = name + "_nongauss"
+                    fn_ssc = name + "_SSC"
+                    np.save(fn_gauss, cov2d_gauss)
+                    if self.has_nongauss:
+                        np.save(fn_nongauss, cov2d_nongauss)
+                    if self.has_ssc:
+                        np.save(fn_ssc, cov2d_ssc)
+                else:
+                    fn = self.filename[self.style.index('matrix')]
+                    np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
                             newline='\n', header=hdr_str, comments='# ')
-                if self.has_ssc:
-                    np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
+                    name, extension = os.path.splitext(fn)
+                    fn_gauss = name + "_gauss" + extension
+                    fn_nongauss = name + "_nongauss" + extension
+                    fn_ssc = name + "_SSC" + extension
+                    np.savetxt(fn_gauss, cov2d_gauss, fmt='%.6e', delimiter=' ',
                             newline='\n', header=hdr_str, comments='# ')
+                    if self.has_nongauss:
+                        np.savetxt(fn_nongauss, cov2d_nongauss, fmt='%.6e', delimiter=' ',
+                                newline='\n', header=hdr_str, comments='# ')
+                    if self.has_ssc:
+                        np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
+                                newline='\n', header=hdr_str, comments='# ')
                 
         
     def __get_obslist(self, 

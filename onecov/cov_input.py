@@ -75,7 +75,7 @@ class Input:
         self.save_alms = None
         self.use_tex = None
         self.list_style_spatial_first = None
-
+        self.save_as_binary = None
         # for lensing in projected Fourier space
         self.covELLspace_settings = dict()
         self.covELLspace_settings_abr = dict()
@@ -1773,7 +1773,11 @@ class Input:
                 self.output_style = ['list']
                 print("The style of the output file [output settings]: " +
                       "'style' will be 'list'.")
-                
+            if 'save_as_binary' in config['output settings']:
+                self.save_as_binary = config['output settings'].getboolean('save_as_binary')
+            else:
+                self.save_as_binary = False
+
             if 'list_style_spatial_first' in config['output settings']:
                 self.list_style_spatial_first = config['output settings'].getboolean('list_style_spatial_first')
             else:
@@ -3592,10 +3596,10 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['directory', 'file', 'style', 'corrmatrix_plot',
-                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first']
+                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
         values = [self.output_dir, self.output_file, self.output_style,
                   self.make_plot, self.save_configs, self.save_Cells,
-                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first]
+                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary]
         self.output_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         self.output_abr['file'] = \
@@ -3611,9 +3615,9 @@ class Input:
             self.save_Cells = path.join(self.output_dir, self.save_Cells)
         if self.save_trispecs and self.output_dir is not None:
             self.save_trispecs = path.join(self.output_dir, self.save_trispecs)
-        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first']
+        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
         values = [self.output_file, self.output_style, self.make_plot,
-                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first]
+                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary]
         self.output = dict(zip(keys, values))
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',

@@ -354,6 +354,10 @@ class CovELLSpace(PolySpectra):
                     self.ellrange_clustering = .5 * (self.ellrange_clustering_ul[1:] + self.ellrange_clustering_ul[:-1])
                 else:
                     self.ellrange_clustering_ul = np.unique(np.geomspace(covELLspacesettings['ell_min_clustering'], covELLspacesettings['ell_max_clustering'], covELLspacesettings['ell_bins_clustering'] + 1).astype(int))
+                    if len(self.ellrange_clustering_ul) != covELLspacesettings['ell_bins_clustering'] + 1:
+                        print("InputWarning: you required", covELLspacesettings['ell_bins_clustering'], "logarithmically-spaced clustering bins.",
+                              "However, the specified clustering ell-range from ", covELLspacesettings['ell_min_clustering'],  "to", covELLspacesettings['ell_max_clustering'], "does not support that many unique bins.",
+                              "Adjusting the number of bins to", len(self.ellrange_clustering_ul) - 1, ".") 
                     self.ellrange_clustering = np.exp(.5 * (np.log(self.ellrange_clustering_ul[1:])
                                         + np.log(self.ellrange_clustering_ul[:-1])))
         self.ellrange_lensing_ul = None
@@ -368,6 +372,10 @@ class CovELLSpace(PolySpectra):
                     self.ellrange_lensing = .5 * (self.ellrange_lensing_ul[1:] + self.ellrange_lensing_ul[:-1])
                 else:
                     self.ellrange_lensing_ul = np.unique(np.geomspace(covELLspacesettings['ell_min_lensing'], covELLspacesettings['ell_max_lensing'], covELLspacesettings['ell_bins_lensing'] + 1).astype(int))
+                    if len(self.ellrange_lensing_ul) != covELLspacesettings['ell_bins_lensing'] + 1:
+                        print("InputWarning: you required", covELLspacesettings['ell_bins_lensing'],"logarithmically-spaced lensing bins.",
+                              "However, the specified clustering ell-range from", covELLspacesettings['ell_min_lensing'],  "to", covELLspacesettings['ell_max_lensing'], "does not support that many unique bins.", 
+                              "Adjusting the number of bins to", len(self.ellrange_lensing_ul) - 1, ".") 
                     self.ellrange_lensing = np.exp(.5 * (np.log(self.ellrange_lensing_ul[1:])
                                         + np.log(self.ellrange_lensing_ul[:-1])))
 
@@ -5189,6 +5197,8 @@ class CovELLSpace(PolySpectra):
                         spline_responsePgg.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
                                                         (aux_response_gg[:, :, i_sample, i_tomo, j_tomo]),bounds_error= False, fill_value = None))
             self.spline_responsePgg = spline_responsePgg    
+            self.spline_responsePgm = spline_responsePgm   
+            self.spline_responsePmm = spline_responsePmm    
                     
 
         print("")
