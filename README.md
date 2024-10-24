@@ -3,7 +3,10 @@
 OneCovariance is python package (with some C++ for the heavy lifting) for the calculation of the covariance matrix of photometric large-scale structure surveys. It can produce the covariance matrix for all the 2-point statistics used within the Kilo-Degree-Survey (KiDS), that is configuration space statistics, bandpowers and COSEBIs. All these observables are derived from projected Fourier space quantities. The code is flexible enough to read in the ingredients from a harmonic space covariance matrix and produce one of the mentioned statistics (whether these are optimal for the considered case is a different question). 
 
 ## Documentation, Installation and Examples
-The installation steps, documentation and examples are all provided at [onecovariance.readthedocs.io](https://onecovariance.readthedocs.io/en/latest/). For starters you first clone the directory via:
+The installation steps, documentation and examples are all provided at [onecovariance.readthedocs.io](https://onecovariance.readthedocs.io/en/latest/).
+
+### Using the conda environment
+ For starters you first clone the directory via:
 ```shell
 git clone git@github.com:rreischke/OneCovariance.git
 ```
@@ -28,7 +31,8 @@ If this is the case just install it by typing
 ```
 and redo the ``pip`` installation.
 
-If you do not want to use the conda environment make sure that you have ``gfortran`` and ``gsl`` installed.
+### Not using the conda environment
+If you do not want to use the conda environment make sure that you have ``gfortran`` and ``gsl`` installed. **Note that there is an issue with pybind11 when using python >= 3.13, so make sure to use a version below that for the moment.**
 You can install both via ``conda``:
 ```shell
 conda install -c conda-forge gfortran
@@ -43,4 +47,5 @@ Once you have installed the external package via ``pip install`` the code simply
 python covariance.py
 ```
 will run the code using the settings in the standard configuration file ``config.ini``. 
+
 

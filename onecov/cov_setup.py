@@ -159,7 +159,7 @@ class Setup():
 
         self.zet_clust, self.zet_lens = \
             self.__check_z_distribution_value_loc_in_bin()
-
+        
     def __set_cosmology(self,
                         cosmo_dict):
         """
@@ -647,6 +647,12 @@ class Setup():
         Ensuring that the redshift distribution contains values which 
         are situated in the middle of any redshift bin.
         """
+        if self.n_tomo_clust != 0:
+            if self.zet_clust['value_loc_in_bin'] != 'left' and self.zet_clust['z'][0] == 0:
+                raise Exception("If the lowest redshift value in the clustering redshift distribution is zero, 'value_loc_in_clustbin' must be set to 'left' in the config file.")
+        if self.n_tomo_lens != 0:
+            if self.zet_lens['value_loc_in_bin'] != 'left' and self.zet_lens['z'][0] == 0:
+                raise Exception("If the lowest redshift value in the lensing redshift distribution is zero, 'value_loc_in_lensbin' must be set to 'left' in the config file.")
 
         if self.n_tomo_clust == 0:
             ...
@@ -675,7 +681,6 @@ class Setup():
         #         if self.n_tomo_lens > 0:
         #             self.zet_lens['photoz'] = \
         #                 np.append(self.zet_lens['photoz'], 0)
-
         if self.n_tomo_lens == 0:
             ...
         elif self.zet_lens['value_loc_in_bin'] == 'left':

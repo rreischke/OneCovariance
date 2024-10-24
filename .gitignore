@@ -6,6 +6,7 @@
 *.so
 *.o
 *.egg
+cz_covariance.py
 /LevinBessel/levin.egg-info/
 /LevinBessel/build/
 __pycache__
