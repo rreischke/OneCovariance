@@ -1214,7 +1214,7 @@ class CovELLSpace(PolySpectra):
             for tomo_i in range(self.n_tomo_lens):
                 for tomo_j in range(tomo_i, self.n_tomo_lens):
                     integrand = spline_Pmm((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                    Cell_mm[:, tomo_i, tomo_j] = fijl*simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None], x = np.log(self.los_integration_chi), axis = 0)
+                    Cell_mm[:, tomo_i, tomo_j] = fijl*simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x =(self.los_integration_chi), axis = 0)
                     Cell_mm[:, tomo_j, tomo_i] = Cell_mm[:, tomo_i, tomo_j]
             Cell_mm = Cell_mm[:, None, :, :] \
                 * np.ones(self.sample_dim)[None, :, None, None]

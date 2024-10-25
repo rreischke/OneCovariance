@@ -4163,290 +4163,291 @@ class Output():
                         cov2d = covariance_xipxim
 
                 cov2d_gauss = np.copy(cov2d)
-                
-                cov = [nongauss[idx] for idx in range(obslength)]
-                cov_diag = []    
-                if obslength == 6:
-                    # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
-                    if gg:
-                        covariance_gggg = self.__create_matrix(cov[0],True,True)
-                        cov2d = covariance_gggg
-                        cov_diag.append(covariance_gggg)
-                        if gm:
-                            covariance_gmgm = self.__create_matrix(cov[3],False,False)
-                            cov_diag.append(covariance_gmgm)
-                            covariance_gggm = self.__create_matrix(cov[1],True,False)
-                            cov2d = np.block([[covariance_gggg, covariance_gggm],
-                                            [covariance_gggm.T, covariance_gmgm]])
-                            if mm:
+                if self.has_nongauss:
+                    cov = [nongauss[idx] for idx in range(obslength)]
+                    cov_diag = []    
+                    if obslength == 6:
+                        # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
+                        if gg:
+                            covariance_gggg = self.__create_matrix(cov[0],True,True)
+                            cov2d = covariance_gggg
+                            cov_diag.append(covariance_gggg)
+                            if gm:
+                                covariance_gmgm = self.__create_matrix(cov[3],False,False)
+                                cov_diag.append(covariance_gmgm)
+                                covariance_gggm = self.__create_matrix(cov[1],True,False)
+                                cov2d = np.block([[covariance_gggg, covariance_gggm],
+                                                [covariance_gggm.T, covariance_gmgm]])
+                                if mm:
+                                    covariance_mmmm = self.__create_matrix(cov[5],True,True)
+                                    cov_diag.append(covariance_mmmm)
+                                    covariance_ggmm = self.__create_matrix(cov[2],True,True)
+                                    covariance_mmgm = self.__create_matrix(cov[4],True,False)
+                                    cov2d = np.block([[covariance_gggg, covariance_gggm, covariance_ggmm],
+                                                    [covariance_gggm.T, covariance_gmgm, covariance_mmgm.T],
+                                                    [covariance_ggmm.T, covariance_mmgm, covariance_mmmm]])
+                            elif mm:
                                 covariance_mmmm = self.__create_matrix(cov[5],True,True)
                                 cov_diag.append(covariance_mmmm)
                                 covariance_ggmm = self.__create_matrix(cov[2],True,True)
-                                covariance_mmgm = self.__create_matrix(cov[4],True,False)
-                                cov2d = np.block([[covariance_gggg, covariance_gggm, covariance_ggmm],
-                                                [covariance_gggm.T, covariance_gmgm, covariance_mmgm.T],
-                                                [covariance_ggmm.T, covariance_mmgm, covariance_mmmm]])
-                        elif mm:
-                            covariance_mmmm = self.__create_matrix(cov[5],True,True)
-                            cov_diag.append(covariance_mmmm)
-                            covariance_ggmm = self.__create_matrix(cov[2],True,True)
-                            cov2d = np.block([[covariance_gggg, covariance_ggmm],
-                                            [covariance_ggmm.T, covariance_mmmm]])
-                    elif gm:
-                        covariance_gmgm = self.__create_matrix(cov[3],False,False)
-                        cov_diag.append(covariance_gmgm)
-                        cov2d = covariance_gmgm
-                        if mm:
-                            covariance_mmmm = self.__create_matrix(cov[5],True,True)
-                            cov_diag.append(covariance_mmmm)
-                            covariance_mmgm = self.__create_matrix(cov[4],True,False)
-                            cov2d = np.block([[covariance_gmgm, covariance_mmgm.T],
-                                            [covariance_mmgm, covariance_mmmm]])
-                    elif mm:
-                        covariance_mmmm = self.__create_matrix(cov[5],True,True)
-                        cov_diag.append(covariance_mmmm)
-                        cov2d = covariance_mmmm
-                elif obslength == 10:        
-                    # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
-                    # 'ximgt', 'xipxip', 'xipxim', 'ximxim'
-                    if gg:
-                        covariance_ww = self.__create_matrix(cov[0],True,True)
-                        cov2d = covariance_ww
-                        cov_diag.append(covariance_ww)
-                        if gm:
-                            covariance_gtgt = self.__create_matrix(cov[4],False,False)
-                            cov_diag.append(covariance_gtgt)
-                            covariance_wgt = self.__create_matrix(cov[1],True,False)
-                            cov2d = np.block([[covariance_ww, covariance_wgt],
-                                            [covariance_wgt.T, covariance_gtgt]])
-                            if xipp:
-                                covariance_xipxip = self.__create_matrix(cov[7],True,True)
-                                covariance_wxip = self.__create_matrix(cov[2],True,True)
-                                covariance_xipgt = self.__create_matrix(cov[5],True,False)
-                                cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
-                                                [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
-                                                [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
-                                cov_diag.append(covariance_xipxip)
-                                if ximm:
-                                    covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                                    cov_diag.append(covariance_ximxim)
-                                    covariance_wxim = self.__create_matrix(cov[3],True,True)
-                                    covariance_ximgt = self.__create_matrix(cov[6],True,False)
-                                    cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
-                                                    [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                    [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                                    [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
-                                    if xipm:
-                                        covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                        cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
-                                                        [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                        [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                                        [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-                            
-                        elif xipp:
-                            covariance_xipxip = self.__create_matrix(cov[7],True,True)
-                            covariance_wxip = self.__create_matrix(cov[2],True,True)
-                            cov2d = np.block([[covariance_ww, covariance_wxip],
-                                            [covariance_wxip.T, covariance_xipxip]])
-                            cov_diag.append(covariance_xipxip)
-                            if ximm:
-                                covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                                covariance_wxim = self.__create_matrix(cov[3],True,True)
-                                cov_diag.append(covariance_ximxim)
-                                cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                                [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                                [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                                if xipm:
-                                    covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                    cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                                    [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
-                                                    [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
-                    elif gm:
-                        covariance_gtgt = self.__create_matrix(cov[4],False,False)
-                        cov2d = covariance_gtgt
-                        cov_diag.append(covariance_gtgt)        
-                        if xipp:
-                            covariance_xipxip = self.__create_matrix(cov[7],True,True)
-                            covariance_xipgt = self.__create_matrix(cov[5],True,False)
-                            cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
-                                            [covariance_xipgt, covariance_xipxip]])
-                            cov_diag.append(covariance_xipxip)
-                            if ximm:
-                                covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                                covariance_ximgt = self.__create_matrix(cov[6],True,False)
-                                cov_diag.append(covariance_ximxim)
-                                cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                                [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                                if xipm:
-                                    covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                    cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                [covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                                [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-                    elif xipp:
-                        covariance_xipxip = self.__create_matrix(cov[7],True,True)
-                        cov2d = covariance_xipxip
-                        cov_diag.append(covariance_xipxip)
-                        if ximm:
-                            covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                            cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                            [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                            cov_diag.append(covariance_ximxim)
-                            if xipm:
-                                covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                cov2d = np.block([[covariance_xipxip, covariance_xipxim],
-                                                [covariance_xipxim.T, covariance_ximxim]])
-                    elif ximm:
-                        covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                        cov2d = covariance_xipxip
-                        cov_diag.append(covariance_ximxim)
-                    elif xipm:
-                        covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                        cov2d = covariance_xipxim
-
-                cov2d_nongauss = np.copy(cov2d)
-
-                cov = [ssc[idx] for idx in range(obslength)]
-                cov_diag = []    
-                if obslength == 6:
-                    # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
-                    if gg:
-                        covariance_gggg = self.__create_matrix(cov[0],True,True)
-                        cov2d = covariance_gggg
-                        cov_diag.append(covariance_gggg)
-                        if gm:
+                                cov2d = np.block([[covariance_gggg, covariance_ggmm],
+                                                [covariance_ggmm.T, covariance_mmmm]])
+                        elif gm:
                             covariance_gmgm = self.__create_matrix(cov[3],False,False)
                             cov_diag.append(covariance_gmgm)
-                            covariance_gggm = self.__create_matrix(cov[1],True,False)
-                            cov2d = np.block([[covariance_gggg, covariance_gggm],
-                                            [covariance_gggm.T, covariance_gmgm]])
+                            cov2d = covariance_gmgm
                             if mm:
                                 covariance_mmmm = self.__create_matrix(cov[5],True,True)
                                 cov_diag.append(covariance_mmmm)
-                                covariance_ggmm = self.__create_matrix(cov[2],True,True)
                                 covariance_mmgm = self.__create_matrix(cov[4],True,False)
-                                cov2d = np.block([[covariance_gggg, covariance_gggm, covariance_ggmm],
-                                                [covariance_gggm.T, covariance_gmgm, covariance_mmgm.T],
-                                                [covariance_ggmm.T, covariance_mmgm, covariance_mmmm]])
+                                cov2d = np.block([[covariance_gmgm, covariance_mmgm.T],
+                                                [covariance_mmgm, covariance_mmmm]])
                         elif mm:
                             covariance_mmmm = self.__create_matrix(cov[5],True,True)
                             cov_diag.append(covariance_mmmm)
-                            covariance_ggmm = self.__create_matrix(cov[2],True,True)
-                            cov2d = np.block([[covariance_gggg, covariance_ggmm],
-                                            [covariance_ggmm.T, covariance_mmmm]])
-                    elif gm:
-                        covariance_gmgm = self.__create_matrix(cov[3],False,False)
-                        cov_diag.append(covariance_gmgm)
-                        cov2d = covariance_gmgm
-                        if mm:
-                            covariance_mmmm = self.__create_matrix(cov[5],True,True)
-                            cov_diag.append(covariance_mmmm)
-                            covariance_mmgm = self.__create_matrix(cov[4],True,False)
-                            cov2d = np.block([[covariance_gmgm, covariance_mmgm.T],
-                                            [covariance_mmgm, covariance_mmmm]])
-                    elif mm:
-                        covariance_mmmm = self.__create_matrix(cov[5],True,True)
-                        cov_diag.append(covariance_mmmm)
-                        cov2d = covariance_mmmm
-                elif obslength == 10:        
-                    # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
-                    # 'ximgt', 'xipxip', 'xipxim', 'ximxim'
-                    if gg:
-                        covariance_ww = self.__create_matrix(cov[0],True,True)
-                        cov2d = covariance_ww
-                        cov_diag.append(covariance_ww)
-                        if gm:
-                            covariance_gtgt = self.__create_matrix(cov[4],False,False)
-                            cov_diag.append(covariance_gtgt)
-                            covariance_wgt = self.__create_matrix(cov[1],True,False)
-                            cov2d = np.block([[covariance_ww, covariance_wgt],
-                                            [covariance_wgt.T, covariance_gtgt]])
-                            if xipp:
+                            cov2d = covariance_mmmm
+                    elif obslength == 10:        
+                        # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
+                        # 'ximgt', 'xipxip', 'xipxim', 'ximxim'
+                        if gg:
+                            covariance_ww = self.__create_matrix(cov[0],True,True)
+                            cov2d = covariance_ww
+                            cov_diag.append(covariance_ww)
+                            if gm:
+                                covariance_gtgt = self.__create_matrix(cov[4],False,False)
+                                cov_diag.append(covariance_gtgt)
+                                covariance_wgt = self.__create_matrix(cov[1],True,False)
+                                cov2d = np.block([[covariance_ww, covariance_wgt],
+                                                [covariance_wgt.T, covariance_gtgt]])
+                                if xipp:
+                                    covariance_xipxip = self.__create_matrix(cov[7],True,True)
+                                    covariance_wxip = self.__create_matrix(cov[2],True,True)
+                                    covariance_xipgt = self.__create_matrix(cov[5],True,False)
+                                    cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
+                                                    [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
+                                                    [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                                    cov_diag.append(covariance_xipxip)
+                                    if ximm:
+                                        covariance_ximxim = self.__create_matrix(cov[9],True,True)
+                                        cov_diag.append(covariance_ximxim)
+                                        covariance_wxim = self.__create_matrix(cov[3],True,True)
+                                        covariance_ximgt = self.__create_matrix(cov[6],True,False)
+                                        cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                                        [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                        [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                        [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                                        if xipm:
+                                            covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                                            cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                                            [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                            [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                                            [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                                
+                            elif xipp:
                                 covariance_xipxip = self.__create_matrix(cov[7],True,True)
                                 covariance_wxip = self.__create_matrix(cov[2],True,True)
-                                covariance_xipgt = self.__create_matrix(cov[5],True,False)
-                                cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
-                                                [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
-                                                [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                                cov2d = np.block([[covariance_ww, covariance_wxip],
+                                                [covariance_wxip.T, covariance_xipxip]])
                                 cov_diag.append(covariance_xipxip)
                                 if ximm:
                                     covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                                    cov_diag.append(covariance_ximxim)
                                     covariance_wxim = self.__create_matrix(cov[3],True,True)
-                                    covariance_ximgt = self.__create_matrix(cov[6],True,False)
-                                    cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
-                                                    [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                    [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                                    [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                                    cov_diag.append(covariance_ximxim)
+                                    cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                                    [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                    [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                                     if xipm:
                                         covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                        cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
-                                                        [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                        [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                                        [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-                            
+                                        cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                                        [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
+                                                        [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
+                        elif gm:
+                            covariance_gtgt = self.__create_matrix(cov[4],False,False)
+                            cov2d = covariance_gtgt
+                            cov_diag.append(covariance_gtgt)        
+                            if xipp:
+                                covariance_xipxip = self.__create_matrix(cov[7],True,True)
+                                covariance_xipgt = self.__create_matrix(cov[5],True,False)
+                                cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
+                                                [covariance_xipgt, covariance_xipxip]])
+                                cov_diag.append(covariance_xipxip)
+                                if ximm:
+                                    covariance_ximxim = self.__create_matrix(cov[9],True,True)
+                                    covariance_ximgt = self.__create_matrix(cov[6],True,False)
+                                    cov_diag.append(covariance_ximxim)
+                                    cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                    [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                    [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                                    if xipm:
+                                        covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                                        cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                    [covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                                    [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
                         elif xipp:
                             covariance_xipxip = self.__create_matrix(cov[7],True,True)
-                            covariance_wxip = self.__create_matrix(cov[2],True,True)
-                            cov2d = np.block([[covariance_ww, covariance_wxip],
-                                            [covariance_wxip.T, covariance_xipxip]])
+                            cov2d = covariance_xipxip
                             cov_diag.append(covariance_xipxip)
                             if ximm:
                                 covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                                covariance_wxim = self.__create_matrix(cov[3],True,True)
+                                cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                                 cov_diag.append(covariance_ximxim)
-                                cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                                [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                                [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                                 if xipm:
                                     covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                    cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                                    [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
-                                                    [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
-                    elif gm:
-                        covariance_gtgt = self.__create_matrix(cov[4],False,False)
-                        cov2d = covariance_gtgt
-                        cov_diag.append(covariance_gtgt)        
-                        if xipp:
-                            covariance_xipxip = self.__create_matrix(cov[7],True,True)
-                            covariance_xipgt = self.__create_matrix(cov[5],True,False)
-                            cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
-                                            [covariance_xipgt, covariance_xipxip]])
-                            cov_diag.append(covariance_xipxip)
-                            if ximm:
-                                covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                                covariance_ximgt = self.__create_matrix(cov[6],True,False)
-                                cov_diag.append(covariance_ximxim)
-                                cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                                [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                                if xipm:
-                                    covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                    cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                [covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                                [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-                    elif xipp:
-                        covariance_xipxip = self.__create_matrix(cov[7],True,True)
-                        cov2d = covariance_xipxip
-                        cov_diag.append(covariance_xipxip)
-                        if ximm:
+                                    cov2d = np.block([[covariance_xipxip, covariance_xipxim],
+                                                    [covariance_xipxim.T, covariance_ximxim]])
+                        elif ximm:
                             covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                            cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                            [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                            cov2d = covariance_xipxip
                             cov_diag.append(covariance_ximxim)
-                            if xipm:
-                                covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                                cov2d = np.block([[covariance_xipxip, covariance_xipxim],
-                                                [covariance_xipxim.T, covariance_ximxim]])
-                    elif ximm:
-                        covariance_ximxim = self.__create_matrix(cov[9],True,True)
-                        cov2d = covariance_xipxip
-                        cov_diag.append(covariance_ximxim)
-                    elif xipm:
-                        covariance_xipxim = self.__create_matrix(cov[8],True,True)
-                        cov2d = covariance_xipxim
+                        elif xipm:
+                            covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                            cov2d = covariance_xipxim
 
-                cov2d_ssc = np.copy(cov2d)
+                    cov2d_nongauss = np.copy(cov2d)
+
+                if self.has_ssc:
+                    cov = [ssc[idx] for idx in range(obslength)]
+                    cov_diag = []    
+                    if obslength == 6:
+                        # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
+                        if gg:
+                            covariance_gggg = self.__create_matrix(cov[0],True,True)
+                            cov2d = covariance_gggg
+                            cov_diag.append(covariance_gggg)
+                            if gm:
+                                covariance_gmgm = self.__create_matrix(cov[3],False,False)
+                                cov_diag.append(covariance_gmgm)
+                                covariance_gggm = self.__create_matrix(cov[1],True,False)
+                                cov2d = np.block([[covariance_gggg, covariance_gggm],
+                                                [covariance_gggm.T, covariance_gmgm]])
+                                if mm:
+                                    covariance_mmmm = self.__create_matrix(cov[5],True,True)
+                                    cov_diag.append(covariance_mmmm)
+                                    covariance_ggmm = self.__create_matrix(cov[2],True,True)
+                                    covariance_mmgm = self.__create_matrix(cov[4],True,False)
+                                    cov2d = np.block([[covariance_gggg, covariance_gggm, covariance_ggmm],
+                                                    [covariance_gggm.T, covariance_gmgm, covariance_mmgm.T],
+                                                    [covariance_ggmm.T, covariance_mmgm, covariance_mmmm]])
+                            elif mm:
+                                covariance_mmmm = self.__create_matrix(cov[5],True,True)
+                                cov_diag.append(covariance_mmmm)
+                                covariance_ggmm = self.__create_matrix(cov[2],True,True)
+                                cov2d = np.block([[covariance_gggg, covariance_ggmm],
+                                                [covariance_ggmm.T, covariance_mmmm]])
+                        elif gm:
+                            covariance_gmgm = self.__create_matrix(cov[3],False,False)
+                            cov_diag.append(covariance_gmgm)
+                            cov2d = covariance_gmgm
+                            if mm:
+                                covariance_mmmm = self.__create_matrix(cov[5],True,True)
+                                cov_diag.append(covariance_mmmm)
+                                covariance_mmgm = self.__create_matrix(cov[4],True,False)
+                                cov2d = np.block([[covariance_gmgm, covariance_mmgm.T],
+                                                [covariance_mmgm, covariance_mmmm]])
+                        elif mm:
+                            covariance_mmmm = self.__create_matrix(cov[5],True,True)
+                            cov_diag.append(covariance_mmmm)
+                            cov2d = covariance_mmmm
+                    elif obslength == 10:        
+                        # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
+                        # 'ximgt', 'xipxip', 'xipxim', 'ximxim'
+                        if gg:
+                            covariance_ww = self.__create_matrix(cov[0],True,True)
+                            cov2d = covariance_ww
+                            cov_diag.append(covariance_ww)
+                            if gm:
+                                covariance_gtgt = self.__create_matrix(cov[4],False,False)
+                                cov_diag.append(covariance_gtgt)
+                                covariance_wgt = self.__create_matrix(cov[1],True,False)
+                                cov2d = np.block([[covariance_ww, covariance_wgt],
+                                                [covariance_wgt.T, covariance_gtgt]])
+                                if xipp:
+                                    covariance_xipxip = self.__create_matrix(cov[7],True,True)
+                                    covariance_wxip = self.__create_matrix(cov[2],True,True)
+                                    covariance_xipgt = self.__create_matrix(cov[5],True,False)
+                                    cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
+                                                    [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
+                                                    [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                                    cov_diag.append(covariance_xipxip)
+                                    if ximm:
+                                        covariance_ximxim = self.__create_matrix(cov[9],True,True)
+                                        cov_diag.append(covariance_ximxim)
+                                        covariance_wxim = self.__create_matrix(cov[3],True,True)
+                                        covariance_ximgt = self.__create_matrix(cov[6],True,False)
+                                        cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                                        [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                        [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                        [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                                        if xipm:
+                                            covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                                            cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                                            [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                            [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                                            [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                                
+                            elif xipp:
+                                covariance_xipxip = self.__create_matrix(cov[7],True,True)
+                                covariance_wxip = self.__create_matrix(cov[2],True,True)
+                                cov2d = np.block([[covariance_ww, covariance_wxip],
+                                                [covariance_wxip.T, covariance_xipxip]])
+                                cov_diag.append(covariance_xipxip)
+                                if ximm:
+                                    covariance_ximxim = self.__create_matrix(cov[9],True,True)
+                                    covariance_wxim = self.__create_matrix(cov[3],True,True)
+                                    cov_diag.append(covariance_ximxim)
+                                    cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                                    [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                    [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                                    if xipm:
+                                        covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                                        cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                                        [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
+                                                        [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
+                        elif gm:
+                            covariance_gtgt = self.__create_matrix(cov[4],False,False)
+                            cov2d = covariance_gtgt
+                            cov_diag.append(covariance_gtgt)        
+                            if xipp:
+                                covariance_xipxip = self.__create_matrix(cov[7],True,True)
+                                covariance_xipgt = self.__create_matrix(cov[5],True,False)
+                                cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
+                                                [covariance_xipgt, covariance_xipxip]])
+                                cov_diag.append(covariance_xipxip)
+                                if ximm:
+                                    covariance_ximxim = self.__create_matrix(cov[9],True,True)
+                                    covariance_ximgt = self.__create_matrix(cov[6],True,False)
+                                    cov_diag.append(covariance_ximxim)
+                                    cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                    [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                    [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                                    if xipm:
+                                        covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                                        cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                    [covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                                    [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                        elif xipp:
+                            covariance_xipxip = self.__create_matrix(cov[7],True,True)
+                            cov2d = covariance_xipxip
+                            cov_diag.append(covariance_xipxip)
+                            if ximm:
+                                covariance_ximxim = self.__create_matrix(cov[9],True,True)
+                                cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                                cov_diag.append(covariance_ximxim)
+                                if xipm:
+                                    covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                                    cov2d = np.block([[covariance_xipxip, covariance_xipxim],
+                                                    [covariance_xipxim.T, covariance_ximxim]])
+                        elif ximm:
+                            covariance_ximxim = self.__create_matrix(cov[9],True,True)
+                            cov2d = covariance_xipxip
+                            cov_diag.append(covariance_ximxim)
+                        elif xipm:
+                            covariance_xipxim = self.__create_matrix(cov[8],True,True)
+                            cov2d = covariance_xipxim
+
+                    cov2d_ssc = np.copy(cov2d)
                 
 
             for i in range(len(cov2d[:,0])):
@@ -4454,10 +4455,11 @@ class Output():
                     cov2d_total[j,i] = cov2d_total[i,j]
                     if cov_dict['split_gauss']:
                         cov2d_gauss[j,i] = cov2d_gauss[i,j]
-                        cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
-                        cov2d_ssc[j,i] = cov2d_ssc[i,j]
-
-            if len(np.where(np.linalg.eig(cov2d)[0] < 0)[0]) > 0:
+                        if self.has_nongauss:
+                            cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
+                        if self.has_ssc:
+                            cov2d_ssc[j,i] = cov2d_ssc[i,j]
+            if len(np.where(np.linalg.eig(cov2d_total)[0] < 0)[0]) > 0:
                 print("ALARM: The resulting covariance matrix has negative eigenvalues")
                 print("Try to adjust the accuracy settings in the config file:")
                 print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
@@ -4926,7 +4928,7 @@ class Output():
                             cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                         if self.has_ssc:
                             cov2d_ssc[j,i] = cov2d_ssc[i,j]
-            if len(np.where(np.linalg.eig(cov2d)[0] < 0)[0]) > 0:
+            if len(np.where(np.linalg.eig(cov2d_total)[0] < 0)[0]) > 0:
                 print("ALARM: The resulting covariance matrix has negative eigenvalues")
                 print("Try to adjust the accuracy settings in the config file:")
                 print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
@@ -5438,7 +5440,7 @@ class Output():
                     cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                     cov2d_ssc[j,i] = cov2d_ssc[i,j]
 
-        if len(np.where(np.linalg.eig(cov2d)[0] < 0)[0]) > 0:
+        if len(np.where(np.linalg.eig(cov2d_total)[0] < 0)[0]) > 0:
             print("ALARM: The resulting covariance matrix has negative eigenvalues")
             print("Try to adjust the accuracy settings in the config file:")
             print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
