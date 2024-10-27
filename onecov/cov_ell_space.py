@@ -249,7 +249,7 @@ class CovELLSpace(PolySpectra):
                        bias_dict, iA_dict, hod_dict, prec, read_in_tables)
         if not self.cov_dict['gauss']:
             self.__set_lensweight_splines(obs_dict['ELLspace'], iA_dict)
-    
+        
     
     def __check_krange_support(self,
                                obs_dict,
@@ -1162,7 +1162,7 @@ class CovELLSpace(PolySpectra):
                                     x_values[1,flat_idx] = ki
                                     flat_idx +=1
                             integrand = spline_Pgg[i_sample*self.sample_dim + j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                            Cell_gg[:, i_sample, j_sample, tomo_i, tomo_j] = simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_zclust[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None], x = np.log(self.los_integration_chi), axis = 0)
+                            Cell_gg[:, i_sample, j_sample, tomo_i, tomo_j] = simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_zclust[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x = self.los_integration_chi, axis = 0)
                             Cell_gg[:, i_sample, j_sample, tomo_j, tomo_i] = \
                                 Cell_gg[:, i_sample, j_sample,  tomo_i, tomo_j]
                             self.__update_los_integration_chi(
@@ -1193,7 +1193,7 @@ class CovELLSpace(PolySpectra):
                                 x_values[1,flat_idx] = ki
                                 flat_idx +=1
                         integrand = spline_Pgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                        Cell_gm[:, i_sample, tomo_i, tomo_j] = np.sqrt(fijl)*simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi)[:,None], x = np.log(self.los_integration_chi), axis = 0)
+                        Cell_gm[:, i_sample, tomo_i, tomo_j] = np.sqrt(fijl)*simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x = (self.los_integration_chi), axis = 0)
                         self.__update_los_integration_chi(
                             self.chimin, self.chimax, covELLspacesettings)
         elif self.tab_bools[1]:
@@ -2374,12 +2374,8 @@ class CovELLSpace(PolySpectra):
                                unique_12,
                                unique_34):
         if not isinstance(cov, np.ndarray):
-            return 0
-        full_sky_angle = 1 * self.deg2torad2
-
+            return 0 
         binned_covariance = np.zeros((len(ellrange_12_ul) - 1, len(ellrange_34_ul) - 1, len(cov[0,0,:,0,0,0,0,0]), len(cov[0,0,0,:,0,0,0,0]), len(cov[0,0,0,0,:,0,0,0]), len(cov[0,0,0,0,0,:,0,0]), len(cov[0,0,0,0,0,0,:,0]), len(cov[0,0,0,0,0,0,0,:])))
-        t0, tomos = time.time(), 0
-        tomos_comb = (len(ellrange_12_ul) - 1)*(len(ellrange_34_ul) - 1)   
         for i_sample in range(len(cov[0,0,:,0,0,0,0,0])):
             for j_sample in range(len(cov[0,0,0,:,0,0,0,0])):        
                 for i_tomo in range(len(cov[0,0,0,0,:,0,0,0])):
@@ -2400,7 +2396,7 @@ class CovELLSpace(PolySpectra):
                                         islog = False
                                         spline = RegularGridInterpolator((self.ellrange,self.ellrange), cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
                                     for i_ell in range(len(ellrange_12_ul) - 1):
-                                        area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]                                            
+                                        area12_ell = np.pi*((ellrange_12_ul[i_ell +1])**2 - (ellrange_12_ul[i_ell])**2)                                            
                                         Numberi = int((np.abs(self.ellrange - ellrange_12_ul[i_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_12_ul[i_ell])).argmin())
                                         if Numberi < 3:
                                                 Numberi = 3
@@ -2408,7 +2404,7 @@ class CovELLSpace(PolySpectra):
                                             Numberi = 10
                                         integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
                                         for j_ell in range(len(ellrange_34_ul) - 1):
-                                            area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
+                                            area34_ell = np.pi*((ellrange_34_ul[i_ell +1])**2 - (ellrange_34_ul[i_ell])**2)                                            
                                             Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())                
                                             if Numberj < 3:
                                                 Numberj = 3
@@ -2421,11 +2417,12 @@ class CovELLSpace(PolySpectra):
                                             else:
                                                 result = simpson(simpson((spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[None, :], x = integration_ell_34), x = integration_ell_12)
                                             result /= (area12_ell*area34_ell)
+                                            result *= 4*np.pi**2
                                             if connected:
-                                                result *= full_sky_angle / max(area_12,area_34)
+                                                result *=  self.deg2torad2/max(area_12,area_34)
                                             binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = result    
         return binned_covariance
-    
+
 
     def __bin_non_Gaussian(self,
                             covELLspacesettings,
