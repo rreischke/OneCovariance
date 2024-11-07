@@ -1163,19 +1163,19 @@ class HaloModel(Setup):
 
         """
         if type == 'sat':
-            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+            csmf = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'sat',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, x = self.mass_func.m, axis = -1)
+            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf, x = self.mass_func.m, axis = -1)
         if type == 'cen':
-            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+            csmf = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'cen',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, x = self.mass_func.m, axis = -1)
+            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf, x = self.mass_func.m, axis = -1)
 
     def __set_spline_galaxy_stellar_mf(self,
                                        hod_dict):
