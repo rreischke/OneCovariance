@@ -312,7 +312,7 @@ class HOD():
                     + "probability evaluated to nan. They are replaced with "
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
-            occ_num = simpson(occ_prob, self.Mbins[:, :, None], axis=1)
+            occ_num = simpson(occ_prob, x = self.Mbins[:, :, None], axis=1)
         
         elif mor_tab['M'] is not None:
             Mobs = mor_tab[pop]
@@ -323,7 +323,7 @@ class HOD():
                     + "probability evaluated to nan. They are replaced with "
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
-            occ_num = simpson(occ_prob, self.Mbins[:, :, None], axis=1)
+            occ_num = simpson(occ_prob, x = self.Mbins[:, :, None], axis=1)
 
         else:
             Mobs = 10**eval(hod_dict['model_mor_'+pop])(hod_dict, pop)
@@ -334,7 +334,7 @@ class HOD():
                     + "probability evaluated to nan. They are replaced with "
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
-            occ_num = simpson(occ_prob, self.Mbins[:, :, None], axis=1)
+            occ_num = simpson(occ_prob, x = self.Mbins[:, :, None], axis=1)
         return occ_num, occ_prob
 
     def occ_num_and_prob(self, 

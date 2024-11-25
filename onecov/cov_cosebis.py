@@ -302,7 +302,7 @@ class CovCOSEBI(CovELLSpace):
         theta_integral_weight = np.ones((len(theta),len(theta)))
         theta_integral_weight = np.triu(theta_integral_weight)[None, :, :]*np.ones(Nmax)[:, None, None]
         theta_integral_weight += (np.diag(np.ones_like(theta)))[None,:,:]
-        return 2/theta**2*simpson(theta_integral_weight*theta[None,:,None]*Un[:,:,None],theta,axis = 1) - Un
+        return 2/theta**2*simpson(theta_integral_weight*theta[None,:,None]*Un[:,:,None], x = theta,axis = 1) - Un
 
     def __get_Wpsi_ell(self, n, Un, theta, ell):
         lev = levin.Levin(0, 16, 32, 1e-8, 200, self.num_cores)
@@ -1141,7 +1141,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Un[m_mode](self.theta_gg)*self.Un[n_mode](self.theta_gg)*self.arcmin2torad2**2
                     integrand = (Tpm_product*self.theta_gg**2)[:,None, None, None]/self.dnpair_gg    
-                    aux_gg_sn = simpson(integrand,self.theta_gg,axis=0)/self.arcmin2torad2**2
+                    aux_gg_sn = simpson(integrand, x = self.theta_gg,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIgggg_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_clust[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_clust[None, None, :, None, None, :]
@@ -1276,7 +1276,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Qn[m_mode](self.theta_gm)*self.Qn[n_mode](self.theta_gm)*self.arcmin2torad2**2
                     integrand = (Tpm_product*self.theta_gm**2)[:,None, None, None]/self.dnpair_gm
-                    aux_gm_sn = simpson(integrand,self.theta_gm,axis=0)/self.arcmin2torad2**2
+                    aux_gm_sn = simpson(integrand, x = self.theta_gm,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIgmgm_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
                                                                             * kron_delta_mass_bins[:,:, None, None, None, None] \
@@ -1387,7 +1387,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Tn_p[m_mode](self.theta_mm)*self.Tn_p[n_mode](self.theta_mm) + self.Tn_m[m_mode](self.theta_mm)*self.Tn_m[n_mode](self.theta_mm)
                     integrand = (Tpm_product*self.theta_mm**2)[:,None, None, None]/self.dnpair_mm
-                    aux_mm_sn = simpson(integrand,self.theta_mm,axis=0)/self.arcmin2torad2**2
+                    aux_mm_sn = simpson(integrand, x = self.theta_mm,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = (kron_delta_tomo_lens[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_lens[None, None, :, None, None, :]

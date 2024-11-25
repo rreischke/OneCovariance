@@ -6,6 +6,7 @@
 *.so
 *.o
 *.egg
+cz_covariance.py
 /LevinBessel/levin.egg-info/
 /LevinBessel/build/
 __pycache__
@@ -18,5 +19,5 @@ levin.egg-info
 !/output/Cell_gg.ascii
 !/output/Cell_gkappa.ascii
 !/output/Cell_kappakappa.ascii
-/output_*/
+output*/
 check_ssc_integrands/*
