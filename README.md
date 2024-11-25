@@ -48,4 +48,7 @@ python covariance.py
 ```
 will run the code using the settings in the standard configuration file ``config.ini``. 
 
+## Using the code
+If you use the OneCovariance code, please cite the [corresponding paper](https://arxiv.org/abs/2410.06962). In there, you can also find the main equations used in the computation as well as a general review on covariance matrix computation.
+
 
