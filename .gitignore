@@ -21,3 +21,7 @@ levin.egg-info
 /output_SPV3/*
 /output_ISTF/*
 /output_ISTF_v2/*
+output_2PCF_C01_v1_cfgFix/*
+!archive/*
+check_ssc_integrands/*
+output_*
