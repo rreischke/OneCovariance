@@ -19,4 +19,5 @@ levin.egg-info
 !/output/Cell_gkappa.ascii
 !/output/Cell_kappakappa.ascii
 /output_*/
-!archive/*
+check_ssc_integrands/*
+!archive/
