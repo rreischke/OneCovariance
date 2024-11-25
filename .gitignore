@@ -19,11 +19,5 @@ levin.egg-info
 !/output/Cell_gg.ascii
 !/output/Cell_gkappa.ascii
 !/output/Cell_kappakappa.ascii
-/comparison_davide
-test.ipynb/output_SPV3/*
-/output_ISTF/*
-/output_ISTF_v2/*
-output_2PCF_C01_v1_cfgFix/*
-!archive/*
+output*/
 check_ssc_integrands/*
-output_*
