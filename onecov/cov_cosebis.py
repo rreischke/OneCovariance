@@ -6,7 +6,6 @@ from scipy.integrate import simpson
 
 from mpmath import mp
 import mpmath
-from scipy import pi,sqrt,exp
 from scipy.special import p_roots
 from scipy.special import eval_legendre
 
@@ -181,7 +180,8 @@ class CovCOSEBI(CovELLSpace):
         self.ell_limits = []
         for mode in range(self.total_modes):
             limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::30]
-            limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
+            #limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
+            limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.wn_ells[1]) & (limits_at_mode < self.wn_ells[-2])]) + 2)
             limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.wn_ells[1]) & (limits_at_mode < self.wn_ells[-2])]
             limits_at_mode_append[0] = self.wn_ells[0]
             limits_at_mode_append[-1] = self.wn_ells[-1]
@@ -205,7 +205,7 @@ class CovCOSEBI(CovELLSpace):
         self.dnpair_gg, self.dnpair_gm, self.dnpair_mm, self.theta_gg, self.theta_gm, self.theta_mm  = self.get_dnpair([self.gg, self.gm, self.mm],
                                                                                                                         self.theta_integral,
                                                                                                                         survey_params_dict,
-                                                                                                                        read_in_tables['npair'])
+                                                                                                                        read_in_tables['npair'])        
         self.array_En_modes = None
         self.array_En_g_modes = None                                                                                                                
         if self.mm:
@@ -302,7 +302,7 @@ class CovCOSEBI(CovELLSpace):
         theta_integral_weight = np.ones((len(theta),len(theta)))
         theta_integral_weight = np.triu(theta_integral_weight)[None, :, :]*np.ones(Nmax)[:, None, None]
         theta_integral_weight += (np.diag(np.ones_like(theta)))[None,:,:]
-        return 2/theta**2*simpson(theta_integral_weight*theta[None,:,None]*Un[:,:,None],theta,axis = 1) - Un
+        return 2/theta**2*simpson(theta_integral_weight*theta[None,:,None]*Un[:,:,None], x = theta,axis = 1) - Un
 
     def __get_Wpsi_ell(self, n, Un, theta, ell):
         lev = levin.Levin(0, 16, 32, 1e-8, 200, self.num_cores)
@@ -310,7 +310,7 @@ class CovCOSEBI(CovELLSpace):
         Wngg = np.zeros_like(ell)
         Wngg = lev.single_bessel_many_args(ell,0,theta[0],theta[-1])
         return Wngg
-    
+    '''
     def __get_WXY(self,obs_dict):
         ell_min = 1
         ell_max = 1e5
@@ -433,7 +433,144 @@ class CovCOSEBI(CovELLSpace):
                         'min  ETA '
                         'in ' + str(round(eta, 1)) + 'min', end="")
                 tcomb += 1
-        
+    '''
+    def __get_WXY(self,obs_dict):
+        ell_min = 1
+        ell_max = 1e5
+        N_ell = int(1e5)
+        N_theta = int(1e4)
+        get_W_ell_as_well = True
+        mp.dps = 160
+        arcmintorad = 1./60./180.*np.pi
+        tmin_mm = 1e6
+        tmax_mm = 0
+        tmin_gg = 1e6
+        tmax_gg = 0
+        Nmax_mm = 0
+        Nmax_gg = 0
+        if self.mm:
+            Nmax_mm = obs_dict['COSEBIs']['En_modes_lensing']
+            tmin_mm = obs_dict['COSEBIs']['theta_min_lensing']
+            tmax_mm = obs_dict['COSEBIs']['theta_max_lensing']
+            tmin_mm *= arcmintorad
+            tmax_mm *= arcmintorad
+            theta_mm = np.geomspace(tmin_mm,tmax_mm, N_theta)
+        if self.gg or self.gm:
+            Nmax_gg = obs_dict['COSEBIs']['En_modes_clustering']
+            tmin_gg = obs_dict['COSEBIs']['theta_min_clustering']
+            tmax_gg = obs_dict['COSEBIs']['theta_max_clustering']
+            tmin_gg *= arcmintorad
+            tmax_gg *= arcmintorad
+            theta_gg = np.geomspace(tmin_gg,tmax_gg, N_theta)
+            theta_gm = theta_gg
+        self.theta_integral = np.geomspace(min(tmin_gg/arcmintorad,tmin_mm/arcmintorad),max(tmax_gg/arcmintorad,tmax_mm/arcmintorad), 1000) 
+        self.total_modes = 0
+        self.En_g_modes = 0 
+        self.En_modes = 0
+        if self.gg or self.gm:
+            self.total_modes += Nmax_gg
+            self.En_g_modes = Nmax_gg
+        if self.mm:
+            self.total_modes += Nmax_mm
+            self.En_modes = Nmax_mm
+        zmax = mp.log(tmax_mm/tmin_mm)
+        self.wn_ells = np.geomspace(ell_min, ell_max, N_ell)
+        if Nmax_mm > 0:
+            coeff_j = mp.matrix(Nmax_mm+1,Nmax_mm+2)
+            for i in range(Nmax_mm+1):
+                coeff_j[i,i+1] = mp.mpf(1.)
+            nn = 1
+            aa = [self.__J(2,0,zmax),self.__J(2,1,zmax)],[self.__J(4,0,zmax),self.__J(4,1,zmax)]
+            bb = [-self.__J(2,nn+1,zmax),-self.__J(4,nn+1,zmax)]
+            coeff_j_ini = mp.lu_solve(aa,bb)
+            coeff_j[1,0] = coeff_j_ini[0]
+            coeff_j[1,1] = coeff_j_ini[1]
+            for nn in np.arange(2,Nmax_mm+1):
+                aa = mp.matrix(int(nn+1))
+                bb = mp.matrix(int(nn+1),1)
+                for m in np.arange(1,nn): 
+                    for j in range(0,nn+1):           
+                        for i in range(0,m+2):
+                            if obs_dict['COSEBIs']['dimensionless_cosebi']:
+                                aa[m-1,j] += self.__J(2,i+j,zmax)*coeff_j[m,i]    
+                            else:
+                                aa[m-1,j] += self.__J(1,i+j,zmax)*coeff_j[m,i]        
+                    for i in range(0,m+2):
+                        if obs_dict['COSEBIs']['dimensionless_cosebi']:
+                            bb[int(m-1)] -= self.__J(2,i+nn+1,zmax)*coeff_j[m,i]
+                        else:    
+                            bb[int(m-1)] -= self.__J(1,i+nn+1,zmax)*coeff_j[m,i]
+                for j in range(nn+1):
+                    aa[nn-1,j] = self.__J(2,j,zmax) 
+                    aa[nn,j]   = self.__J(4,j,zmax) 
+                    bb[int(nn-1)] = -self.__J(2,nn+1,zmax)
+                    bb[int(nn)]   = -self.__J(4,nn+1,zmax)
+                temp_coeff = mp.lu_solve(aa,bb)
+                coeff_j[nn,:len(temp_coeff)] = temp_coeff[:,0].T
+            coeff_j = coeff_j[1:,:]
+            Nn = []
+            for nn in np.arange(1,Nmax_mm+1):
+                temp_sum = mp.mpf(0)
+                for i in range(nn+2):
+                    for j in range(nn+2):
+                        if obs_dict['COSEBIs']['dimensionless_cosebi']:
+                            temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*self.__J(2,i+j,zmax)
+                        else:
+                            temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*self.__J(1,i+j,zmax)
+                if obs_dict['COSEBIs']['dimensionless_cosebi']:
+                    tbar = (tmax_mm + tmin_mm)/2
+                    BB = (tmax_mm - tmin_mm)/(tmax_mm + tmin_mm)
+                    temp_Nn = 1/(temp_sum)
+                    temp_Nn = mp.sqrt(mp.fabs(temp_Nn))*np.sqrt(tbar**2*BB/tmin_mm**2)
+                else:
+                    temp_Nn = (mp.expm1(zmax))/(temp_sum)
+                    temp_Nn = mp.sqrt(mp.fabs(temp_Nn))
+                Nn.append(temp_Nn)
+            rn = []
+            for nn in range(1,Nmax_mm+1):
+                rn.append(mpmath.polyroots(coeff_j[nn-1,:nn+2][::-1],maxsteps=500,extraprec=100))
+        self.wn_kernels = np.zeros((self.total_modes, len(self.wn_ells)))
+        self.Tn_p = []
+        self.Tn_m = []
+        self.Qn = []
+        self.Un = []
+        if self.mm:
+            t0, tcomb = time.time(), 1
+            tcombs = Nmax_mm
+            for nn in range(1,Nmax_mm+1):
+                n = nn-1
+                tpn = self.__tplus(tmin_mm,tmax_mm,nn,Nn[n],rn[n], N_theta)
+                theta = tpn[:,0]
+                tmn = self.__tminus(tmin_mm,tmax_mm,1,Nn[n],rn[n], tpn, theta)
+                self.wn_kernels[nn - 1, :] = self.__get_W_ell(theta,tpn[:,1], self.wn_ells)
+                self.Tn_p.append(UnivariateSpline(tpn[:,0]/arcmintorad,tpn[:,1], k=2, s=0, ext=0))
+                self.Tn_m.append(UnivariateSpline(tmn[:,0]/arcmintorad,tmn[:,1], k=2, s=0, ext=0))
+                eta = (time.time()-t0) / \
+                    60 * (tcombs/tcomb-1)
+                print('\rCalculating weights for lensing COSEBI covariance '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
+        if self.gg or self.gm:
+            print("")
+            t0, tcomb = time.time(), 1
+            tcombs = Nmax_gg
+            Ungg = self.__get_Un(tmax_gg, tmin_gg, theta_gg, Nmax_gg)
+            Qngg = self.__get_Qn(Ungg, theta_gm, Nmax_gg)
+            for nn in range(1,Nmax_gg+1):
+                self.wn_kernels[nn - 1  + self.En_modes, :] = self.__get_Wpsi_ell(nn - 1, Ungg[nn-1,:], theta_gg, self.wn_ells)
+                self.Un.append(UnivariateSpline(theta_gg/arcmintorad,  Ungg[nn-1,:]/self.arcmin2torad2, k=2, s=0, ext=1))
+                self.Qn.append(UnivariateSpline(theta_gg/arcmintorad,  Qngg[nn-1,:]/self.arcmin2torad2, k=2, s=0, ext=1))
+                eta = (time.time()-t0) / \
+                    60 * (tcombs/tcomb-1)
+                print('\rCalculating weights for clustering COSEBI covariance '
+                        + str(round(tcomb/tcombs*100, 1)) + '% in '
+                        + str(round(((time.time()-t0)/60), 1)) +
+                        'min  ETA '
+                        'in ' + str(round(eta, 1)) + 'min', end="")
+                tcomb += 1
 
     def __get_Tn_pm(self,
                     cosebi_tabs,
@@ -1004,7 +1141,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Un[m_mode](self.theta_gg)*self.Un[n_mode](self.theta_gg)*self.arcmin2torad2**2
                     integrand = (Tpm_product*self.theta_gg**2)[:,None, None, None]/self.dnpair_gg    
-                    aux_gg_sn = simpson(integrand,self.theta_gg,axis=0)/self.arcmin2torad2**2
+                    aux_gg_sn = simpson(integrand, x = self.theta_gg,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIgggg_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_clust[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_clust[None, None, :, None, None, :]
@@ -1139,7 +1276,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Qn[m_mode](self.theta_gm)*self.Qn[n_mode](self.theta_gm)*self.arcmin2torad2**2
                     integrand = (Tpm_product*self.theta_gm**2)[:,None, None, None]/self.dnpair_gm
-                    aux_gm_sn = simpson(integrand,self.theta_gm,axis=0)/self.arcmin2torad2**2
+                    aux_gm_sn = simpson(integrand, x = self.theta_gm,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIgmgm_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
                                                                             * kron_delta_mass_bins[:,:, None, None, None, None] \
@@ -1250,7 +1387,7 @@ class CovCOSEBI(CovELLSpace):
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Tn_p[m_mode](self.theta_mm)*self.Tn_p[n_mode](self.theta_mm) + self.Tn_m[m_mode](self.theta_mm)*self.Tn_m[n_mode](self.theta_mm)
                     integrand = (Tpm_product*self.theta_mm**2)[:,None, None, None]/self.dnpair_mm
-                    aux_mm_sn = simpson(integrand,self.theta_mm,axis=0)/self.arcmin2torad2**2
+                    aux_mm_sn = simpson(integrand, x = self.theta_mm,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = (kron_delta_tomo_lens[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_lens[None, None, :, None, None, :]

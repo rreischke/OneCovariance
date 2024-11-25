@@ -647,6 +647,18 @@ class Setup():
         Ensuring that the redshift distribution contains values which 
         are situated in the middle of any redshift bin.
         """
+        if self.zet_clust['value_loc_in_bin'] == 'cen':
+            self.zet_clust['z'] = self.zet_clust['z']
+        if self.zet_lens['value_loc_in_bin'] == 'cen':
+            self.zet_lens['z'] = self.zet_lens['z']
+        if self.n_tomo_clust != 0:
+            if self.zet_clust['value_loc_in_bin'] != 'left' and self.zet_clust['z'][0] == 0:
+                if self.zet_clust['value_loc_in_bin'] != 'cen':
+                    raise Exception("If the lowest redshift value in the clustering redshift distribution is zero, 'value_loc_in_clustbin' must be set to 'left' in the config file.")
+        if self.n_tomo_lens != 0:
+            if self.zet_lens['value_loc_in_bin'] != 'left' and self.zet_lens['z'][0] == 0:
+                if self.zet_lens['value_loc_in_bin'] != 'cen':
+                    raise Exception("If the lowest redshift value in the lensing redshift distribution is zero, 'value_loc_in_lensbin' must be set to 'left' in the config file.")
 
         if self.n_tomo_clust == 0:
             ...
@@ -675,7 +687,6 @@ class Setup():
         #         if self.n_tomo_lens > 0:
         #             self.zet_lens['photoz'] = \
         #                 np.append(self.zet_lens['photoz'], 0)
-
         if self.n_tomo_lens == 0:
             ...
         elif self.zet_lens['value_loc_in_bin'] == 'left':
@@ -999,20 +1010,20 @@ class Setup():
                     "the pair counts file only provides it from " + str(npair_tab['theta_gm'][0]) + " to " + str(npair_tab['theta_gm'][-1]) +
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
-                dnpair_gg_aux = np.ones((len(theta_ul_bins), len(dnpair_gg[0, 0, :, 0]), len(dnpair_gg[0, :, 0, 0]), len(dnpair_gg[0, 0, 0, :])))
-                for i_sample in range(i_tomo, len(dnpair_gg[0, 0, 0, :])):                
-                    for i_tomo in range(len(dnpair_gg[0, :, 0, 0])):
-                        for j_tomo in range(i_tomo, len(dnpair_gg[0, 0, :, 0])):
-                            spline = interp1d(theta_gm, dnpair_gg[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
-                            dnpair_gg_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
-                            dnpair_gg_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0], i_tomo, j_tomo,i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
-                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
-                                                                                                                    * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
-                            dnpair_gg_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
-                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+            dnpair_gg_aux = np.ones((len(theta_ul_bins), len(dnpair_gg[0, 0, :, 0]), len(dnpair_gg[0, :, 0, 0]), len(dnpair_gg[0, 0, 0, :])))
+            for i_sample in range(i_tomo, len(dnpair_gg[0, 0, 0, :])):                
+                for i_tomo in range(len(dnpair_gg[0, :, 0, 0])):
+                    for j_tomo in range(i_tomo, len(dnpair_gg[0, 0, :, 0])):
+                        spline = interp1d(theta_gm, dnpair_gg[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
+                        dnpair_gg_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
+                        dnpair_gg_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0], i_tomo, j_tomo,i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
+                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
                                                                                                                 * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
-                dnpair_gg = dnpair_gg_aux
-                theta_gg = theta_ul_bins
+                        dnpair_gg_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
+                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+                                                                                                            * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
+            dnpair_gg = dnpair_gg_aux
+            theta_gg = theta_ul_bins
             dnpair_gg = dnpair_gg.transpose(0, 3, 1, 2)
         elif gg:
             print("Approximating the clustering real space shot noise " +
@@ -1036,20 +1047,20 @@ class Setup():
                     "the pair counts file only provides it from " + str(npair_tab['theta_gm'][0]) + " to " + str(npair_tab['theta_gm'][-1]) +
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
-                dnpair_gm_aux = np.ones((len(theta_ul_bins), len(dnpair_gm[0, :, 0, 0]), len(dnpair_gm[0, 0, :, 0]), len(dnpair_gm[0, 0, 0, :])))
-                for i_sample in range(i_tomo, len(dnpair_gm[0, 0, 0, :])):                
-                    for i_tomo in range(len(dnpair_gm[0, :, 0, 0])):
-                        for j_tomo in range(len(dnpair_gm[0, 0, :, 0])):
-                            spline = interp1d(theta_gm, dnpair_gm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
-                            dnpair_gm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
-                            dnpair_gm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
-                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
-                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-                            dnpair_gm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
-                                                                                                                    * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
-                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-                dnpair_gm = dnpair_gm_aux
-                theta_gm = theta_ul_bins
+            dnpair_gm_aux = np.ones((len(theta_ul_bins), len(dnpair_gm[0, :, 0, 0]), len(dnpair_gm[0, 0, :, 0]), len(dnpair_gm[0, 0, 0, :])))
+            for i_sample in range(i_tomo, len(dnpair_gm[0, 0, 0, :])):                
+                for i_tomo in range(len(dnpair_gm[0, :, 0, 0])):
+                    for j_tomo in range(len(dnpair_gm[0, 0, :, 0])):
+                        spline = interp1d(theta_gm, dnpair_gm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
+                        dnpair_gm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
+                        dnpair_gm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
+                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
+                        dnpair_gm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
+                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
+                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
+            dnpair_gm = dnpair_gm_aux
+            theta_gm = theta_ul_bins
             dnpair_gm =dnpair_gm.transpose(0, 3, 1, 2)
         elif gm:
             print("Approximating the ggl real space shot noise " +
@@ -1074,20 +1085,20 @@ class Setup():
                     "the pair counts file only provides it from " + str(npair_tab['theta_mm'][0]) + " to " + str(npair_tab['theta_mm'][-1]) +
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
-                dnpair_mm_aux = np.ones((len(theta_ul_bins), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, 0, 0, :])))
-                for i_sample in range(len(dnpair_mm[0, 0, 0, :])):
-                    for i_tomo in range(len(dnpair_mm[0, :, 0, 0])):
-                        for j_tomo in range(i_tomo,len(dnpair_mm[0, 0, :, 0])):
-                            spline = interp1d(theta_mm, dnpair_mm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
-                            dnpair_mm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
-                            dnpair_mm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
-                                                                                                                    * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
-                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-                            dnpair_mm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
-                                                                                                                    * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
-                                                                                                                    * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-                dnpair_mm = dnpair_mm_aux
-                theta_mm = theta_ul_bins
+            dnpair_mm_aux = np.ones((len(theta_ul_bins), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, 0, 0, :])))
+            for i_sample in range(len(dnpair_mm[0, 0, 0, :])):
+                for i_tomo in range(len(dnpair_mm[0, :, 0, 0])):
+                    for j_tomo in range(i_tomo,len(dnpair_mm[0, 0, :, 0])):
+                        spline = interp1d(theta_mm, dnpair_mm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
+                        dnpair_mm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
+                        dnpair_mm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
+                                                                                                                * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
+                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
+                        dnpair_mm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
+                                                                                                                * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
+                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
+            dnpair_mm = dnpair_mm_aux
+            theta_mm = theta_ul_bins
             dnpair_mm =dnpair_mm.transpose(0, 3, 1, 2)
         elif mm:
             print("Approximating the lensing real space shape noise " +
@@ -1339,7 +1350,6 @@ class Setup():
 
         import healpy
         from astropy.io import ascii, fits
-
         if (est1 == 'mm' and est2 == 'gg') or est1 == 'gm':
             est1, est2 = est2, est1
         if est1 == 'gg':
@@ -1369,16 +1379,21 @@ class Setup():
         ell, sum_m_a_lm = [], []
         failure = False
         if survey_params_dict['read_alm_'+est1+'_'+est2]:
-            for afile in survey_params_dict['alm_file_'+est1+'_'+est2]:
-                try:
-                    print("Reading in a_lm file " + afile + ".")
-                    data = ascii.read(afile)
-                    ell.append(data[data.colnames[0]])
-                    sum_m_a_lm.append(data[data.colnames[1]])
-                except:
-                    print("WARNING: a_lm file " + afile + " not found. Will use circular mask for response")
-                    ell, sum_m_a_lm = None, None
-                    failure = True
+            if survey_params_dict['alm_file_'+est1+'_'+est2] is not None:
+                for afile in survey_params_dict['alm_file_'+est1+'_'+est2]:
+                    try:
+                        print("Reading in a_lm file " + afile + ".")
+                        data = ascii.read(afile)
+                        ell.append(data[data.colnames[0]])
+                        sum_m_a_lm.append(data[data.colnames[1]])
+                    except:
+                        print("WARNING: a_lm file " + afile + " not found. Will use circular mask for response")
+                        ell, sum_m_a_lm = None, None
+                        failure = True
+            else:
+                print("WARNING: Will use circular mask for response")
+                ell, sum_m_a_lm = None, None
+                failure = True
         elif survey_params_dict['read_mask_'+est1+'_'+est2]:
             for mfile in survey_params_dict['mask_file_'+est1+'_'+est1]:
                 try:
@@ -1436,19 +1451,19 @@ class Setup():
             ell, sum_m_a_lm = [], []
             NSIDE = 512
             NPIX = healpy.nside2npix(NSIDE)
-            vec = healpy.ang2vec(np.pi / 2, 2*np.pi)
             survey_area = max(survey_params_dict['survey_area_'+est1][0], survey_params_dict['survey_area_'+est2][0])
-            ipix_disc = healpy.query_disc(nside=NSIDE, vec=vec, radius=np.radians(np.sqrt(survey_area)/np.pi))
-            ipix_fullsky = healpy.query_disc(nside=NSIDE, vec=vec, radius=np.radians(360))
-            m = np.arange(NPIX)
-            m[ipix_fullsky] = 0
+            survey_area_in_rad = survey_area*np.pi**2/(180**2)
+            radius_mask = np.arccos(1 - survey_area_in_rad / (2 * np.pi))
+            center_coord = healpy.ang2vec(0, 0)
+            ipix_disc = healpy.query_disc(nside=NSIDE, vec=center_coord, radius=radius_mask)
+            m = np.zeros(NPIX)
             m[ipix_disc] = 1
             ellmax = 3 * NSIDE - 1
             aux_ell = np.arange(ellmax)
             ell.append(aux_ell)
             C_ell = healpy.sphtfunc.anafast(m, use_weights=True)
             sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-            print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")    
+            print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")   
         return ell, sum_m_a_lm
 
 

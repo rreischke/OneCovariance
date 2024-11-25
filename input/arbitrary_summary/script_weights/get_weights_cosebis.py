@@ -6,7 +6,6 @@ import mpmath
 from scipy.interpolate import interp1d
 import multiprocessing as mpi
 from scipy.signal import argrelextrema
-from scipy import pi,sqrt,exp
 from scipy.special import p_roots
 from numpy.polynomial.legendre import legcompanion, legval, legder
 import numpy.linalg as la
@@ -18,7 +17,7 @@ ell_min = 1 # Minimum multipole
 ell_max = 1e5 # Maximum multipole
 N_ell = int(1e5) # Number of Fourier modes
 N_theta = int(1e4)
-get_W_ell_as_well = True # If true the Well are calculated
+get_W_ell_as_well = False # If true the Well are calculated
 num_cores = 100 #number of cores used
 
 
@@ -27,7 +26,7 @@ arcmintorad = 1./60./180.*np.pi
 #define constants
 Nmax_mm = 5 # maximum COSEBI mode
 tmin_mm = 0.5 #theta_min in arcmin
-tmax_mm = 300.0 #theta_max in armin
+tmax_mm = 30. #theta_max in armin
 
 Nmax_gg = 5 # maximum COSEBI mode for gg
 tmin_gg = 0.5 #theta_min in arcmin for gg
@@ -45,7 +44,7 @@ tmax_gg *= arcmintorad
 tmin_gm *= arcmintorad
 tmax_gm *= arcmintorad
 theta_gg = np.geomspace(tmin_gg,tmax_gg, N_theta)
-theta_mm = np.geomspace(tmin_gg,tmax_gg, N_theta)
+theta_mm = np.geomspace(tmin_mm,tmax_mm, N_theta)
 theta_gm = np.geomspace(tmin_gm,tmax_gm, N_theta)
 
 

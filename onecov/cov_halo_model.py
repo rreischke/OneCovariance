@@ -154,6 +154,22 @@ class HaloModel(Setup):
         self.mass_func = \
             self.calc_mass_func(zet, cosmo_dict, prec['hm'], prec['powspec'])
         self.hod = HOD(bias_dict, prec['hm'])
+        '''if zet == 0:
+            np.savetxt("occ_num_sat", self.hod.occ_num_and_prob_per_pop(
+                            hod_dict,
+                            'sat',
+                            self.mor_tab,
+                            self.occprob_tab,
+                            self.occnum_tab
+                        )[0])
+            np.savetxt("occ_num_cen", self.hod.occ_num_and_prob_per_pop(
+                            hod_dict,
+                            'cen',
+                            self.mor_tab,
+                            self.occprob_tab,
+                            self.occnum_tab
+                        )[0])
+            np.savetxt("mass", self.hod.Mrange)'''
         self.ngal = self.nbar(hod_dict)
         self.ncen = self.nbar_cen(hod_dict)
         self.nsat = self.nbar_sat(hod_dict)
@@ -286,7 +302,7 @@ class HaloModel(Setup):
                             self.occprob_tab,
                             self.occnum_tab
                         )[0],
-                        self.hod.Mrange[None, :])
+                        x = self.hod.Mrange[None, :])
 
     def nbar_cen(self,
                  hod_dict):
@@ -342,7 +358,7 @@ class HaloModel(Setup):
                             self.occprob_tab,
                             self.occnum_tab
                         )[0],
-                        self.hod.Mrange[None, :])
+                        x = self.hod.Mrange[None, :])
 
     def __bias_tinker10_fittfunc(self,
                                  nu):
@@ -427,7 +443,7 @@ class HaloModel(Setup):
                     simpson(self.mass_func.fsigma
                              / nu_new
                              * self.__bias_tinker10_fittfunc(nu_new),
-                             nu_new)
+                              x = nu_new)
             spline_tinker = \
                 UnivariateSpline(nu_new, self.__bias_tinker10_fittfunc(nu_new),
                                  k=2, s=0, ext=0)
@@ -483,7 +499,7 @@ class HaloModel(Setup):
             integral = simpson(self.mass_func.dndm
                                 * occ_num
                                 * self.bias(bias_dict, hm_prec),
-                                self.mass_func.m)
+                                 x = self.mass_func.m)
 
             bias = integral / self.ngal
         else:
@@ -496,7 +512,7 @@ class HaloModel(Setup):
         return bias
 
     def uk(self,
-           Mc_relation,
+           bias_dict,
            type = 'cen'):
         """
         Calculates the normalized Fourier transform of the NFW density
@@ -517,11 +533,12 @@ class HaloModel(Setup):
         """
 
         overdensity = self.mass_func.mdef_params['overdensity']
-        con = self.__concentration(Mc_relation)
         if type == 'sat':
-            con *= 0.6289028827810339
-        if type == 'halo':
-            con *= 0.9841
+            con = self.__concentration(bias_dict['Mc_relation_sat'])
+            con *= bias_dict['norm_Mc_relation_sat']
+        if type == 'cen':
+            con = self.__concentration(bias_dict['Mc_relation_cen'])
+            con *= bias_dict['norm_Mc_relation_cen']
         deltac = overdensity * con**3 / (3 * (np.log(1+con) - con/(1+con)))
 
         rvir = self.__virial_radius()
@@ -655,7 +672,7 @@ class HaloModel(Setup):
         """
 
         # if type == 'sat'
-        uk = self.uk(bias_dict['Mc_relation_sat'], 'sat')
+        uk = self.uk(bias_dict, 'sat')
         norm = self.ngal
         pop = self.hod.occ_num_and_prob_per_pop(
             hod_dict,
@@ -675,7 +692,7 @@ class HaloModel(Setup):
                 self.occnum_tab
             )[0]
         if (type_x == 'm'):
-            uk = self.uk(bias_dict['Mc_relation_cen'],'cen')
+            uk = self.uk(bias_dict,'cen')
             norm = np.ones_like(norm) * self.rho_bg
             pop = self.mass_func.m[None, :]
         return (uk[:, None, :]*pop[None, :, :]) / norm.T[None, :, None]
@@ -764,7 +781,7 @@ class HaloModel(Setup):
                 integral_x = simpson(self.mass_func.dndm
                                       * bias
                                       * hurlyX,
-                                      self.mass_func.m)
+                                     x = self.mass_func.m)
             if type_x == 'm':
                 M_min_save = hm_prec["log10M_min"]
                 step_save = self.mass_func.dlog10m
@@ -778,7 +795,7 @@ class HaloModel(Setup):
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
                 bias = self.bias(bias_dict, hm_prec)
                 integral_x = simpson(
-                    self.mass_func.dndm * hurlyX * bias, self.mass_func.m)
+                    self.mass_func.dndm * hurlyX * bias, x = self.mass_func.m)
 
                 hm_prec["log10M_min"] = M_min_save
                 self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
@@ -922,7 +939,7 @@ class HaloModel(Setup):
                                        * hurlyX[:, None, :,  None, :]
                                        * hurlyX[None, :, None, :, :]
                                        * bias[None, None, None, None, :],
-                                       self.mass_func.m)
+                                       x = self.mass_func.m)
                 hm_prec["log10M_min"] = M_min_save
                 self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
                 hm_prec['M_bins'] = len(self.mass_func.m)
@@ -933,7 +950,7 @@ class HaloModel(Setup):
                                           * hurlyY[None, :, None, :, :]
                                           - correct)
                                        * bias[None, None, None, None, :],
-                                       self.mass_func.m)
+                                       x = self.mass_func.m)
 
         return integral_xy
 
@@ -1040,7 +1057,7 @@ class HaloModel(Setup):
                                     * hurlyX[:, None, :, :]
                                     * hurlyX[None, :, :, :]**2.0
                                     * bias[None, None, None, :],
-                                    self.mass_func.m)
+                                    x = self.mass_func.m)
 
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
@@ -1110,14 +1127,14 @@ class HaloModel(Setup):
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return simpson(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson(self.mass_func.dndm[None, None, :]*csmf_sat, x = self.mass_func.m, axis = -1)
         if type == 'cen':
             csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'cen',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return simpson(self.mass_func.dndm[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson(self.mass_func.dndm[None, None, :]*csmf_sat, x = self.mass_func.m, axis = -1)
     
     def galaxy_stellar_mf_bias(self,
                                hod_dict,
@@ -1146,19 +1163,19 @@ class HaloModel(Setup):
 
         """
         if type == 'sat':
-            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+            csmf = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'sat',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf, x = self.mass_func.m, axis = -1)
         if type == 'cen':
-            csmf_sat = self.hod.occ_num_and_prob_per_pop(hod_dict,
+            csmf = self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                          'cen',
                                                          self.mor_tab,
                                                          self.occprob_tab,
                                                          self.occnum_tab)[1]
-            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf_sat, self.mass_func.m, axis = -1)
+            return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf, x = self.mass_func.m, axis = -1)
 
     def __set_spline_galaxy_stellar_mf(self,
                                        hod_dict):
@@ -1249,29 +1266,36 @@ class HaloModel(Setup):
                                                      'sat',
                                                       self.mor_tab,
                                                       self.occprob_tab,
-                                                      self.occnum_tab)[1][0,:,:]
+                                                      self.occnum_tab)[1]
         if type == 'cen':
             return self.hod.occ_num_and_prob_per_pop(hod_dict,
                                                      'cen',
                                                       self.mor_tab,
                                                       self.occprob_tab,
-                                                      self.occnum_tab)[1][0,:,:]
+                                                      self.occnum_tab)[1]
         
     def count_matter_bispectrum(self,
                                 bias_dict,
+                                hod_dict,
                                 hm_prec):
         """
         Calculates the three dimensional count-matter density cross-bispectrum
         for a collapsed triange at the wavenumbers specified in log10kbins
         and redshift specified in the class. This is used for later computation
         of the cross-correlation between the conditional stellar mass function and
-        2pt statistics
+        2pt statistics.
 
         Parameters
         ----------
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation 
+            distribution used. This defines the shot noise level of the 
+            covariance and includes the mass bin definition of the 
+            different galaxy populations. To be passed from the 
+            read_input method of the Input class.
         hm_prec : dictionary
             Contains precision information about the HaloModel (also, 
             see hmf documentation by Steven Murray), this includes mass 
@@ -1282,28 +1306,27 @@ class HaloModel(Setup):
         Returns
         -------
         nBcmm_mu : array
-            with shape (log10k bins, 
-                        sample bins, sample bins)
+            with shape (log10k bins, sample bins)
 
         References
         ----------
         Takada and Bridle 2007,  New Journal of Physics, 9, 446
 
         """
-        halo_profile = self.uk(bias_dict['Mc_relation_cen'])
+        halo_profile = self.uk(bias_dict)
         halo_bias = self.bias(bias_dict,hm_prec)
-        csmf = self.conditional_galaxy_stellar_mf('cen')
-        term1 = self.mass_func.dndm[None, None,:]*csmf[None, :, :]*(self.mass_func.m**2)[None, None,:]/self.rho_bg**2*(halo_profile**2)[:, None, :]
-        term2 = self.mass_func.dndm[None, None,:]*csmf[None, :, :]*(self.mass_func.m)[None, None,:]/self.rho_bg*(halo_profile)[:, None, :]*halo_bias[None,None,:]
+        csmf = self.conditional_galaxy_stellar_mf(hod_dict,'cen')
+        term1 = self.mass_func.dndm[None, None, None, :]*csmf[None, :, :, :]*(self.mass_func.m**2)[None, None, None,:]/self.rho_bg**2*(halo_profile**2)[:, None, None, :]
+        term2 = self.mass_func.dndm[None, None, None, :]*csmf[None, :, :, :]*(self.mass_func.m)[None, None, None,:]/self.rho_bg*(halo_profile)[:, None, None, :]*halo_bias[None, None , None, :]
         term3 = self.mass_func.dndm[None,:]*(self.mass_func.m)[None,:]/self.rho_bg*(halo_profile)[:, :]*halo_bias[None,:]
 
-        I1 = simpson(term1, self.mass_func.m, axis=-1)
-        I2 = simpson(term2, self.mass_func.m, axis=-1) * simpson(term3, self.mass_func.m, axis=-1)[:, None]
-
-        return I1 + 2.0 * self.mass_func.power[:, None] * I2
+        I1 = simpson(term1, x = self.mass_func.m, axis=-1)
+        I2 = simpson(term2, x = self.mass_func.m, axis=-1) * simpson(term3, x = self.mass_func.m, axis=-1)[:, None, None]
+        return I1 + 2.0 * self.mass_func.power[:, None, None] * I2
     
     def get_count_matter_bispectrum(self,
                                     bias_dict,
+                                    hod_dict,
                                     hm_prec,
                                     log10csmf_mass_bins):
         """
@@ -1325,15 +1348,10 @@ class HaloModel(Setup):
             of the Input class.)
         """
 
-        aux_M = np.zeros((len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]) + len(self.hod.Mbins[0,:]))
-        aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hm_prec)
-        aux_bispec = np.zeros((len(aux_M)),self.mass_func.k)
-        for i_bins in range(len(self.hod.Mbins[:,0]) - 1):
-            aux_M[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1])] = self.hod.Mbins[i_bins,:-1]
-            aux_bispec[i_bins*len(self.hod.Mbins[0,:-1]) : (i_bins+1)*len(self.hod.Mbins[0,:-1]), :] = aux_bispec_count_mm[:, i_bins,:-1]
-        aux_M[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = self.hod.Mbins[len(self.hod.Mbins[:,0]) - 1,:]
-        aux_bispec[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_bispec_count_mm[:, len(self.hod.Mbins[:,0]) - 1,:]
+        aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
+        aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
+        aux_bispec_count_mm = aux_bispec_count_mm.reshape((len(aux_bispec_count_mm[:,0,0]), len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0])))
         count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
         for i_k in range(len(self.mass_func.k)):
-            count_matter_bispec[i_k, :] = np.exp(np.intep(log10csmf_mass_bins,np.log10(aux_M), np.log(aux_bispec)))
+            count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M), np.log(aux_bispec_count_mm[i_k,:])))
         return count_matter_bispec

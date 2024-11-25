@@ -21,12 +21,12 @@ class HOD():
     Private Variables
     -----------------
     Mrange : array
-        with unit M_sun
+        with unit M_sun/h
         with shape (M_bins)
         logarithmically spaced masses in the range 
         [hm_prec['log10M_min'], hm_prec['log10M_max']]
     Mbins : array
-        with unit M_sun
+        with unit M_sun/h
         with shape (sample_dims, 300)
         logarithmically spaced masses in the range 
         [bias_dict['logmass_bins'][:-1], bias_dict['logmass_bins'][1:]],
@@ -164,7 +164,7 @@ class HOD():
         Returns
         -------
         Mobs : array
-            with unit M_sun
+            with unit M_sun/h
             with shape (M_bins)
         """
         mrange = self.Mrange / 10**hod_dict['dpow_logM1_'+pop]
@@ -312,7 +312,7 @@ class HOD():
                     + "probability evaluated to nan. They are replaced with "
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
-            occ_num = simpson(occ_prob, self.Mbins[:, :, None], axis=1)
+            occ_num = simpson(occ_prob, x = self.Mbins[:, :, None], axis=1)
         
         elif mor_tab['M'] is not None:
             Mobs = mor_tab[pop]
@@ -323,7 +323,7 @@ class HOD():
                     + "probability evaluated to nan. They are replaced with "
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
-            occ_num = simpson(occ_prob, self.Mbins[:, :, None], axis=1)
+            occ_num = simpson(occ_prob, x = self.Mbins[:, :, None], axis=1)
 
         else:
             Mobs = 10**eval(hod_dict['model_mor_'+pop])(hod_dict, pop)
@@ -334,7 +334,7 @@ class HOD():
                     + "probability evaluated to nan. They are replaced with "
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
-            occ_num = simpson(occ_prob, self.Mbins[:, :, None], axis=1)
+            occ_num = simpson(occ_prob, x = self.Mbins[:, :, None], axis=1)
         return occ_num, occ_prob
 
     def occ_num_and_prob(self, 

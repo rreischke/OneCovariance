@@ -75,7 +75,7 @@ class Input:
         self.save_alms = None
         self.use_tex = None
         self.list_style_spatial_first = None
-
+        self.save_as_binary = None
         # for lensing in projected Fourier space
         self.covELLspace_settings = dict()
         self.covELLspace_settings_abr = dict()
@@ -162,6 +162,7 @@ class Input:
         self.En_modes_lensing = None
         self.theta_min_cosebi_lensing = None
         self.theta_max_cosebi_lensing = None
+        self.dimensionless_cosebi = None
         
         self.En_acc = None
         self.Wn_style = None
@@ -228,6 +229,8 @@ class Input:
         self.bias_2h = None
         self.Mc_relation_cen = None
         self.Mc_relation_sat = None
+        self.norm_Mc_relation_cen = None
+        self.norm_Mc_relation_sat = None
         self.logmass_bins = None
         self.sampledim = None
 
@@ -593,7 +596,8 @@ class Input:
                     print("Note that the full non-Limber calculation slows down the code significantly.")
             if 'pixelised_cell' in config['covELLspace settings']:
                 self.pixelised_cell = config['covELLspace settings'].getboolean('pixelised_cell')
-                self.pixel_Nside = int(config['covELLspace settings']['pixel_Nside'])
+                if self.pixelised_cell:
+                    self.pixel_Nside = int(config['covELLspace settings']['pixel_Nside'])
             if 'nglimber' in config['covELLspace settings']:
                 self.nglimber = config['covELLspace settings'].getboolean('nglimber')
                 if not self.nglimber:
@@ -695,7 +699,7 @@ class Input:
             if self.pixelised_cell is None:
                 self.pixelised_cell = False
             else:
-                if self.pixel_Nside is None:
+                if self.pixel_Nside is None and self.pixelised_cell:
                     raise Exception("ConfigError: C_ells are required to be pixelised " +
                                 "but 'pixelised_cell = True', however Nside is not set in " +
                                 "specified. Must be adjusted in config file " +
@@ -1223,6 +1227,9 @@ class Input:
                     float(config['covCOSEBI settings']['Wn_accuracy'])
             else:
                 self.Wn_acc = 1e-6
+            if 'dimensionless_cosebi' in config['covCOSEBI settings']:
+                self.dimensionless_cosebi = \
+                    config['covCOSEBI settings'].getboolean('dimensionless_cosebi')
         else:
             if self.cosmicshear and self.est_shear == 'cosebi':
                 self.En_acc = 1e-4
@@ -1235,7 +1242,7 @@ class Input:
                       "'[covCOSEBI settings]: 'Wn_style'. It is set to 'log'.")
                 self.Wn_acc = 1e-6
 
-        if self.cosmicshear and self.est_shear == 'cosebi':
+        if self.cosmicshear and self.est_shear == 'cosebi' and not self.do_arbitrary_obs:
             if self.En_modes is None:
                 raise Exception("ConfigError: The cosmic shear estimator is " +
                                 "'cosebi' but no number of E modes is specified. Must " +
@@ -1267,6 +1274,9 @@ class Input:
                                 config['covCOSEBI settings']['Wn_style'] + "' is " +
                                 "not recognised. Must be either 'lin' or 'log'.")
             
+            if self.dimensionless_cosebi is None:
+                self.dimensionless_cosebi = False
+
             if self.limber is None:
                 self.limber = True
 
@@ -1387,7 +1397,7 @@ class Input:
                 self.bandpower_accuracy = float(config['covbandpowers settings']['bandpower_accuracy'])
 
 
-        if self.est_shear == 'bandpowers' or self.est_ggl == 'bandpowers' or self.est_clust == self.est_shear == 'bandpowers':
+        if self.est_shear == 'bandpowers' or self.est_ggl == 'bandpowers' or self.est_clust == self.est_shear == 'bandpowers' and not self.do_arbitrary_obs:
             if self.clustering or self.ggl:
                 if self.apodisation_log_width_clustering is None:
                     if 'apodisation_log_width' in config['covbandpowers settings']:
@@ -1764,7 +1774,11 @@ class Input:
                 self.output_style = ['list']
                 print("The style of the output file [output settings]: " +
                       "'style' will be 'list'.")
-                
+            if 'save_as_binary' in config['output settings']:
+                self.save_as_binary = config['output settings'].getboolean('save_as_binary')
+            else:
+                self.save_as_binary = False
+
             if 'list_style_spatial_first' in config['output settings']:
                 self.list_style_spatial_first = config['output settings'].getboolean('list_style_spatial_first')
             else:
@@ -2098,7 +2112,15 @@ class Input:
                 self.Mc_relation_sat = config['bias']['Mc_relation_sat']
             if self.Mc_relation_sat is None:
                 self.Mc_relation_sat = 'duffy08'
-
+            if 'norm_Mc_relation_cen' in config['bias']:
+                self.norm_Mc_relation_cen = float(config['bias']['norm_Mc_relation_cen'])
+            else:
+                self.norm_Mc_relation_cen = 1.0
+            if 'norm_Mc_relation_sat' in config['bias']:
+                self.norm_Mc_relation_sat = float(config['bias']['norm_Mc_relation_sat'])
+            else:
+                self.norm_Mc_relation_sat = 1.0
+            
             if 'log10mass_bins' in config['bias']:
                 self.logmass_bins = \
                     np.array(config['bias']['log10mass_bins'].split(','))
@@ -2128,6 +2150,8 @@ class Input:
                   "to 1.")
             self.Mc_relation_cen = 'duffy08'
             self.Mc_relation_sat = 'duffy08'
+            self.norm_Mc_relation_cen = 1.0
+            self.norm_Mc_relation_sat = 1.0
             print("The mass-concentration relation for the centrals [bias]: " +
                   "'Mc_relation_cen' is set to duffy08.")
             self.sampledim = 1
@@ -3573,10 +3597,10 @@ class Input:
             {k: v for k, v in zip(keys, values) if v is not None})
 
         keys = ['directory', 'file', 'style', 'corrmatrix_plot',
-                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first']
+                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
         values = [self.output_dir, self.output_file, self.output_style,
                   self.make_plot, self.save_configs, self.save_Cells,
-                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first]
+                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary]
         self.output_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         self.output_abr['file'] = \
@@ -3592,9 +3616,9 @@ class Input:
             self.save_Cells = path.join(self.output_dir, self.save_Cells)
         if self.save_trispecs and self.output_dir is not None:
             self.save_trispecs = path.join(self.output_dir, self.save_trispecs)
-        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first']
+        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
         values = [self.output_file, self.output_style, self.make_plot,
-                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first]
+                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary]
         self.output = dict(zip(keys, values))
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
@@ -3611,6 +3635,9 @@ class Input:
         self.covELLspace_settings = dict(zip(keys, values))
         self.covELLspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
+
+        self.covELLspace_settings_abr['mult_shear_bias'] = \
+                ', '.join(map(str, self.multiplicative_shear_bias_uncertainty))
 
         keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type',
                 'theta_min_clustering', 'theta_max_clustering', 'theta_bins_clustering', 'theta_type_clustering',
@@ -3639,16 +3666,16 @@ class Input:
         keys = ['En_modes', 'theta_min', 'theta_max', 'En_acc', 'Wn_style',
                 'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
                 'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
-                'Wn_acc']
+                'Wn_acc', 'dimensionless_cosebi']
         values = [self.En_modes, self.theta_min_cosebi, self.theta_max_cosebi, self.En_acc, self.Wn_style,
                   self.En_modes_clustering, self.theta_min_cosebi_clustering, self.theta_max_cosebi_clustering,
                   self.En_modes_lensing, self.theta_min_cosebi_lensing, self.theta_max_cosebi_lensing,
-                  self.Wn_acc]
+                  self.Wn_acc, self.dimensionless_cosebi]
         self.covCOSEBI_settings = dict(zip(keys, values))
-        keys = ['En_modes', 'theta_min', 'theta_max', 'En_accuracy', 'Wn_style'
+        keys = ['En_modes', 'theta_min', 'theta_max', 'En_accuracy', 'Wn_style',
                 'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
                 'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
-                'Wn_accuracy']
+                'Wn_accuracy', 'dimensionless_cosebi']
         self.covCOESBI_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         
@@ -3695,11 +3722,12 @@ class Input:
         self.cosmo = dict(zip(keys, values))
         self.cosmo_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
+        
 
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'log10mass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins']
         values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                  self.Mc_relation_sat, self.logmass_bins]
+                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
         self.bias_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.logmass_bins is not None:
@@ -3708,9 +3736,9 @@ class Input:
         else:
             self.logmass_bins = np.array([0, 0])
             values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                      self.Mc_relation_sat, self.logmass_bins]
+                      self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'logmass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins']
         self.bias = dict(zip(keys, values))
 
         keys = ['A_IA', 'eta_IA', 'z_pivot_IA']
@@ -3929,7 +3957,7 @@ class Input:
 
         return True
 
-    def __write_save_configs_file(self):
+    def __write_save_configs_file(self, config_pars):
         """
         This methods creates a save_configs file which contains all the
         parameters that are not None, whether they have been explicitly
@@ -3966,8 +3994,12 @@ class Input:
         params_used['powspec evaluation'] = self.powspec_prec_abr
         if self.nongauss:
             params_used['trispec evaluation'] = self.trispec_prec_abr
-        params_used['misc '] = self.misc
-
+        params_used['misc'] = self.misc
+        #all_section_names: list[str] = config_pars.sections()
+        #all_section_names.append("DEFAULT")
+        #for section_name in all_section_names:
+        #    for key, value in config_pars.items(section_name):
+        #        print(key, value)
         if self.output_dir is None:
             self.output_dir = ''
         with open(
@@ -4138,7 +4170,8 @@ class Input:
         self.__read_in_trispec_prec(config)
         self.__read_in_misc(config)
         self.__zip_to_dicts()
-        self.__write_save_configs_file()
+        
+        self.__write_save_configs_file(config)
 
         observables = {'observables': self.observables,
                        'ELLspace': self.covELLspace_settings,
@@ -4560,7 +4593,6 @@ class FileInput:
         1.1     0.0
 
         """
-
         if 'redshift' in config:
             if 'zclust_directory' in config['redshift']:
                 self.zet_clust_dir = \
@@ -4626,7 +4658,7 @@ class FileInput:
                     config['redshift']['value_loc_in_bin']
             else:
                 self.value_loc_in_lensbin = 'mid'
-            if 'zcsmf_file' in config['redshift'] and self.csmf:
+            if 'zcsmf_file' in config['redshift'] and self.cstellar_mf:
                 self.zet_csmf_file =  \
                     (config['redshift']['zcsmf_file'].replace(
                         " ", "")).split(',')
@@ -4898,7 +4930,7 @@ class FileInput:
                 bin_idx += 1
             self.zet_lens_photoz = self.zet_lens_photoz.reshape((bin_idx-1,
                                                                  hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
-
+        
         if self.zet_clust_z is not None:
             if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
                 self.zet_clust_z = self.zet_clust_z[1:]
@@ -4912,8 +4944,8 @@ class FileInput:
         if self.zet_lens_z is not None:
             if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
                 try:
-                    self.zet_lens_z = self.zet_lens_z[1:]
                     self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
+                    self.zet_lens_z = self.zet_lens_z[1:]
                 except:
                     self.zet_lens_z = self.zet_lens_z[1:]
                     self.zet_lens_photoz = self.zet_lens_photoz[1:]
@@ -5008,6 +5040,7 @@ class FileInput:
             self.zet_csmf_pz = self.zet_csmf_pz.reshape((bin_idx-1,
                                                                  hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
 
+        
         if self.zet_clust_z is not None:
             if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
                 self.zet_clust_z = self.zet_clust_z[1:]
@@ -5032,7 +5065,6 @@ class FileInput:
             if len(self.zet_lens_photoz.shape) == 1:
                 self.zet_lens_photoz = np.array([self.zet_lens_photoz])
             self.n_tomo_lens = len(self.zet_lens_photoz)
-
         return True
     
     def __read_in_csmf_files(self, config):
@@ -5624,7 +5656,6 @@ class FileInput:
                 self.bias_files = \
                     list((config['bias']['bias_files'].replace(
                         " ", "")).split(','))
-
         if self.bias_files is not None and (self.clustering or self.ggl):
             try:
                 save_zet_bias_z = []
@@ -7873,7 +7904,6 @@ class FileInput:
             self.zet_input['zcsmf_file'] = \
                 ', '.join(map(str, self.zet_csmf_file))
 
-
         keys = ['theta_mm', 'npair_mm', 'theta_gm', 'npair_gm', 'theta_gg',
                 'npair_gg']
         values = [self.theta_npair_mm, self.npair_mm, self.theta_npair_gm,
@@ -7967,13 +7997,13 @@ class FileInput:
             values.append(self.Cell_dir)
         if self.Cmm_file is not None:
             keys.append('Cmm_file')
-            values.append(self.Cmm_file)
+            values.append(', '.join(map(str, self.Cmm_file)))
         if self.Cgm_file is not None:
             keys.append('Cgm_file')
-            values.append(self.Cgm_file)
+            values.append(', '.join(map(str, self.Cgm_file)))
         if self.Cgg_file is not None:
             keys.append('Cgg_file')
-            values.append(self.Cgg_file)
+            values.append(', '.join(map(str, self.Cgg_file)))
         if self.effbias_file is not None:
             keys.extend(['effbias_directory', 'effbias_file'])
             values.extend([self.effbias_dir, self.effbias_file])
@@ -8207,7 +8237,6 @@ class FileInput:
 
         config = configparser.ConfigParser()
         config.read(config_name)
-
         self.__read_config_for_consistency_checks(config, config_name)
         self.__read_in_z_files(config, config_name)
         self.__read_in_csmf_files(config)
