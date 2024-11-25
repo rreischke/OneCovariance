@@ -647,6 +647,18 @@ class Setup():
         Ensuring that the redshift distribution contains values which 
         are situated in the middle of any redshift bin.
         """
+        if self.zet_clust['value_loc_in_bin'] == 'cen':
+            self.zet_clust['z'] = self.zet_clust['z']
+        if self.zet_lens['value_loc_in_bin'] == 'cen':
+            self.zet_lens['z'] = self.zet_lens['z']
+        if self.n_tomo_clust != 0:
+            if self.zet_clust['value_loc_in_bin'] != 'left' and self.zet_clust['z'][0] == 0:
+                if self.zet_clust['value_loc_in_bin'] != 'cen':
+                    raise Exception("If the lowest redshift value in the clustering redshift distribution is zero, 'value_loc_in_clustbin' must be set to 'left' in the config file.")
+        if self.n_tomo_lens != 0:
+            if self.zet_lens['value_loc_in_bin'] != 'left' and self.zet_lens['z'][0] == 0:
+                if self.zet_lens['value_loc_in_bin'] != 'cen':
+                    raise Exception("If the lowest redshift value in the lensing redshift distribution is zero, 'value_loc_in_lensbin' must be set to 'left' in the config file.")
 
         if self.n_tomo_clust == 0:
             ...
@@ -675,7 +687,6 @@ class Setup():
         #         if self.n_tomo_lens > 0:
         #             self.zet_lens['photoz'] = \
         #                 np.append(self.zet_lens['photoz'], 0)
-
         if self.n_tomo_lens == 0:
             ...
         elif self.zet_lens['value_loc_in_bin'] == 'left':
@@ -1339,7 +1350,6 @@ class Setup():
 
         import healpy
         from astropy.io import ascii, fits
-
         if (est1 == 'mm' and est2 == 'gg') or est1 == 'gm':
             est1, est2 = est2, est1
         if est1 == 'gg':
@@ -1441,19 +1451,19 @@ class Setup():
             ell, sum_m_a_lm = [], []
             NSIDE = 512
             NPIX = healpy.nside2npix(NSIDE)
-            vec = healpy.ang2vec(np.pi / 2, 2*np.pi)
             survey_area = max(survey_params_dict['survey_area_'+est1][0], survey_params_dict['survey_area_'+est2][0])
-            ipix_disc = healpy.query_disc(nside=NSIDE, vec=vec, radius=np.radians(np.sqrt(survey_area)/np.pi))
-            ipix_fullsky = healpy.query_disc(nside=NSIDE, vec=vec, radius=np.radians(360))
-            m = np.arange(NPIX)
-            m[ipix_fullsky] = 0
+            survey_area_in_rad = survey_area*np.pi**2/(180**2)
+            radius_mask = np.arccos(1 - survey_area_in_rad / (2 * np.pi))
+            center_coord = healpy.ang2vec(0, 0)
+            ipix_disc = healpy.query_disc(nside=NSIDE, vec=center_coord, radius=radius_mask)
+            m = np.zeros(NPIX)
             m[ipix_disc] = 1
             ellmax = 3 * NSIDE - 1
             aux_ell = np.arange(ellmax)
             ell.append(aux_ell)
             C_ell = healpy.sphtfunc.anafast(m, use_weights=True)
             sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-            print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")    
+            print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")   
         return ell, sum_m_a_lm
 
 
