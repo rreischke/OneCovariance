@@ -19,5 +19,6 @@ levin.egg-info
 !/output/Cell_gg.ascii
 !/output/Cell_gkappa.ascii
 !/output/Cell_kappakappa.ascii
-/comparison_davide
-test.ipynb
+/output_*/
+check_ssc_integrands/*
+/!archive/*
