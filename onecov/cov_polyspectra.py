@@ -1681,6 +1681,14 @@ class PolySpectra(HaloModel):
         """
         return 5/7 + 2/7 * mu*mu + .5*mu * (ki/kj + kj/ki)
 
+    def calc_int_for_trispec_4h(self,
+                                  phi,
+                                  ki,
+                                  kj):
+        return self.__calc_int_for_trispec_4h(phi,
+                                  ki,
+                                  kj)
+    
     def __calc_int_for_trispec_4h(self,
                                   phi,
                                   ki,
@@ -1702,29 +1710,29 @@ class PolySpectra(HaloModel):
 
         pm = 0
         F2_im, F2_jm = 0, 0
-        #if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
-        #        and (1-mu < self.trispec_matter_mulim)):
         km = np.sqrt(ki*ki + kj*kj - 2*ki*kj*mu)
         if km == 0:
-            km = 1e-20
-        mu_im = kj/km * mu - ki/km
-        mu_jm = kj/km - mu * ki/km
-        pm = np.exp(self.Plin_spline(np.log(km)))
-        F2_im = self.__pt_kernel_f2(mu_im, ki, km)
-        F2_jm = self.__pt_kernel_f2(-mu_jm, kj, km)
+            F2_im = 13./28
+            F2_jm = 13./28
+        else:
+            mu_im = kj/km * mu - ki/km
+            mu_jm = kj/km - mu * ki/km
+            pm = np.exp(self.Plin_spline(np.log(km)))
+            F2_im = self.__pt_kernel_f2(mu_im, ki, km)
+            F2_jm = self.__pt_kernel_f2(-mu_jm, kj, km)
 
         pp = 0
         F2_ip, F2_jp = 0, 0
-        #if not ((np.fabs(ki-kj) < self.trispec_matter_klim)
-        #        and (1+mu < self.trispec_matter_mulim)):
         kp = np.sqrt(ki*ki + kj*kj + 2*ki*kj*mu)
         if kp == 0:
-            kp = 1e-20
-        mu_ip = kj/kp * mu + ki/kp
-        mu_jp = ki/kp * mu + kj/kp
-        pp = np.exp(self.Plin_spline(np.log(kp)))
-        F2_ip = self.__pt_kernel_f2(-mu_ip, ki, kp)
-        F2_jp = self.__pt_kernel_f2(-mu_jp, kj, kp)
+            F2_ip = 13./28
+            F2_jp = 13./28
+        else:
+            mu_ip = kj/kp * mu + ki/kp
+            mu_jp = ki/kp * mu + kj/kp
+            pp = np.exp(self.Plin_spline(np.log(kp)))
+            F2_ip = self.__pt_kernel_f2(-mu_ip, ki, kp)
+            F2_jp = self.__pt_kernel_f2(-mu_jp, kj, kp)
 
         pi = np.exp(self.Plin_spline(np.log(ki)))
         pj = np.exp(self.Plin_spline(np.log(kj)))
@@ -1937,8 +1945,8 @@ class PolySpectra(HaloModel):
                             self.int_3h[i,j] = 2/np.pi * simpson(integrand, x = phis)
 
                         try:
-                            self.int_4h[i,j] = 2/np.pi \
-                                * quad(self.__calc_int_for_trispec_4h, 0, .5*np.pi,
+                            self.int_4h[i,j] = 1/np.pi \
+                                * quad(self.__calc_int_for_trispec_4h, 0, np.pi,
                                         args=(ki, kj), limit=100, epsrel=1e-05)[0]    
                         except IntegrationWarning:
                             integrand = np.zeros_like(phis)

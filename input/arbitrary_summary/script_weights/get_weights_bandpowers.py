@@ -128,13 +128,13 @@ def get_gpm(ell_bins,ell_ul_bins, thetabins, T_of_theta, Norm, type):
             g_minus[i_ell,i_theta] = 1./(thetabins[i_theta]/60/180*np.pi)**2*(curly_G_minus_up - curly_G_minus_lo)
             h_ell[i_ell,i_theta] = - 1./(thetabins[i_theta]/60/180*np.pi)**2*(theta_times_ell_up*jv(1, theta_times_ell_up) - theta_times_ell_lo*jv(1, theta_times_ell_lo) + 2.*jv(0, theta_times_ell_up) - 2.*jv(0, theta_times_ell_lo))  
         if i_ell+1 < 10:
-            filename_mm = "./../real_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
-            filename_gm = "./../real_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
-            filename_gg = "./../real_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
+            filename_mm = "./../bandpowers/real_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
+            filename_gm = "./../bandpowers/real_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
+            filename_gg = "./../bandpowers/real_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
         else:
-            filename_mm = "./../real_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
-            filename_gm = "./../real_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
-            filename_gg = "./../real_weight_bandpowers_gg_" + str(i_ell+1) + ".table"
+            filename_mm = "./../bandpowers/real_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
+            filename_gm = "./../bandpowers/real_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
+            filename_gg = "./../bandpowers/real_weight_bandpowers_gg_" + str(i_ell+1) + ".table"
         if type == 'mm':
             np.savetxt(filename_mm,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T)
         if type == 'gg':
@@ -142,9 +142,9 @@ def get_gpm(ell_bins,ell_ul_bins, thetabins, T_of_theta, Norm, type):
         if type == 'gm':
             np.savetxt(filename_gm,np.array([thetabins,h_ell[i_ell, :]*T_of_theta*2*np.pi/Norm[i_ell]]).T)
         if i_ell+1 < 10:
-            filename_mm = "./../real_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
+            filename_mm = "./../bandpowers/real_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
         else:
-            filename_mm = "./../real_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
+            filename_mm = "./../bandpowers/real_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
         if type == 'mm':
             np.savetxt(filename_mm,np.array([thetabins,g_minus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T)
         
@@ -240,13 +240,13 @@ def calc_fourier_filters_bp(ell_bins,ell_ul_bins, ell_fourier_integral, thetabin
                 'in ' + str(round(eta, 1)) + 'min', end="")
         tcomb += 1
         if i_ell+1 < 10:
-            filename_mm = "./../fourier_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
-            filename_gm = "./../fourier_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
-            filename_gg = "./../fourier_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
+            filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
+            filename_gm = "./../bandpowers/fourier_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
+            filename_gg = "./../bandpowers/fourier_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
         else:
-            filename_mm = "./../fourier_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
-            filename_gm = "./../fourier_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
-            filename_gg = "./../fourier_weight_bandpowers_gg_" + str(i_ell+1) + "table"
+            filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
+            filename_gm = "./../bandpowers/fourier_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
+            filename_gg = "./../bandpowers/fourier_weight_bandpowers_gg_" + str(i_ell+1) + "table"
         if type == "mm":
             np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi/Norm[i_ell]]).T)
         if type == "gm":
@@ -255,9 +255,9 @@ def calc_fourier_filters_bp(ell_bins,ell_ul_bins, ell_fourier_integral, thetabin
             np.savetxt(filename_gg,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T)
         
         if i_ell+1 < 10:
-            filename_mm = "./../fourier_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
+            filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
         else:
-            filename_mm = "./../fourier_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
+            filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
         if type == "mm":
             np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EB[i_ell, :]*np.pi/Norm[i_ell]]).T)
     print("")

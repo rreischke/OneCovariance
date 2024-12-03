@@ -8,7 +8,7 @@ from onecov.cov_arbitrary_summary import CovARBsummary
 import sys
 import os
 import platform
-if platform.processor() == 'arm' or int(platform.mac_ver()[0][:(platform.mac_ver()[0]).find(".")]) > 13:
+if len(platform.mac_ver()[0]) > 0 and (platform.processor() == 'arm' or int(platform.mac_ver()[0][:(platform.mac_ver()[0]).find(".")]) > 13):
     os.environ['KMP_DUPLICATE_LIB_OK']='True'
 print("READING INPUT")
 print("#############")

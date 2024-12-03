@@ -64,15 +64,15 @@ for i_theta in range(len(theta_bins)):
     theta_l = theta_ul_bins[i_theta]/60/180*np.pi
     K_gg = 2/(theta_u**2 - theta_l**2)/fourier_ell*(theta_u*jv(1,theta_u*fourier_ell) - theta_l*jv(1,theta_l*fourier_ell))
     if i_theta+1 < 10:
-        filename_gg = "./../fourier_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
+        filename_gg = "./../rcf/fourier_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
     else:
-        filename_gg = "./../fourier_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
+        filename_gg = "./../rcf/fourier_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
     np.savetxt(filename_gg,np.array([fourier_ell,K_gg]).T)
     R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
     if i_theta+1 < 10:
-        filename = "./../real_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
     else:
-        filename = "./../real_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
     np.savetxt(filename,np.array([real_theta,R]).T)
 
 # Define theta-range for gamma_t (i.e. gm)
@@ -87,15 +87,15 @@ for i_theta in range(len(theta_bins)):
      
     K_gm = 2/(xu**2 - xl**2)*(-xu*jv(1,xu) + xl*jv(1,xl) -2*jv(0,xu) + 2*jv(0,xl))
     if i_theta+1 < 10:
-        filename_gm = "./../fourier_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
+        filename_gm = "./../rcf/fourier_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
     else:
-        filename_gm = "./../fourier_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
+        filename_gm = "./../rcf/fourier_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
     np.savetxt(filename_gm,np.array([fourier_ell,K_gm]).T)
     R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
     if i_theta+1 < 10:
-        filename = "./../real_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
     else:
-        filename = "./../real_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
     np.savetxt(filename,np.array([real_theta,R]).T)
 
 # Define theta-range for xip_m (i.e. mm)
@@ -110,26 +110,26 @@ for i_theta in range(len(theta_bins)):
     xl = fourier_ell*theta_l
     K_mm = 2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl))
     if i_theta+1 < 10:
-        filename_mm = "./../fourier_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
+        filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
     else:
-        filename_mm = "./../fourier_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
+        filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
     np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T)
     K_mm = 2/(xu**2 - xl**2)*((xu - 8/xu)*jv(1,xu) - 8*jv(2,xu) - (xl-8/xl)*jv(1,xl) + 8*jv(2,xl))
     if i_theta+1 < 10:
-        filename_mm = "./../fourier_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
+        filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
     else:
-        filename_mm = "./../fourier_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
+        filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
     np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T)
     R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
     if i_theta+1 < 10:
-        filename = "./../real_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
     else:
-        filename = "./../real_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
     np.savetxt(filename,np.array([real_theta,R]).T)
     if i_theta+1 < 10:
-        filename = "./../real_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
     else:
-        filename = "./../real_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
+        filename = "./../rcf/real_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
     np.savetxt(filename,np.array([real_theta,R]).T)
 
 

@@ -181,13 +181,13 @@ for nn in range(1,Nmax_mm+1):
     tpn[:,0] /= arcmintorad
     tmn[:,0] /= arcmintorad
     if nn < 10:
-        file_tpn = "./../dimensionless_Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-        file_tmn = "./../dimensionless_Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-        file_Wn = "./../dimensionless_Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+        file_tpn = "./../dimless_cosebis/dimensionless_Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+        file_tmn = "./../dimless_cosebis/dimensionless_Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+        file_Wn = "./../dimless_cosebis/dimensionless_Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
     else:
-        file_tpn = "./../dimensionless_Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-        file_tmn = "./../dimensionless_Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-        file_Wn = "./../dimensionless_Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+        file_tpn = "./../dimless_cosebis/dimensionless_Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+        file_tmn = "./../dimless_cosebis/dimensionless_Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+        file_Wn = "./../dimless_cosebis/dimensionless_Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
     np.savetxt(file_tpn,tpn)
     np.savetxt(file_tmn,tmn)    
     if get_W_ell_as_well:
