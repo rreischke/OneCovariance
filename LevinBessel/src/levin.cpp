@@ -97,12 +97,12 @@ void Levin::init_w_ell(std::vector<double> ell, std::vector<std::vector<double>>
         std::vector<double> y_value(ell.size());
         for (uint i = 0; i < number_of_modes; i++)
         {
-            spline_w_ell.at(j).push_back(gsl_spline_alloc(gsl_interp_steffen, ell.size()));
+            spline_w_ell.at(j).push_back(gsl_spline_alloc(gsl_interp_akima, ell.size()));
             acc_w_ell.at(j).push_back(gsl_interp_accel_alloc());
         }
         for (uint a = 0; a < number_of_modes; a++)
         {
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
             for (uint i = 0; i < ell.size(); i++)
             {
                 y_value.at(i) = w_ells.at(i).at(a);
@@ -157,7 +157,7 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
     }
     if (number_of_modes != 0)
     {
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
         for (uint a = 0; a < number_integrals; a++)
         {
             gsl_spline_free(spline_integrand.at(a));
@@ -214,7 +214,7 @@ void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>
     x_min = x.at(0);
     if (number_of_modes != 0)
     {
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
         for (uint a = 0; a < number_integrals; a++)
         {
             std::vector<double> new_x(2 * x.size());
@@ -308,99 +308,6 @@ double Levin::call_integrand(double x, uint i)
         result = exp(result);
     }
     return result;
-}
-
-void Levin::init_cov_R_space_Gaussian(std::vector<std::vector<std::vector<double>>> cov_k_space_Gaussian, std::vector<double> k, std::vector<double> r)
-{
-    cov_R_radii = r;
-    sample_size = cov_k_space_Gaussian.at(0).at(0).size();
-    for (uint i = 0; i < gsl_pow_2(sample_size); i++)
-    {
-        spline_cov_Gauss.push_back(gsl_spline_alloc(gsl_interp_steffen, k.size()));
-        acc_cov_Gauss.push_back(gsl_interp_accel_alloc());
-    }
-    k_min = k.at(0);
-    k_max = k.at(k.size() - 1);
-    std::vector<double> y_value(k.size());
-    for (uint i = 0; i < k.size(); i++)
-    {
-        k.at(i) = log(k.at(i));
-    }
-    for (uint a = 0; a < sample_size; a++)
-    {
-        for (uint b = 0; b < sample_size; b++)
-        {
-            for (uint i = 0; i < k.size(); i++)
-            {
-                y_value.at(i) = log(cov_k_space_Gaussian.at(i).at(a).at(b));
-            }
-            gsl_spline_init(spline_cov_Gauss.at(a * sample_size + b), &k[0], &y_value[0], k.size());
-        }
-    }
-}
-
-void Levin::init_cov_R_space_SSC(std::vector<std::vector<std::vector<double>>> cov_k_space_SSC, std::vector<double> k, std::vector<double> r)
-{
-    cov_R_radii = r;
-    sample_size = cov_k_space_SSC.at(0).at(0).size();
-    for (uint i = 0; i < gsl_pow_2(sample_size); i++)
-    {
-        spline_cov_SSC.push_back(gsl_spline_alloc(gsl_interp_steffen, k.size()));
-        acc_cov_SSC.push_back(gsl_interp_accel_alloc());
-    }
-    k_min = k.at(0);
-    k_max = k.at(k.size() - 1);
-    std::vector<double> y_value(k.size());
-    for (uint i = 0; i < k.size(); i++)
-    {
-        k.at(i) = log(k.at(i));
-    }
-    for (uint a = 0; a < sample_size; a++)
-    {
-        for (uint b = 0; b < sample_size; b++)
-        {
-            for (uint i = 0; i < k.size(); i++)
-            {
-                y_value.at(i) = cov_k_space_SSC.at(i).at(a).at(b);
-            }
-            gsl_spline_init(spline_cov_SSC.at(a * sample_size + b), &k[0], &y_value[0], k.size());
-        }
-    }
-}
-
-void Levin::init_cov_R_space_NonGaussian(std::vector<std::vector<std::vector<std::vector<double>>>> cov_k_space_NonGaussian, std::vector<double> k, std::vector<double> r)
-{
-    cov_R_radii = r;
-    sample_size = cov_k_space_NonGaussian.at(0).at(0).at(0).size();
-    const gsl_interp2d_type *T = gsl_interp2d_bicubic;
-    for (uint i = 0; i < gsl_pow_2(sample_size); i++)
-    {
-        spline_cov_non_Gauss.push_back(gsl_spline2d_alloc(T, k.size(), k.size()));
-        acc_non_cov_Gauss_k1.push_back(gsl_interp_accel_alloc());
-        acc_non_cov_Gauss_k2.push_back(gsl_interp_accel_alloc());
-    }
-    k_min = k.at(0);
-    k_max = k.at(k.size() - 1);
-    std::vector<double> z_value(k.size() * k.size());
-    for (uint i = 0; i < k.size(); i++)
-    {
-        k.at(i) = log(k.at(i));
-    }
-
-    for (uint a = 0; a < sample_size; a++)
-    {
-        for (uint b = 0; b < sample_size; b++)
-        {
-            for (uint i = 0; i < k.size(); i++)
-            {
-                for (uint j = 0; j < k.size(); j++)
-                {
-                    z_value.at(i * k.size() + j) = log(cov_k_space_NonGaussian.at(i).at(j).at(a).at(b));
-                }
-            }
-            gsl_spline2d_init(spline_cov_non_Gauss.at(a * sample_size + b), &z_value[0], &k[0], &k[0], k.size(), k.size());
-        }
-    }
 }
 
 double Levin::w_single(double x, double k, uint ell, uint i)
@@ -1135,7 +1042,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
     std::vector<double> result(number_integrals);
     if (k * b > 1000)
     {
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1146,7 +1053,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
     else
     {
         gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1216,7 +1123,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
     std::vector<double> result(number_integrals);
     if (k1 * b > 1000 && k2 * b > 1000)
     {
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1226,7 +1133,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
     }
     else
     {
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1253,7 +1160,7 @@ std::vector<double> Levin::double_bessel_many_args(std::vector<double> k1, doubl
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k1.size());
-#pragma omp parallel for schedule(dynamic) num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint i_k1 = 0; i_k1 < k1.size(); i_k1++)
     {
         if (k1.at(i_k1) * b > 1000 && k2 * b > 1000)
@@ -1288,7 +1195,7 @@ std::vector<double> Levin::single_bessel_many_args(std::vector<double> k, uint e
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k.size());
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint ik = 0; ik < k.size(); ik++)
     {
         if (k.at(ik) * b > 1000)
@@ -1347,7 +1254,7 @@ std::vector<double> Levin::cquad_integrate(std::vector<double> limits)
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-#pragma omp parallel for num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
@@ -1380,7 +1287,7 @@ std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limit
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-#pragma omp parallel for schedule(dynamic) num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
@@ -1419,7 +1326,7 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(number_integrals);
-#pragma omp parallel for schedule(dynamic) num_threads(N_thread_max)
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint i = 0; i < number_integrals; i++)
     {
         uint tid = omp_get_thread_num();
@@ -1438,227 +1345,6 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
         }
     }
     delete int_index_integral;
-    return result;
-}
-
-double Levin::cov_R_Gaussian_integrand(double k, void *p)
-{
-    uint tid = omp_get_thread_num();
-    Levin *lp = static_cast<Levin *>(p);
-    return k * exp(gsl_spline_eval(lp->spline_cov_Gauss.at(lp->int_cov_R_m_bin[tid] * lp->sample_size + lp->int_cov_R_n_bin[tid]), log(k), lp->acc_cov_Gauss.at(lp->int_cov_R_m_bin[tid] * lp->sample_size + lp->int_cov_R_n_bin[tid])));
-}
-
-double Levin::cov_R_SSC_integrand(double k, void *p)
-{
-    uint tid = omp_get_thread_num();
-    Levin *lp = static_cast<Levin *>(p);
-    return k * gsl_spline_eval(lp->spline_cov_SSC.at(lp->int_cov_R_m_bin[tid] * lp->sample_size + lp->int_cov_R_n_bin[tid]), log(k), lp->acc_cov_SSC.at(lp->int_cov_R_m_bin[tid] * lp->sample_size + lp->int_cov_R_n_bin[tid]));
-}
-double Levin::cov_R_NonGaussian_inner_integrand(double k, void *p)
-{
-    uint tid = omp_get_thread_num();
-    Levin *lp = static_cast<Levin *>(p);
-    return k * exp(gsl_spline2d_eval(lp->spline_cov_non_Gauss.at(lp->int_cov_R_m_bin[tid] * lp->sample_size + lp->int_cov_R_n_bin[tid]), log(lp->int_cov_R_non_Gauss_outer_k[tid]), log(k), lp->acc_non_cov_Gauss_k1.at(lp->int_cov_R_m_bin[tid] * lp->sample_size + lp->int_cov_R_n_bin[tid]), lp->acc_non_cov_Gauss_k2.at(lp->int_cov_R_m_bin[tid] * lp->sample_size + lp->int_cov_R_n_bin[tid])));
-}
-
-double Levin::cov_R_NonGaussian_outer_integrand(double k, void *p)
-{
-    uint tid = omp_get_thread_num();
-    Levin *lp = static_cast<Levin *>(p);
-    lp->int_cov_R_non_Gauss_outer_k[tid] = k;
-    return k * lp->levin_integrate_bessel_double(cov_R_NonGaussian_inner_integrand, lp->cov_R_radii.at(lp->int_cov_R_i_R[tid]), lp->cov_R_radii.at(lp->int_cov_R_j_R[tid]), lp->int_cov_R_ell1[tid], lp->int_cov_R_ell2[tid], lp->k_min, lp->k_max);
-}
-
-std::vector<std::vector<std::vector<std::vector<double>>>> Levin::cov_R_get_gauss(bool cross, uint ell_1, uint ell_2)
-{
-    int_cov_R_m_bin = new uint[N_thread_max];
-    int_cov_R_n_bin = new uint[N_thread_max];
-    std::vector<std::vector<std::vector<std::vector<double>>>> result(cov_R_radii.size(), std::vector<std::vector<std::vector<double>>>(cov_R_radii.size(), std::vector<std::vector<double>>(sample_size, std::vector<double>(sample_size, 0.0))));
-    if (!cross)
-    {
-#pragma omp parallel for num_threads(N_thread_max)
-        for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
-        {
-            for (uint j_R = i_R; j_R < cov_R_radii.size(); j_R++)
-            {
-                for (uint m = 0; m < sample_size; m++)
-                {
-                    for (uint n = m; n < sample_size; n++)
-                    {
-                        uint tid = omp_get_thread_num();
-                        int_cov_R_m_bin[tid] = m;
-                        int_cov_R_n_bin[tid] = n;
-                        result.at(i_R).at(j_R).at(m).at(n) = levin_integrate_bessel_double(cov_R_Gaussian_integrand, cov_R_radii.at(i_R), cov_R_radii.at(j_R), ell_1, ell_2, k_min, k_max);
-                        result.at(j_R).at(i_R).at(m).at(n) = result.at(i_R).at(j_R).at(m).at(n);
-                        result.at(i_R).at(j_R).at(n).at(m) = result.at(i_R).at(j_R).at(m).at(n);
-                        result.at(j_R).at(i_R).at(n).at(m) = result.at(i_R).at(j_R).at(m).at(n);
-                    }
-                }
-            }
-        }
-    }
-    else
-    {
-#pragma omp parallel for num_threads(N_thread_max)
-        for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
-        {
-            for (uint j_R = 0; j_R < cov_R_radii.size(); j_R++)
-            {
-                for (uint m = 0; m < sample_size; m++)
-                {
-                    for (uint n = 0; n < sample_size; n++)
-                    {
-                        uint tid = omp_get_thread_num();
-                        int_cov_R_m_bin[tid] = m;
-                        int_cov_R_n_bin[tid] = n;
-                        result.at(i_R).at(j_R).at(m).at(n) = levin_integrate_bessel_double(cov_R_Gaussian_integrand, cov_R_radii.at(i_R), cov_R_radii.at(j_R), ell_1, ell_2, k_min, k_max);
-                    }
-                }
-            }
-        }
-    }
-    delete int_cov_R_m_bin;
-    delete int_cov_R_n_bin;
-    for (uint i = 0; i < gsl_pow_2(sample_size); i++)
-    {
-        gsl_spline_free(spline_cov_Gauss.at(i));
-        gsl_interp_accel_free(acc_cov_Gauss.at(i));
-    }
-    return result;
-}
-
-std::vector<std::vector<std::vector<std::vector<double>>>> Levin::cov_R_get_ssc(bool cross, uint ell_1, uint ell_2)
-{
-    int_cov_R_m_bin = new uint[N_thread_max];
-    int_cov_R_n_bin = new uint[N_thread_max];
-    std::vector<std::vector<std::vector<std::vector<double>>>> result(cov_R_radii.size(), std::vector<std::vector<std::vector<double>>>(cov_R_radii.size(), std::vector<std::vector<double>>(sample_size, std::vector<double>(sample_size, 0.0))));
-    if (!cross)
-    {
-#pragma omp parallel for num_threads(N_thread_max)
-        for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
-        {
-            for (uint j_R = i_R; j_R < cov_R_radii.size(); j_R++)
-            {
-                for (uint m = 0; m < sample_size; m++)
-                {
-                    for (uint n = m; n < sample_size; n++)
-                    {
-                        uint tid = omp_get_thread_num();
-                        int_cov_R_m_bin[tid] = m;
-                        int_cov_R_n_bin[tid] = n;
-                        result.at(i_R).at(j_R).at(m).at(n) = levin_integrate_bessel_double(cov_R_SSC_integrand, cov_R_radii.at(i_R), cov_R_radii.at(j_R), ell_1, ell_2, k_min, k_max);
-                        result.at(j_R).at(i_R).at(m).at(n) = result.at(i_R).at(j_R).at(m).at(n);
-                        result.at(i_R).at(j_R).at(n).at(m) = result.at(i_R).at(j_R).at(m).at(n);
-                        result.at(j_R).at(i_R).at(n).at(m) = result.at(i_R).at(j_R).at(m).at(n);
-                    }
-                }
-            }
-        }
-    }
-    else
-    {
-#pragma omp parallel for num_threads(N_thread_max)
-        for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
-        {
-            for (uint j_R = 0; j_R < cov_R_radii.size(); j_R++)
-            {
-                for (uint m = 0; m < sample_size; m++)
-                {
-                    for (uint n = 0; n < sample_size; n++)
-                    {
-                        uint tid = omp_get_thread_num();
-                        int_cov_R_m_bin[tid] = m;
-                        int_cov_R_n_bin[tid] = n;
-                        result.at(i_R).at(j_R).at(m).at(n) = levin_integrate_bessel_double(cov_R_SSC_integrand, cov_R_radii.at(i_R), cov_R_radii.at(j_R), ell_1, ell_2, k_min, k_max);
-                    }
-                }
-            }
-        }
-    }
-    delete int_cov_R_m_bin;
-    delete int_cov_R_n_bin;
-    for (uint i = 0; i < gsl_pow_2(sample_size); i++)
-    {
-        gsl_spline_free(spline_cov_SSC.at(i));
-        gsl_interp_accel_free(acc_cov_SSC.at(i));
-    }
-    return result;
-}
-
-std::vector<std::vector<std::vector<std::vector<double>>>> Levin::cov_R_get_nongauss(bool cross, uint ell_1, uint ell_2)
-{
-    int_cov_R_m_bin = new uint[N_thread_max];
-    int_cov_R_n_bin = new uint[N_thread_max];
-    int_cov_R_i_R = new uint[N_thread_max];
-    int_cov_R_j_R = new uint[N_thread_max];
-    int_cov_R_ell1 = new uint[N_thread_max];
-    int_cov_R_ell2 = new uint[N_thread_max];
-    int_cov_R_non_Gauss_outer_k = new double[N_thread_max];
-    std::vector<std::vector<std::vector<std::vector<double>>>> result(cov_R_radii.size(), std::vector<std::vector<std::vector<double>>>(cov_R_radii.size(), std::vector<std::vector<double>>(sample_size, std::vector<double>(sample_size, 0.0))));
-    if (!cross)
-    {
-        // #pragma omp parallel for
-        for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
-        {
-            for (uint j_R = i_R; j_R < cov_R_radii.size(); j_R++)
-            {
-                for (uint m = 0; m < sample_size; m++)
-                {
-                    for (uint n = m; n < sample_size; n++)
-                    {
-                        uint tid = omp_get_thread_num();
-                        int_cov_R_m_bin[tid] = m;
-                        int_cov_R_n_bin[tid] = n;
-                        int_cov_R_ell1[tid] = ell_1;
-                        int_cov_R_ell2[tid] = ell_2;
-                        int_cov_R_i_R[tid] = i_R;
-                        int_cov_R_j_R[tid] = j_R;
-                        result.at(i_R).at(j_R).at(m).at(n) = gslIntegratecquad(cov_R_NonGaussian_outer_integrand, k_min, k_max);
-                        result.at(j_R).at(i_R).at(m).at(n) = result.at(i_R).at(j_R).at(m).at(n);
-                        result.at(i_R).at(j_R).at(n).at(m) = result.at(i_R).at(j_R).at(m).at(n);
-                        result.at(j_R).at(i_R).at(n).at(m) = result.at(i_R).at(j_R).at(m).at(n);
-                    }
-                }
-            }
-        }
-    }
-    else
-    {
-#pragma omp parallel for
-        for (uint i_R = 0; i_R < cov_R_radii.size(); i_R++)
-        {
-            for (uint j_R = 0; j_R < cov_R_radii.size(); j_R++)
-            {
-                for (uint m = 0; m < sample_size; m++)
-                {
-                    for (uint n = 0; n < sample_size; n++)
-                    {
-                        uint tid = omp_get_thread_num();
-                        int_cov_R_m_bin[tid] = m;
-                        int_cov_R_n_bin[tid] = n;
-                        int_cov_R_ell1[tid] = ell_1;
-                        int_cov_R_ell2[tid] = ell_2;
-                        int_cov_R_i_R[tid] = i_R;
-                        int_cov_R_j_R[tid] = j_R;
-                        result.at(i_R).at(j_R).at(m).at(n) = gslIntegratecquad(cov_R_NonGaussian_outer_integrand, k_min, k_max);
-                    }
-                }
-            }
-        }
-    }
-    delete int_cov_R_m_bin;
-    delete int_cov_R_n_bin;
-    delete int_cov_R_i_R;
-    delete int_cov_R_j_R;
-    delete int_cov_R_ell1;
-    delete int_cov_R_ell2;
-    delete int_cov_R_non_Gauss_outer_k;
-    for (uint i = 0; i < gsl_pow_2(sample_size); i++)
-    {
-        gsl_spline2d_free(spline_cov_non_Gauss.at(i));
-        gsl_interp_accel_free(acc_non_cov_Gauss_k1.at(i));
-        gsl_interp_accel_free(acc_non_cov_Gauss_k1.at(i));
-    }
     return result;
 }
 

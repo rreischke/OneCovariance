@@ -1248,8 +1248,7 @@ class Output():
                     obs_copy = 'PsigmEmm'
                 if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'PsigmBmm'
-                
-                
+            
                 if not obsbool[oidx]:
                     splitidx += 3
                     continue

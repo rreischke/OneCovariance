@@ -66,15 +66,13 @@ private:
   std::vector<gsl_spline2d *> spline_cov_non_Gauss;
   std::vector<gsl_interp_accel *> acc_non_cov_Gauss_k1;
   std::vector<gsl_interp_accel *> acc_non_cov_Gauss_k2;
-  std::vector<double> cov_R_radii;
   std::vector<double> ell_w_ell;
 
   uint sample_size;
   double k_max;
   double k_min;
   double converged;
-  uint *int_cov_R_m_bin, *int_cov_R_n_bin, *int_cov_R_i_R, *int_cov_R_j_R, *int_cov_R_ell1, *int_cov_R_ell2, *int_index_integral;
-  double *int_cov_R_non_Gauss_outer_k;
+  uint *int_index_integral;
 
   double *int_k_single_bessel;
   uint *int_ell_single_bessel;
@@ -137,12 +135,6 @@ public:
   std::vector<double> get_integrand(std::vector<double> x, uint j);
 
   double call_integrand(double x, uint i);
-
-  void init_cov_R_space_Gaussian(std::vector<std::vector<std::vector<double>>> cov_k_space_Gaussian, std::vector<double> k, std::vector<double> r);
-
-  void init_cov_R_space_SSC(std::vector<std::vector<std::vector<double>>> cov_k_space_SSC, std::vector<double> k, std::vector<double> r);
-
-  void init_cov_R_space_NonGaussian(std::vector<std::vector<std::vector<std::vector<double>>>> cov_k_space_NonGaussian, std::vector<double> k, std::vector<double> r);
 
   /**
    *  Define the vector \f$ w \f$ for the integration of a single oscillatory function and returning the i-th component.
@@ -271,20 +263,6 @@ public:
   std::vector<double> cquad_integrate_double_well(std::vector<double> limits, uint m_mode, uint n_mode);
   
   static double integrand(double x, void *p);
-
-  static double cov_R_Gaussian_integrand(double, void *);
-
-  static double cov_R_SSC_integrand(double, void *);
-
-  static double cov_R_NonGaussian_inner_integrand(double, void *);
-
-  static double cov_R_NonGaussian_outer_integrand(double, void *);
-
-  std::vector<std::vector<std::vector<std::vector<double>>>> cov_R_get_gauss(bool cross, uint ell_1, uint ell_2);
-
-  std::vector<std::vector<std::vector<std::vector<double>>>> cov_R_get_ssc(bool cross, uint ell_1, uint ell_2);
-
-  std::vector<std::vector<std::vector<std::vector<double>>>> cov_R_get_nongauss(bool cross, uint ell_1, uint ell_2);
 };
 
 #endif

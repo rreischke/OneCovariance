@@ -29,24 +29,6 @@ PYBIND11_MODULE(levin, m)
          .def("get_w_ell", &Levin::get_w_ell,
               "ell"_a, "mode"_a,
               py::call_guard<py::gil_scoped_release>())
-         .def("init_cov_R_space_Gaussian", &Levin::init_cov_R_space_Gaussian,
-              "cov_k_space_Gaussian"_a, "k"_a, "r"_a,
-              py::call_guard<py::gil_scoped_release>())
-         .def("init_cov_R_space_SSC", &Levin::init_cov_R_space_SSC,
-              "cov_k_space_SSC"_a, "k"_a, "r"_a,
-              py::call_guard<py::gil_scoped_release>())
-         .def("init_cov_R_space_NonGaussian", &Levin::init_cov_R_space_NonGaussian,
-              "cov_k_space_NonGaussian"_a, "k"_a, "r"_a,
-              py::call_guard<py::gil_scoped_release>())
-         .def("cov_R_get_gauss", &Levin::cov_R_get_gauss,
-              "cross"_a, "ell_1"_a, "ell_2"_a,
-              py::call_guard<py::gil_scoped_release>())
-         .def("cov_R_get_ssc", &Levin::cov_R_get_ssc,
-              "cross"_a, "ell_1"_a, "ell_2"_a,
-              py::call_guard<py::gil_scoped_release>())
-         .def("cov_R_get_nongauss", &Levin::cov_R_get_nongauss,
-              "cross"_a, "ell_1"_a, "ell_2"_a,
-              py::call_guard<py::gil_scoped_release>())
          .def("single_bessel", &Levin::single_bessel,
               "k"_a, "ell"_a, "a"_a, "b"_a,
               py::call_guard<py::gil_scoped_release>())

@@ -795,7 +795,6 @@ class CovARBsummary(CovELLSpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
             print("")
-            
     
     def calc_covarbsummary(self,
                            obs_dict,

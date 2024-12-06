@@ -2442,7 +2442,7 @@ class CovELLSpace(PolySpectra):
                                             Numberi = 10
                                         integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
                                         for j_ell in range(len(ellrange_34_ul) - 1):
-                                            area34_ell = np.pi*((ellrange_34_ul[i_ell +1])**2 - (ellrange_34_ul[i_ell])**2)                                            
+                                            area34_ell = np.pi*((ellrange_34_ul[j_ell +1])**2 - (ellrange_34_ul[j_ell])**2)                                            
                                             Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())                
                                             if Numberj < 3:
                                                 Numberj = 3
@@ -2651,6 +2651,7 @@ class CovELLSpace(PolySpectra):
             aux__bin_non_Gaussian, [i_ell for i_ell in range(len(ellrange_12))]))
         pool.close()
         pool.terminate()
+        print(binned_covariance[0,1,0,0,0,0,0,0], binned_covariance[0,1,0,0,0,0,1,0])
         return binned_covariance
                                     
 
@@ -5158,15 +5159,15 @@ class CovELLSpace(PolySpectra):
                 self.los_integration_chi, survey_variance_mmgm, k=1, s=0, ext=0)
 
         if not self.redshift_dep_bias:  
-            aux_response_gg = np.zeros((len(self.los_chi),
+            self.aux_response_gg = np.zeros((len(self.los_chi),
                                         len(self.mass_func.k),
                                         self.sample_dim))
-            aux_response_gm = np.zeros_like(aux_response_gg)
-            aux_response_mm = np.zeros_like(aux_response_gg)
+            self.aux_response_gm = np.zeros_like(self.aux_response_gg)
+            self.aux_response_mm = np.zeros_like(self.aux_response_gg)
             t0 = time.time()
             for i_chi in range(self.los_interpolation_sampling):
                 self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
-                aux_response_gg[i_chi, :, :], aux_response_gm[i_chi, :, :], aux_response_mm[i_chi,
+                self.aux_response_gg[i_chi, :, :], self.aux_response_gm[i_chi, :, :], self.aux_response_mm[i_chi,
                                                                                             :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
                 eta = (time.time()-t0) * \
                     (len(self.los_z)/(i_chi+1)-1)
@@ -5177,49 +5178,48 @@ class CovELLSpace(PolySpectra):
             
             for i_sample in range(self.sample_dim):
                 spline_responsePgg.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                                (aux_response_gg[:, :, i_sample]),bounds_error= False, fill_value = None))
+                                                (self.aux_response_gg[:, :, i_sample]),bounds_error= False, fill_value = None))
                 spline_responsePgm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                                (aux_response_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
+                                                (self.aux_response_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
                 spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                                (aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
+                                                (self.aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
         else:
             aux_gg = np.zeros((len(self.los_chi),
                                         len(self.mass_func.k),
                                         self.sample_dim))
             aux_gm = np.zeros_like(aux_gg)
-            aux_mm = np.zeros_like(aux_gg)
-            aux_response_gg = np.zeros((len(self.los_chi),
+            self.aux_response_gg = np.zeros((len(self.los_chi),
                                         len(self.mass_func.k),
                                         self.sample_dim,
                                         self.n_tomo_clust,
                                         self.n_tomo_clust))
-            aux_response_gm = np.zeros((len(self.los_chi),
+            self.aux_response_gm = np.zeros((len(self.los_chi),
                                         len(self.mass_func.k),
                                         self.sample_dim,
                                         self.n_tomo_clust))
-            aux_response_mm = np.zeros((len(self.los_chi),
+            self.aux_response_mm = np.zeros((len(self.los_chi),
                                         len(self.mass_func.k),
                                         self.sample_dim))
             t0 = time.time()
             for i_chi in range(self.los_interpolation_sampling):
                 self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
-                aux_gg[i_chi, :, :], aux_gm[i_chi, :, :], aux_response_mm[i_chi, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
+                aux_gg[i_chi, :, :], aux_gm[i_chi, :, :], self.aux_response_mm[i_chi, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
                 if self.gm:
                     for i_sample in range(self.sample_dim):
                         for i_tomo in range(self.n_tomo_clust):
                             bias_i_tomo = self.bias_of_zet[i_tomo](self.los_z[i_chi])
-                            aux_response_gm[i_chi, :, i_sample, i_tomo] = aux_response_mm[i_chi, :, i_sample]*bias_i_tomo
-                            aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[:, i_sample]*bias_i_tomo**2
-                            aux_response_gm[i_chi, :, i_sample, i_tomo] /= bias_i_tomo
+                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] = self.aux_response_mm[i_chi, :, i_sample]*bias_i_tomo
+                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[:, i_sample]*bias_i_tomo**2
+                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] /= bias_i_tomo
                 if self.gg:
                     for i_sample in range(self.sample_dim):
                         for i_tomo in range(self.n_tomo_clust):
                             bias_i_tomo = self.bias_of_zet[i_tomo](self.los_z[i_chi])
                             for j_tomo in range(self.n_tomo_clust):
                                 bias_j_tomo = self.bias_of_zet[j_tomo](self.los_z[i_chi])
-                                aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] = aux_response_mm[i_chi, :, i_sample]*bias_i_tomo*bias_j_tomo
-                                aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_i_tomo + bias_j_tomo)*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]*bias_i_tomo*bias_j_tomo
-                                aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] /= (bias_i_tomo*bias_j_tomo)
+                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] = self.aux_response_mm[i_chi, :, i_sample]*bias_i_tomo*bias_j_tomo
+                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_i_tomo + bias_j_tomo)*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]*bias_i_tomo*bias_j_tomo
+                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] /= (bias_i_tomo*bias_j_tomo)
                 eta = (time.time()-t0) * \
                     (len(self.los_z)/(i_chi+1)-1)
                 print('\rPreparations for SSC calculation at '
@@ -5229,13 +5229,13 @@ class CovELLSpace(PolySpectra):
             
             for i_sample in range(self.sample_dim):
                 spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                                (aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
+                                                (self.aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
                 for i_tomo in range(self.n_tomo_clust):
                     spline_responsePgm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                                (aux_response_gm[:, :, i_sample, i_tomo]),bounds_error= False, fill_value = None))
+                                                (self.aux_response_gm[:, :, i_sample, i_tomo]),bounds_error= False, fill_value = None))
                     for j_tomo in range(self.n_tomo_clust):        
                         spline_responsePgg.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
-                                                        (aux_response_gg[:, :, i_sample, i_tomo, j_tomo]),bounds_error= False, fill_value = None))
+                                                        (self.aux_response_gg[:, :, i_sample, i_tomo, j_tomo]),bounds_error= False, fill_value = None))
             self.spline_responsePgg = spline_responsePgg    
             self.spline_responsePgm = spline_responsePgm   
                     
