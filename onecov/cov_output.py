@@ -164,12 +164,17 @@ class Output():
             Supersample covariance
         """
         self.has_gauss, self.has_nongauss, self.has_ssc = cov_dict['gauss'], cov_dict['nongauss'], cov_dict['ssc']
+        self.has_csmf = obs_dict['observables']['csmf']
         gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
 
         obslist, obsbool, obslength = self.__get_obslist(obs_dict)
         gg, gm, mm = obsbool[0], obsbool[3], obsbool[5]
         xipp, xipm, ximm = None, None, None
         mult = 1
+        self.conditional_stellar_mass_function_cov = []
+        if self.has_csmf:
+            self.conditional_stellar_mass_function_cov = gauss[-5:]
+            gauss = gauss[:-5]
         if len(gauss) == obslength:
             ...
         elif len(gauss) == obslength+3:
@@ -328,12 +333,22 @@ class Output():
             
         """
         self.has_gauss, self.has_nongauss, self.has_ssc = cov_dict['gauss'], cov_dict['nongauss'], cov_dict['ssc']
+        self.has_csmf = obs_dict['observables']['csmf']
+        self.is_cell = obs_dict['observables']['is_cell']
         gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
 
         obslist, obsbool, obslength = self.__get_obslist(obs_dict)
         gg, gm, mm = obsbool[0], obsbool[3], obsbool[5]
         xipp, xipm, ximm = None, None, None
         mult = 1
+        self.conditional_stellar_mass_function_cov = []
+        if self.has_csmf:
+            if self.is_cell:
+                self.conditional_stellar_mass_function_cov = gauss[-4:]
+                gauss = gauss[:-4]
+            else:
+                self.conditional_stellar_mass_function_cov = gauss[-5:]
+                gauss = gauss[:-5]
         if len(gauss) == obslength:
             ...
         elif len(gauss) == obslength+3:
@@ -1248,7 +1263,8 @@ class Output():
                     obs_copy = 'PsigmEmm'
                 if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'PsigmBmm'
-            
+                
+                
                 if not obsbool[oidx]:
                     splitidx += 3
                     continue
@@ -1554,6 +1570,76 @@ class Output():
                                                             ssc[oidx][idxs])
                                                         olist.append(ostr)
                     splitidx += 3
+            
+            index = 0
+            if self.has_csmf:
+                if self.is_cell:
+                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
+                else:
+                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmmE", "csmfmmB"]
+                for obs in self.conditional_stellar_mass_function_cov:
+                    csmf_auto = False
+                    if index == 0:
+                        csmf_auto = True
+                    if not isinstance(obs, np.ndarray):
+                        continue
+                    if csmf_auto:
+                        for i_r1 in range(len(obs[:, 0,0,0])):
+                            for i_r2 in range(len(obs[0, :, 0, 0])):
+                                for t1 in range(len(obs[0,0,:,0])):
+                                    for t2 in range(len(obs[0,0,0,:])):
+                                        ri = i_r1
+                                        rj = i_r2              
+                                        cov = obs[i_r1, i_r2, t1, t2]
+                                        if not cov_dict['split_gauss']:
+                                            ostr = ostr_format \
+                                                % (obs_copy[index],  ri, rj, 
+                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                                cov, 
+                                                0,
+                                                0,
+                                                0)
+                                        else:
+                                            ostr = ostr_format \
+                                                % (obs_copy[index], ri, rj,
+                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                                cov, 
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0)
+                                        olist.append(ostr)
+                    else:
+                        for i_r1 in range(len(obs[:, 0,0,0,0,0])):
+                            for i_r2 in range(len(obs[0, :, 0, 0,0,0])):                
+                                for s1 in range(len(obs[0,0,:,0,0,0])):
+                                    for t1 in range(len(obs[0,0,0,:,0,0])):
+                                        for t2 in range(len(obs[0,0,0,0,:,0])):
+                                            for t3 in range(len(obs[0,0,0,0,0,:])):
+                                                ri = proj_quant[i_r1]
+                                                rj = i_r2              
+                                                cov = obs[i_r1, i_r2, s1, t1, t2, t3]
+                                                if not cov_dict['split_gauss']:
+                                                    ostr = ostr_format \
+                                                        % (obs_copy[index],  ri, rj, 
+                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                        cov, 
+                                                        0,
+                                                        0,
+                                                        0)
+                                                else:
+                                                    ostr = ostr_format \
+                                                        % (obs_copy[index], ri, rj,
+                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                        cov, 
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0)
+                                                olist.append(ostr)
+                    index += 1
             if not self.save_as_binary:
                 if 'terminal' in self.style:
                     print("Writing result to terminal. (Brace yourself...).'")
@@ -2475,6 +2561,78 @@ class Output():
                                                             ssc_aux)
                                                         olist.append(ostr)
                     splitidx += 3
+            
+            index = 0
+            if self.has_csmf:
+                if self.is_cell:
+                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
+                else:
+                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmmE", "csmfmmB"]
+                for obs in self.conditional_stellar_mass_function_cov:
+                    csmf_auto = False
+                    if index == 0:
+                        csmf_auto = True
+                    if not isinstance(obs, np.ndarray):
+                        continue
+                    print(obs_copy[index],obs.shape)
+                    if csmf_auto:
+                        for t1 in range(len(obs[0,0,:,0])):
+                            for t2 in range(len(obs[0,0,0,:])):
+                                for i_r1 in range(len(obs[:, 0,0,0])):
+                                    for i_r2 in range(len(obs[0, :, 0, 0])):
+                                        ri = i_r1
+                                        rj = i_r2              
+                                        cov = obs[i_r1, i_r2, t1, t2]
+                                        if not cov_dict['split_gauss']:
+                                            ostr = ostr_format \
+                                                % (obs_copy[index],  ri, rj, 
+                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                                cov, 
+                                                0,
+                                                0,
+                                                0)
+                                        else:
+                                            ostr = ostr_format \
+                                                % (obs_copy[index], ri, rj,
+                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                                cov, 
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0)
+                                        olist.append(ostr)
+                    else:
+                        for s1 in range(len(obs[0,0,:,0,0,0])):
+                            for t1 in range(len(obs[0,0,0,:,0,0])):
+                                for t2 in range(len(obs[0,0,0,0,:,0])):
+                                    for t3 in range(len(obs[0,0,0,0,0,:])):
+                                        for i_r1 in range(len(obs[:, 0,0,0,0,0])):
+                                            for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
+                                                ri = proj_quant[i_r1]
+                                                rj = i_r2              
+                                                cov = obs[i_r1, i_r2, s1, t1, t2, t3]
+                                                if not cov_dict['split_gauss']:
+                                                    ostr = ostr_format \
+                                                        % (obs_copy[index],  ri, rj, 
+                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                        cov, 
+                                                        0,
+                                                        0,
+                                                        0)
+                                                else:
+                                                    ostr = ostr_format \
+                                                        % (obs_copy[index], ri, rj,
+                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                        cov, 
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0)
+                                                olist.append(ostr)
+                    index += 1
+
             if not self.save_as_binary:
                 if 'terminal' in self.style:
                     print("Writing result to terminal. (Brace yourself...).'")
@@ -2911,7 +3069,73 @@ class Output():
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
                 splitidx += 3
-
+        
+        index = 0
+        if self.has_csmf:
+            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
+            for obs in self.conditional_stellar_mass_function_cov:
+                csmf_auto = False
+                if index == 0:
+                    csmf_auto = True
+                if not isinstance(obs, np.ndarray):
+                    continue
+                if csmf_auto:
+                    for i_r1 in range(len(obs[:, 0,0,0])):
+                        for i_r2 in range(len(obs[0, :, 0, 0])):
+                            for t1 in range(len(obs[0,0,:,0])):
+                                for t2 in range(len(obs[0,0,0,:])):
+                                    ri = i_r1
+                                    rj = i_r2              
+                                    cov = obs[i_r1, i_r2, t1, t2]
+                                    if not cov_dict['split_gauss']:
+                                        ostr = ostr_format \
+                                            % (obs_copy[index],  ri, rj, 
+                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                            cov, 
+                                            0,
+                                            0,
+                                            0)
+                                    else:
+                                        ostr = ostr_format \
+                                            % (obs_copy[index], ri, rj,
+                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                            cov, 
+                                            0,
+                                            0,
+                                            0,
+                                            0,
+                                            0)
+                                    olist.append(ostr)
+                else:
+                    for i_r1 in range(len(obs[:, 0,0,0,0,0])):
+                        for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
+                            for s1 in range(len(obs[0,0,:,0,0,0])):
+                                for t1 in range(len(obs[0,0,0,:,0,0])):
+                                    for t2 in range(len(obs[0,0,0,0,:,0])):
+                                        for t3 in range(len(obs[0,0,0,0,0,:])):
+                                            ri = i_r1
+                                            rj = i_r2              
+                                            cov = obs[i_r1, i_r2, s1, t1, t2, t3]
+                                            if not cov_dict['split_gauss']:
+                                                ostr = ostr_format \
+                                                    % (obs_copy[index],  ri, rj, 
+                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                    cov, 
+                                                    0,
+                                                    0,
+                                                    0)
+                                            else:
+                                                ostr = ostr_format \
+                                                    % (obs_copy[index], ri, rj,
+                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                    cov, 
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0)
+                                            olist.append(ostr)
+                index += 1
         if not self.save_as_binary:
             if 'terminal' in self.style:
                 print("Writing result to terminal. (Brace yourself...).'")
@@ -3658,6 +3882,73 @@ class Output():
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
                 splitidx += 3
+        index = 0
+        if self.has_csmf:
+            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
+            for obs in self.conditional_stellar_mass_function_cov:
+                csmf_auto = False
+                if index == 0:
+                    csmf_auto = True
+                if not isinstance(obs, np.ndarray):
+                    continue
+                if csmf_auto:
+                    for t1 in range(len(obs[0,0,:,0])):
+                        for t2 in range(len(obs[0,0,0,:])):
+                            for i_r1 in range(len(obs[:, 0,0,0])):
+                                for i_r2 in range(len(obs[0, :, 0, 0])):
+                                    ri = i_r1
+                                    rj = i_r2              
+                                    cov = obs[i_r1, i_r2, t1, t2]
+                                    if not cov_dict['split_gauss']:
+                                        ostr = ostr_format \
+                                            % (obs_copy[index],  ri, rj, 
+                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                            cov, 
+                                            0,
+                                            0,
+                                            0)
+                                    else:
+                                        ostr = ostr_format \
+                                            % (obs_copy[index], ri, rj,
+                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
+                                            cov, 
+                                            0,
+                                            0,
+                                            0,
+                                            0,
+                                            0)
+                                    olist.append(ostr)
+                else:
+                    for s1 in range(len(obs[0,0,:,0,0,0])):
+                        for t1 in range(len(obs[0,0,0,:,0,0])):
+                            for t2 in range(len(obs[0,0,0,0,:,0])):
+                                for t3 in range(len(obs[0,0,0,0,0,:])):
+                                    for i_r1 in range(len(obs[:, 0,0,0,0,0])):
+                                        for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
+                                            ri = i_r1
+                                            rj = i_r2              
+                                            cov = obs[i_r1, i_r2, s1, t1, t2, t3]
+                                            if not cov_dict['split_gauss']:
+                                                ostr = ostr_format \
+                                                    % (obs_copy[index],  ri, rj, 
+                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                    cov, 
+                                                    0,
+                                                    0,
+                                                    0)
+                                            else:
+                                                ostr = ostr_format \
+                                                    % (obs_copy[index], ri, rj,
+                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
+                                                    cov, 
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0)
+                                            olist.append(ostr)
+                index += 1
+        
         if not self.save_as_binary:
             if 'terminal' in self.style:
                 print("Writing result to terminal. (Brace yourself...).'")
@@ -3671,7 +3962,91 @@ class Output():
                         file.write("%s\n" % ostr)
         return True
 
-
+    def __create_matrix_csmf(self,covlist, want_diagonal_csmf = False):
+        number_m_bins = int(len(covlist[:,0,0,0]))
+        number_tomo_bins = int(len(covlist[0,0,:,0]))
+        if want_diagonal_csmf:
+            data_size = number_m_bins
+            covariance = np.zeros((data_size,data_size))
+            for i_t in range(number_m_bins):
+                for j_t in range(number_m_bins):
+                    covariance[i_t,j_t] = covlist[i_t, j_t, i_t, j_t]
+        else:
+            data_size = number_m_bins * number_tomo_bins
+            covariance = np.zeros((data_size,data_size))
+            i = 0
+            for i_t in range(number_tomo_bins):
+                for i_m in range(number_m_bins):
+                    j = 0
+                    for j_t in range(number_tomo_bins):
+                        for j_m in range(number_m_bins):
+                            covariance[i,j] = covlist[i_m, j_m, i_t, j_t]
+                            j += 1
+                    i += 1
+        return covariance
+    
+    def __create_matrix_csmf_cross_LSS(self,covlist,is_i_smaller_j ,want_diagonal_csmf = False):
+        number_m_bins = int(len(covlist[0,:,0,0,0,0]))
+        number_tomo_bins = int(len(covlist[0,0,0,:,0,0]))
+        if is_i_smaller_j:
+            data_size_ij = int(len(covlist[0,0,0,0,:,0])*(len(covlist[0,0,0,0,0,:]) + 1)/2*len(covlist[0,0,:,0,0,0])*len(covlist[:,0,0,0,0,0]))
+            if want_diagonal_csmf:
+                i = 0
+                data_size_mn = int(len(covlist[0,:,0,0,0,0]))
+                covariance = np.zeros((data_size_ij,data_size_mn))
+                for i_tomo in range(len(covlist[0,0,0,0,:,0])):
+                    for j_tomo in range(i_tomo,len(covlist[0,0,0,0,:, 0])):
+                        for i_sample in range(len(covlist[0,0, :, 0,0,0])):
+                            for i_theta in range(len(covlist[:,0,0,0,0,0])):
+                                j = 0
+                                for i_mass_tomo in range(number_tomo_bins):
+                                    covariance[i,j] = covlist[i_theta, i_mass_tomo, i_sample, i_mass_tomo, i_tomo, j_tomo]
+                                    j += 1
+                                i += 1
+            else:
+                i = 0
+                data_size_mn = int(len(covlist[0,:,0,0,0,0])*len(covlist[0,0,0,:,0,0]))
+                covariance = np.zeros((data_size_ij,data_size_mn))
+                for i_tomo in range(len(covlist[0,0,0,0,:,0])):
+                    for j_tomo in range(i_tomo,len(covlist[0,0,0,0,:, 0])):
+                        for i_sample in range(len(covlist[0,0, :, 0,0,0])):
+                            for i_theta in range(len(covlist[:,0,0,0,0,0])):
+                                j = 0
+                                for i_mass_tomo in range(number_tomo_bins):
+                                    for i_mass in range(number_m_bins):    
+                                        covariance[i,j] = covlist[i_theta, i_mass, i_sample, i_mass_tomo, i_tomo, j_tomo]
+                                        j += 1
+                                i += 1
+        else:
+            data_size_ij = int(len(covlist[0,0,0,0,:,0])*len(covlist[0,0,0,0,0,:])*len(covlist[0,0,:,0,0,0])*len(covlist[:,0,0,0,0,0]))
+            if want_diagonal_csmf:
+                i = 0
+                data_size_mn = int(len(covlist[0,:,0,0,0,0]))
+                covariance = np.zeros((data_size_ij,data_size_mn))
+                for i_tomo in range(len(covlist[0,0,0,0,:,0])):
+                    for j_tomo in range(len(covlist[0,0,0,0,:, 0])):
+                        for i_sample in range(len(covlist[0,0, :, 0,0,0])):
+                            for i_theta in range(len(covlist[:,0,0,0,0,0])):
+                                j = 0
+                                for i_mass_tomo in range(number_tomo_bins):
+                                    covariance[i,j] = covlist[i_theta, i_mass_tomo, i_sample, i_mass_tomo, i_tomo, j_tomo]
+                                    j += 1
+                                i += 1
+            else:
+                i = 0
+                data_size_mn = int(len(covlist[0,:,0,0,0,0])*len(covlist[0,0,0,:,0,0]))
+                covariance = np.zeros((data_size_ij,data_size_mn))
+                for i_tomo in range(len(covlist[0,0,0,0,:,0])):
+                    for j_tomo in range(len(covlist[0,0,0,0,:, 0])):
+                        for i_sample in range(len(covlist[0,0, :, 0,0,0])):
+                            for i_theta in range(len(covlist[:,0,0,0,0,0])):
+                                j = 0
+                                for i_mass_tomo in range(number_tomo_bins):
+                                    for i_mass in range(number_m_bins):    
+                                        covariance[i,j] = covlist[i_theta, i_mass, i_sample, i_mass_tomo, i_tomo, j_tomo]
+                                        j += 1
+                                i += 1
+        return covariance
     
     def __create_matrix(self,covlist, is_i_smaller_j, is_m_smaller_n):
         if is_i_smaller_j and is_m_smaller_n:
@@ -3881,10 +4256,22 @@ class Output():
         
             cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(obslength)]
             cov_diag = []    
+            if self.has_csmf:
+                covariange_csmf = self.__create_matrix_csmf(self.conditional_stellar_mass_function_cov[0])
+                if gg:
+                    covariange_csmfgg = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[1], True)
+                if gm:
+                    covariange_csmfgm = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[2], False)
+                if mm:
+                    covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[3], True)
+                if obslength == 10:
+                    covariange_csmfmmB = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[4], True)
+
             if obslength == 6:
                 # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
                 if gg:
                     covariance_gggg = self.__create_matrix(cov[0],True,True)
+
                     cov2d = covariance_gggg
                     cov_diag.append(covariance_gggg)
                     if gm:
@@ -3921,6 +4308,11 @@ class Output():
                     covariance_mmmm = self.__create_matrix(cov[5],True,True)
                     cov_diag.append(covariance_mmmm)
                     cov2d = covariance_mmmm
+                if self.has_csmf:
+                    if gg and not gm and not mm:
+                        cov2d = np.block([[covariance_gggg, covariange_csmfgg],
+                                        [covariange_csmfgg.T, covariange_csmf]])
+
             elif obslength == 10:        
                 # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
                 # 'ximgt', 'xipxip', 'xipxim', 'ximxim'

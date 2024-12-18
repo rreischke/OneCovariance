@@ -801,13 +801,23 @@ class CovBandPowers(CovTHETASpace):
         """
 
         if not self.cov_dict['split_gauss']:
-            gauss_CEgggg, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm, \
-                gauss_CEgmgm, gauss_CEmmgm, gauss_CBmmgm, \
-                gauss_CEEmmmm, gauss_CEBmmmm, \
-                gauss_CBBmmmm, \
-                gauss_CEgggg_sn, gauss_CEgmgm_sn, gauss_CEEmmmm_sn, gauss_CBBmmmm_sn = \
-                self.covbandpowers_gaussian(obs_dict,
-                                       survey_params_dict)
+            if self.csmf:
+                gauss_CEgggg, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm, \
+                    gauss_CEgmgm, gauss_CEmmgm, gauss_CBmmgm, \
+                    gauss_CEEmmmm, gauss_CEBmmmm, \
+                    gauss_CBBmmmm, \
+                    gauss_CEgggg_sn, gauss_CEgmgm_sn, gauss_CEEmmmm_sn, gauss_CBBmmmm_sn, \
+                    csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB = \
+                    self.covbandpowers_gaussian(obs_dict,
+                                        survey_params_dict)
+            else:
+                gauss_CEgggg, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm, \
+                    gauss_CEgmgm, gauss_CEmmgm, gauss_CBmmgm, \
+                    gauss_CEEmmmm, gauss_CEBmmmm, \
+                    gauss_CBBmmmm, \
+                    gauss_CEgggg_sn, gauss_CEgmgm_sn, gauss_CEEmmmm_sn, gauss_CBBmmmm_sn = \
+                    self.covbandpowers_gaussian(obs_dict,
+                                        survey_params_dict)
             gauss = [gauss_CEgggg + gauss_CEgggg_sn, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm,
                      gauss_CEgmgm + gauss_CEgmgm_sn, gauss_CEmmgm, gauss_CBmmgm,
                      gauss_CEEmmmm + gauss_CEEmmmm_sn, gauss_CEBmmmm,
@@ -922,47 +932,102 @@ class CovBandPowers(CovTHETASpace):
 
         print("Calculating gaussian bandpower covariance from angular " +
               "correlations.")
-
-        gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
-            gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
-            gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
-            gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
-            gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
-            gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
-            gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
-            gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
-            gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
-            gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn = \
-            self.__covbandpowers_split_gaussian(obs_dict,
-                                           survey_params_dict)
-
-        if not self.cov_dict['split_gauss']:
-            gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
-            gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
-            gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
-            gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
-            gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
-            gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
-            gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
-            gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
-            gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
-            gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
-            return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
-                gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
-                gauss_BPEEmmmm, gauss_BPEBmmmm, \
-                gauss_BPBBmmmm, \
-                gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn
+        if self.csmf:
+            gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
+                gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
+                gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
+                gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
+                gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
+                gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
+                gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
+                gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
+                gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
+                gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn, \
+                csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB = \
+                self.__covbandpowers_split_gaussian(obs_dict,
+                                            survey_params_dict)
         else:
-            return gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
-                    gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
-                    gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
-                    gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
-                    gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
-                    gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
-                    gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
-                    gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
-                    gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
-                    gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn
+            gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
+                gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
+                gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
+                gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
+                gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
+                gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
+                gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
+                gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
+                gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
+                gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn = \
+                self.__covbandpowers_split_gaussian(obs_dict,
+                                            survey_params_dict)
+
+        if self.csmf:
+            if not self.cov_dict['split_gauss']:
+                gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
+                gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
+                gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
+                gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
+                gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
+                gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
+                gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
+                gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
+                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+                gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
+                return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
+                    gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
+                    gauss_BPEEmmmm, gauss_BPEBmmmm, \
+                    gauss_BPBBmmmm, \
+                    gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
+                    csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB 
+            else:
+                gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
+                gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
+                gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
+                gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
+                gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
+                gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
+                gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
+                gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
+                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+                gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
+                return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
+                    gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
+                    gauss_BPEEmmmm, gauss_BPEBmmmm, \
+                    gauss_BPBBmmmm, \
+                    gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
+                    csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB 
+        else:
+            if not self.cov_dict['split_gauss']:
+                gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
+                gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
+                gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
+                gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
+                gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
+                gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
+                gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
+                gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
+                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+                gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
+                return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
+                    gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
+                    gauss_BPEEmmmm, gauss_BPEBmmmm, \
+                    gauss_BPBBmmmm, \
+                    gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn
+            else:
+                gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
+                gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
+                gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
+                gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
+                gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
+                gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
+                gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
+                gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
+                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+                gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
+                return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
+                    gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
+                    gauss_BPEEmmmm, gauss_BPEBmmmm, \
+                    gauss_BPBBmmmm, \
+                    gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
 
     def __covbandpowers_split_gaussian(self,
                                        obs_dict,
@@ -1028,13 +1093,23 @@ class CovBandPowers(CovTHETASpace):
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         save_entry = self.cov_dict['split_gauss']
         self.cov_dict['split_gauss'] = True
-        gaussELLgggg_sva, gaussELLgggg_mix, _, \
+        if self.csmf:
+            gaussELLgggg_sva, gaussELLgggg_mix, _, \
             gaussELLgggm_sva, gaussELLgggm_mix, _, \
             gaussELLggmm_sva, _, _, \
             gaussELLgmgm_sva, gaussELLgmgm_mix, _, \
             gaussELLmmgm_sva, gaussELLmmgm_mix, _, \
-            gaussELLmmmm_sva, gaussELLmmmm_mix, _ = self.covELL_gaussian(
+            gaussELLmmmm_sva, gaussELLmmmm_mix, _, \
+            csmf_auto, csmf_gg, csmf_gm, csmf_mm = self.covELL_gaussian(
                 obs_dict['ELLspace'], survey_params_dict, False)
+        else:
+            gaussELLgggg_sva, gaussELLgggg_mix, _, \
+                gaussELLgggm_sva, gaussELLgggm_mix, _, \
+                gaussELLggmm_sva, _, _, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, _, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, _, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, _ = self.covELL_gaussian(
+                    obs_dict['ELLspace'], survey_params_dict, False)
         self.cov_dict['split_gauss'] = save_entry
         if self.gg or self.gm:
             kron_delta_tomo_clust = np.diag(np.ones(self.n_tomo_clust))
@@ -1342,20 +1417,74 @@ class CovBandPowers(CovTHETASpace):
         else:
             gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn = 0, 0, 0
             gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn = 0, 0, 0
-            gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn = 0, 0, 0 
+            gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn = 0, 0, 0
+        
+        if self.csmf:
+            if self.gg:
+                csmf_BPgg = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
+                original_shape = csmf_gg[0, :, :, :, :, :].shape
+                flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
+                csmf_BP_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
+                for m_mode in range(len(self.ell_bins_clustering)):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    self.levin_int_fourier.init_integral(self.ellrange, csmf_BP_flat, True, True)
+                    csmf_BPgg[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+            else:
+                csmf_BPgg = 0
+            if self.gm:
+                csmf_BPgm = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
+                original_shape = csmf_gm[0, :, :, :, :, :].shape
+                flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
+                csmf_BP_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
+                for m_mode in range(len(self.ell_bins_clustering)):
+                    local_ell_limit = self.ell_limits[m_mode + len(self.ell_bins_clustering)][:]
+                    self.levin_int_fourier.init_integral(self.ellrange, csmf_BP_flat, True, True)
+                    csmf_BPgm[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + len(self.ell_bins_clustering))),original_shape)            
+            else:
+                csmf_BPgm = 0
+            
+            if self.gm:
+                csmf_BPmmE = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_BPmmB = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                original_shape = csmf_mm[0, :, :, :, :, :].shape
+                flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
+                csmf_BP_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
+                for m_mode in range(len(self.ell_bins_lensing)):
+                    local_ell_limit_E = self.ell_limits[m_mode + 2*len(self.ell_bins_clustering)][:]
+                    self.levin_int_fourier.init_integral(self.ellrange, csmf_BP_flat, True, True)
+                    csmf_BPmmE[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering)),original_shape))           
+                    csmf_BPmmB[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering) +  len(self.ell_bins_lensing)),original_shape))       
+
+            else:
+                csmf_BPmmE, csmf_BPmmB = 0, 0
+
         print("\nWrapping up all Gaussian bandpower covariance contributions.")
 
+        if self.csmf:
+            return gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
+                gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
+                gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
+                gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
+                gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
+                gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
+                gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
+                gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
+                gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
+                gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn, \
+                csmf_auto, csmf_BPgg, csmf_BPgm, csmf_BPmm, csmf_BPmmE
 
-        return gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
-            gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
-            gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
-            gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
-            gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
-            gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
-            gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
-            gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
-            gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
-            gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn
+                
+        else:
+            return gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
+                gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
+                gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
+                gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
+                gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
+                gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
+                gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
+                gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
+                gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
+                gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn
 
 
     def covbandpowers_non_gaussian(self,

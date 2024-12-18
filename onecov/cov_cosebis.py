@@ -316,7 +316,7 @@ class CovCOSEBI(CovELLSpace):
         ell_max = 1e5
         N_ell = int(1e5)
         N_theta = int(1e4)
-        get_W_ell_as_well = True
+        get_W_ell_COSEBI_well = True
         mp.dps = 160
         arcmintorad = 1./60./180.*np.pi
         tmin_mm = 1e6
@@ -439,7 +439,7 @@ class CovCOSEBI(CovELLSpace):
         ell_max = 1e5
         N_ell = int(1e5)
         N_theta = int(1e4)
-        get_W_ell_as_well = True
+        get_W_ell_COSEBI_well = True
         mp.dps = 160
         arcmintorad = 1./60./180.*np.pi
         tmin_mm = 1e6
@@ -859,17 +859,31 @@ class CovCOSEBI(CovELLSpace):
         """
         print("Calculating covariance for COSEBIs E_n")
         if not self.cov_dict['split_gauss']:
-            gauss_EEgggg, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm, \
-                gauss_EEgmgm, gauss_EEmmgm, gauss_EBmmgm, \
-                gauss_EEmmmm, gauss_EBmmmm, \
-                gauss_BBmmmm, \
-                gauss_EEgggg_sn, gauss_EEgmgm_sn, gauss_EEmmmm_sn, gauss_BBmmmm_sn = \
-                self.covCOSEBI_gaussian(obs_dict,
-                                        survey_params_dict)
-            gauss = [gauss_EEgggg + gauss_EEgggg_sn, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm,
-                     gauss_EEgmgm + gauss_EEgmgm_sn, gauss_EEmmgm, gauss_EBmmgm,
-                     gauss_EEmmmm + gauss_EEmmmm_sn, gauss_EBmmmm,
-                     gauss_BBmmmm + gauss_BBmmmm_sn]
+            if self.csmf:
+                gauss_EEgggg, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm, \
+                    gauss_EEgmgm, gauss_EEmmgm, gauss_EBmmgm, \
+                    gauss_EEmmmm, gauss_EBmmmm, \
+                    gauss_BBmmmm, \
+                    gauss_EEgggg_sn, gauss_EEgmgm_sn, gauss_EEmmmm_sn, gauss_BBmmmm_sn = \
+                    csmf_COSEBI_auto, csmf_COSEBI_gg, csmf_COSEBI_gm, csmf_COSEBI_mmE, csmf_COSEBI_mmB = \
+                    self.covCOSEBI_gaussian(obs_dict,
+                                            survey_params_dict)
+                gauss = [gauss_EEgggg + gauss_EEgggg_sn, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm,
+                        gauss_EEgmgm + gauss_EEgmgm_sn, gauss_EEmmgm, gauss_EBmmgm,
+                        gauss_EEmmmm + gauss_EEmmmm_sn, gauss_EBmmmm,
+                        gauss_BBmmmm + gauss_BBmmmm_sn]
+            else:
+                gauss_EEgggg, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm, \
+                    gauss_EEgmgm, gauss_EEmmgm, gauss_EBmmgm, \
+                    gauss_EEmmmm, gauss_EBmmmm, \
+                    gauss_BBmmmm, \
+                    gauss_EEgggg_sn, gauss_EEgmgm_sn, gauss_EEmmmm_sn, gauss_BBmmmm_sn = \
+                    self.covCOSEBI_gaussian(obs_dict,
+                                            survey_params_dict)
+                gauss = [gauss_EEgggg + gauss_EEgggg_sn, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm,
+                        gauss_EEgmgm + gauss_EEgmgm_sn, gauss_EEmmgm, gauss_EBmmgm,
+                        gauss_EEmmmm + gauss_EEmmmm_sn, gauss_EBmmmm,
+                        gauss_BBmmmm + gauss_BBmmmm_sn]
         else:
             gauss = self.covCOSEBI_gaussian(obs_dict,
                                             survey_params_dict)
@@ -973,35 +987,8 @@ class CovCOSEBI(CovELLSpace):
 
         print("Calculating gaussian covariance for COSEBIS")
 
-        gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
-            gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
-            gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
-            gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
-            gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
-            gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
-            gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
-            gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
-            gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
-            gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn = \
-            self.__covCOSEBI_split_gaussian(obs_dict,
-                                            survey_params_dict)
-        if not self.cov_dict['split_gauss']:
-            gaussCOSEBIgggg = gaussCOSEBIgggg_sva + gaussCOSEBIgggg_mix
-            gaussCOSEBIgggm = gaussCOSEBIgggm_sva + gaussCOSEBIgggm_mix
-            gaussCOSEBIEggmm = gaussCOSEBIEggmm_sva + gaussCOSEBIEggmm_mix
-            gaussCOSEBIBggmm = gaussCOSEBIBggmm_sva + gaussCOSEBIBggmm_mix
-            gaussCOSEBIgmgm = gaussCOSEBIgmgm_sva + gaussCOSEBIgmgm_mix
-            gaussCOSEBIEmmgm = gaussCOSEBIEmmgm_sva + gaussCOSEBIEmmgm_mix
-            gaussCOSEBIBmmgm = gaussCOSEBIBmmgm_sva + gaussCOSEBIBmmgm_mix
-            gaussCOSEBIEEmmmm = gaussCOSEBIEEmmmm_sva + gaussCOSEBIEEmmmm_mix
-            gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix
-            gaussCOSEBIBBmmmm = gaussCOSEBIBBmmmm_sva + gaussCOSEBIBBmmmm_mix
-            return gaussCOSEBIgggg, gaussCOSEBIgggm, gaussCOSEBIEggmm, \
-                gaussCOSEBIBggmm, gaussCOSEBIgmgm, gaussCOSEBIEmmgm, \
-                gaussCOSEBIBmmgm, gaussCOSEBIEEmmmm, gaussCOSEBIEBmmmm, gaussCOSEBIBBmmmm,\
-                gaussCOSEBIgggg_sn, gaussCOSEBIgmgm_sn, gaussCOSEBIEEmmmm_sn, gaussCOSEBIBBmmmm_sn
-        else:
-            return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
+        if self.csmf:
+            gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
                 gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
                 gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
                 gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
@@ -1010,7 +997,79 @@ class CovCOSEBI(CovELLSpace):
                 gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
                 gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
                 gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
-                gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn
+                gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn, \
+                csmf_COSEBI_auto, csmf_COSEBI_gg, csmf_COSEBI_gm, csmf_COSEBI_mmE, csmf_COSEBI_mmB = \
+                self.__covCOSEBI_split_gaussian(obs_dict,
+                                                survey_params_dict)
+        else:
+            gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
+                gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
+                gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
+                gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
+                gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
+                gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
+                gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
+                gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
+                gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
+                gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn = \
+                self.__covCOSEBI_split_gaussian(obs_dict,
+                                                survey_params_dict)
+        if self.csmf:
+            if not self.cov_dict['split_gauss']:
+                gaussCOSEBIgggg = gaussCOSEBIgggg_sva + gaussCOSEBIgggg_mix
+                gaussCOSEBIgggm = gaussCOSEBIgggm_sva + gaussCOSEBIgggm_mix
+                gaussCOSEBIEggmm = gaussCOSEBIEggmm_sva + gaussCOSEBIEggmm_mix
+                gaussCOSEBIBggmm = gaussCOSEBIBggmm_sva + gaussCOSEBIBggmm_mix
+                gaussCOSEBIgmgm = gaussCOSEBIgmgm_sva + gaussCOSEBIgmgm_mix
+                gaussCOSEBIEmmgm = gaussCOSEBIEmmgm_sva + gaussCOSEBIEmmgm_mix
+                gaussCOSEBIBmmgm = gaussCOSEBIBmmgm_sva + gaussCOSEBIBmmgm_mix
+                gaussCOSEBIEEmmmm = gaussCOSEBIEEmmmm_sva + gaussCOSEBIEEmmmm_mix
+                gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix
+                gaussCOSEBIBBmmmm = gaussCOSEBIBBmmmm_sva + gaussCOSEBIBBmmmm_mix
+                return gaussCOSEBIgggg, gaussCOSEBIgggm, gaussCOSEBIEggmm, \
+                    gaussCOSEBIBggmm, gaussCOSEBIgmgm, gaussCOSEBIEmmgm, \
+                    gaussCOSEBIBmmgm, gaussCOSEBIEEmmmm, gaussCOSEBIEBmmmm, gaussCOSEBIBBmmmm,\
+                    gaussCOSEBIgggg_sn, gaussCOSEBIgmgm_sn, gaussCOSEBIEEmmmm_sn, gaussCOSEBIBBmmmm_sn, \
+                    csmf_COSEBI_auto, csmf_COSEBI_gg, csmf_COSEBI_gm, csmf_COSEBI_mmE, csmf_COSEBI_mmB 
+            else:
+                return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
+                    gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
+                    gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
+                    gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
+                    gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
+                    gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
+                    gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
+                    gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
+                    gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
+                    gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn, \
+                    csmf_COSEBI_auto, csmf_COSEBI_gg, csmf_COSEBI_gm, csmf_COSEBI_mmE, csmf_COSEBI_mmB
+        else:
+            if not self.cov_dict['split_gauss']:
+                gaussCOSEBIgggg = gaussCOSEBIgggg_sva + gaussCOSEBIgggg_mix
+                gaussCOSEBIgggm = gaussCOSEBIgggm_sva + gaussCOSEBIgggm_mix
+                gaussCOSEBIEggmm = gaussCOSEBIEggmm_sva + gaussCOSEBIEggmm_mix
+                gaussCOSEBIBggmm = gaussCOSEBIBggmm_sva + gaussCOSEBIBggmm_mix
+                gaussCOSEBIgmgm = gaussCOSEBIgmgm_sva + gaussCOSEBIgmgm_mix
+                gaussCOSEBIEmmgm = gaussCOSEBIEmmgm_sva + gaussCOSEBIEmmgm_mix
+                gaussCOSEBIBmmgm = gaussCOSEBIBmmgm_sva + gaussCOSEBIBmmgm_mix
+                gaussCOSEBIEEmmmm = gaussCOSEBIEEmmmm_sva + gaussCOSEBIEEmmmm_mix
+                gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix
+                gaussCOSEBIBBmmmm = gaussCOSEBIBBmmmm_sva + gaussCOSEBIBBmmmm_mix
+                return gaussCOSEBIgggg, gaussCOSEBIgggm, gaussCOSEBIEggmm, \
+                    gaussCOSEBIBggmm, gaussCOSEBIgmgm, gaussCOSEBIEmmgm, \
+                    gaussCOSEBIBmmgm, gaussCOSEBIEEmmmm, gaussCOSEBIEBmmmm, gaussCOSEBIBBmmmm,\
+                    gaussCOSEBIgggg_sn, gaussCOSEBIgmgm_sn, gaussCOSEBIEEmmmm_sn, gaussCOSEBIBBmmmm_sn
+            else:
+                return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
+                    gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
+                    gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
+                    gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
+                    gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
+                    gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
+                    gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
+                    gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
+                    gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
+                    gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn
 
     def __covCOSEBI_split_gaussian(self,
                                    obs_dict,
@@ -1058,13 +1117,23 @@ class CovCOSEBI(CovELLSpace):
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         save_entry = self.cov_dict['split_gauss']
         self.cov_dict['split_gauss'] = True
-        gaussELLgggg_sva, gaussELLgggg_mix, _, \
+        if self.csmf:
+            gaussELLgggg_sva, gaussELLgggg_mix, _, \
             gaussELLgggm_sva, gaussELLgggm_mix, _, \
             gaussELLggmm_sva, _, _, \
             gaussELLgmgm_sva, gaussELLgmgm_mix, _, \
             gaussELLmmgm_sva, gaussELLmmgm_mix, _, \
-            gaussELLmmmm_sva, gaussELLmmmm_mix, _ = self.covELL_gaussian(
+            gaussELLmmmm_sva, gaussELLmmmm_mix, _, \
+            csmf_auto, csmf_gg, csmf_gm, csmf_mm = self.covELL_gaussian(
                 obs_dict['ELLspace'], survey_params_dict, False)
+        else:
+            gaussELLgggg_sva, gaussELLgggg_mix, _, \
+                gaussELLgggm_sva, gaussELLgggm_mix, _, \
+                gaussELLggmm_sva, _, _, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, _, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, _, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, _ = self.covELL_gaussian(
+                    obs_dict['ELLspace'], survey_params_dict, False)
         self.cov_dict['split_gauss'] = save_entry
         gaussCOSEBIgggg_sva = None
         gaussCOSEBIgggg_mix = None
@@ -1415,16 +1484,65 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIBBmmmm_mix = 0
             gaussCOSEBIBBmmmm_sn = 0
 
-        return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
-            gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
-            gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
-            gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
-            gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
-            gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
-            gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
-            gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
-            gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
-            gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn
+        if self.csmf:
+            if self.gg:
+                csmf_COSEBIgg = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
+                original_shape = csmf_gg[0, :, :, :, :, :].shape
+                flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
+                csmf_COSEBI_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
+                for m_mode in range(self.gg_summaries):
+                    local_ell_limit = self.ell_limits[m_mode + + self.En_modes][:]
+                    self.levin_int_fourier.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
+                    csmf_COSEBIgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+            else:
+                csmf_COSEBIgg = 0
+            if self.gm:
+                csmf_COSEBIgm = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
+                original_shape = csmf_gm[0, :, :, :, :, :].shape
+                flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
+                csmf_COSEBI_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
+                for m_mode in range(self.En_g_modes):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    self.levin_int_fourier.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
+                    csmf_COSEBIgm[m_mode , :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+            else:
+                csmf_COSEBIgm = 0
+            if self.mm:
+                csmf_COSEBImmE = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_COSEBImmB = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                original_shape = csmf_mm[0, :, :, :, :, :].shape
+                flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
+                csmf_COSEBI_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
+                for m_mode in range(self.En_modes):
+                    local_ell_limit = self.ell_limits[m_mode][:]
+                    self.levin_int_fourier.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
+                    csmf_COSEBImmE[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+            else:
+                csmf_COSEBImmE, csmf_COSEBImmB = 0, 0
+
+        if self.csmf:
+            return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
+                gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
+                gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
+                gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
+                gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
+                gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
+                gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
+                gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
+                gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
+                gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn, \
+                csmf_auto, csmf_COSEBIgg, csmf_COSEBIgm, csmf_COSEBImmE, csmf_COSEBImmB
+        else:
+            return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
+                gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
+                gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
+                gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
+                gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
+                gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
+                gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
+                gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
+                gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
+                gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn
     
     
     def covCOSEBI_non_gaussian(self,

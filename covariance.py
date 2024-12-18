@@ -12,7 +12,7 @@ if len(platform.mac_ver()[0]) > 0 and (platform.processor() == 'arm' or int(plat
     os.environ['KMP_DUPLICATE_LIB_OK']='True'
 print("READING INPUT")
 print("#############")
-    
+
 inp = Input()
 
 
@@ -35,9 +35,9 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
                             hod, survey_params, prec, read_in_tables)
         
         
-
         covariance_in_ell_space = covell.calc_covELL(
             observables, output, bias,  hod, survey_params, prec, read_in_tables)
+        observables['observables']['is_cell'] = True
         out = Output(output, covell.ellrange_clustering, covell.ellrange_lensing)
         out.write_cov(covterms, observables, covell.n_tomo_clust,
                     covell.n_tomo_lens, covell.ellrange,

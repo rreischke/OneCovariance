@@ -687,7 +687,9 @@ class Input:
                 self.ell_type_lensing = config['covELLspace settings']['ell_type_lensing']
         else:
             ...
-
+        #if self.pixelised_cell is None:
+            #self.pixelised_cell = False
+            
         if (self.cosmicshear and self.est_shear == 'C_ell') or \
            (self.ggl and self.est_ggl == 'C_ell') or \
            (self.clustering and self.est_clust == 'C_ell'):
@@ -696,8 +698,6 @@ class Input:
             if self.nglimber is None:
                 self.nglimber = True
             
-            if self.pixelised_cell is None:
-                self.pixelised_cell = False
             else:
                 if self.pixel_Nside is None and self.pixelised_cell:
                     raise Exception("ConfigError: C_ells are required to be pixelised " +
@@ -992,6 +992,12 @@ class Input:
                 self.xi_pp = True
                 self.xi_mm = True
         
+        if self.limber is None:
+            self.limber = True
+        if self.nglimber is None:
+            self.nglimber = True
+            
+        
         if (self.clustering and self.est_clust == 'w') or (self.ggl and self.est_ggl == 'gamma_t'):
             if self.theta_min is None:
                 if self.theta_min_clustering is None:
@@ -1000,6 +1006,8 @@ class Input:
                                     "specified. Must be adjusted in config file " +
                                     config_name + ", [covTHETAspace settings]: 'theta_min = " +
                                     "10' [arcmin].")
+                else:
+                    self.theta_min = self.theta_min_clustering
             if self.theta_min_clustering is None:
                 self.theta_min_clustering = self.theta_min
             if self.theta_max is None:
@@ -1009,6 +1017,8 @@ class Input:
                                     "specified. Must be adjusted in config file " +
                                     config_name + ", [covTHETAspace settings]: 'theta_max = " +
                                     "100'. [arcmax")
+                else:
+                    self.theta_max = self.theta_max_clustering
             if self.theta_max_clustering is None:
                 self.theta_max_clustering = self.theta_max      
             if self.theta_bins is None:
@@ -1017,6 +1027,8 @@ class Input:
                                     "'w' or 'gamma_t' but no number of theta bins is specified. Must " +
                                     "be adjusted in config file " + config_name + ", " +
                                     "[covTHETAspace settings]: 'theta_bins = 10'.")
+                else:
+                    self.theta_bins = self.theta_bins_clustering
             if self.theta_bins_clustering is None:
                 self.theta_bins_clustering = self.theta_bins
             if self.theta_type is None:
@@ -1064,6 +1076,8 @@ class Input:
                                     "specified. Must be adjusted in config file " +
                                     config_name + ", [covTHETAspace settings]: 'theta_min = " +
                                     "10' [arcmin].")
+                else:
+                    self.theta_min = self.theta_min_lensing
             if self.theta_min_lensing is None:
                 self.theta_min_lensing = self.theta_min
             if self.theta_max is None:
@@ -1073,6 +1087,8 @@ class Input:
                                     "specified. Must be adjusted in config file " +
                                     config_name + ", [covTHETAspace settings]: 'theta_max = " +
                                     "100'. [arcmax")
+                else:
+                    self.theta_max = self.theta_max_lensing
             if self.theta_max_lensing is None:
                 self.theta_max_lensing = self.theta_max      
             if self.theta_bins is None:
@@ -1081,6 +1097,8 @@ class Input:
                                     "'xi_pm' but no number of theta bins is specified. Must " +
                                     "be adjusted in config file " + config_name + ", " +
                                     "[covTHETAspace settings]: 'theta_bins = 10'.")
+                else:
+                    self.theta_bins = self.theta_bins_lensing
             if self.theta_bins_lensing is None:
                 self.theta_bins_lensing = self.theta_bins
             if self.theta_type is None:
@@ -3588,10 +3606,10 @@ class Input:
         self.covterms = dict(zip(keys, values))
 
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
-                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins']
+                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell"]
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
-                  self.cstellar_mf, self.csmf_log10M_bins]
+                  self.cstellar_mf, self.csmf_log10M_bins, False]
         self.observables = dict(zip(keys, values))
         self.observables_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
@@ -3636,8 +3654,9 @@ class Input:
         self.covELLspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
-        self.covELLspace_settings_abr['mult_shear_bias'] = \
-                ', '.join(map(str, self.multiplicative_shear_bias_uncertainty))
+        if self.cosmicshear or self.ggl:
+            self.covELLspace_settings_abr['mult_shear_bias'] = \
+                    ', '.join(map(str, self.multiplicative_shear_bias_uncertainty))
 
         keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type',
                 'theta_min_clustering', 'theta_max_clustering', 'theta_bins_clustering', 'theta_type_clustering',
@@ -3725,9 +3744,9 @@ class Input:
         
 
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins', 'has_csmf']
         values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
+                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, self.cstellar_mf]
         self.bias_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.logmass_bins is not None:
@@ -3736,11 +3755,10 @@ class Input:
         else:
             self.logmass_bins = np.array([0, 0])
             values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                      self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins]
+                      self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, self.cstellar_mf]
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins', 'has_csmf']
         self.bias = dict(zip(keys, values))
-
         keys = ['A_IA', 'eta_IA', 'z_pivot_IA']
         values = [self.A_IA, self.eta_IA, self.z_pivot_IA]
         self.intrinsic_alignments = dict(zip(keys, values))

@@ -154,30 +154,14 @@ class HaloModel(Setup):
         self.mass_func = \
             self.calc_mass_func(zet, cosmo_dict, prec['hm'], prec['powspec'])
         self.hod = HOD(bias_dict, prec['hm'])
-        '''if zet == 0:
-            np.savetxt("occ_num_sat", self.hod.occ_num_and_prob_per_pop(
-                            hod_dict,
-                            'sat',
-                            self.mor_tab,
-                            self.occprob_tab,
-                            self.occnum_tab
-                        )[0])
-            np.savetxt("occ_num_cen", self.hod.occ_num_and_prob_per_pop(
-                            hod_dict,
-                            'cen',
-                            self.mor_tab,
-                            self.occprob_tab,
-                            self.occnum_tab
-                        )[0])
-            np.savetxt("mass", self.hod.Mrange)'''
         self.ngal = self.nbar(hod_dict)
         self.ncen = self.nbar_cen(hod_dict)
         self.nsat = self.nbar_sat(hod_dict)
         self.norm_bias = -1
         self.effective_bias = self.calc_effective_bias(
             bias_dict, hod_dict, prec['hm'])
-        self.__set_spline_galaxy_stellar_mf(hod_dict)
-        self.__set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
+        self.set_spline_galaxy_stellar_mf(hod_dict)
+        self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
         self.zet= zet
 
     def calc_mass_func(self,
@@ -1177,7 +1161,7 @@ class HaloModel(Setup):
                                                          self.occnum_tab)[1]
             return simpson((self.bias(bias_dict,hm_prec)*self.mass_func.dndm)[None, None, :]*csmf, x = self.mass_func.m, axis = -1)
 
-    def __set_spline_galaxy_stellar_mf(self,
+    def set_spline_galaxy_stellar_mf(self,
                                        hod_dict):
         """
         Sets up the splines for the galaxy stellar mass function as private variables
@@ -1208,7 +1192,7 @@ class HaloModel(Setup):
         self.galaxy_smf_c = UnivariateSpline(np.array(aux_M), np.array(aux_c) , k=2, s=0, ext=0)
         self.galaxy_smf_s = UnivariateSpline(np.array(aux_M), np.array(aux_s) , k=2, s=0, ext=0)
 
-    def __set_spline_galaxy_stellar_mf_bias(self,
+    def set_spline_galaxy_stellar_mf_bias(self,
                                             hod_dict,bias_dict, hm_prec):
         """
         Sets up the splines for the galaxy stellar mass function as private variables
