@@ -60,6 +60,8 @@ class Input:
         self.csmf_log10Mmax = None
         self.csmf_N_log10M_bin = None
         self.csmf_log10M_bins = None
+        self.csmf_diagonal = None
+
         
 
         # output settings
@@ -477,10 +479,13 @@ class Input:
                             "missing in config file " + config_name + ". Compulsory " +
                             "inputs are either 'cosmic_shear', 'ggl', or 'clustering' " +
                             "and at least one specified estimator.")
-        
         if 'csmf settings' in config and self.cstellar_mf:
             if 'csmf_log10M_bins' in config['csmf settings']:
                 self.csmf_log10M_bins = np.array(config['csmf settings']['csmf_log10M_bins'].split(',')).astype(float)
+            if 'csmf_diagonal' in config['csmf settings']:
+                self.csmf_diagonal = config['csmf settings'].getboolean('csmf_diagonal')
+            else:
+                self.csmf_diagonal = False
             if not isinstance(self.csmf_log10M_bins, np.ndarray):
                 if 'csmf_log10Mmin' in config['csmf settings']:
                     self.csmf_log10Mmin = float(config['csmf settings']['csmf_log10Mmin'])
@@ -3606,10 +3611,10 @@ class Input:
         self.covterms = dict(zip(keys, values))
 
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
-                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell"]
+                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal"]
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
-                  self.cstellar_mf, self.csmf_log10M_bins, False]
+                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal]
         self.observables = dict(zip(keys, values))
         self.observables_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
@@ -5105,7 +5110,7 @@ class FileInput:
                         raise Exception("ConfigError: The Vmax file needs to have the dimensions fitting to the number of stellar mass bins "+
                                         "times the number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
                     for tomo in range(self.n_tomo_csmf):
-                        self.V_max[:, tomo] = np.array(data[data.colnames[1]][tomo**self.csmf_N_log10M_bin:(tomo+1)*self.csmf_N_log10M_bin])
+                        self.V_max[:, tomo] = np.array(data[data.colnames[1]][tomo*self.csmf_N_log10M_bin:(tomo+1)*self.csmf_N_log10M_bin])
                 else:
                     raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
                                     "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
@@ -5113,7 +5118,7 @@ class FileInput:
                     self.f_tomo_file = config['csmf settings']['f_tomo_file']
                     data = np.array(np.loadtxt(path.join(self.csmf_directory, self.f_tomo_file)))
                     if self.n_tomo_csmf != 1:
-                        if len(data[0]) != int(self.n_tomo_csmf):
+                        if len(data) != int(self.n_tomo_csmf):
                             raise Exception("ConfigError: The f_tomo file needs to have the dimensions fitting to the "+
                                             "number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
                         self.f_tomo = data

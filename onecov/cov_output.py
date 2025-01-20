@@ -1284,9 +1284,7 @@ class Output():
                     r1 = gauss[oidx].shape[0]
                     r2 = gauss[oidx].shape[1]
                     for i_r1 in range(r1):
-                        for i_r2 in range(r2):
-                            ri = proj_quant[i_r1]
-                            rj = proj_quant[i_r2]
+                        for i_r2 in range(r2):                    
                             if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                 tomo1 = gauss[oidx].shape[4]
                                 if obs == 'gggg':
@@ -1295,12 +1293,18 @@ class Output():
                                     if np.any(self.projected_clust):
                                         ri = self.projected_clust[i_r1]
                                         rj = self.projected_clust[i_r2]
+                                    else:
+                                        ri = proj_quant[i_r1]
+                                        rj = proj_quant[i_r2]
                                 if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                     sampledim1 = 1
                                     sampledim2 = 1
                                     if np.any(self.projected_lens):
                                         ri = self.projected_lens[i_r1]
                                         rj = self.projected_lens[i_r2]
+                                    else:
+                                        ri = proj_quant[i_r1]
+                                        rj = proj_quant[i_r2]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo1):
@@ -1327,6 +1331,9 @@ class Output():
                                 if np.any(self.projected_clust):
                                     ri = self.projected_clust[i_r1]
                                     rj = self.projected_clust[i_r2]
+                                else:
+                                    ri = proj_quant[i_r1]
+                                    rj = proj_quant[i_r2]
                                 for t1 in range(tomo1):
                                     for t2 in range(tomo2):
                                         for t3 in range(tomo1):
@@ -1355,13 +1362,20 @@ class Output():
                                     if np.any(self.projected_clust):
                                         ri = self.projected_clust[i_r1]
                                         rj = self.projected_clust[i_r2]
+                                    else:
+                                        ri = proj_quant[i_r1]
+                                        rj = proj_quant[i_r2]
                                 if obs in ['mmgm', 'gmxip', 'gmxim']:
                                     sampledim1 = 1
                                     sampledim2 = sampledim
                                     if np.any(self.projected_clust):
                                         rj = self.projected_clust[i_r2]
+                                    else:
+                                        rj = proj_quant[i_r2]
                                     if np.any(self.projected_lens):
                                         ri = self.projected_lens[i_r1]
+                                    else:
+                                        ri = proj_quant[i_r1]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo3):
@@ -1387,8 +1401,12 @@ class Output():
                                 sampledim2 = 1
                                 if np.any(self.projected_lens):
                                     rj = self.projected_lens[i_r2]
+                                else:
+                                    rj = proj_quant[i_r2]
                                 if np.any(self.projected_clust):
                                     ri = self.projected_clust[i_r1]
+                                else:
+                                    ri = proj_quant[i_r1]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo2):
@@ -1427,8 +1445,6 @@ class Output():
                     r2 = gauss[3*oidx].shape[1]
                     for i_r1 in range(r1):
                         for i_r2 in range(r2):
-                            ri = proj_quant[i_r1]
-                            rj = proj_quant[i_r2]
                             if obs in ['gggg', 'mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                 tomo1 = gauss[splitidx].shape[4]
                                 if obs == 'gggg':
@@ -1437,14 +1453,18 @@ class Output():
                                     if np.any(self.projected_clust):
                                         rj = self.projected_clust[i_r2]
                                         ri = self.projected_clust[i_r1]
-                                
+                                    else:
+                                        ri = proj_quant[i_r1]
+                                        rj = proj_quant[i_r2]
                                 if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                     sampledim1 = 1
                                     sampledim2 = 1
                                     if np.any(self.projected_lens):
                                         rj = self.projected_lens[i_r2]
                                         ri = self.projected_lens[i_r1]
-                                
+                                    else:
+                                        ri = proj_quant[i_r1]
+                                        rj = proj_quant[i_r2]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo1):
@@ -1513,9 +1533,12 @@ class Output():
                                     sampledim2 = sampledim
                                     if np.any(self.projected_clust):
                                         rj = self.projected_clust[i_r2]
+                                    else:
+                                        rj = proj_quant[i_r2]
                                     if np.any(self.projected_lens):
                                         ri = self.projected_lens[i_r1]
-                                    
+                                    else:
+                                        ri = proj_quant[i_r1]                                    
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo3):
@@ -1545,8 +1568,12 @@ class Output():
                                 sampledim2 = 1
                                 if np.any(self.projected_lens):
                                     rj = self.projected_lens[i_r2]
+                                else:
+                                    rj = proj_quant[i_r2]
                                 if np.any(self.projected_clust):
                                     ri = self.projected_clust[i_r1]
+                                else:
+                                    ri = proj_quant[i_r1]
                                 for t1 in range(tomo1):
                                     for t2 in range(t1, tomo1):
                                         for t3 in range(tomo2):
@@ -1617,7 +1644,7 @@ class Output():
                                     for t1 in range(len(obs[0,0,0,:,0,0])):
                                         for t2 in range(len(obs[0,0,0,0,:,0])):
                                             for t3 in range(len(obs[0,0,0,0,0,:])):
-                                                ri = proj_quant[i_r1]
+                                                ri = i_r1
                                                 rj = i_r2              
                                                 cov = obs[i_r1, i_r2, s1, t1, t2, t3]
                                                 if not cov_dict['split_gauss']:
@@ -2143,16 +2170,20 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         if obs == 'gggg':
                                                             if np.any(self.projected_clust):
                                                                 ri = self.projected_clust[i_r1]
                                                                 rj = self.projected_clust[i_r2]
+                                                            else:
+                                                                ri = proj_quant[i_r1]
+                                                                rj = proj_quant[i_r2]
                                                         if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                                             if np.any(self.projected_lens):
                                                                 ri = self.projected_lens[i_r1]
                                                                 rj = self.projected_lens[i_r2]
+                                                            else:
+                                                                ri = proj_quant[i_r1]
+                                                                rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -2193,6 +2224,9 @@ class Output():
                                                         if np.any(self.projected_clust):
                                                             ri = self.projected_clust[i_r1]
                                                             rj = self.projected_clust[i_r2]
+                                                        else:
+                                                            ri = proj_quant[i_r1]
+                                                            rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -2233,17 +2267,22 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         if obs == 'gggm':
                                                             if np.any(self.projected_clust):
                                                                 ri = self.projected_clust[i_r1]
                                                                 rj = self.projected_clust[i_r2]
+                                                            else:
+                                                                ri = proj_quant[i_r1]
+                                                                rj = proj_quant[i_r2]
                                                         if obs in ['mmgm', 'gmxip', 'gmxim']:
                                                             if np.any(self.projected_lens):
                                                                 ri = self.projected_lens[i_r1]
+                                                            else:
+                                                                ri = proj_quant[i_r1]
                                                             if np.any(self.projected_clust):
                                                                 rj = self.projected_clust[i_r2]
+                                                            else:
+                                                                rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -2283,8 +2322,12 @@ class Output():
                                                         rj = proj_quant[i_r2]
                                                         if np.any(self.projected_lens):
                                                             rj = self.projected_lens[i_r2]
+                                                        else:
+                                                            rj = proj_quant[i_r2]
                                                         if np.any(self.projected_clust):
                                                             ri = self.projected_clust[i_r1]
+                                                        else:
+                                                            ri = proj_quant[i_r1]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
@@ -2334,18 +2377,21 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
-                                                        
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         if obs == 'gggg':
                                                             if np.any(self.projected_clust):
                                                                 ri = self.projected_clust[i_r1]
                                                                 rj = self.projected_clust[i_r2]
+                                                            else:
+                                                                ri = proj_quant[i_r1]
+                                                                rj = proj_quant[i_r2]
                                                         if obs in  ['mmmm', 'xipxip', 'xipxim', 'ximxim']:
                                                             if np.any(self.projected_lens):
                                                                 rj = self.projected_lens[i_r2]
                                                                 ri = self.projected_lens[i_r1]
+                                                            else:
+                                                                ri = proj_quant[i_r1]
+                                                                rj = proj_quant[i_r2]
                                                         
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -2396,11 +2442,12 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         if np.any(self.projected_clust):
                                                             ri = self.projected_clust[i_r1]
                                                             rj = self.projected_clust[i_r2]             
+                                                        else:
+                                                            ri = proj_quant[i_r1]
+                                                            rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -2456,17 +2503,22 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         if obs == 'gggm':
                                                             if np.any(self.projected_clust):
                                                                 ri = self.projected_clust[i_r1]
-                                                                rj = self.projected_clust[i_r2]             
+                                                                rj = self.projected_clust[i_r2]           
+                                                            else:
+                                                                ri = proj_quant[i_r1]
+                                                                rj = proj_quant[i_r2]  
                                                         if obs in ['mmgm', 'gmxip', 'gmxim']:
                                                             if np.any(self.projected_lens):
                                                                 ri = self.projected_lens[i_r1]
+                                                            else:
+                                                                ri = proj_quant[i_r1]
                                                             if np.any(self.projected_clust): 
                                                                 rj = self.projected_clust[i_r2] 
+                                                            else:
+                                                                rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -2517,12 +2569,14 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         if np.any(self.projected_lens):
                                                             rj = self.projected_lens[i_r2]
+                                                        else:
+                                                            rj = proj_quant[i_r2]
                                                         if np.any(self.projected_clust): 
                                                             ri = self.projected_clust[i_r1] 
+                                                        else:
+                                                            ri = proj_quant[i_r1]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
@@ -2574,7 +2628,6 @@ class Output():
                         csmf_auto = True
                     if not isinstance(obs, np.ndarray):
                         continue
-                    print(obs_copy[index],obs.shape)
                     if csmf_auto:
                         for t1 in range(len(obs[0,0,:,0])):
                             for t2 in range(len(obs[0,0,0,:])):
@@ -2609,7 +2662,7 @@ class Output():
                                     for t3 in range(len(obs[0,0,0,0,0,:])):
                                         for i_r1 in range(len(obs[:, 0,0,0,0,0])):
                                             for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
-                                                ri = proj_quant[i_r1]
+                                                ri = i_r1
                                                 rj = i_r2              
                                                 cov = obs[i_r1, i_r2, s1, t1, t2, t3]
                                                 if not cov_dict['split_gauss']:
@@ -4257,18 +4310,34 @@ class Output():
             cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(obslength)]
             cov_diag = []    
             if self.has_csmf:
-                covariange_csmf = self.__create_matrix_csmf(self.conditional_stellar_mass_function_cov[0])
+                covariange_csmf = self.__create_matrix_csmf(self.conditional_stellar_mass_function_cov[0], obs_dict['observables']['csmf_diagonal'])
+                covariange_csmfgg = None
+                covariange_csmfgm = None
+                covariange_csmfmmE = None
+                covariange_csmfmmB = None
                 if gg:
-                    covariange_csmfgg = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[1], True)
+                    covariange_csmfgg = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[1], True, obs_dict['observables']['csmf_diagonal'])
                 if gm:
-                    covariange_csmfgm = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[2], False)
+                    covariange_csmfgm = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[2], False, obs_dict['observables']['csmf_diagonal'])
                 if mm:
-                    covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[3], True)
+                    covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[3], True, obs_dict['observables']['csmf_diagonal'])
                 if obslength == 10:
-                    covariange_csmfmmB = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[4], True)
-
+                    covariange_csmfmmB = np.zeros_like(covariange_csmfmmE)
             if obslength == 6:
                 # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
+                if self.has_csmf:
+                    if covariange_csmfgg is not None:
+                        csmf_block = np.block([[covariange_csmfgg]])
+                        if covariange_csmfgm is not None:
+                            csmf_block = np.block([[covariange_csmfgg],[covariange_csmfgm]])
+                            if covariange_csmfmmE is not None:
+                                csmf_block = np.block([[covariange_csmfgg],[ covariange_csmfgm],[ covariange_csmfmmE]])
+                    elif covariange_csmfgm is not None:
+                        csmf_block = np.block([[covariange_csmfgm]])
+                        if covariange_csmfmmE is not None:
+                            csmf_block = np.block([[covariange_csmfgm],[ covariange_csmfmmE]])
+                    elif covariange_csmfmmE is not None:
+                        csmf_block = np.block([[covariange_csmfmmE]])
                 if gg:
                     covariance_gggg = self.__create_matrix(cov[0],True,True)
 
@@ -4307,15 +4376,30 @@ class Output():
                 elif mm:
                     covariance_mmmm = self.__create_matrix(cov[5],True,True)
                     cov_diag.append(covariance_mmmm)
-                    cov2d = covariance_mmmm
-                if self.has_csmf:
-                    if gg and not gm and not mm:
-                        cov2d = np.block([[covariance_gggg, covariange_csmfgg],
-                                        [covariange_csmfgg.T, covariange_csmf]])
-
+                    cov2d = covariance_mmmm                    
             elif obslength == 10:        
                 # 'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 
                 # 'ximgt', 'xipxip', 'xipxim', 'ximxim'
+                if self.has_csmf:
+                    if covariange_csmfgg is not None:
+                        csmf_block = np.block([[covariange_csmfgg]])
+                        if covariange_csmfgm is not None:
+                            csmf_block = np.block([[covariange_csmfgg],[ covariange_csmfgm]])
+                            if covariange_csmfmmE is not None:
+                                csmf_block = np.block([[covariange_csmfgg],[ covariange_csmfgm],[ covariange_csmfmmE]])
+                                if covariange_csmfmmB is not None:
+                                    csmf_block = np.block([[covariange_csmfgg],[ covariange_csmfgm],[ covariange_csmfmmE],[ covariange_csmfmmB]])
+                    elif covariange_csmfgm is not None:
+                        csmf_block = np.block([[covariange_csmfgm]])
+                        if covariange_csmfmmE is not None:
+                            csmf_block = np.block([[covariange_csmfgm],[ covariange_csmfmmE]])
+                            if covariange_csmfmmB is not None:
+                                csmf_block = np.block([[covariange_csmfgm],[ covariange_csmfmmE],[ covariange_csmfmmB]])
+
+                    elif covariange_csmfmmE is not None:
+                        csmf_block = np.block([[covariange_csmfmmE]])
+                        if covariange_csmfmmB is not None:
+                            csmf_block = np.block([[covariange_csmfmmE],[ covariange_csmfmmB]])
                 if gg:
                     covariance_ww = self.__create_matrix(cov[0],True,True)
                     cov2d = covariance_ww
@@ -4410,7 +4494,11 @@ class Output():
                 elif xipm:
                     covariance_xipxim = self.__create_matrix(cov[8],True,True)
                     cov2d = covariance_xipxim
-
+            
+            if self.has_csmf:
+                cov_diag.append(covariange_csmf)
+                cov2d = np.block([[cov2d, csmf_block],
+                                [csmf_block.T, covariange_csmf]])
             cov2d_total = np.copy(cov2d)
             if cov_dict['split_gauss']:
                 cov = [gauss[idx] for idx in range(obslength)]
@@ -4552,6 +4640,10 @@ class Output():
                     elif xipm:
                         covariance_xipxim = self.__create_matrix(cov[8],True,True)
                         cov2d = covariance_xipxim
+                if self.has_csmf:
+                    cov_diag.append(covariange_csmf)
+                    cov2d = np.block([[cov2d, csmf_block],
+                                      [csmf_block.T, covariange_csmf]])
 
                 cov2d_gauss = np.copy(cov2d)
                 if self.has_nongauss:
@@ -4877,6 +4969,8 @@ class Output():
                 hdr_str += obslist[4]+' ' if obsbool[4] else ''
                 hdr_str += obslist[7]+' ' if obsbool[7] else ''
                 hdr_str += obslist[9]+' ' if obsbool[9] else ''
+            if self.has_csmf:
+                hdr_str += " csmf "
             hdr_str += 'with '
             if n_tomo_clust is not None:
                 hdr_str += str(n_tomo_clust) + ' tomographic clustering bins and '
@@ -4884,16 +4978,17 @@ class Output():
                 hdr_str += str(n_tomo_lens) + ' tomographic lensing bins and '
             alternative = False
             if self.projected_clust is not None:
-                hdr_str += str(len(self.projected_clust)) + ' elements per tomographic clustering bin '
+                hdr_str += str(len(self.projected_clust)) + ' spatial elements per tomographic clustering bin '
                 alternative = True
             if self.projected_lens is not None:
                 if not alternative:
-                    hdr_str += str(len(self.projected_lens)) + ' elements per tomographic lensing bin '
+                    hdr_str += str(len(self.projected_lens)) + ' spatial elements per tomographic lensing bin '
                 else:
-                    hdr_str += str(len(self.projected_lens)) + ' elements per tomographic lensing bin and'
+                    hdr_str += str(len(self.projected_lens)) + ' spatial elements per tomographic lensing bin and'
                 alternative = True
             if not alternative:
-                hdr_str += str(len(proj_quant)) + ' elements per tomographic bin'
+                hdr_str += str(len(proj_quant)) + ' spatial elements per tomographic bin'
+            
             if 'matrix' in self.style:
                 if not cov_dict['split_gauss']:
                     print("Writing matrix output file.")
@@ -5422,6 +5517,42 @@ class Output():
         
         cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(obslength)]
         cov_diag = []
+        
+        if self.has_csmf:
+            covariange_csmf = self.__create_matrix_csmf(self.conditional_stellar_mass_function_cov[0], obs_dict['observables']['csmf_diagonal'])
+            covariange_csmfgg = None
+            covariange_csmfgm = None
+            covariange_csmfmmE = None
+            covariange_csmfmmB = None
+            if gg:
+                covariange_csmfgg = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[1], True, obs_dict['observables']['csmf_diagonal'])
+            if gm:
+                covariange_csmfgm = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[2], False, obs_dict['observables']['csmf_diagonal'])
+            if mm:
+                covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[3], True, obs_dict['observables']['csmf_diagonal'])
+            if ximm:
+                covariange_csmfmmB = np.zeros_like(covariange_csmfmmE)
+            if covariange_csmfgg is not None:
+                csmf_block = np.block([[covariange_csmfgg]])
+                if covariange_csmfgm is not None:
+                    csmf_block = np.block([[covariange_csmfgg],[ covariange_csmfgm]])
+                    if covariange_csmfmmE is not None:
+                        csmf_block = np.block([[covariange_csmfgg],[ covariange_csmfgm],[ covariange_csmfmmE]])
+                        if covariange_csmfmmB is not None:
+                            csmf_block = np.block([[covariange_csmfgg],[ covariange_csmfgm],[ covariange_csmfmmE],[ covariange_csmfmmB]])
+            elif covariange_csmfgm is not None:
+                csmf_block = np.block([[covariange_csmfgm]])
+                if covariange_csmfmmE is not None:
+                    csmf_block = np.block([[covariange_csmfgm],[ covariange_csmfmmE]])
+                    if covariange_csmfmmB is not None:
+                        csmf_block = np.block([[covariange_csmfgm],[ covariange_csmfmmE],[ covariange_csmfmmB]])
+
+            elif covariange_csmfmmE is not None:
+                csmf_block = np.block([[covariange_csmfmmE]])
+                if covariange_csmfmmB is not None:
+                    csmf_block = np.block([[covariange_csmfmmE],[ covariange_csmfmmB]])
+
+        
         if gg:
             covariance_ww = self.__create_matrix_arbitrary(cov[0],True,True,'gg','gg',summary)
             cov2d = covariance_ww
@@ -5518,6 +5649,12 @@ class Output():
         elif xipm:
             covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
             cov2d = covariance_xipxim
+        
+        if self.has_csmf:
+            cov_diag.append(covariange_csmf)
+            cov2d = np.block([[cov2d, csmf_block],
+                            [csmf_block.T, covariange_csmf]])
+
         
         cov2d_total = np.copy(cov2d)
 
@@ -5620,6 +5757,10 @@ class Output():
             elif xipm:
                 covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
                 cov2d = covariance_xipxim
+            if self.has_csmf:
+                cov_diag.append(covariange_csmf)
+                cov2d = np.block([[cov2d, csmf_block],
+                                [csmf_block.T, covariange_csmf]])
             cov2d_gauss = np.copy(cov2d)
 
 

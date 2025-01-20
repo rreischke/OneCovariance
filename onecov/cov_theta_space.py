@@ -1356,8 +1356,8 @@ class CovTHETASpace(CovELLSpace):
                 csmf_gt = 0
             
             if self.mm:
-                csmf_xip = np.zeros((self.mm_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                csmf_xim = np.zeros((self.mm_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_xip = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_xim = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                 original_shape = csmf_mm[0, :, :, :, :, :].shape
                 flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
                 csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))

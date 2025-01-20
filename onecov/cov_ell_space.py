@@ -213,7 +213,12 @@ class CovELLSpace(PolySpectra):
             self.Vmax = read_in_tables['csmf']['V_max']
             self.f_tomo = np.zeros(self.n_tomo_csmf)
             self.f_tomo[:] = read_in_tables['csmf']['f_tomo']
-            
+            self.csmf_number_mass_bins = len(self.log10csmf_mass_bins)
+            self.csmf_diagonal = obs_dict['observables']['csmf_diagonal']
+            if self.csmf_diagonal and self.n_tomo_csmf != self.csmf_number_mass_bins:
+                raise Exception("ConfigError: You ask for the diagonal-only mode in the stellar mass function, i.e. considering only bins i with tomographic bin j. However, "
+                                "the number of tomographic bins is " + str(self.n_tomo_csmf) + ", while the number of mass bins is " + str(self.csmf_number_mass_bins) +
+                                ". Please fix this in the config so that they are equal, or deactivate 'csmf_diagonal'.") 
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
         self.Cells, self.tab_bools = self.__check_for_tabulated_Cells(read_in_tables['Cxy'])
         
@@ -361,6 +366,7 @@ class CovELLSpace(PolySpectra):
                         print("InputWarning: you required", covELLspacesettings['ell_bins_clustering'], "logarithmically-spaced clustering bins.",
                               "However, the specified clustering ell-range from ", covELLspacesettings['ell_min_clustering'],  "to", covELLspacesettings['ell_max_clustering'], "does not support that many unique bins.",
                               "Adjusting the number of bins to", len(self.ellrange_clustering_ul) - 1, ". The bin boundaries are:")
+                        print(self.ellrange_clustering_ul) 
                     self.ellrange_clustering = np.exp(.5 * (np.log(self.ellrange_clustering_ul[1:])
                                         + np.log(self.ellrange_clustering_ul[:-1])))
         self.ellrange_lensing_ul = None
@@ -379,6 +385,7 @@ class CovELLSpace(PolySpectra):
                         print("InputWarning: you required", covELLspacesettings['ell_bins_lensing'],"logarithmically-spaced lensing bins.",
                               "However, the specified clustering ell-range from", covELLspacesettings['ell_min_lensing'],  "to", covELLspacesettings['ell_max_lensing'], "does not support that many unique bins.", 
                               "Adjusting the number of bins to", len(self.ellrange_lensing_ul) - 1, ". The bin boundaries are:") 
+                        print(self.ellrange_lensing_ul)
                     self.ellrange_lensing = np.exp(.5 * (np.log(self.ellrange_lensing_ul[1:])
                                         + np.log(self.ellrange_lensing_ul[:-1])))
 
@@ -1131,6 +1138,18 @@ class CovELLSpace(PolySpectra):
                 self.spline_responsePgg = []
                 for i_sample in range(self.sample_dim):
                     self.spline_responsePgg.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gg[:, :, i_sample]).T,bounds_error= False, fill_value = None))
+        else:
+            if self.csmf:
+                if self.mm:
+                    self.spline_responsePmm = RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), np.log(aux_response_mm[:, :, 0]).T,bounds_error= False, fill_value = None)
+                if self.gm:
+                    self.spline_responsePgm = []
+                    for i_sample in range(self.sample_dim):
+                        self.spline_responsePgm.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gm[:, :, i_sample]).T,bounds_error= False, fill_value = None))
+                if self.gg:
+                    self.spline_responsePgg = []
+                    for i_sample in range(self.sample_dim):
+                        self.spline_responsePgg.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gg[:, :, i_sample]).T,bounds_error= False, fill_value = None))
 
         self.power_mm_lin_spline = RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),np.log(self.power_mm_lin_z),bounds_error= False, fill_value = None)
         self.update_mass_func(0, bias_dict, hod_dict, prec)
@@ -5971,7 +5990,7 @@ class CovELLSpace(PolySpectra):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                chi_low, chi_high, covELLspacesettings)
+                                self.chimin, self.chimax, covELLspacesettings)
                             los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update) > 0)[0]]
                             weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
                             weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
