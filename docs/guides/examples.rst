@@ -99,7 +99,7 @@ to calculate the response. ``n_eff_clust``, ``n_eff_lensing`` and ``ellipticity_
    zlens_file = K1000_photoz_1.asc, K1000_photoz_2.asc, K1000_photoz_3.asc, K1000_photoz_4.asc, K1000_photoz_5.asc
    value_loc_in_lensbin = left
 
-Here the file paths of the redshift distributions are specified, both for clustering and lensing (note that in the literature clustering is often refereed to as lenses, or lens distribution, while 
+Here the file paths of the redshift distributions are specified, both for clustering and lensing (note that in the literature clustering is often referred to as lenses, or lens distribution, while 
 lensing is referred to as sources or source distribution). The number (or structure) of these files will determine the number of tomographic bins for clustering, lensing and GGL. The clustering signal
 will always be calculated for all unique bin combinations, even if there is no overlap between the clustering bins. ``value_loc_in_...`` specifies how the redshift values in the files should be interpreted,
 i.e. whether they correspond to the ``left``, ``mid`` or ``right`` location of the redshift distribution histogram.
