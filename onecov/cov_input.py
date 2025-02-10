@@ -5110,7 +5110,9 @@ class FileInput:
                         raise Exception("ConfigError: The Vmax file needs to have the dimensions fitting to the number of stellar mass bins "+
                                         "times the number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
                     for tomo in range(self.n_tomo_csmf):
-                        self.V_max[:, tomo] = np.array(data[data.colnames[1]][tomo*self.csmf_N_log10M_bin:(tomo+1)*self.csmf_N_log10M_bin])
+                        V_max = np.array(data[data.colnames[1]][tomo*self.csmf_N_log10M_bin:(tomo+1)*self.csmf_N_log10M_bin])
+                        V_max[V_max == 0.0] = np.nan
+                        self.V_max[:, tomo] = self.__fill_nan(V_max)
                 else:
                     raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
                                     "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
@@ -5132,6 +5134,16 @@ class FileInput:
                                 "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." +
                                 "f_tomo_file = ....")
         return True
+
+
+    def __fill_nan(self, a):
+        not_nan = np.isfinite(a)
+        indices = np.arange(len(a))
+        if not_nan.sum() == 0:
+            return a
+        else:
+            func = interp1d(indices[not_nan], a[not_nan], bounds_error=False, fill_value='extrapolate')
+            return func(indices)
 
 
     def __read_in_npair_files(self,

@@ -21,3 +21,4 @@ levin.egg-info
 !/output/Cell_kappakappa.ascii
 /comparison_davide
 test.ipynb
+OneCovariance_make.sh

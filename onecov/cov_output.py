@@ -524,7 +524,7 @@ class Output():
         limit = max(-min(corr_covmatrix.flatten()), max(corr_covmatrix.flatten()))
         cbar = ax.imshow(corr_covmatrix, cmap = 'seismic', 
                          extent = [0, len(corr_covmatrix), 0, len(corr_covmatrix)],
-                         vmin=-limit, vmax=limit)
+                         vmin=-limit, vmax=limit, interpolation='nearest')
         fig.colorbar(cbar, location='bottom', shrink=.775, aspect=30, pad=0.055).ax.tick_params(axis='x', direction='in')
         ax.text(len(covmatrix)/2, -6*ratio, 'Correlation coefficients', fontsize=16, ha='center', va='center')
 
@@ -719,7 +719,7 @@ class Output():
         limit = max(-min(corr_covmatrix.flatten()), max(corr_covmatrix.flatten()))
         cbar = ax.imshow(corr_covmatrix, cmap = 'seismic', 
                          extent = [0, len(corr_covmatrix), 0, len(corr_covmatrix)],
-                         vmin=-limit, vmax=limit)
+                         vmin=-limit, vmax=limit, interpolation='nearest')
         fig.colorbar(cbar, location='bottom', shrink=.775, aspect=30, pad=0.055).ax.tick_params(axis='x', direction='in')
         ax.text(len(covmatrix)/2, -6*ratio, 'Correlation coefficients', fontsize=16, ha='center', va='center')
 
@@ -3125,7 +3125,7 @@ class Output():
         
         index = 0
         if self.has_csmf:
-            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
+            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmmE", "csmfmmB"]
             for obs in self.conditional_stellar_mass_function_cov:
                 csmf_auto = False
                 if index == 0:
@@ -3937,7 +3937,7 @@ class Output():
                 splitidx += 3
         index = 0
         if self.has_csmf:
-            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
+            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmmE", "csmfmmB"]
             for obs in self.conditional_stellar_mass_function_cov:
                 csmf_auto = False
                 if index == 0:
@@ -3950,21 +3950,21 @@ class Output():
                             for i_r1 in range(len(obs[:, 0,0,0])):
                                 for i_r2 in range(len(obs[0, :, 0, 0])):
                                     ri = i_r1
-                                    rj = i_r2              
+                                    rj = i_r2
                                     cov = obs[i_r1, i_r2, t1, t2]
                                     if not cov_dict['split_gauss']:
                                         ostr = ostr_format \
-                                            % (obs_copy[index],  ri, rj, 
-                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                            cov, 
+                                            % (obs_copy[index],  ri, rj,
+                                            1, 1, t1+1, t2+1, t1+1, t2+1,
+                                            cov,
                                             0,
                                             0,
                                             0)
                                     else:
                                         ostr = ostr_format \
                                             % (obs_copy[index], ri, rj,
-                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                            cov, 
+                                            1, 1, t1+1, t2+1, t1+1, t2+1,
+                                            cov,
                                             0,
                                             0,
                                             0,
@@ -3979,21 +3979,21 @@ class Output():
                                     for i_r1 in range(len(obs[:, 0,0,0,0,0])):
                                         for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
                                             ri = i_r1
-                                            rj = i_r2              
+                                            rj = i_r2
                                             cov = obs[i_r1, i_r2, s1, t1, t2, t3]
                                             if not cov_dict['split_gauss']:
                                                 ostr = ostr_format \
-                                                    % (obs_copy[index],  ri, rj, 
-                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                    cov, 
+                                                    % (obs_copy[index],  ri, rj,
+                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1,
+                                                    cov,
                                                     0,
                                                     0,
                                                     0)
                                             else:
                                                 ostr = ostr_format \
                                                     % (obs_copy[index], ri, rj,
-                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                    cov, 
+                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1,
+                                                    cov,
                                                     0,
                                                     0,
                                                     0,

@@ -1573,8 +1573,8 @@ class CovARBsummary(CovELLSpace):
                 csmf_ASgm = 0
             
             if self.mm:
-                csmf_ASmmE = np.zeros((self.mm_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                csmf_ASmmB = np.zeros((self.mm_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_ASmmE = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_ASmmB = np.zeros((self.mmB_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                 original_shape = csmf_mm[0, :, :, :, :, :].shape
                 flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
                 csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
@@ -1600,7 +1600,7 @@ class CovARBsummary(CovELLSpace):
                 gauss_ASEEmmmm_sva, gauss_ASEEmmmm_mix, gauss_ASEEmmmm_sn, \
                 gauss_ASEBmmmm_sva, gauss_ASEBmmmm_mix, gauss_ASEBmmmm_sn, \
                 gauss_ASBBmmmm_sva, gauss_ASBBmmmm_mix, gauss_ASBBmmmm_sn, \
-                csmf_auto, csmf_ASgg, csmf_ASgm, csmf_ASmm, csmf_ASmmE
+                csmf_auto, csmf_ASgg, csmf_ASgm, csmf_ASmmE, csmf_ASmmB
         else:
             return gauss_ASgggg_sva, gauss_ASgggg_mix, gauss_ASgggg_sn, \
                 gauss_ASgggm_sva, gauss_ASgggm_mix, gauss_ASgggm_sn, \
