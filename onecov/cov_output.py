@@ -289,7 +289,6 @@ class Output():
         new_matrix = np.zeros((new_data_size,new_data_size))
         for i, ii in enumerate(indices_take_final):
             new_matrix[i, :] = full_covariance[ii,indices_take_final]
-        if self.has_csmf
         return new_matrix
 
     def write_arbitrary_cov(self,
