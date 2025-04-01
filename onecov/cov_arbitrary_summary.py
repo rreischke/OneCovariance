@@ -20,7 +20,7 @@ class CovARBsummary(CovELLSpace):
     The structure is very similar to the COSEBIs class, but requires a more careful treatment
     of the noise term. It should be noted that covCOSEBI, CovBandPowers and covTHETAspace are
     optimized for the respective estimators. This class uses a more brute force approach for
-    the integration and will thus most likelily be slower or less accurate. It should only be
+    the integration and will thus most likely be slower or less accurate. It should only be
     used if cross-variances between different 2pt statistics is required or a new statistic
     needs to be calculated which has not been implemented in the code.
 
@@ -305,6 +305,10 @@ class CovARBsummary(CovELLSpace):
         self.theta_ul_realspace_ggl = []
         self.theta_ul_realspace_lensing = []
         realspace_counts = 0
+        realspace_counts_mm = 0
+        realspace_counts_gm = 0
+        realspace_counts_gg = 0
+
         for i in range(len(self.RXY_stack[:,0])):
             index = np.where(self.RXY_stack[i,:] != 0)[0]
             test_array = self.RXY_stack[i,index]*self.theta_real_integral[index]
@@ -312,23 +316,29 @@ class CovARBsummary(CovELLSpace):
                 if i < self.gg_summaries_real + self.gm_summaries_real + self.mmE_summaries_real:
                     if i >= self.gg_summaries_real + self.gm_summaries_real and i < self.gg_summaries_real + self.gm_summaries_real + self.mmE_summaries_real:
                         self.index_realspace_lensing.append(i)
-                        if realspace_counts == 0:
+                        if realspace_counts_mm == 0:
                             self.theta_ul_realspace_lensing.append(self.theta_real_integral[index[0]])
                             self.theta_ul_realspace_lensing.append(self.theta_real_integral[index[-1]])
+                            realspace_counts_mm = 1
+                            print("Detected mm is realspace, correcting shot-noise")
                         else:
                             self.theta_ul_realspace_lensing.append(self.theta_real_integral[index[-1]])
                     if i >= self.gg_summaries_real and i < self.gg_summaries_real + self.gm_summaries_real:
                         self.index_realspace_ggl.append(i)
-                        if realspace_counts == 0:
+                        if realspace_counts_gm == 0:
                             self.theta_ul_realspace_ggl.append(self.theta_real_integral[index[0]])
                             self.theta_ul_realspace_ggl.append(self.theta_real_integral[index[-1]])
+                            realspace_counts_gm = 1
+                            print("Detected gm is realspace, correcting shot-noise")
                         else:
                             self.theta_ul_realspace_ggl.append(self.theta_real_integral[index[-1]])
                     if  i < self.gg_summaries_real:
                         self.index_realspace_clustering.append(i)
-                        if realspace_counts == 0:
+                        if realspace_counts_gg == 0:
                             self.theta_ul_realspace_clustering.append(self.theta_real_integral[index[0]])
                             self.theta_ul_realspace_clustering.append(self.theta_real_integral[index[-1]])
+                            realspace_counts_gg = 1
+                            print("Detected gg is realspace, correcting shot-noise")
                         else:
                             self.theta_ul_realspace_clustering.append(self.theta_real_integral[index[-1]])
                     realspace_counts += 1
@@ -410,6 +420,7 @@ class CovARBsummary(CovELLSpace):
                             self.theta_realspace_lensing,
                             survey_params_dict,
                             read_in_tables['npair'])
+        
         if self.gm and self.theta_ul_realspace_ggl is not None:
             _, self.npair_gm, _ = \
                 self.get_npair([False, self.gm, False],
@@ -426,7 +437,7 @@ class CovARBsummary(CovELLSpace):
             for i in range(self.index_realspace_lensing[0]):
                 correction.append(np.ones_like(self.SN_integral_mmmm[0,0,:, :, :]))
             for i, iv in enumerate(self.index_realspace_lensing):
-                correction.append(np.sqrt(1/(self.SN_integral_mmmm[iv,iv, : ,: ,:]*self.npair_mm[i, :, :, :])))
+                correction.append(np.sqrt(1/(self.SN_integral_mmmm[i,i, : ,: ,:]*self.npair_mm[i, :, :, :])))
             correction = np.array(correction)
             for i in range(len(self.SN_integral_mmmm[:,0,0,0,0])):
                 for j in range(len(self.SN_integral_mmmm[0,:,0,0,0])):
@@ -441,7 +452,7 @@ class CovARBsummary(CovELLSpace):
             for i in range(self.index_realspace_ggl[0]):
                 correction.append(np.ones_like(self.SN_integral_gmgm[0,0,:, :, :]))
             for i, iv in enumerate(self.index_realspace_ggl):
-                correction.append(np.sqrt(1/(self.SN_integral_gmgm[iv,iv, : ,: ,:]*self.npair_gm[i, :, :, :])))
+                correction.append(np.sqrt(1/(self.SN_integral_gmgm[i,i, : ,: ,:]*self.npair_gm[i, :, :, :])))
             correction = np.array(correction)
             for i in range(len(self.SN_integral_gmgm[:,0,0,0,0])):
                 for j in range(len(self.SN_integral_gmgm[0,:,0,0,0])):
@@ -1573,8 +1584,8 @@ class CovARBsummary(CovELLSpace):
                 csmf_ASgm = 0
             
             if self.mm:
-                csmf_ASmmE = np.zeros((self.mm_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                csmf_ASmmB = np.zeros((self.mm_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_ASmmE = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                csmf_ASmmB = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                 original_shape = csmf_mm[0, :, :, :, :, :].shape
                 flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
                 csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
@@ -1600,7 +1611,7 @@ class CovARBsummary(CovELLSpace):
                 gauss_ASEEmmmm_sva, gauss_ASEEmmmm_mix, gauss_ASEEmmmm_sn, \
                 gauss_ASEBmmmm_sva, gauss_ASEBmmmm_mix, gauss_ASEBmmmm_sn, \
                 gauss_ASBBmmmm_sva, gauss_ASBBmmmm_mix, gauss_ASBBmmmm_sn, \
-                csmf_auto, csmf_ASgg, csmf_ASgm, csmf_ASmm, csmf_ASmmE
+                csmf_auto, csmf_ASgg, csmf_ASgm, csmf_ASmmE, csmf_ASmmB
         else:
             return gauss_ASgggg_sva, gauss_ASgggg_mix, gauss_ASgggg_sn, \
                 gauss_ASgggm_sva, gauss_ASgggm_mix, gauss_ASgggm_sn, \

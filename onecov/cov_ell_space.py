@@ -366,7 +366,6 @@ class CovELLSpace(PolySpectra):
                         print("InputWarning: you required", covELLspacesettings['ell_bins_clustering'], "logarithmically-spaced clustering bins.",
                               "However, the specified clustering ell-range from ", covELLspacesettings['ell_min_clustering'],  "to", covELLspacesettings['ell_max_clustering'], "does not support that many unique bins.",
                               "Adjusting the number of bins to", len(self.ellrange_clustering_ul) - 1, ". The bin boundaries are:")
-                        print(self.ellrange_clustering_ul) 
                     self.ellrange_clustering = np.exp(.5 * (np.log(self.ellrange_clustering_ul[1:])
                                         + np.log(self.ellrange_clustering_ul[:-1])))
         self.ellrange_lensing_ul = None
@@ -385,7 +384,6 @@ class CovELLSpace(PolySpectra):
                         print("InputWarning: you required", covELLspacesettings['ell_bins_lensing'],"logarithmically-spaced lensing bins.",
                               "However, the specified clustering ell-range from", covELLspacesettings['ell_min_lensing'],  "to", covELLspacesettings['ell_max_lensing'], "does not support that many unique bins.", 
                               "Adjusting the number of bins to", len(self.ellrange_lensing_ul) - 1, ". The bin boundaries are:") 
-                        print(self.ellrange_lensing_ul)
                     self.ellrange_lensing = np.exp(.5 * (np.log(self.ellrange_lensing_ul[1:])
                                         + np.log(self.ellrange_lensing_ul[:-1])))
 
@@ -1453,6 +1451,7 @@ class CovELLSpace(PolySpectra):
         else:
             gauss = self.covELL_gaussian(obs_dict['ELLspace'],
                                          survey_params_dict, True)
+
         nongauss = self.covELL_non_gaussian(obs_dict['ELLspace'],
                                             output_dict,
                                             bias_dict,
@@ -2429,9 +2428,7 @@ class CovELLSpace(PolySpectra):
         for i_ell in range(len(ellrange_12)):
             for j_ell in range(len(ellrange_34)):
                 integration_ell_12 = np.arange(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1]).astype(int)
-                N_ell_12 = len(integration_ell_12)
                 integration_ell_34 = np.arange(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1]).astype(int)
-                N_ell_34 = len(integration_ell_34)
                 overlapping_elements = np.array(list(set(integration_ell_12).intersection(set(integration_ell_34))))
                 if len(overlapping_elements) == 0:
                     continue
@@ -2458,14 +2455,11 @@ class CovELLSpace(PolySpectra):
         if not isinstance(cov, np.ndarray):
             return 0
         fsky = max(area_12,area_34)/(4.0*np.pi * self.deg2torad2)
-
         binned_covariance = np.zeros((len(ellrange_12_ul) - 1, len(ellrange_34_ul) - 1, len(cov[0,0,:,0,0,0,0,0]), len(cov[0,0,0,:,0,0,0,0]), len(cov[0,0,0,0,:,0,0,0]), len(cov[0,0,0,0,0,:,0,0]), len(cov[0,0,0,0,0,0,:,0]), len(cov[0,0,0,0,0,0,0,:])))
         for i_ell in range(len(ellrange_12_ul) - 1):
             for j_ell in range(len(ellrange_34_ul) - 1):
                 integration_ell_12 = np.arange(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1]).astype(int)
-                N_ell_12 = np.sum(2*integration_ell_12 + 1)
                 integration_ell_34 = np.arange(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1]).astype(int)
-                N_ell_34 = np.sum(2*integration_ell_34 + 1)
                 overlapping_elements = np.array(list(set(integration_ell_12).intersection(set(integration_ell_34))))
                 if len(overlapping_elements) == 0:
                     continue
@@ -2484,7 +2478,7 @@ class CovELLSpace(PolySpectra):
                                         for l_tomo in range(l_tomo_start, len(cov[0,0,0,0,0,0,0,:])):
                                             if len(np.where(np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
                                                 spline = UnivariateSpline(self.ellrange, np.diagonal(cov[:, :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo]), k=1, s=0, ext=1)
-                                                binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = 1/fsky/np.sum((2.*overlapping_elements + 1)/spline(overlapping_elements))
+                                                binned_covariance[i_ell, j_ell, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = np.sum(spline(overlapping_elements)/(2.*overlapping_elements + 1))/fsky/len(integration_ell_12)/len(integration_ell_34)
         return binned_covariance            
 
     def __bin_cov_ell_nongauss(self,
@@ -2823,6 +2817,7 @@ class CovELLSpace(PolySpectra):
                                                 False)
         if self.csmf:
             cov_csmf_auto, cov_csmf_gg, cov_csmf_gm, cov_csmf_mm = self.calc_covELL_csmf(covELLspacesettings, survey_params_dict)
+
             if self.gg and self.ellrange_clustering_ul is not None:
                 cov_csmf_gg = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cov_csmf_gg,True)
             if self.gm and self.ellrange_clustering_ul is not None:
@@ -2939,25 +2934,25 @@ class CovELLSpace(PolySpectra):
                                                             gaussELLgmgm_sn,
                                                             False,
                                                             False)
-            if self.gm and self.mm and self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:  
+            if self.gm and self.mm and self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is not None:                  
                 gaussELLmmgm_sva = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
                                                             self.ellrange_clustering_ul,
-                                                            survey_params_dict['survey_area_clust'],
                                                             survey_params_dict['survey_area_lens'],
+                                                            survey_params_dict['survey_area_ggl'],
                                                             gaussELLmmgm_sva,
                                                             True,
                                                             False)
                 gaussELLmmgm_mix = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
                                                             self.ellrange_clustering_ul,
-                                                            survey_params_dict['survey_area_clust'],
                                                             survey_params_dict['survey_area_lens'],
+                                                            survey_params_dict['survey_area_ggl'],
                                                             gaussELLmmgm_mix,
                                                             True,
                                                             False)
                 gaussELLmmgm_sn = self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
                                                             self.ellrange_clustering_ul,
-                                                            survey_params_dict['survey_area_clust'],
                                                             survey_params_dict['survey_area_lens'],
+                                                            survey_params_dict['survey_area_ggl'],
                                                             gaussELLmmgm_sn,
                                                             True,
                                                             False)
@@ -5691,7 +5686,7 @@ class CovELLSpace(PolySpectra):
         smf_sn : array
             with shape (csmf_mass_bins, csmf_mass_bins, csmf_tomo_bins, csmf_tomo_bins)
         """
-        amplitude = self.csmf_at_tomo_and_mass/self.deltaM_csmf[:, None]/self.Vmax
+        amplitude = self.csmf_at_tomo_and_mass/(self.deltaM_csmf[:, None]*self.Vmax)*((np.log(10.0)*10**self.log10csmf_mass_bins)**2)[:, None]
         return np.eye(len(self.log10csmf_mass_bins))[:,:, None, None]*np.eye(self.n_tomo_csmf)[None, None, :, :]*amplitude[:, None, :, None]
 
     def covELL_csmf_SSC(self,
@@ -5717,17 +5712,17 @@ class CovELLSpace(PolySpectra):
                     flat_idx +=1
             power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
         survey_variance_mmmm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
-        self.survey_variance_mmmm_spline = UnivariateSpline(
+        survey_variance_mmmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
         result = np.zeros((len(self.log10csmf_mass_bins), len(self.log10csmf_mass_bins), self.n_tomo_csmf, self.n_tomo_csmf))
         for i_tomo in range(self.n_tomo_csmf):
             for j_tomo in range(i_tomo, self.n_tomo_csmf):
                 for i_mass in range(len(self.log10csmf_mass_bins)):
                     for j_mass in range(i_mass, len(self.log10csmf_mass_bins)):
-                        los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi) > 0)[0]]
+                        los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi)**2 > 0)[0]]
                         integrand = self.spline_zcsmf[i_tomo](los_integration_chi_update)*self.spline_zcsmf[j_tomo](los_integration_chi_update) \
-                            *los_integration_chi_update**2*self.survey_variance_mmmm_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)**2 *self.phi_tilde_spline[j_mass](los_integration_chi_update)
-                        result[i_mass, j_mass, i_tomo, j_tomo] = survey_params_dict['survey_area_clust']**2/self.deg2torad2**2*self.f_tomo[i_tomo]*self.f_tomo[j_tomo]/self.Vmax[i_mass, i_tomo]/self.Vmax[j_mass, j_tomo]*simpson(integrand, x = los_integration_chi_update)
+                            *los_integration_chi_update**2*survey_variance_mmmm_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)**2 *self.phi_tilde_spline[j_mass](los_integration_chi_update)
+                        result[i_mass, j_mass, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*10**self.log10csmf_mass_bins[j_mass]*np.log(10)*survey_params_dict['survey_area_clust']**2/self.deg2torad2**2*self.f_tomo[i_tomo]*self.f_tomo[j_tomo]/self.Vmax[i_mass, i_tomo]/self.Vmax[j_mass, j_tomo]*simpson(integrand, x = los_integration_chi_update)
                         result[i_mass, j_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
                         result[j_mass, i_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
                         result[j_mass, i_mass, i_tomo, j_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
@@ -5772,7 +5767,7 @@ class CovELLSpace(PolySpectra):
                                 chi_high = self.los_integration_chi[-1]
                             los_integration_chi_update = self.__get_updated_los_integration_chi(
                                 chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update) > 0)[0]]
+                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
                             weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
                             x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
                             flat_idx = 0
@@ -5783,7 +5778,7 @@ class CovELLSpace(PolySpectra):
                                     x_values[0,flat_idx] = ki
                                     flat_idx +=1
                             spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                            covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
         else:
             covELL_smf_cross_gg = 0
         
@@ -5803,7 +5798,7 @@ class CovELLSpace(PolySpectra):
                                 chi_high = self.los_integration_chi[-1]
                             los_integration_chi_update = self.__get_updated_los_integration_chi(
                                 chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update) > 0)[0]]
+                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
                             weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
                             x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
                             flat_idx = 0
@@ -5814,7 +5809,7 @@ class CovELLSpace(PolySpectra):
                                     x_values[0,flat_idx] = ki
                                     flat_idx +=1
                             spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_gm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                            covELL_smf_cross_gm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
         else:
             covELL_smf_cross_gm = 0
         if self.mm:
@@ -5824,7 +5819,7 @@ class CovELLSpace(PolySpectra):
                 for i_smf_tomo in range(self.n_tomo_csmf):
                     for i_tomo in range(self.n_tomo_clust):
                         for j_tomo in range(self.n_tomo_lens):
-                            los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi) > 0)[0]]
+                            los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi)**2 > 0)[0]]
                             weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
                             x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
                             flat_idx = 0
@@ -5835,7 +5830,7 @@ class CovELLSpace(PolySpectra):
                                     x_values[0,flat_idx] = ki
                                     flat_idx +=1
                             spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                            covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_mm = 0
         return covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm
@@ -5884,7 +5879,6 @@ class CovELLSpace(PolySpectra):
                 power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
             survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
             survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
-        
             for i_mass in range(len(self.log10csmf_mass_bins)):
                 for i_smf_tomo in range(self.n_tomo_csmf):
                     for i_tomo in range(self.n_tomo_clust):
@@ -5901,7 +5895,7 @@ class CovELLSpace(PolySpectra):
                                 chi_high = self.los_integration_chi[-1]
                             los_integration_chi_update = self.__get_updated_los_integration_chi(
                                 chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update) > 0)[0]]
+                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
                             weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)
                             weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)/los_integration_chi_update**2
                             x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
@@ -5914,7 +5908,7 @@ class CovELLSpace(PolySpectra):
                                     flat_idx +=1
                             for i_sample in range(self.sample_dim):
                                 spline_eval = self.spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gg = 0
 
@@ -5950,7 +5944,7 @@ class CovELLSpace(PolySpectra):
                                 chi_high = self.los_integration_chi[-1]
                             los_integration_chi_update = self.__get_updated_los_integration_chi(
                                 chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update) > 0)[0]]
+                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
                             weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
                             weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
                             x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
@@ -5963,7 +5957,7 @@ class CovELLSpace(PolySpectra):
                                     flat_idx +=1
                             for i_sample in range(self.sample_dim):
                                 spline_eval = self.spline_responsePgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gm = 0
 
@@ -5991,7 +5985,7 @@ class CovELLSpace(PolySpectra):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             los_integration_chi_update = self.__get_updated_los_integration_chi(
                                 self.chimin, self.chimax, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update) > 0)[0]]
+                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
                             weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
                             weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
                             x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
@@ -6003,7 +5997,7 @@ class CovELLSpace(PolySpectra):
                                     x_values[0,flat_idx] = ki
                                     flat_idx +=1
                             spline_eval = np.exp(self.spline_responsePmm((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                            covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
         else:
             covELL_smf_cross_mm = 0        
         return covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm

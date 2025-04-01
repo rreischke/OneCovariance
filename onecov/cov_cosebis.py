@@ -871,7 +871,8 @@ class CovCOSEBI(CovELLSpace):
                 gauss = [gauss_EEgggg + gauss_EEgggg_sn, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm,
                         gauss_EEgmgm + gauss_EEgmgm_sn, gauss_EEmmgm, gauss_EBmmgm,
                         gauss_EEmmmm + gauss_EEmmmm_sn, gauss_EBmmmm,
-                        gauss_BBmmmm + gauss_BBmmmm_sn]
+                        gauss_BBmmmm + gauss_BBmmmm_sn, 
+                        csmf_COSEBI_auto, csmf_COSEBI_gg, csmf_COSEBI_gm, csmf_COSEBI_mmE, csmf_COSEBI_mmB]
             else:
                 gauss_EEgggg, gauss_EEgggm, gauss_EEggmm, gauss_EBggmm, \
                     gauss_EEgmgm, gauss_EEmmgm, gauss_EBmmgm, \
@@ -1490,10 +1491,10 @@ class CovCOSEBI(CovELLSpace):
                 original_shape = csmf_gg[0, :, :, :, :, :].shape
                 flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
                 csmf_COSEBI_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                for m_mode in range(self.gg_summaries):
+                for m_mode in range(self.En_g_modes):
                     local_ell_limit = self.ell_limits[m_mode + + self.En_modes][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
-                    csmf_COSEBIgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+                    self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
+                    csmf_COSEBIgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
             else:
                 csmf_COSEBIgg = 0
             if self.gm:
@@ -1503,8 +1504,8 @@ class CovCOSEBI(CovELLSpace):
                 csmf_COSEBI_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
                 for m_mode in range(self.En_g_modes):
                     local_ell_limit = self.ell_limits[m_mode][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
-                    csmf_COSEBIgm[m_mode , :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+                    self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
+                    csmf_COSEBIgm[m_mode , :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
             else:
                 csmf_COSEBIgm = 0
             if self.mm:
@@ -1515,8 +1516,8 @@ class CovCOSEBI(CovELLSpace):
                 csmf_COSEBI_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
                 for m_mode in range(self.En_modes):
                     local_ell_limit = self.ell_limits[m_mode][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
-                    csmf_COSEBImmE[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                    self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
+                    csmf_COSEBImmE[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
             else:
                 csmf_COSEBImmE, csmf_COSEBImmB = 0, 0
 

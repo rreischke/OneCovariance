@@ -298,6 +298,9 @@ class Input:
         self.alm_file_lens = None
         self.read_alm_lens = None
         self.survey_area_lens = None
+        self.combinations_clustering = None
+        self.combinations_ggl = None
+        self.combinations_lensing = None
         self.n_eff_lens = None
         self.sigma_eps = None
         self.shot_noise_gamma = None
@@ -474,6 +477,27 @@ class Input:
                 self.cstellar_mf = config['observables'].getboolean('cstellar_mf')
             else:
                 self.cstellar_mf = False
+            if 'combinations_clustering' in config['observables']:
+                aux_combinations = config['observables']['combinations_clustering'].split(',')
+                self.combinations_clustering = []
+                for i in range(len(aux_combinations)):
+                    index = aux_combinations[i].index('-')
+                    aux = [int(aux_combinations[i][:index]),int(aux_combinations[i][index+1:])]
+                    self.combinations_clustering.append(aux)
+            if 'combinations_ggl' in config['observables']:
+                aux_combinations = config['observables']['combinations_ggl'].split(',')
+                self.combinations_ggl = []
+                for i in range(len(aux_combinations)):
+                    index = aux_combinations[i].index('-')
+                    aux = [int(aux_combinations[i][:index]),int(aux_combinations[i][index+1:])]
+                    self.combinations_ggl.append(aux)
+            if 'combinations_lensing' in config['observables']:
+                aux_combinations = config['observables']['combinations_lensing'].split(',')
+                self.combinations_clustering = []
+                for i in range(len(aux_combinations)):
+                    index = aux_combinations[i].index('-')
+                    aux = [int(aux_combinations[i][:index]),int(aux_combinations[i][index+1:])]
+                    self.combinations_lensing.append(aux)
         else:
             raise Exception("ConfigError: The section [observables] is " +
                             "missing in config file " + config_name + ". Compulsory " +
@@ -691,7 +715,7 @@ class Input:
             if 'ell_type_lensing' in config['covELLspace settings']:
                 self.ell_type_lensing = config['covELLspace settings']['ell_type_lensing']
         else:
-            ...
+            pass
         #if self.pixelised_cell is None:
             #self.pixelised_cell = False
             
@@ -1714,7 +1738,7 @@ class Input:
                 self.projection_length_clustering = float(
                     config['covRspace settings']['projection_length_clustering'])
         else:
-            ...
+            pass
 
         if (self.ggl and self.est_ggl == 'projected_real') or \
            (self.clustering and self.est_clust == 'projected_real'):
@@ -1829,7 +1853,7 @@ class Input:
                         print("The name of the output file is set to " +
                               ', '.join(self.output_file) + ".")
                     else:
-                        ...
+                        pass
 
             self.make_plot = True
             if 'corrmatrix_plot' in config['output settings']:
@@ -2393,7 +2417,7 @@ class Input:
             self.hod_model_mor_sat = self.hod_model_mor_cen
         if self.hod_model_mor_sat == 'self.double_powerlaw':
             if self.dpow_logM0_sat is not None:
-                ...
+                pass
             elif self.dpow_logM0_sat is None and self.dpow_logM0_cen is not None:
                 self.dpow_logM0_sat = self.dpow_logM0_cen
             else:
@@ -2404,7 +2428,7 @@ class Input:
                                 "adjusted in config file " + config_name + ", [hod]: " +
                                 "'dpow_logM0_sat = 10.6'.")
             if self.dpow_logM1_sat is not None:
-                ...
+                pass
             elif self.dpow_logM1_sat is None and self.dpow_logM1_cen is not None:
                 self.dpow_logM1_sat = self.dpow_logM1_cen
             else:
@@ -2415,7 +2439,7 @@ class Input:
                                 "adjusted in config file " + config_name + ", [hod]: " +
                                 "'dpow_logM1_sat = 11.25'.")
             if self.dpow_a_sat is not None:
-                ...
+                pass
             elif self.dpow_a_sat is None and self.dpow_a_cen is not None:
                 self.dpow_a_sat = self.dpow_a_cen
             else:
@@ -2426,7 +2450,7 @@ class Input:
                                 "adjusted in config file " + config_name + ", [hod]: " +
                                 "'dpow_a_sat = 3.41'.")
             if self.dpow_b_sat is not None:
-                ...
+                pass
             elif self.dpow_b_sat is None and self.dpow_b_cen is not None:
                 self.dpow_b_sat = self.dpow_b_cen
             else:
@@ -2437,7 +2461,7 @@ class Input:
                                 "adjusted in config file " + config_name + ", [hod]: " +
                                 "'dpow_b_sat = 0.99'.")
             if self.dpow_norm_sat is not None:
-                ...
+                pass
             elif self.dpow_norm_sat is None and self.dpow_norm_cen is not None:
                 self.dpow_norm_sat = self.dpow_norm_cen
             else:
@@ -2476,7 +2500,7 @@ class Input:
             self.hod_model_scatter_sat = self.hod_model_scatter_cen
         if self.hod_model_scatter_sat == 'self.lognormal':
             if self.logn_sigma_c_sat is not None:
-                ...
+                pass
             elif self.logn_sigma_c_sat is None and self.logn_sigma_c_cen is not None:
                 self.logn_sigma_c_sat = self.logn_sigma_c_cen
             else:
@@ -2509,7 +2533,7 @@ class Input:
             self.hod_model_scatter_sat = self.hod_model_scatter_cen
         if self.hod_model_scatter_sat == 'self.modschechter':
             if self.modsch_logMref_sat is not None:
-                ...
+                pass
             elif self.modsch_logMref_sat is None and \
                     self.modsch_logMref_cen is not None:
                 self.modsch_logMref_sat = self.modsch_logMref_cen
@@ -2520,7 +2544,7 @@ class Input:
                                 "provided. Must be adjusted in config file " +
                                 config_name + ", [hod]: 'modsch_logMref_sat = 12'.")
             if self.modsch_alpha_s_sat is not None:
-                ...
+                pass
             elif self.modsch_alpha_s_sat is None and \
                     self.modsch_logMref_cen is not None:
                 self.modsch_alpha_s_sat = self.modsch_alpha_s_cen
@@ -2531,7 +2555,7 @@ class Input:
                                 "provided. Must be adjusted in config file " +
                                 config_name + ", [hod]: 'modsch_alpha_s_sat = -1.34'.")
             if self.modsch_b_sat is not None:
-                ...
+                pass
             elif self.modsch_b_sat is None and self.modsch_b_cen is not None:
                 self.modsch_b_sat = self.modsch_b_cen
             else:
@@ -2914,7 +2938,7 @@ class Input:
                                     config['survey specs']['n_eff_lensing'] + "' to " +
                                     "numpy array. Must be adjusted in config file " +
                                     config_name + ".")
-
+            
             if 'shot_noise_clust' in config['survey specs']:
                 self.shot_noise_clust = \
                     np.array(config['survey specs']
@@ -3611,10 +3635,13 @@ class Input:
         self.covterms = dict(zip(keys, values))
 
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
-                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal"]
+                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal",
+                'combinations_clustering',
+                'combinations_ggl','combinations_lensing']
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
-                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal]
+                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal,
+                  self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
         self.observables = dict(zip(keys, values))
         self.observables_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
@@ -3822,7 +3849,9 @@ class Input:
                   self.n_eff_ggl, self.mask_file_lens, self.alm_file_lens,
                   self.survey_area_lens, self.n_eff_lens, self.sigma_eps,
                   self.shot_noise_gamma, self.alm_file_clust_lens,
-                  self.alm_file_clust_ggl, self.alm_file_lens_ggl]
+                  self.alm_file_clust_ggl, self.alm_file_lens_ggl,
+                  self.combinations_clustering, self.combinations_ggl,
+                  self.combinations_lensing]
         self.survey_params_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.mask_file_clust is not None:
@@ -3936,7 +3965,9 @@ class Input:
                   self.alm_file_clust_ggl, self.read_mask_clust_ggl,
                   self.read_alm_clust_ggl, self.alm_file_lens_ggl,
                   self.read_mask_lens_ggl, self.read_alm_lens_ggl,
-                  self.save_alms, self.use_tex]
+                  self.save_alms, self.use_tex,
+                  self.combinations_clustering, self.combinations_ggl,
+                  self.combinations_lensing]
         self.survey_params = dict(zip(keys, values))
 
         keys = ['M_bins', 'log10M_min', 'log10M_max', 'hmf_model',
@@ -4340,6 +4371,18 @@ class FileInput:
         self.mor_cen = None
         self.mor_sat = None
 
+        # weight functions from files
+        self.arbitrary_weights_tab = dict()
+        self.has_arbitrary_weights_m = None
+        self.has_arbitrary_weights_g = None
+        self.arbitrary_weights_dir = None
+        self.arbitrary_weights_file_m = None
+        self.arbitrary_weights_dir_m = None
+        self.arbitrary_weights_chi = None
+        self.arbitrary_weights_m = None
+        self.arbitrary_weights_g = None
+
+
         # hod probability from files
         self.occprob_tab = dict()
         self.occprob_dir = None
@@ -4534,7 +4577,7 @@ class FileInput:
                     config['covRspace settings']['mean_redshift'].split(','))
                 self.mean_redshift = (self.mean_redshift).astype(float)
         else:
-            ...
+            pass
 
         if 'output settings' in config:
             if 'directory' in config['output settings']:
@@ -4574,7 +4617,7 @@ class FileInput:
             if 'model_scatter_cen' in config['hod']:
                 self.hod_model_scatter_cen = config['hod']['model_scatter_cen']
         else:
-            ...
+            pass
         
         if 'csmf settings' in config:
             if 'csmf_N_log10M_bin' in config['csmf settings']:
@@ -4703,7 +4746,7 @@ class FileInput:
             
 
         else:
-            ...
+            pass
 
         if self.zet_clust_file is None:
             if (self.ggl and
@@ -4737,7 +4780,7 @@ class FileInput:
            (self.clustering and
             self.est_clust != 'k_space' and
                 self.est_clust != 'projected_real'):
-            ...
+            pass
         else:
             print("InputWarning: The files for the clustering redshift " +
                   "distribution will be ignored as no clustering estimator " +
@@ -4773,7 +4816,7 @@ class FileInput:
             self.est_ggl != 'projected_real') or \
            (self.cosmicshear and
                 self.est_shear != 'k_space'):
-            ...
+            pass
         else:
             print("InputWarning: The files for the lensing redshift " +
                   "distribution will be ignored as no lensing estimator is " +
@@ -5090,6 +5133,509 @@ class FileInput:
             self.n_tomo_lens = len(self.zet_lens_photoz)
         return True
     
+    def __read_in_arbitrary_weight_files(self,
+                                         config,
+                                         config_name):
+        """
+        Reads in the arbitrary weight files for which the covariance 
+        should be calculated. Checks if they are required by the user
+        and if they are found. An exception is raised if they are required
+        but not found
+
+        Parameters
+        ----------
+        config : class
+            This class holds all the information specified the config 
+            file. It originates from the configparser module.
+        config_name : string
+            Name of the config file. Needed for giving meaningful
+            exception texts.
+
+        File structure :
+        --------------
+        # chi     W(chi)
+        0.1     4.1e-4
+        0.2     1.3e-3
+        ...     ...
+        1.1     0.0
+
+        """
+        if 'arbitrary radial weights' in config:
+            #if 'has_arbitrary_weights_m' in config['arbitrary radial weights']:
+            if 'arbitrary_weights_directory' in config['arbitrary radial weights']:
+                self.arbitrary_weights_dir = \
+                    config['arbitrary radial weights']['arbitrary_weights_directory']
+            elif 'z_directory' in config['redshift']:
+                self.zet_clust_dir = \
+                    config['redshift']['z_directory']
+            else:
+                self.zet_clust_dir = ''
+
+            if 'zclust_specz_file' in config['redshift'] and \
+               'zclust_photz_file' in config['redshift']:
+                self.zet_clust_file = \
+                    (config['redshift']['zclust_specz_file'].replace(
+                        " ", "")).split(',') \
+                    + (config['redshift']['zclust_photz_file'].replace(
+                        " ", "")).split(',')
+                self.tomos_6x2pt_clust = np.array(
+                    [len(config['redshift']['zclust_specz_file'].replace(
+                        " ", "")).split(','),
+                     len(config['redshift']['zclust_photz_file'].replace(
+                         " ", "")).split(',')])
+            elif ('zclust_specz_file' in config['redshift']) != \
+                 ('zclust_photz_file' in config['redshift']):
+                raise Exception("ConfigError: The redshift files for the " +
+                                "extended 6x2pt analysis [redshift]: " +
+                                "'zclust_specz_file' and 'zclust_photz_file' must " +
+                                "always be passed together.")
+            elif 'zclust_file' in config['redshift']:
+                self.zet_clust_file = \
+                    (config['redshift']['zclust_file'].replace(
+                        " ", "")).split(',')
+            if 'zclust_extension' in config['redshift']:
+                self.zet_clust_ext = \
+                    config['redshift']['zclust_extension'].casefold()
+            if 'value_loc_in_clustbin' in config['redshift']:
+                self.value_loc_in_clustbin = \
+                    config['redshift']['value_loc_in_clustbin']
+            elif 'value_loc_in_bin' in config['redshift']:
+                self.value_loc_in_clustbin = \
+                    config['redshift']['value_loc_in_bin']
+            else:
+                self.value_loc_in_clustbin = 'mid'
+
+            if 'zlens_directory' in config['redshift']:
+                self.zet_lens_dir = config['redshift']['zlens_directory']
+            elif 'z_directory' in config['redshift']:
+                self.zet_lens_dir = config['redshift']['z_directory']
+            else:
+                self.zet_lens_dir = ''
+            if 'zlens_file' in config['redshift']:
+                self.zet_lens_file = \
+                    (config['redshift']['zlens_file'].replace(
+                        " ", "")).split(',')
+            if 'zlens_extension' in config['redshift']:
+                self.zet_lens_ext = \
+                    config['redshift']['zlens_extension'].casefold()
+            if 'value_loc_in_lensbin' in config['redshift']:
+                self.value_loc_in_lensbin = \
+                    config['redshift']['value_loc_in_lensbin']
+            elif 'value_loc_in_bin' in config['redshift']:
+                self.value_loc_in_lensbin = \
+                    config['redshift']['value_loc_in_bin']
+            else:
+                self.value_loc_in_lensbin = 'mid'
+            if 'zcsmf_file' in config['redshift'] and self.cstellar_mf:
+                self.zet_csmf_file =  \
+                    (config['redshift']['zcsmf_file'].replace(
+                        " ", "")).split(',')
+            if 'zcsmf_extension' in config['redshift']:
+                self.zet_csmf_ext = \
+                    config['redshift']['zcsmf_extension'].casefold()
+            if 'value_loc_in_csmfbin' in config['redshift']:
+                self.value_loc_in_csmfbin = \
+                    config['redshift']['value_loc_in_csmfbin']
+            elif 'value_loc_in_bin' in config['redshift']:
+                self.value_loc_in_csmfbin = \
+                    config['redshift']['value_loc_in_bin']
+            else:
+                self.value_loc_in_csmfbin = 'mid'
+            if 'zcsmf_directory' in config['redshift']:
+                self.zet_csmf_dir = config['redshift']['zlens_directory']
+            elif 'z_directory' in config['redshift']:
+                self.zet_csmf_dir = config['redshift']['z_directory']
+            
+
+        else:
+            self.has_arbitrary_weights_m = False
+            self.has_arbitrary_weights_g = False
+
+        if self.zet_clust_file is None:
+            if (self.ggl and
+                self.est_ggl != 'k_space' and
+                self.est_ggl != 'projected_real') or \
+               (self.clustering and
+                self.est_clust != 'k_space' and
+                    self.est_clust != 'projected_real'):
+                raise Exception("ConfigError: No file(s) with redshift " +
+                                "distributions for clustering have been specified. Must " +
+                                "be adjusted in config file " + config_name + ", " +
+                                "[redshift]: 'zclust_file = ...' (separated by comma/s).")
+        else:
+            if (self.clustering and self.est_clust == 'projected_real') or \
+               (self.ggl and self.est_ggl == 'projected_real'):
+                # self.zet_clust_file = None
+                # do I need the lens files? I don't think so ??? work here
+                print("The estimator 'projected_real' will be calculated " +
+                      "with the mean redshifts only. In especially, the " +
+                      "[redshift]: 'zclust_file = ...' will be ignored.")
+            if '.fits' in self.zet_clust_file[0] and \
+               self.zet_clust_ext is None:
+                raise Exception("ConfigError: A fits zclust_file is " +
+                                "specified for the redshift distribution this requires " +
+                                "the name of the extension where to find the n(z). " +
+                                "Please adjust '[redshift]: zclust_extension = ' to go " +
+                                "on.")
+        if (self.ggl and
+            self.est_ggl != 'k_space' and
+            self.est_ggl != 'projected_real') or \
+           (self.clustering and
+            self.est_clust != 'k_space' and
+                self.est_clust != 'projected_real'):
+            pass
+        else:
+            print("InputWarning: The files for the clustering redshift " +
+                  "distribution will be ignored as no clustering estimator " +
+                  "is calculated.")
+            self.zet_clust_file = None
+
+        if self.zet_lens_file is None:
+            if (self.ggl and
+                self.est_ggl != 'k_space' and
+                self.est_ggl != 'projected_real') or \
+               (self.cosmicshear and
+                    self.est_shear != 'k_space'):
+                raise Exception("ConfigError: No file(s) with redshift " +
+                                "distributions for lensing have been specified. Must " +
+                                "be adjusted in config file " + config_name + ", " +
+                                "[redshift]: 'zlens_file = ...' (separated by comma/s).")
+        else:
+            if '.fits' in self.zet_lens_file and self.zet_lens_ext is None:
+                raise Exception("ConfigError: A fits zlens_file is " +
+                                "specified for the redshift distribution which requires " +
+                                "the name of the extension where to find the n(z). " +
+                                "Please adjust '[redshift]: zlens_extension = ' to go on.")
+        if self.zet_csmf_file is None:
+            if self.cstellar_mf:
+                raise Exception("ConfigError: No file(s) with redshift " +
+                                "distributions for the conditional stellar mass function have been specified. Must " +
+                                "be adjusted in config file " + config_name + ", " +
+                                "[redshift]: 'zcsmf_file = ...' (separated by comma/s).")
+
+
+        if (self.ggl and
+            self.est_ggl != 'k_space' and
+            self.est_ggl != 'projected_real') or \
+           (self.cosmicshear and
+                self.est_shear != 'k_space'):
+            pass
+        else:
+            print("InputWarning: The files for the lensing redshift " +
+                  "distribution will be ignored as no lensing estimator is " +
+                  "calculated.")
+            self.zet_lens_file = None
+
+        self.zet_clust_nz = np.array([])
+        try:  # ascii
+            save_zet_clust_z = []
+            save_zet_clust_nz = []
+            for fidx, file in enumerate(self.zet_clust_file):
+                print("Reading in redshift distributions for clustering " +
+                      "from file " + path.join(self.zet_clust_dir, file) + ".")
+                data = ascii.read(path.join(self.zet_clust_dir, file))
+                if len(data.colnames) < 2:
+                    print("InputWarning: The file " + file + " in keyword " +
+                          "'zclust_file' has less than 2 columns. The data " +
+                          "file should provide the redshift on the first " +
+                          "column and the redshift distribution in the " +
+                          "second. This file will be ignored.")
+                    continue
+                different_redshifts = False
+                if fidx == 0:
+                    self.zet_clust_z = np.array(data[data.colnames[0]])
+                    save_zet_clust_z.append(self.zet_clust_z)
+                    self.zet_clust_nz = np.array(data[data.colnames[1]])
+                    save_zet_clust_nz.append(self.zet_clust_nz)
+                    for colname in data.colnames[2:]:
+                        self.zet_clust_nz = \
+                            np.vstack([self.zet_clust_nz, data[colname]])
+                        save_zet_clust_nz.append(data[colname])
+                else:
+                    save_zet_clust_z.append(np.array(data[data.colnames[0]]))
+                    if len(np.array(data[data.colnames[0]])) != len(self.zet_clust_z):
+                        redshift_increment = min(self.zet_clust_z[1]- self.zet_clust_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
+                        redshift_max = max(np.max(min(self.zet_clust_z)),np.max(np.array(data[data.colnames[0]])))
+                        redshift_min = min(np.min(min(self.zet_clust_z)),np.min(np.array(data[data.colnames[0]])))
+                        self.zet_clust_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
+                        different_redshifts = True         
+                        print("ConfigWarning: Adjusting the redshift range in the zclust_files due to different redshift ranges in clustering redshift distribution")
+                    if not different_redshifts:
+                        for colname in data.colnames[1:]:
+                            self.zet_clust_nz = \
+                                np.vstack([self.zet_clust_nz, data[colname]])
+                            save_zet_clust_nz.append(data[colname])
+                    else:
+                        for colname in data.colnames[1:]:
+                            save_zet_clust_nz.append(data[colname])
+            if different_redshifts:
+                self.zet_clust_nz = np.array([])
+                for i_z in range(len(save_zet_clust_nz)):
+                    if i_z == 0:
+                        self.zet_clust_nz = np.interp(self.zet_clust_z,
+                                                        save_zet_clust_z[i_z],
+                                                        save_zet_clust_nz[i_z],
+                                                        left = 0,
+                                                        right = 0)
+                    else:
+                        self.zet_clust_nz = np.vstack([self.zet_clust_nz, np.interp(self.zet_clust_z,
+                                                                                    save_zet_clust_z[i_z],
+                                                                                    save_zet_clust_nz[i_z],
+                                                                                    left = 0,
+                                                                                    right = 0)])
+        except TypeError:
+            self.zet_clust_nz = None
+        except UnicodeDecodeError:  # fits
+            hdul = fits.open(path.join(self.zet_clust_dir, file))
+            ext = 1
+            try:
+                while self.zet_clust_ext != \
+                        hdul[ext].header['EXTNAME'].casefold():
+                    ext += 1
+            except IndexError:
+                raise Exception('ConfigError: The extension name ' +
+                                self.zet_clust_ext + ' could not be found in the file ' +
+                                path.join(self.zet_clust_dir, file) + '. Must be ' +
+                                'adjusted to go on.')
+
+            try:
+                self.zet_clust_z = hdul[ext].data['Z_MID']
+                self.value_loc_in_clustbin = 'mid'
+            except KeyError:
+                self.zet_clust_z = hdul[ext].data['Z_LOW']
+                self.value_loc_in_clustbin = 'left'
+
+            bin_idx = 1
+            while 'BIN'+str(bin_idx) in hdul[ext].data.names:
+                self.zet_clust_nz = np.concatenate((self.zet_clust_nz,
+                                                    hdul[ext].data['BIN'+str(bin_idx)]))
+                bin_idx += 1
+            self.zet_clust_nz = self.zet_clust_nz.reshape((bin_idx-1,
+                                                           hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
+
+        self.zet_lens_photoz = np.array([])
+        try:
+            save_zet_lens_z = []
+            save_zet_lens_nz = []
+            for fidx, file in enumerate(self.zet_lens_file):
+                print("Reading in redshift distributions for lensing from " +
+                      "file " + path.join(self.zet_lens_dir, file) + ".")
+                data = ascii.read(path.join(self.zet_lens_dir, file))
+                if len(data.colnames) < 2:
+                    print("InputWarning: The file " + file + " in keyword " +
+                          "'zlens_file' has less than 2 columns. The data " +
+                          "file should provide the redshift on the first " +
+                          "column and the redshift distribution in the " +
+                          "second. This file will be ignored.")
+                    continue
+                different_redshifts = False
+                if fidx == 0:
+                    self.zet_lens_z = np.array(data[data.colnames[0]])
+                    save_zet_lens_z.append(self.zet_lens_z)
+                    self.zet_lens_photoz = np.array(data[data.colnames[1]])
+                    save_zet_lens_nz.append(self.zet_lens_photoz)
+                    for colname in data.colnames[2:]:
+                        self.zet_lens_photoz = \
+                            np.vstack([self.zet_lens_photoz, data[colname]])
+                        save_zet_lens_nz.append(data[colname])
+                else:
+                    save_zet_lens_z.append(np.array(data[data.colnames[0]]))
+                    if len(np.array(data[data.colnames[0]])) != len(self.zet_lens_z):
+                        redshift_increment = min(self.zet_lens_z[1]- self.zet_lens_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
+                        redshift_max = max(np.max(min(self.zet_lens_z)),np.max(np.array(data[data.colnames[0]])))
+                        redshift_min = min(np.min(min(self.zet_lens_z)),np.min(np.array(data[data.colnames[0]])))
+                        self.zet_lens_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
+                        different_redshifts = True         
+                        print("ConfigWarning: Adjusting the redshift range in the zlens_files due to different redshift ranges in lensing redshift distribution")
+                    if not different_redshifts:
+                        for colname in data.colnames[1:]:
+                            self.zet_lens_photoz = \
+                                np.vstack([self.zet_lens_photoz, data[colname]])
+                            save_zet_lens_nz.append(data[colname])
+                    else:
+                        for colname in data.colnames[1:]:
+                            save_zet_lens_nz.append(data[colname])
+            if different_redshifts:
+                self.zet_lens_photoz = np.array([])
+                for i_z in range(len(save_zet_lens_nz)):
+                    if i_z == 0:
+                        self.zet_lens_photoz = np.interp(self.zet_lens_z,
+                                                        save_zet_lens_z[i_z],
+                                                        save_zet_lens_nz[i_z],
+                                                        left = 0,
+                                                        right = 0)
+                    else:
+                        self.zet_lens_photoz = np.vstack([self.zet_lens_photoz, np.interp(self.zet_lens_z,
+                                                                                    save_zet_lens_z[i_z],
+                                                                                    save_zet_lens_nz[i_z],
+                                                                                    left = 0,
+                                                                                    right = 0)])
+        except TypeError:
+            self.zet_lens_photoz = None
+        except UnicodeDecodeError:  # fits
+            hdul = fits.open(path.join(self.zet_lens_dir, file))
+            ext = 1
+            try:
+                while self.zet_lens_ext != \
+                        hdul[ext].header['EXTNAME'].casefold():
+                    ext += 1
+            except IndexError:
+                raise Exception('ConfigError: The extension name ' +
+                                self.zet_lens_ext + ' could not be found in the file ' +
+                                path.join(self.zet_lens_dir, file) + '. Must be adjusted ' +
+                                'to go on.')
+
+            try:
+                self.zet_lens_z = hdul[ext].data['Z_MID']
+                self.value_loc_in_lensbin = 'mid'
+            except KeyError:
+                self.zet_lens_z = hdul[ext].data['Z_LOW']
+                self.value_loc_in_lensbin = 'left'
+
+            bin_idx = 1
+            while 'BIN'+str(bin_idx) in hdul[ext].data.names:
+                self.zet_lens_photoz = np.concatenate((self.zet_lens_photoz,
+                                                       hdul[ext].data['BIN'+str(bin_idx)]))
+                bin_idx += 1
+            self.zet_lens_photoz = self.zet_lens_photoz.reshape((bin_idx-1,
+                                                                 hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
+        
+        if self.zet_clust_z is not None:
+            if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
+                self.zet_clust_z = self.zet_clust_z[1:]
+                if len(self.zet_clust_nz.shape) == 1:
+                    self.zet_clust_nz = self.zet_clust_nz[1:]
+                else:
+                    self.zet_clust_nz = self.zet_clust_nz[:, 1:]
+            if len(self.zet_clust_nz.shape) == 1:
+                self.zet_clust_nz = np.array([self.zet_clust_nz])
+            self.n_tomo_clust = len(self.zet_clust_nz)
+        if self.zet_lens_z is not None:
+            if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
+                try:
+                    self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
+                    self.zet_lens_z = self.zet_lens_z[1:]
+                except:
+                    self.zet_lens_z = self.zet_lens_z[1:]
+                    self.zet_lens_photoz = self.zet_lens_photoz[1:]
+            if len(self.zet_lens_photoz.shape) == 1:
+                self.zet_lens_photoz = np.array([self.zet_lens_photoz])
+            self.n_tomo_lens = len(self.zet_lens_photoz)
+
+        self.zet_csmf_pz = np.array([])
+        try:
+            save_zet_csmf_z = []
+            save_zet_csmf_nz = []
+            for fidx, file in enumerate(self.zet_csmf_file):
+                print("Reading in redshift distributions for csmf from " +
+                      "file " + path.join(self.zet_csmf_dir, file) + ".")
+                data = ascii.read(path.join(self.zet_csmf_dir, file))
+                if len(data.colnames) < 2:
+                    print("InputWarning: The file " + file + " in keyword " +
+                          "'zcsmf_file' has less than 2 columns. The data " +
+                          "file should provide the redshift on the first " +
+                          "column and the redshift distribution in the " +
+                          "second. This file will be ignored.")
+                    continue
+                different_redshifts = False
+                if fidx == 0:
+                    self.zet_csmf_z = np.array(data[data.colnames[0]])
+                    save_zet_csmf_z.append(self.zet_csmf_z)
+                    self.zet_csmf_pz = np.array(data[data.colnames[1]])
+                    save_zet_csmf_nz.append(self.zet_csmf_pz)
+                    for colname in data.colnames[2:]:
+                        self.zet_csmf_pz = \
+                            np.vstack([self.zet_csmf_pz, data[colname]])
+                        save_zet_csmf_nz.append(data[colname])
+                else:
+                    save_zet_csmf_z.append(np.array(data[data.colnames[0]]))
+                    if len(np.array(data[data.colnames[0]])) != len(self.zet_csmf_z):
+                        redshift_increment = min(self.zet_csmf_z[1]- self.zet_csmf_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
+                        redshift_max = max(np.max(min(self.zet_csmf_z)),np.max(np.array(data[data.colnames[0]])))
+                        redshift_min = min(np.min(min(self.zet_csmf_z)),np.min(np.array(data[data.colnames[0]])))
+                        self.zet_csmf_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
+                        different_redshifts = True         
+                        print("ConfigWarning: Adjusting the redshift range in the zcsmf_files due to different redshift ranges in csmf redshift distribution")
+                    if not different_redshifts:
+                        for colname in data.colnames[1:]:
+                            self.zet_csmf_pz = \
+                                np.vstack([self.zet_csmf_pz, data[colname]])
+                            save_zet_csmf_nz.append(data[colname])
+                    else:
+                        for colname in data.colnames[1:]:
+                            save_zet_csmf_nz.append(data[colname])
+            if different_redshifts:
+                self.zet_csmf_pz = np.array([])
+                for i_z in range(len(save_zet_csmf_nz)):
+                    if i_z == 0:
+                        self.zet_csmf_pz = np.interp(self.zet_csmf_z,
+                                                        save_zet_csmf_z[i_z],
+                                                        save_zet_csmf_nz[i_z],
+                                                        left = 0,
+                                                        right = 0)
+                    else:
+                        self.zet_csmf_pz = np.vstack([self.zet_csmf_pz, np.interp(self.zet_csmf_z,
+                                                                                    save_zet_csmf_z[i_z],
+                                                                                    save_zet_csmf_nz[i_z],
+                                                                                    left = 0,
+                                                                                    right = 0)])
+        except TypeError:
+            self.zet_csmf_pz = None
+        except UnicodeDecodeError:  # fits
+            hdul = fits.open(path.join(self.zet_csmf_dir, file))
+            ext = 1
+            try:
+                while self.zet_csmf_ext != \
+                        hdul[ext].header['EXTNAME'].casefold():
+                    ext += 1
+            except IndexError:
+                raise Exception('ConfigError: The extension name ' +
+                                self.zet_csmf_ext + ' could not be found in the file ' +
+                                path.join(self.zet_csmf_dir, file) + '. Must be adjusted ' +
+                                'to go on.')
+
+            try:
+                self.zet_csmf_z = hdul[ext].data['Z_MID']
+                self.value_loc_in_csmfbin = 'mid'
+            except KeyError:
+                self.zet_csmf_z = hdul[ext].data['Z_LOW']
+                self.value_loc_in_csmfbin = 'left'
+
+            bin_idx = 1
+            while 'BIN'+str(bin_idx) in hdul[ext].data.names:
+                self.zet_csmf_pz = np.concatenate((self.zet_csmf_pz,
+                                                       hdul[ext].data['BIN'+str(bin_idx)]))
+                bin_idx += 1
+            self.zet_csmf_pz = self.zet_csmf_pz.reshape((bin_idx-1,
+                                                                 hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
+
+        
+        if self.zet_clust_z is not None:
+            if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
+                self.zet_clust_z = self.zet_clust_z[1:]
+                if len(self.zet_clust_nz.shape) == 1:
+                    self.zet_clust_nz = self.zet_clust_nz[1:]
+                else:
+                    self.zet_clust_nz = self.zet_clust_nz[:, 1:]
+            if len(self.zet_clust_nz.shape) == 1:
+                self.zet_clust_nz = np.array([self.zet_clust_nz])
+            self.n_tomo_clust = len(self.zet_clust_nz)
+        if self.zet_csmf_z is not None:
+            if self.zet_csmf_z[0] < 1e-2 and self.value_loc_in_csmfbin != 'left':
+                self.zet_csmf_z = self.zet_csmf_z[1:]
+                self.zet_csmf_pz = self.zet_csmf_pz[:, 1:]
+            if len(self.zet_csmf_pz.shape) == 1:
+                self.zet_csmf_pz = np.array([self.zet_csmf_pz])
+            self.n_tomo_csmf = len(self.zet_csmf_pz)
+        if self.zet_lens_z is not None:
+            if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
+                self.zet_lens_z = self.zet_lens_z[1:]
+                self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
+            if len(self.zet_lens_photoz.shape) == 1:
+                self.zet_lens_photoz = np.array([self.zet_lens_photoz])
+            self.n_tomo_lens = len(self.zet_lens_photoz)
+        return True
+
     def __read_in_csmf_files(self, config):
         """
         Reads in the files for the conditional stellar mass function
@@ -5227,7 +5773,7 @@ class FileInput:
                 if self.npair_mm_file[0] == '':
                     self.npair_mm_file = None
         else:
-            ...
+            pass
 
         if self.clustering and self.npair_gg_file is not None:
             if len(self.bias_dict['logmass_bins']) <= 2:
@@ -5571,7 +6117,7 @@ class FileInput:
                 self.Pmm_file = \
                     config['tabulated inputs files']['Pmm_file']
         else:
-            ...
+            pass
 
         self.Pgg_tab, kdim_gg, sampledim_gg, zdim_gg = \
             self.__read_in_powspec_files(self.Pgg_file)

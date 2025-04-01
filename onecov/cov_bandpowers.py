@@ -217,7 +217,6 @@ class CovBandPowers(CovTHETASpace):
         self.ell_limits = []
         for mode in range(len(self.WXY_stack[:,0])):
             limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode, :], np.less)[0][:]])
-            #limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
             limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ell_fourier_integral[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
             limits_at_mode_append[1:-1] = limits_at_mode
             limits_at_mode_append[0] = self.ell_fourier_integral[0]
@@ -810,6 +809,11 @@ class CovBandPowers(CovTHETASpace):
                     csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB = \
                     self.covbandpowers_gaussian(obs_dict,
                                         survey_params_dict)
+                gauss = [gauss_CEgggg + gauss_CEgggg_sn, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm,
+                     gauss_CEgmgm + gauss_CEgmgm_sn, gauss_CEmmgm, gauss_CBmmgm,
+                     gauss_CEEmmmm + gauss_CEEmmmm_sn, gauss_CEBmmmm,
+                     gauss_CBBmmmm + gauss_CBBmmmm_sn,
+                     csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB]
             else:
                 gauss_CEgggg, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm, \
                     gauss_CEgmgm, gauss_CEmmgm, gauss_CBmmgm, \
@@ -818,10 +822,10 @@ class CovBandPowers(CovTHETASpace):
                     gauss_CEgggg_sn, gauss_CEgmgm_sn, gauss_CEEmmmm_sn, gauss_CBBmmmm_sn = \
                     self.covbandpowers_gaussian(obs_dict,
                                         survey_params_dict)
-            gauss = [gauss_CEgggg + gauss_CEgggg_sn, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm,
-                     gauss_CEgmgm + gauss_CEgmgm_sn, gauss_CEmmgm, gauss_CBmmgm,
-                     gauss_CEEmmmm + gauss_CEEmmmm_sn, gauss_CEBmmmm,
-                     gauss_CBBmmmm + gauss_CBBmmmm_sn]
+                gauss = [gauss_CEgggg + gauss_CEgggg_sn, gauss_CEgggm, gauss_CEggmm, gauss_CBggmm,
+                        gauss_CEgmgm + gauss_CEgmgm_sn, gauss_CEmmgm, gauss_CBmmgm,
+                        gauss_CEEmmmm + gauss_CEEmmmm_sn, gauss_CEBmmmm,
+                        gauss_CBBmmmm + gauss_CBBmmmm_sn]
         else:
             gauss = self.covbandpowers_gaussian(obs_dict,
                                        survey_params_dict)
@@ -1427,8 +1431,8 @@ class CovBandPowers(CovTHETASpace):
                 csmf_BP_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
                 for m_mode in range(len(self.ell_bins_clustering)):
                     local_ell_limit = self.ell_limits[m_mode][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_BP_flat, True, True)
-                    csmf_BPgg[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                    self.levin_int.init_integral(self.ellrange, csmf_BP_flat, True, True)
+                    csmf_BPgg[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
             else:
                 csmf_BPgg = 0
             if self.gm:
@@ -1438,8 +1442,8 @@ class CovBandPowers(CovTHETASpace):
                 csmf_BP_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
                 for m_mode in range(len(self.ell_bins_clustering)):
                     local_ell_limit = self.ell_limits[m_mode + len(self.ell_bins_clustering)][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_BP_flat, True, True)
-                    csmf_BPgm[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + len(self.ell_bins_clustering))),original_shape)            
+                    self.levin_int.init_integral(self.ellrange, csmf_BP_flat, True, True)
+                    csmf_BPgm[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + len(self.ell_bins_clustering))),original_shape)            
             else:
                 csmf_BPgm = 0
             
@@ -1451,9 +1455,9 @@ class CovBandPowers(CovTHETASpace):
                 csmf_BP_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
                 for m_mode in range(len(self.ell_bins_lensing)):
                     local_ell_limit_E = self.ell_limits[m_mode + 2*len(self.ell_bins_clustering)][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_BP_flat, True, True)
-                    csmf_BPmmE[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering)),original_shape))           
-                    csmf_BPmmB[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering) +  len(self.ell_bins_lensing)),original_shape))       
+                    self.levin_int.init_integral(self.ellrange, csmf_BP_flat, True, True)
+                    csmf_BPmmE[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering)),original_shape))           
+                    csmf_BPmmB[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering) +  len(self.ell_bins_lensing)),original_shape))       
 
             else:
                 csmf_BPmmE, csmf_BPmmB = 0, 0
@@ -1471,7 +1475,7 @@ class CovBandPowers(CovTHETASpace):
                 gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
                 gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
                 gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn, \
-                csmf_auto, csmf_BPgg, csmf_BPgm, csmf_BPmm, csmf_BPmmE
+                csmf_auto, csmf_BPgg, csmf_BPgm, csmf_BPmmE, csmf_BPmmB
 
                 
         else:

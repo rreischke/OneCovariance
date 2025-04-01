@@ -9,6 +9,7 @@
 cz_covariance.py
 /LevinBessel/levin.egg-info/
 /LevinBessel/build/
+/auxillary_scripts
 __pycache__
 levin.egg-info
 .vscode

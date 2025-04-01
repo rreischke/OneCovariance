@@ -1684,6 +1684,9 @@ class CovTHETASpace(CovELLSpace):
             else:
                 nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
                     bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
+                np.save("ssc_ell_space.npy",nongaussELLmmmm)
+                np.save("ell.npy",self.ellrange)
+            
         if self.gg:
             print("")
             original_shape = nongaussELLgggg[0, 0, :, :, :, :, :, :].shape
