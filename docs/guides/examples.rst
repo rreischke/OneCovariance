@@ -458,3 +458,13 @@ In the directory ``input/Cell`` files for precomputed angular power spectra, :ma
 
 in the ini-file. In this way one can use the code to produce the covariance of the implemented summary statistic for any tracer for which a harmonic covariance has been calculated. 
 
+Selecting tomographic bins
+--------------------------
+By default, the OneCovariance code calculates all unique combinations of tomographic bins and writes it out into the final matrix file. However, it is often the case
+that people only want to consider particular bin combinations, this can be done by the variables ``combinations_clustering``, ``combinations_ggl`` and ``combinations_lensing`` in the observables section.
+If they are not set, the code falls back to the default for the respective tracer. So for example if you want to only consider the auto-correlations for clustering and 
+you specified 2 redshift files for clustering you might do this by writing:
+
+``combinations_clustering = 0-0,1-1```
+
+The code will still calculate all combinations. However, it will produce an additional matrix file with ``your_matrix_file_name_reduced.mat``with only the specified tomographic bins.

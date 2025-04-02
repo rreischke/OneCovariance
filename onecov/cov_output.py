@@ -122,7 +122,14 @@ class Output():
         if np.any(self.projected_clust):
             n_spatial_clustering = len(self.projected_clust)
             n_spatial_ggl = len(self.projected_clust)
+        if np.any(self.projected_lens):
             n_spatial_shear = len(self.projected_lens)
+        if n_spatial_clustering is None:
+            n_spatial_clustering = 0
+        if n_spatial_ggl is None:
+            n_spatial_ggl = 0
+        if n_spatial_shear is None:
+            n_spatial_shear = 0
 
         length_clustering = int(n_tomo_clust*(n_tomo_clust + 1)/2)
         length_ggl = int(n_tomo_clust*n_tomo_lens)
@@ -207,14 +214,18 @@ class Output():
                                           n_tomo_clust,
                                           n_tomo_lens,
                                           full_covariance):
-        n_spatial_clustering = summary['number_summary_gg']
-        n_spatial_ggl = summary['number_summary_gm']
-        n_spatial_shear = summary['number_summary_mm']
-        if np.any(self.projected_clust):
-            n_spatial_clustering = len(self.projected_clust)
-            n_spatial_ggl = len(self.projected_clust)
-            n_spatial_shear = len(self.projected_lens)
-
+        if summary['WL_gg'] is not None:
+            n_spatial_clustering = len(summary['WL_gg'])
+        else:
+            n_spatial_clustering = 0
+        if summary['WL_gm'] is not None:
+            n_spatial_ggl = len(summary['WL_gm'])
+        else:
+            n_spatial_ggl = 0
+        if summary['WL_mmE'] is not None:
+            n_spatial_shear = len(summary['WL_mmE'])
+        else:
+            n_spatial_shear = 0
         length_clustering = int(n_tomo_clust*(n_tomo_clust + 1)/2)
         length_ggl = int(n_tomo_clust*n_tomo_lens)
         length_shear = int(n_tomo_lens*(n_tomo_lens + 1)/2)
