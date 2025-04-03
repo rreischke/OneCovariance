@@ -467,4 +467,4 @@ you specified 2 redshift files for clustering you might do this by writing:
 
 ``combinations_clustering = 0-0,1-1```
 
-The code will still calculate all combinations. However, it will produce an additional matrix file with ``your_matrix_file_name_reduced.mat``with only the specified tomographic bins.
+The code will still calculate all combinations. However, it will produce an additional matrix file with ``your_matrix_file_name_reduced.mat`` with only the specified tomographic bins.
