@@ -2844,8 +2844,7 @@ class CovELLSpace(PolySpectra):
             gaussELLmmmm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
             gaussELLmmmm_sn  *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
-
-        if calc_prefac or self.ellrange_spec is None:
+        if calc_prefac and self.ellrange_spec is None:
             if self.gg and self.ellrange_clustering_ul is not None:
                 gaussELLgggg_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
                                                             self.ellrange_clustering_ul,

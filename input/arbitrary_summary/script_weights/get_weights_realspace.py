@@ -11,17 +11,17 @@ def main():
 
     parser.add_argument('-tlo_mm', '--theta_lo_mm', type=float, default=0.5, help='lower limit for angular range in arcmin for lensing(default is 0.5)')
     parser.add_argument('-tup_mm', '--theta_up_mm', type=float, default=300, help='upper limit for angular range in arcmin for lensing(default is 300)')
-    parser.add_argument('-tb_mm', '--t_bins_mm', type=int, default=8, help='Number of theta bins for lensing (default is 8)')
+    parser.add_argument('-tb_mm', '--t_bins_mm', type=int, default=9, help='Number of theta bins for lensing (default is 8)')
     parser.add_argument('-tt_mm', '--t_type_mm', type=str, default='log', help='Type if binning for theta bins for lensing (default is log)')
 
     parser.add_argument('-tlo_gm', '--theta_lo_gm', type=float, default=0.5, help='lower limit for angular range in arcmin for ggl(default is 0.5)')
     parser.add_argument('-tup_gm', '--theta_up_gm', type=float, default=300, help='upper limit for angular range in arcmin for ggl(default is 300)')
-    parser.add_argument('-tb_gm', '--t_bins_gm', type=int, default=8, help='Number of theta bins for ggl (default is 8)')
+    parser.add_argument('-tb_gm', '--t_bins_gm', type=int, default=9, help='Number of theta bins for ggl (default is 8)')
     parser.add_argument('-tt_gm', '--t_type_gm', type=str, default='log', help='Type if binning for theta bins for ggl (default is log)')
 
     parser.add_argument('-tlo_gg', '--theta_lo_gg', type=float, default=0.5, help='lower limit for angular range in arcmin for clustering(default is 0.5)')
     parser.add_argument('-tup_gg', '--theta_up_gg', type=float, default=300, help='upper limit for angular range in arcmin for clustering(default is 300)')
-    parser.add_argument('-tb_gg', '--t_bins_gg', type=int, default=8, help='Number of theta bins for clustering (default is 8)')
+    parser.add_argument('-tb_gg', '--t_bins_gg', type=int, default=9, help='Number of theta bins for clustering (default is 8)')
     parser.add_argument('-tt_gg', '--t_type_gg', type=str, default='log', help='Type if binning for theta bins for clustering (default is log)')
 
     args = parser.parse_args()

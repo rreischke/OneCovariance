@@ -1918,6 +1918,7 @@ class Output():
         olist = []
         splitidx = 0
         write_header = True
+        
 
         if obs_dict['ELLspace']['n_spec'] is not None and obs_dict['ELLspace']['n_spec'] != 0:
             obs_copy = ['gggg_ssss',  'gggg_sssp',  'gggg_sspp',  \
@@ -1942,6 +1943,10 @@ class Output():
                 for i_probe in range(22):
                     if not isinstance(gauss[i_probe], np.ndarray):
                         continue
+                    if not isinstance(nongauss[i_probe], np.ndarray):
+                        nongauss[i_probe] = np.zeros_like(gauss[i_probe])
+                    if not isinstance(ssc[i_probe], np.ndarray):
+                        ssc[i_probe] = np.zeros_like(gauss[i_probe])
                     r1 = gauss[i_probe].shape[0]
                     r2 = gauss[i_probe].shape[1]
                     tomo1 = gauss[i_probe].shape[4]
@@ -3850,19 +3855,19 @@ class Output():
                                                             rj -= summary['arb_number_first_summary_gg']
                                                         else:
                                                             obs_copy += str(summary['gg_summary_name'][0])
-                                                    if gm and obs in ['gmgm', 'gggm', 'gmxip', 'gmxim']:
+                                                    if gm and obs in ['gmgm', 'gggm']:
                                                         if i_r2 >= summary['arb_number_first_summary_gm']:
                                                             obs_copy += str(summary['gm_summary_name'][1])
                                                             rj -= summary['arb_number_first_summary_gm']
                                                         else:
                                                             obs_copy += str(summary['gm_summary_name'][0])
-                                                    if mm and obs in ['xipxip']:
+                                                    if mm and obs in ['xipxip', 'gmxip', 'ggxip',]:
                                                         if i_r1 >= summary['arb_number_first_summary_mm']:
                                                             obs_copy += str(summary['mmE_summary_name'][1])
                                                             ri -= summary['arb_number_first_summary_mm']
                                                         else:
                                                             obs_copy += str(summary['mmE_summary_name'][0])
-                                                    if mm and obs in ['xipxim', 'ximxim']:
+                                                    if mm and obs in ['xipxim', 'ximxim', 'gmxim', 'ggxim']:
                                                         if i_r1 >= summary['arb_number_first_summary_mm']:
                                                             obs_copy += str(summary['mmB_summary_name'][1])
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3984,7 +3989,7 @@ class Output():
                                                     ri = int(np.copy(i_r1))
                                                     rj = int(np.copy(i_r2))
                                                     
-                                                    #label ri 
+                                                    #label ri  'gggm', 'mmgm', 'gmxip', 'gmxim']
                                                     if gg and obs in ['gggg', 'gggm', 'ggxip', 'ggxim']:
                                                         obs_copy = str(summary['gg_summary_name'][0])
                                                         if i_r1 >= summary['arb_number_first_summary_gg']:
