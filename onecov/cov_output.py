@@ -3759,15 +3759,15 @@ class Output():
                                                         else:
                                                             obs_copy += str(summary['gm_summary_name'][0])
                                                     if mm and obs in ['xipxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             obs_copy += str(summary['mmE_summary_name'][1])
-                                                            ri -= summary['arb_number_first_summary_mm']
+                                                            rmj -= summary['arb_number_first_summary_mm']
                                                         else:
                                                             obs_copy += str(summary['mmE_summary_name'][0])
-                                                    if mm and obs in ['xipxim', 'ximxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                    if mm and obs in ['xipxim', 'ximxim', 'ggxip', 'ggxim']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             obs_copy += str(summary['mmB_summary_name'][1])
-                                                            ri -= summary['arb_number_first_summary_mm']
+                                                            rj -= summary['arb_number_first_summary_mm']
                                                         else:
                                                             obs_copy += str(summary['mmB_summary_name'][0])
                                                     idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)

@@ -308,13 +308,12 @@ class CovARBsummary(CovELLSpace):
         realspace_counts_mm = 0
         realspace_counts_gm = 0
         realspace_counts_gg = 0
-
         for i in range(len(self.RXY_stack[:,0])):
             index = np.where(self.RXY_stack[i,:] != 0)[0]
-            test_array = self.RXY_stack[i,index]*self.theta_real_integral[index]
+            test_array = ((self.RXY_stack[i,index]*self.theta_real_integral[index])[self.RXY_stack[i,index]*self.theta_real_integral[index]!=0])[1:-1]
             if np.all(np.round(test_array/test_array[0],4) == 1.):
                 if i < self.gg_summaries_real + self.gm_summaries_real + self.mmE_summaries_real:
-                    if i >= self.gg_summaries_real + self.gm_summaries_real and i < self.gg_summaries_real + self.gm_summaries_real + self.mmE_summaries_real:
+                    if i >= self.gg_summaries_real + self.gm_summaries_real:
                         self.index_realspace_lensing.append(i)
                         if realspace_counts_mm == 0:
                             self.theta_ul_realspace_lensing.append(self.theta_real_integral[index[0]])
@@ -434,47 +433,41 @@ class CovARBsummary(CovELLSpace):
             survey_params_dict['n_eff_lens'] = save_n_eff_lens
         if self.mm and self.index_realspace_lensing is not None:
             correction = []
-            for i in range(self.index_realspace_lensing[0]):
-                correction.append(np.ones_like(self.SN_integral_mmmm[0,0,:, :, :]))
-            for i, iv in enumerate(self.index_realspace_lensing):
+            for i in range(len(self.SN_integral_mmmm[:,0,0,0,0])):
                 correction.append(np.sqrt(1/(self.SN_integral_mmmm[i,i, : ,: ,:]*self.npair_mm[i, :, :, :])))
             correction = np.array(correction)
             for i in range(len(self.SN_integral_mmmm[:,0,0,0,0])):
                 for j in range(len(self.SN_integral_mmmm[0,:,0,0,0])):
                     local_correction = 1
-                    if i in self.index_realspace_lensing:
+                    if i in np.arange(len(self.index_realspace_lensing)):
                         local_correction *= correction[i, :, :, :]
-                    if j in self.index_realspace_lensing:
+                    if j in np.arange(len(self.index_realspace_lensing)):
                         local_correction *= correction[j, :, :, :]
                     self.SN_integral_mmmm[i,j, : ,: ,:] *= local_correction
         if self.gm and self.index_realspace_ggl is not None:
             correction = []
-            for i in range(self.index_realspace_ggl[0]):
-                correction.append(np.ones_like(self.SN_integral_gmgm[0,0,:, :, :]))
-            for i, iv in enumerate(self.index_realspace_ggl):
+            for i in range(len(self.SN_integral_gmgm[:,0,0,0,0])):
                 correction.append(np.sqrt(1/(self.SN_integral_gmgm[i,i, : ,: ,:]*self.npair_gm[i, :, :, :])))
             correction = np.array(correction)
             for i in range(len(self.SN_integral_gmgm[:,0,0,0,0])):
                 for j in range(len(self.SN_integral_gmgm[0,:,0,0,0])):
                     local_correction = 1
-                    if i in self.index_realspace_ggl:
+                    if i in np.arange(len(self.index_realspace_ggl)):
                         local_correction *= correction[i, :, :, :]
-                    if j in self.index_realspace_ggl:
+                    if j in np.arange(len(self.index_realspace_ggl)):
                         local_correction *= correction[j, :, :, :]
                     self.SN_integral_gmgm[i,j, : ,: ,:] *= local_correction
         if self.gg and self.index_realspace_clustering is not None:
             correction = []
-            for i in range(self.index_realspace_clustering[0]):
-                correction.append(np.ones_like(self.SN_integral_gggg[0,0,:, :, :]))
-            for i, iv in enumerate(self.index_realspace_clustering):
-                correction.append(np.sqrt(1/(self.SN_integral_gggg[iv,iv, : ,: ,:]*self.npair_gg[i, :, :, :])))
+            for i in range(len(self.SN_integral_gggg[:,0,0,0,0])):
+                correction.append(np.sqrt(1/(self.SN_integral_gggg[i,i, : ,: ,:]*self.npair_gg[i, :, :, :])))
             correction = np.array(correction)
             for i in range(len(self.SN_integral_gggg[:,0,0,0,0])):
                 for j in range(len(self.SN_integral_gggg[0,:,0,0,0])):
                     local_correction = 1
-                    if i in self.index_realspace_clustering:
+                    if i in np.arange(len(self.index_realspace_clustering)):
                         local_correction *= correction[i, :, :, :]
-                    if j in self.index_realspace_clustering:
+                    if j in np.arange(len(self.index_realspace_clustering)):
                         local_correction *= correction[j, :, :, :]
                     self.SN_integral_gggg[i,j, : ,: ,:] *= local_correction
 
