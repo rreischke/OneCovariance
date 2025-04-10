@@ -1228,6 +1228,46 @@ std::vector<double> Levin::single_bessel_many_args(std::vector<double> k, uint e
     return result;
 }
 
+
+std::vector<double> Levin::single_bessel_many_args_diagonal(std::vector<double> k, uint ell, double a, double b)
+{
+    gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
+    int_index_integral = new uint[N_thread_max];
+    std::vector<double> result(k.size());
+#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+    for (uint ik = 0; ik < k.size(); ik++)
+    {
+        if (k.at(ik) * b > 1000000)
+        {
+            uint tid = omp_get_thread_num();
+            int_index_integral[tid] = ik;
+            result.at(ik) = iterate_single(integrand, a, b, col, k.at(ik), ell, nsub, false);
+        }
+        else
+        {
+            uint tid = omp_get_thread_num();
+            int_ell_single_bessel[tid] = ell;
+            int_k_single_bessel[tid] = k.at(ik);
+            int_index_integral[tid] = ik;
+            uint N_sum = uint(n_split_rs / 10);
+            if (N_sum < 2)
+            {
+                N_sum = 2;
+            }
+            result.at(ik) = 0.0;
+            for (uint j = 0; j < N_sum; j++)
+            {
+                double al = exp(log(a) + (log(b) - log(a)) / (N_sum)*j);
+                double bl = exp(log(a) + (log(b) - log(a)) / (N_sum) * (j + 1));
+                result.at(ik) += gslIntegratecquad(single_bessel_integrand, al, bl);
+            }
+        }
+    }
+    gsl_set_error_handler(old_handler);
+    delete int_index_integral;
+    return result;
+}
+
 double Levin::cquad_integrand(double x, void *p)
 {
     uint tid = omp_get_thread_num();

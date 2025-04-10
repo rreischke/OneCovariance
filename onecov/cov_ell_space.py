@@ -921,13 +921,17 @@ class CovELLSpace(PolySpectra):
 
         print("Calculating non-limber angular power spectra (C_ell's).")
         n_tomo_clust_copy = np.copy(self.n_tomo_clust)
-        ellmax = 200
+        ellmax = 100
         if self.clustering_z:
             self.n_tomo_clust = 1
             ellmax = 1000
         
-                    
+        inner_integral_gg = None
+        inner_integral_gm_clust = None
+        inner_integral_gm_lens= None
+        inner_integral_mm = None
         if (self.gg or self.gm) and not self.tab_bools[0]:
+            lev = levin.Levin(1, 16, 32, 1e-4, 50, self.num_cores)
             for eidx, ell in enumerate(self.ellrange):
                 if (int(ell) < ellmax):
                     if ell < 100:
@@ -936,63 +940,120 @@ class CovELLSpace(PolySpectra):
                     if ell < 10:
                         kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
                         kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    if ell >100:
-                        kmax = 3*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.3*(ell + 0.5)/np.max(self.chi_min_clust)
-                    if ell >200:
-                        kmax = 2*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.3*(ell + 0.5)/np.max(self.chi_min_clust)
                     k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 1000)
-                    for i_sample in range(self.sample_dim):
-                        for j_sample in range(i_sample,self.sample_dim): 
-                            global non_limber_k_integral
+                    inner_integral_gg = np.zeros((len(k_nonlimber),self.sample_dim,self.sample_dim,self.n_tomo_clust))
 
-                            def non_limber_k_integral(k_integral):
-                                lev = levin.Levin(1, 16, 32, 1e-6, self.integration_intervals)
-                                result = np.zeros(self.n_tomo_clust)
-                                for tomo_i in range(self.n_tomo_clust):
-                                    chi_low = self.chi_min_clust[tomo_i]
-                                    chi_high = self.chi_max_clust[tomo_i]
-                                    los_chi = self.__get_updated_los_integration_chi(
-                                        chi_low, chi_high, covELLspacesettings)
-                                    integrand = np.sqrt((10**self.spline_Pgg[i_sample*self.sample_dim +j_sample](
-                                        np.log10(k_integral), los_chi))[:, 0])*self.spline_zclust[tomo_i](
-                                        los_chi)
-                                    lev.init_integral(
-                                        los_chi, integrand[:, None], True, True)
-                                    result[tomo_i] = np.array(lev.single_bessel(
-                                            k_integral, int(ell), los_chi[0], los_chi[-1]))*k_integral
-                                return result
-                            pool = mp.Pool(self.num_cores)
-                            inner_integral_gg = np.array(pool.map(
-                                non_limber_k_integral, k_nonlimber)).T
-                            pool.close()
-                            pool.terminate()
-                            
-                            
-                            
-                            if ell > 80:
-                                inner_integral_gg[0,np.where(np.abs(inner_integral_gg[0,:]) < 1e-90)[0]] = 0
-                                index_first_max =argrelextrema(inner_integral_gg[0,:], np.greater)[0][0]
-                                inner_integral_gg[0,np.where(np.abs(inner_integral_gg[0,:]/inner_integral_gg[0,index_first_max])> 1.)[0]] = 0.0
-                                
-                            
-                            self.Cell_gg[eidx, i_sample, j_sample, :self.n_tomo_clust, :self.n_tomo_clust] = \
-                                simpson(
-                                    inner_integral_gg[:, None, :]*inner_integral_gg[None,:, :], x = k_nonlimber, axis = -1)*2.0/np.pi
-                            self.Cell_gg[eidx, j_sample, i_sample, :self.n_tomo_clust, :self.n_tomo_clust] = self.Cell_gg[eidx, i_sample, j_sample, :self.n_tomo_clust, :self.n_tomo_clust]
-                            
-                            
+                    for tomo_i in range(self.n_tomo_clust):
+                        chi_low = self.chi_min_clust[tomo_i]
+                        chi_high = self.chi_max_clust[tomo_i]
+                        los_chi = np.geomspace(chi_low, chi_high, 1000)
+                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
+                        for i_sample in range(self.sample_dim):
+                            for j_sample in range(i_sample,self.sample_dim): 
+                                power = 10**self.spline_Pgg[i_sample*self.sample_dim +j_sample]((xg, yg))
+                                integrand = np.sqrt(power)*self.spline_zclust[tomo_i](
+                                    los_chi)[:, None]
+                                lev.init_integral(
+                                    los_chi, integrand, True, True)
+                                inner_integral_gg[:,i_sample, j_sample, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
+                                        k_nonlimber,
+                                        int(ell),
+                                        los_chi[0],
+                                        los_chi[-1]))*k_nonlimber
+                    self.Cell_gg[eidx, :,:, :, :] = simpson(
+                        inner_integral_gg[:, :, :, :, None]*inner_integral_gg[:, :, :, None, :],
+                        x = k_nonlimber, axis = 0)*2.0/np.pi
+                    self.Cell_gg[eidx, j_sample, i_sample, :,:] = self.Cell_gg[eidx, i_sample, j_sample, :, :]
+        if (self.gm or (self.gg and self.mm and self.cross_terms)) and \
+           not self.tab_bools[1]:
+            lev = levin.Levin(1, 16, 32, 1e-4, 50, self.num_cores)
+            for eidx, ell in enumerate(self.ellrange):
+                if (int(ell) < ellmax):
+                    if ell < 100:
+                        kmax = 50*(ell + 0.5)/np.min(self.chi_min_clust)
+                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
+                    if ell < 10:
+                        kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
+                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
+                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 1000)
+                    inner_integral_gm_clust = np.zeros((len(k_nonlimber), self.sample_dim,self.n_tomo_clust))
+                    inner_integral_gm_lens = np.zeros((len(k_nonlimber), self.sample_dim,self.n_tomo_lens))
+                    for tomo_i in range(self.n_tomo_lens):
+                        chi_low = self.los_integration_chi[0] 
+                        chi_high = self.los_integration_chi[-1]
+                        los_chi = np.geomspace(chi_low, chi_high, 1000)
+                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
+                        for i_sample in range(self.sample_dim):
+                            power = 10**self.spline_Pgm[i_sample*self.sample_dim +j_sample]((xg, yg))
+                            integrand = np.sqrt(power)*self.spline_lensweight[tomo_i](
+                                los_chi)[:, None]
+                            lev.init_integral(
+                                los_chi, integrand, True, True)
+                            inner_integral_gm_lens[:,i_sample, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
+                                    k_nonlimber,
+                                    int(ell),
+                                    los_chi[0],
+                                    los_chi[-1]))*k_nonlimber
+                    for tomo_i in range(self.n_tomo_clust):
+                        chi_low = self.chi_min_clust[tomo_i]
+                        chi_high = self.chi_max_clust[tomo_i]
+                        los_chi = np.geomspace(chi_low, chi_high, 1000)
+                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
+                        for i_sample in range(self.sample_dim):
+                            power = 10**self.spline_Pgm[i_sample]((xg, yg))
+                            integrand = np.sqrt(power)*self.spline_zclust[tomo_i](
+                                los_chi)[:, None]
+                            lev.init_integral(
+                                los_chi, integrand, True, True)
+                            inner_integral_gm_clust[:,i_sample, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
+                                    k_nonlimber,
+                                    int(ell),
+                                    los_chi[0],
+                                    los_chi[-1]))*k_nonlimber
+                    self.Cell_gm[eidx, :,:, :, :] = np.sqrt(self.fijl)*simpson(
+                        inner_integral_gm_clust[:, :, :, None]*inner_integral_gm_lens[:, :, None, :],
+                        x = k_nonlimber, axis = 0)*2.0/np.pi
+        if (self.mm or self.gm) and not self.tab_bools[2]:
+            lev = levin.Levin(1, 16, 32, 1e-4, 50, self.num_cores)
+            ellmax = 50
+            for eidx, ell in enumerate(self.ellrange):
+                if (int(ell) < ellmax):
+                    if ell < 100:
+                        kmax = 50*(ell + 0.5)/np.min(self.chi_min_clust)
+                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
+                    if ell < 10:
+                        kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
+                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
+                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 1000)
+                    inner_integral_mm = np.zeros((len(k_nonlimber), self.n_tomo_lens))
 
-        
-        
+                    for tomo_i in range(self.n_tomo_clust):
+                        chi_low = self.chi_min_clust[tomo_i]
+                        chi_high = self.chi_max_clust[tomo_i]
+                        los_chi = np.geomspace(chi_low, chi_high, 1000)
+                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
+                        for i_sample in range(self.sample_dim):
+                            for j_sample in range(i_sample,self.sample_dim): 
+                                power = 10**self.spline_Pmm((xg, yg))
+                                integrand = np.sqrt(power)*self.spline_lensweight[tomo_i](
+                                    los_chi)[:, None]
+                                lev.init_integral(
+                                    los_chi, integrand, True, True)
+                                inner_integral_mm[:, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
+                                        k_nonlimber,
+                                        int(ell),
+                                        los_chi[0],
+                                        los_chi[-1]))*k_nonlimber
+                    self.Cell_mm[eidx, :,:, :, :] = simpson(
+                        inner_integral_mm[:, :, None]*inner_integral_mm[:, None, :],
+                        x = k_nonlimber, axis = 0)*2.0/np.pi*self.fijl
+                    self.Cell_mm[eidx, :,:] = self.Cell_mm[eidx, :, :]                     
+
+
+            
         if self.clustering_z:
             self.n_tomo_clust = n_tomo_clust_copy
-        elif self.tab_bools[0]:
-            self.Cell_gg = self.Cells[0]
-        else:
-            self.Cell_gg = 0
-
+        
     def calc_Cells_Limber(self,
                           covELLspacesettings,
                           bias_dict,
@@ -1167,15 +1228,15 @@ class CovELLSpace(PolySpectra):
                 prob = self.spline_zclust[tomo_i](self.los_integration_chi)*np.append((self.los_integration_chi[1:] -self.los_integration_chi[:-1]),0)
                 self.Ngal[i_sample,tomo_i] = simpson(prob*self.los_integration_chi**2*spline_nbar(self.los_integration_chi), x = self.los_integration_chi)
         if self.gg or self.gm:
-            spline_Pgg, spline_Pgm = [], []
+            self.spline_Pgg, spline_Pgm = [], []
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
-                    spline_Pgg.append(RegularGridInterpolator((self.los_chi, np.log10(self.mass_func.k)),
+                    self.spline_Pgg.append(RegularGridInterpolator((self.los_chi, np.log10(self.mass_func.k)),
                                             np.log10(aux_gg[:, :, i_sample, j_sample]),bounds_error= False, fill_value = None))
                 if self.gm or self.mm:
                     spline_Pgm.append(RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
             if self.gm or self.mm:
-                self.spline_Pgg = spline_Pgg
+                self.spline_Pgg = self.spline_Pgg
                 self.spline_Pgm = spline_Pgm
     
         if (self.mm or self.gm) and not self.tab_bools[2]:
@@ -1188,7 +1249,7 @@ class CovELLSpace(PolySpectra):
                 return self.Cells[0], self.Cells[1], self.Cells[2]
 
         fil = np.sqrt((self.ellrange + 2)*(self.ellrange + 1)*(self.ellrange)*(self.ellrange -1))
-        fijl = fil**2*(self.ellrange+0.5)**(-4)
+        self.fijl = fil**2*(self.ellrange+0.5)**(-4)
         print("Calculating angular power spectra (C_ell's).")
 
         if (self.gg or self.gm) and not self.tab_bools[0]:
@@ -1214,7 +1275,7 @@ class CovELLSpace(PolySpectra):
                                     x_values[0,flat_idx] = self.los_integration_chi[i_chi]
                                     x_values[1,flat_idx] = ki
                                     flat_idx +=1
-                            integrand = spline_Pgg[i_sample*self.sample_dim + j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                            integrand = self.spline_Pgg[i_sample*self.sample_dim + j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                             Cell_gg[:, i_sample, j_sample, tomo_i, tomo_j] = simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_zclust[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x = self.los_integration_chi, axis = 0)
                             Cell_gg[:, i_sample, j_sample, tomo_j, tomo_i] = \
                                 Cell_gg[:, i_sample, j_sample,  tomo_i, tomo_j]
@@ -1246,7 +1307,7 @@ class CovELLSpace(PolySpectra):
                                 x_values[1,flat_idx] = ki
                                 flat_idx +=1
                         integrand = spline_Pgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                        Cell_gm[:, i_sample, tomo_i, tomo_j] = np.sqrt(fijl)*simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x = (self.los_integration_chi), axis = 0)
+                        Cell_gm[:, i_sample, tomo_i, tomo_j] = np.sqrt(self.fijl)*simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x = (self.los_integration_chi), axis = 0)
                         self.__update_los_integration_chi(
                             self.chimin, self.chimax, covELLspacesettings)
         elif self.tab_bools[1]:
@@ -1267,7 +1328,7 @@ class CovELLSpace(PolySpectra):
             for tomo_i in range(self.n_tomo_lens):
                 for tomo_j in range(tomo_i, self.n_tomo_lens):
                     integrand = spline_Pmm((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
-                    Cell_mm[:, tomo_i, tomo_j] = fijl*simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x =(self.los_integration_chi), axis = 0)
+                    Cell_mm[:, tomo_i, tomo_j] = self.fijl*simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x =(self.los_integration_chi), axis = 0)
                     Cell_mm[:, tomo_j, tomo_i] = Cell_mm[:, tomo_i, tomo_j]
             Cell_mm = Cell_mm[:, None, :, :] \
                 * np.ones(self.sample_dim)[None, :, None, None]

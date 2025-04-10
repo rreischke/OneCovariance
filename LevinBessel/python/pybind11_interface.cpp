@@ -44,6 +44,9 @@ PYBIND11_MODULE(levin, m)
          .def("single_bessel_many_args", &Levin::single_bessel_many_args,
               "k"_a, "ell"_a, "a"_a, "b"_a,
               py::call_guard<py::gil_scoped_release>())
+         .def("single_bessel_many_args_diagonal", &Levin::single_bessel_many_args_diagonal,
+               "k"_a, "ell"_a, "a"_a, "b"_a,
+               py::call_guard<py::gil_scoped_release>())
          .def("cquad_integrate", &Levin::cquad_integrate,
               "limits"_a,
               py::call_guard<py::gil_scoped_release>())

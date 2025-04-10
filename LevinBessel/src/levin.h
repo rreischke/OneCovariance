@@ -250,6 +250,8 @@ public:
 
   std::vector<double> single_bessel_many_args(std::vector<double> k, uint ell, double a, double b);
 
+  std::vector<double> single_bessel_many_args_diagonal(std::vector<double> k, uint ell, double a, double b);
+
   static double cquad_integrand(double x, void *p);
 
   std::vector<double> cquad_integrate(std::vector<double> limits);
