@@ -33,6 +33,8 @@ def main():
     parser.add_argument('-N_gg', '--Nmax_gg', type=int, default=6, help='number of cosebi modes to be constructed for clustering (default is 6)')
     parser.add_argument('-tlo_gg', '--tmin_gg', type=float, default=0.5, help='lower limit for angular range in arcmin for clustering(default is 0.5)')
     parser.add_argument('-tup_gg', '--tmax_gg', type=float, default=300, help='upper limit for angular range in arcmin for clustering(default is 300)')
+    
+    parser.add_argument('-out', '--output_path', type=str, default='./../cosebis/', help='output path to the output folder')
 
     args = parser.parse_args()
 
@@ -59,6 +61,7 @@ def main():
     tmin_gg = args.tmin_gg
     tmax_gg = args.tmax_gg
 
+    out_path = args.output_path
 
     tmin_mm *= arcmintorad
     tmax_mm *= arcmintorad
@@ -238,13 +241,13 @@ def main():
         tpn[:,0] /= arcmintorad
         tmn[:,0] /= arcmintorad
         if nn < 10:
-            file_tpn = "./../cosebis/Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-            file_tmn = "./../cosebis/Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_tpn = out_path + "Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_tmn = out_path + "Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_Wn = out_path + "Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
         else:
-            file_tpn = "./../cosebis/Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-            file_tmn = "./../cosebis/Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+            file_tpn = out_path + "Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+            file_tmn = out_path + "Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+            file_Wn = out_path + "Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
         np.savetxt(file_tpn,tpn)
         np.savetxt(file_tmn,tmn)    
         if get_W_ell_as_well:
@@ -258,11 +261,11 @@ def main():
     for nn in range(1,Nmax_gg+1):
         Wpsigg = get_Wpsi_ell(nn - 1, Ungg[nn-1,:], theta_gg)
         if nn < 10:
-            file_Ugg = "./../cosebis/Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigg_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_Ugg = out_path + "Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_Wn = out_path + "Wn_psigg_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
         else:
-            file_Ugg = "./../cosebis/Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigg"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_Ugg = out_path + "Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
+            file_Wn = out_path + "Wn_psigg"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
         np.savetxt(file_Ugg,np.array([theta_gg/arcmintorad,Ungg[nn-1,:]*arcmintorad**2]).T)
         if get_W_ell_as_well:
             np.savetxt(file_Wn, np.array([ell,Wpsigg]).T)
@@ -270,11 +273,11 @@ def main():
     for nn in range(1,Nmax_gm+1):
         Wpsigm = get_Wpsi_ell(nn - 1, Ungm[nn-1,:], theta_gm)
         if nn < 10:
-            file_Qgm = "./../cosebis/Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigm_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_Qgm = out_path + "Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_Wn = out_path + "Wn_psigm_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
         else:
-            file_Qgm = "./../cosebis/Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigm"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            file_Qgm = out_path + "Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
+            file_Wn = out_path + "Wn_psigm"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
         np.savetxt(file_Qgm,np.array([theta_gm/arcmintorad,Qngm[nn-1,:]*arcmintorad**2]).T)
         if get_W_ell_as_well:
             np.savetxt(file_Wn, np.array([ell,Wpsigm]).T)
