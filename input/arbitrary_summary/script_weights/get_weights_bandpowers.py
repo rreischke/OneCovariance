@@ -34,6 +34,8 @@ def main():
     parser.add_argument('-lup_gg', '--L_max_gg', type=float, default=1500, help='Maximum bandpower multipole for clustering (default is 1500)')
     parser.add_argument('-lb_gg', '--L_bins_gg', type=int, default=8, help='Number of bandpower multipole bins for clustering (default is 8)')
     parser.add_argument('-lt_gg', '--L_type_gg', type=str, default='log', help='Type if binning for bandpower multipoles for clustering (default is log)')
+    
+    parser.add_argument('-out', '--output_path', type=str, default='./../bandpowers/', help='output path to the output folder')
 
     args = parser.parse_args()
 
@@ -66,7 +68,7 @@ def main():
     L_bins_gg = args.L_bins_gg
     L_type_gg = args.L_type_gg
 
-
+    out_path = args.output_path
 
     theta_min_gm = np.exp(np.log(theta_lo_gm) - delta_ln_theta_gm/2) # real lower limit after apodisation
     theta_max_gm = np.exp(np.log(theta_up_gm) + delta_ln_theta_gm/2) # real upper limit after apodisation
@@ -158,13 +160,13 @@ def main():
                 g_minus[i_ell,i_theta] = 1./(thetabins[i_theta]/60/180*np.pi)**2*(curly_G_minus_up - curly_G_minus_lo)
                 h_ell[i_ell,i_theta] = - 1./(thetabins[i_theta]/60/180*np.pi)**2*(theta_times_ell_up*jv(1, theta_times_ell_up) - theta_times_ell_lo*jv(1, theta_times_ell_lo) + 2.*jv(0, theta_times_ell_up) - 2.*jv(0, theta_times_ell_lo))  
             if i_ell+1 < 10:
-                filename_mm = "./../bandpowers/real_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
-                filename_gm = "./../bandpowers/real_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
-                filename_gg = "./../bandpowers/real_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
+                filename_mm = out_path + "bandpowers/real_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
+                filename_gm = out_path + "bandpowers/real_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
+                filename_gg = out_path + "bandpowers/real_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
             else:
-                filename_mm = "./../bandpowers/real_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
-                filename_gm = "./../bandpowers/real_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
-                filename_gg = "./../bandpowers/real_weight_bandpowers_gg_" + str(i_ell+1) + ".table"
+                filename_mm = out_path + "bandpowers/real_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
+                filename_gm = out_path + "bandpowers/real_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
+                filename_gg = out_path + "bandpowers/real_weight_bandpowers_gg_" + str(i_ell+1) + ".table"
             if type == 'mm':
                 np.savetxt(filename_mm,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T)
             if type == 'gg':
@@ -172,9 +174,9 @@ def main():
             if type == 'gm':
                 np.savetxt(filename_gm,np.array([thetabins,h_ell[i_ell, :]*T_of_theta*2*np.pi/Norm[i_ell]]).T)
             if i_ell+1 < 10:
-                filename_mm = "./../bandpowers/real_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
+                filename_mm = out_path + "bandpowers/real_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
             else:
-                filename_mm = "./../bandpowers/real_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
+                filename_mm = out_path + "bandpowers/real_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
             if type == 'mm':
                 np.savetxt(filename_mm,np.array([thetabins,g_minus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T)
             
@@ -270,13 +272,13 @@ def main():
                     'in ' + str(round(eta, 1)) + 'min', end="")
             tcomb += 1
             if i_ell+1 < 10:
-                filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
-                filename_gm = "./../bandpowers/fourier_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
-                filename_gg = "./../bandpowers/fourier_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
+                filename_mm = out_path + "bandpowers/fourier_weight_bandpowers_mmE_0" + str(i_ell+1) + ".table"
+                filename_gm = out_path + "bandpowers/fourier_weight_bandpowers_gm_0" + str(i_ell+1) + ".table"
+                filename_gg = out_path + "bandpowers/fourier_weight_bandpowers_gg_0" + str(i_ell+1) + ".table"
             else:
-                filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
-                filename_gm = "./../bandpowers/fourier_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
-                filename_gg = "./../bandpowers/fourier_weight_bandpowers_gg_" + str(i_ell+1) + "table"
+                filename_mm = out_path + "bandpowers/fourier_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
+                filename_gm = out_path + "bandpowers/fourier_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
+                filename_gg = out_path + "bandpowers/fourier_weight_bandpowers_gg_" + str(i_ell+1) + "table"
             if type == "mm":
                 np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi/Norm[i_ell]]).T)
             if type == "gm":
@@ -285,9 +287,9 @@ def main():
                 np.savetxt(filename_gg,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T)
             
             if i_ell+1 < 10:
-                filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
+                filename_mm = out_path + "bandpowers/fourier_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
             else:
-                filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
+                filename_mm = out_path + "bandpowers/fourier_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
             if type == "mm":
                 np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EB[i_ell, :]*np.pi/Norm[i_ell]]).T)
         print("")

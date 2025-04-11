@@ -23,6 +23,8 @@ def main():
     parser.add_argument('-tup_gg', '--theta_up_gg', type=float, default=300, help='upper limit for angular range in arcmin for clustering(default is 300)')
     parser.add_argument('-tb_gg', '--t_bins_gg', type=int, default=9, help='Number of theta bins for clustering (default is 8)')
     parser.add_argument('-tt_gg', '--t_type_gg', type=str, default='log', help='Type if binning for theta bins for clustering (default is log)')
+    
+    parser.add_argument('-out', '--output_path', type=str, default='./../rcf/', help='output path to the output folder')
 
     args = parser.parse_args()
     N_fourier = args.nfourier # at how many ells should the Fourier space filter be evaluated
@@ -43,6 +45,8 @@ def main():
     theta_min_mm = args.theta_lo_mm 
     theta_max_mm = args.theta_up_mm 
     ntheta_bins_mm = args.t_bins_mm
+    
+    out_path = args.output_path
 
     def top_hat(x,width_low, width_high, location):
         return (np.heaviside(x- (location-width_low),1)- np.heaviside(x-(location + width_high),1))/(width_high + width_low)
@@ -88,15 +92,15 @@ def main():
         theta_l = theta_ul_bins[i_theta]/60/180*np.pi
         K_gg = 2/(theta_u**2 - theta_l**2)/fourier_ell*(theta_u*jv(1,theta_u*fourier_ell) - theta_l*jv(1,theta_l*fourier_ell))
         if i_theta+1 < 10:
-            filename_gg = "./../rcf/fourier_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
+            filename_gg = out_path + "fourier_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
         else:
-            filename_gg = "./../rcf/fourier_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
+            filename_gg = out_path + "fourier_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
         np.savetxt(filename_gg,np.array([fourier_ell,K_gg]).T)
         R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
         if i_theta+1 < 10:
-            filename = "./../rcf/real_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
         else:
-            filename = "./../rcf/real_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
         np.savetxt(filename,np.array([real_theta,R]).T)
 
     # Define theta-range for gamma_t (i.e. gm)
@@ -111,15 +115,15 @@ def main():
         
         K_gm = 2/(xu**2 - xl**2)*(-xu*jv(1,xu) + xl*jv(1,xl) -2*jv(0,xu) + 2*jv(0,xl))
         if i_theta+1 < 10:
-            filename_gm = "./../rcf/fourier_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
+            filename_gm = out_path + "fourier_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
         else:
-            filename_gm = "./../rcf/fourier_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
+            filename_gm = out_path + "fourier_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
         np.savetxt(filename_gm,np.array([fourier_ell,K_gm]).T)
         R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
         if i_theta+1 < 10:
-            filename = "./../rcf/real_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
         else:
-            filename = "./../rcf/real_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
         np.savetxt(filename,np.array([real_theta,R]).T)
 
     # Define theta-range for xip_m (i.e. mm)
@@ -134,26 +138,26 @@ def main():
         xl = fourier_ell*theta_l
         K_mm = 2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl))
         if i_theta+1 < 10:
-            filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
+            filename_mm = out_path + "fourier_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
         else:
-            filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
+            filename_mm = out_path + "fourier_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
         np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T)
         K_mm = 2/(xu**2 - xl**2)*((xu - 8/xu)*jv(1,xu) - 8*jv(2,xu) - (xl-8/xl)*jv(1,xl) + 8*jv(2,xl))
         if i_theta+1 < 10:
-            filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
+            filename_mm = out_path + "fourier_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
         else:
-            filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
+            filename_mm = out_path + "fourier_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
         np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T)
         R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
         if i_theta+1 < 10:
-            filename = "./../rcf/real_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
         else:
-            filename = "./../rcf/real_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_mm_p_" + str(i_theta+1) + ".table"
         np.savetxt(filename,np.array([real_theta,R]).T)
         if i_theta+1 < 10:
-            filename = "./../rcf/real_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_mm_m_0" + str(i_theta+1) + ".table"
         else:
-            filename = "./../rcf/real_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
+            filename = out_path + "real_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
         np.savetxt(filename,np.array([real_theta,R]).T)
 
 
