@@ -68,9 +68,6 @@ private:
   std::vector<gsl_interp_accel *> acc_non_cov_Gauss_k2;
   std::vector<double> ell_w_ell;
 
-  uint sample_size;
-  double k_max;
-  double k_min;
   double converged;
   uint *int_index_integral;
 

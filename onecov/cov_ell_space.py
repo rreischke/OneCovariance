@@ -1010,7 +1010,7 @@ class CovELLSpace(PolySpectra):
                                     int(ell),
                                     los_chi[0],
                                     los_chi[-1]))*k_nonlimber
-                    self.Cell_gm[eidx, :,:, :, :] = np.sqrt(self.fijl)*simpson(
+                    self.Cell_gm[eidx,:, :, :] = np.sqrt(self.fijl[eidx])*simpson(
                         inner_integral_gm_clust[:, :, :, None]*inner_integral_gm_lens[:, :, None, :],
                         x = k_nonlimber, axis = 0)*2.0/np.pi
         if (self.mm or self.gm) and not self.tab_bools[2]:
@@ -1044,10 +1044,9 @@ class CovELLSpace(PolySpectra):
                                         int(ell),
                                         los_chi[0],
                                         los_chi[-1]))*k_nonlimber
-                    self.Cell_mm[eidx, :,:, :, :] = simpson(
+                    self.Cell_mm[eidx, :, :] = simpson(
                         inner_integral_mm[:, :, None]*inner_integral_mm[:, None, :],
-                        x = k_nonlimber, axis = 0)*2.0/np.pi*self.fijl
-                    self.Cell_mm[eidx, :,:] = self.Cell_mm[eidx, :, :]                     
+                        x = k_nonlimber, axis = 0)*2.0/np.pi*self.fijl[eidx]
 
 
             
