@@ -411,7 +411,11 @@ Running the code with ``config_3x2pt_arbitrary_summary.ini`` then gives the foll
 .. image:: correlation_coefficient_3x2pt_arbitrary.png
    :width: 790
 
-Note that in the output list file the spatial variables will just be labeled by indices and the probe names are the filenames of the filters.
+The labelling in the list output is the following: for each tracer, one can define a maximum of two summary statistics, we call them ``A`` and ``B``. Next, galaxy clustering will be named
+``gg``, galaxy-galaxy lensing ``gm`` and cosmic shear ``mmE``, and ``mmB`` for whatever is passed in the filter files respectively. So if you pass the :mathm:`\xi_\pm` filters,
+``mmE`` would correspond to :math:`\xi_+`. The observable collumn in the list output is then always a pair of this naming scheme, so for example:
+``gg_summary_A_gg_summary_A``, the first summary statistic passed for galaxy clustering.
+The spatial index of the summary statistic will simply be labeled by indices of each of the summary files.
    
 
 KiDS-1000 covariance

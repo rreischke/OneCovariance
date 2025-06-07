@@ -3022,15 +3022,15 @@ class Output():
                                 obs_copy += '__gm_summary_A'
                                 #obs_copy += str(summary['gm_summary_name'][0])
                         if mm and obs in ['xipxip', 'ggxip']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                            if i_r2 >= summary['arb_number_first_summary_mm']:
                                 #obs_copy += str(summary['mmE_summary_name'][1])
                                 obs_copy += '__mmE_summary_B'
                                 ri -= summary['arb_number_first_summary_mm']
                             else:
                                 #obs_copy = str(summary['mmE_summary_name'][0])
                                 obs_copy += '__mmE_summary_A'
-                        if mm and obs in ['xipxim', 'ximxim', 'ggxix']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                        if mm and obs in ['xipxim', 'ximxim', 'ggxim']:
+                            if i_r2 >= summary['arb_number_first_summary_mm']:
                                 #obs_copy += str(summary['mmB_summary_name'][1])
                                 obs_copy += '__mmB_summary_B'
                                 ri -= summary['arb_number_first_summary_mm']
@@ -3220,15 +3220,15 @@ class Output():
                                 #obs_copy += str(summary['gm_summary_name'][0])
                                 obs_copy += '__gm_summary_A'
                         if mm and obs in ['xipxip']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                            if i_r2 >= summary['arb_number_first_summary_mm']:
                                 #obs_copy += str(summary['mmE_summary_name'][1])
                                 obs_copy += '__mmE_summary_B'
                                 ri -= summary['arb_number_first_summary_mm']
                             else:
                                 #obs_copy += str(summary['mmE_summary_name'][0])
                                 obs_copy += '__mmE_summary_A'
-                        if mm and obs in ['xipxim', 'ximxim']:
-                            if i_r1 >= summary['arb_number_first_summary_mm']:
+                        if mm and obs in ['xipxim', 'ximxim', 'ggxim']:
+                            if i_r2 >= summary['arb_number_first_summary_mm']:
                                 #obs_copy += str(summary['mmB_summary_name'][1])
                                 obs_copy += '__mmB_summary_B'
                                 ri -= summary['arb_number_first_summary_mm']
@@ -3574,7 +3574,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip', 'ggxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3582,7 +3582,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim', 'ggxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3666,7 +3666,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3674,7 +3674,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3762,7 +3762,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3770,7 +3770,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3853,7 +3853,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip', 'ggxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3861,7 +3861,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim', 'ggxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3973,7 +3973,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -3981,7 +3981,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -4068,7 +4068,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -4076,7 +4076,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -4168,7 +4168,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -4176,7 +4176,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -4263,7 +4263,7 @@ class Output():
                                                             #obs_copy += str(summary['gm_summary_name'][0])
                                                             obs_copy += '__gm_summary_A'
                                                     if mm and obs in ['xipxip', 'ggxip']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmE_summary_name'][1])
                                                             obs_copy += '__mmE_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
@@ -4271,7 +4271,7 @@ class Output():
                                                             #obs_copy += str(summary['mmE_summary_name'][0])
                                                             obs_copy += '__mmE_summary_A'
                                                     if mm and obs in ['xipxim', 'ximxim', 'ggxim']:
-                                                        if i_r1 >= summary['arb_number_first_summary_mm']:
+                                                        if i_r2 >= summary['arb_number_first_summary_mm']:
                                                             #obs_copy += str(summary['mmB_summary_name'][1])
                                                             obs_copy += '__mmB_summary_B'
                                                             ri -= summary['arb_number_first_summary_mm']
