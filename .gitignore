@@ -21,6 +21,7 @@ levin.egg-info
 !/output/Cell_gg.ascii
 !/output/Cell_gkappa.ascii
 !/output/Cell_kappakappa.ascii
+!/docs/requirements.txt
 /comparison_davide
 /my_inputs/*
 test.ipynb
