@@ -27,6 +27,9 @@ else:
     fileinp = FileInput(bias)
     read_in_tables = fileinp.read_input()
 
+safe_gauss = covterms['gauss']
+covterms['gauss'] = True
+
 
 if not observables['arbitrary_summary']['do_arbitrary_summary']:
     if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
@@ -40,6 +43,7 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
             observables, output, bias,  hod, survey_params, prec, read_in_tables)
         observables['observables']['is_cell'] = True
         out = Output(output, covell.ellrange_clustering, covell.ellrange_lensing)
+        covterms['gauss'] = safe_gauss
         out.write_cov(covterms, observables, covell.n_tomo_clust,
                     covell.n_tomo_lens, covell.ellrange,
                     covariance_in_ell_space[0],
@@ -55,6 +59,7 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
         covariance_in_theta_space = covtheta.calc_covTHETA(
             observables, output, bias,  hod, survey_params, prec, read_in_tables)
         out = Output(output, covtheta.theta_bins_clustering, covtheta.theta_bins_lensing)
+        covterms['gauss'] = safe_gauss
         out.write_cov(covterms, observables, covtheta.n_tomo_clust,
                     covtheta.n_tomo_lens, covtheta.thetabins,
                     covariance_in_theta_space[0],
@@ -67,6 +72,7 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
                             cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
         covariance_COSEBIS = covcosebis.calc_covCOSEBI(observables, output, bias,  hod, survey_params, prec, read_in_tables)
         out = Output(output , covcosebis.array_En_g_modes, covcosebis.array_En_modes)
+        covterms['gauss'] = safe_gauss
         out.write_cov(covterms, observables, covcosebis.n_tomo_clust,
                     covcosebis.n_tomo_lens, covcosebis.ellrange,
                     covariance_COSEBIS[0],
@@ -80,6 +86,7 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
                             cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
         covariance_bp = covbp.calc_covbandpowers(observables, output, bias,  hod, survey_params, prec, read_in_tables)
         out = Output(output, covbp.ell_bins_clustering, covbp.ell_bins_lensing)
+        covterms['gauss'] = safe_gauss
         out.write_cov(covterms, observables, covbp.n_tomo_clust,
                     covbp.n_tomo_lens, covbp.ellrange,
                     covariance_bp[0],
@@ -92,6 +99,7 @@ else:
                             cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
     covariance_arb = covARB.calc_covarbsummary(observables, output, bias,  hod, survey_params, prec, read_in_tables)
     out = Output(output)
+    covterms['gauss'] = safe_gauss
     out.write_arbitrary_cov(covterms, observables, covARB.n_tomo_clust,
                 covARB.n_tomo_lens, read_in_tables,
                 covariance_arb[0],

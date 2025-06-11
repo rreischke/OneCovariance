@@ -65,7 +65,6 @@ class Output():
         self.filename = output_dict['file']
         self.__check_filetype()
         self.style = output_dict['style']
-        
         self.plot = output_dict['make_plot']
         self.trispecfile = output_dict['trispec']
         self.Cellfile = output_dict['Cell']
@@ -358,6 +357,10 @@ class Output():
         self.has_gauss, self.has_nongauss, self.has_ssc = cov_dict['gauss'], cov_dict['nongauss'], cov_dict['ssc']
         self.has_csmf = obs_dict['observables']['csmf']
         gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
+        if obs_dict['ELLspace']['n_spec'] != 0:
+            self.style = "matrix"
+            self.filename = [s for s in self.filename if 'matrix' in s or 'mat' in s]
+
 
         obslist, obsbool, obslength = self.__get_obslist(obs_dict)
         gg, gm, mm = obsbool[0], obsbool[3], obsbool[5]
@@ -414,7 +417,7 @@ class Output():
                 "'ggxim', 'gmgm', 'gmxip', 'gmxim', 'xipxip', 'xi_pm', " +
                 "'xi_mm']. Replacing the respective inputs with 0 or None " +
                 "is supported.")
-                
+    
         sampledim = self.__get_sampledim(gauss, nongauss, ssc)
         gaussidx = 0
         for idx in range(obslength):
@@ -528,7 +531,12 @@ class Output():
         self.has_csmf = obs_dict['observables']['csmf']
         self.is_cell = obs_dict['observables']['is_cell']
         gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
-
+        if obs_dict['ELLspace']['n_spec'] != 0:
+            self.style = "matrix"
+            self.filename = [s for s in self.filename if 'matrix' in s or 'mat' in s]
+            print("For 6x2pt type covariances matrices, only the matrix output is supported.")
+            print("The diagonals of the matrix are in the following order: 'ss', 'sp', 'pp', 'sm', 'pm', 'mm'.")
+            print("Here 'p','s' and 'm' stand for photometric clustering, spectroscopic clustering and lensing respectively.")
         obslist, obsbool, obslength = self.__get_obslist(obs_dict)
         gg, gm, mm = obsbool[0], obsbool[3], obsbool[5]
         xipp, xipm, ximm = None, None, None
@@ -1010,6 +1018,184 @@ class Output():
             fig.savefig(filename, bbox_inches='tight', pad_inches=0.1)
 
         print("Plotting correlation matrix")
+
+    
+    def plot_corrcoeff_matrix_6x2pt(self,
+                                    obs_dict,
+                                    covmatrix, 
+                                    cov_diag,
+                                    proj_quant,
+                                    n_tomo_clust,
+                                    n_tomo_lens,
+                                    sampledim,
+                                    filename = None,
+                                    fct_args = None):
+        """
+        Plots the Pearson correlation coefficient of the covariance matrix
+        to a file depending on the specifications in the config.ini.
+
+        Parameters
+        ----------
+        cov_dict : dictionary
+            Specifies which terms of the covariance (Gaussian, non-Gaussian,
+            super-sample covariance) should be calculated. To be passed from
+            the read_input method of the Input class.
+        obs_dict : dictionary
+            with the following keys (To be passed from the read_input method
+            of the Input class.)
+            'observables' : dictionary
+                Specifies which observables (cosmic shear, galaxy-galaxy
+                lensing and/or clustering) should be calculated. Also,
+                indicates whether cross-terms are evaluated.
+            'ELLspace' : dictionary
+                Specifies the exact details of the projection to ell space.
+                The projection from wavefactor k to angular scale ell is
+                done first, followed by the projection to real space in this
+                class
+            'THETAspace' : dictionary
+                Specifies the exact details of the projection to real space,
+                e.g., theta_min/max and the number of theta bins to be
+                calculated.
+            'COSEBIs' : dictionary
+                Specifies the exact details of the projection to COSEBIs,
+                e.g. the number of modes to be calculated.
+            'bandpowers' : dictionary
+                Specifies the exact details of the projection to bandpowers,
+                e.g. the ell modes and their spacing.
+        covmatrix : 2d array
+            The full covariance matrix with all contributions 
+        cov_diag : 2d array
+            The diagonal block part of the covariance matrix
+        n_tomo_clust : int
+            Number of clustering (lens) bins
+        n_tomo_lens : int
+            Number of lensing (source) bins
+        sampledim : int
+            Number of sample bins
+        filename : str
+            Filename of the plot
+        """
+        obslist, obsbool, obslength, mult, gg, gm, mm, xipp, xipm, ximm = \
+            fct_args
+        ratio = len(covmatrix) / 140
+        if self.tex:
+            plt.rc('text', usetex=True)
+            #plt.rc('image', interpolation='none')
+
+        else:
+            plt.rc('text', usetex=False)
+            #plt.rc('image', interpolation='none')
+
+        fig, ax = plt.subplots(1, 1, figsize=(12,12))
+
+        corr_covmatrix = self.__correlation_matrix(covmatrix)
+        
+        limit = max(-min(corr_covmatrix.flatten()), max(corr_covmatrix.flatten()))
+        cbar = ax.imshow(corr_covmatrix, cmap = 'seismic', 
+                            extent = [0, len(corr_covmatrix), 0, len(corr_covmatrix)],
+                            vmin=-limit, vmax=limit)
+        fig.colorbar(cbar, location='bottom', shrink=.775, aspect=30, pad=0.055).ax.tick_params(axis='x', direction='in')
+        ax.text(len(covmatrix)/2, -6*ratio, 'Correlation coefficients', fontsize=16, ha='center', va='center')
+
+        
+        labels_position = []
+        labels_position_y = []
+        labels_text = []
+        position = 0
+        old_position = 0
+        if gg:
+            sub_position_tomo = 0
+            for sub_tomo in range(int(self.six_times_two_s_tomo_bin*(self.six_times_two_s_tomo_bin + 1)/2)):
+                sub_position_sample = sub_position_tomo
+                sub_position_tomo += self.six_times_two_ss_spatial_index
+                ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+            position += self.six_times_two_ss_spatial_index*self.six_times_two_s_tomo_bin*(self.six_times_two_s_tomo_bin + 1)/2
+            old_position = position
+            labels_position.append(position/2)
+            labels_position_y.append(len(covmatrix) - position/2)
+            labels_text.append(r'$C^{\mathrm{ss}}_\mathrm{gg}$')
+            ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+            ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        
+            for sub_tomo in range(int(self.six_times_two_p_tomo_bin**self.six_times_two_s_tomo_bin)):
+                sub_position_sample = sub_position_tomo
+                sub_position_tomo += self.six_times_two_ps_spatial_index
+                ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+            position += self.six_times_two_p_tomo_bin*self.six_times_two_s_tomo_bin*self.six_times_two_ps_spatial_index
+            labels_position.append(old_position + (position- old_position)/2)
+            labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
+            labels_text.append(r'$C^{\mathrm{sp}}_\mathrm{gg}$')
+            old_position = position
+            ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+            ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+            
+            for sub_tomo in range(int(self.six_times_two_p_tomo_bin*(self.six_times_two_p_tomo_bin + 1)/2)):
+                sub_position_sample = sub_position_tomo
+                sub_position_tomo += self.six_times_two_pp_spatial_index
+                ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+            position += self.six_times_two_pp_spatial_index*self.six_times_two_p_tomo_bin*(self.six_times_two_p_tomo_bin + 1)/2
+            labels_position.append(old_position + (position- old_position)/2)
+            labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
+            labels_text.append(r'$C^{\mathrm{pp}}_\mathrm{gg}$')
+            old_position = position
+            ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+            ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        
+        if gm:
+            sub_position_tomo = old_position
+            for sub_tomo in range(int(self.six_times_two_s_tomo_bin*self.six_times_two_m_tomo_bin)):
+                sub_position_sample = sub_position_tomo
+                sub_position_tomo += self.six_times_two_sm_spatial_index
+                ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+            position += self.six_times_two_ps_spatial_index*self.six_times_two_s_tomo_bin*self.six_times_two_m_tomo_bin
+            labels_position.append(old_position + (position- old_position)/2)
+            labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
+            labels_text.append(r'$C^{\mathrm{s}}_\mathrm{gm}$')
+            old_position = position
+            ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+            ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+
+
+            for sub_tomo in range(int(self.six_times_two_p_tomo_bin*self.six_times_two_m_tomo_bin)):
+                sub_position_sample = sub_position_tomo
+                sub_position_tomo += self.six_times_two_pm_spatial_index
+                ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+            position += self.six_times_two_pm_spatial_index*self.six_times_two_p_tomo_bin*self.six_times_two_m_tomo_bin
+            labels_position.append(old_position + (position- old_position)/2)
+            labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
+            labels_text.append(r'$C^{\mathrm{p}}_\mathrm{gm}$')
+            old_position = position
+            ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+            ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        
+        ax.xaxis.tick_top()
+        
+        if mm:
+            sub_position_tomo = old_position
+            for sub_tomo in range(int(self.six_times_two_m_tomo_bin*(self.six_times_two_m_tomo_bin+1)/2)):
+                sub_position_sample = sub_position_tomo
+                sub_position_tomo += self.six_times_two_mm_spatial_index
+                ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+            position += self.six_times_two_mm_spatial_index*self.six_times_two_m_tomo_bin*(self.six_times_two_m_tomo_bin+1)/2
+            labels_position.append(old_position + (position- old_position)/2)
+            labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
+            labels_text.append(r'$C_\mathrm{mm}$')
+            old_position = position
+            ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
+            ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        plt.yticks(labels_position_y, labels_text, rotation=45)
+        plt.xticks(labels_position, labels_text,rotation=45,)
+
+        if filename is not None:
+            fig.savefig(filename, bbox_inches='tight', pad_inches=0.1)
+
+    print("Plotting correlation matrix")
 
     def __write_cov_list(self,
                          cov_dict,
@@ -5399,28 +5585,31 @@ class Output():
                     np.savetxt(fn_reduced, cov2d_total_reduced, fmt='%.6e', delimiter=' ')
 
         else:
-            gauss = [gauss[0]+gauss[1]+gauss[2],
-                     gauss[3]+gauss[4]+gauss[5],
-                     gauss[6]+gauss[7]+gauss[8], 
-                     gauss[9]+gauss[10]+gauss[11],
-                     gauss[12]+gauss[13]+gauss[14], 
-                     gauss[15]+gauss[16]+gauss[17],
-                     gauss[18]+gauss[19]+gauss[20], 
-                     gauss[21]+gauss[22]+gauss[23], 
-                     gauss[24]+gauss[25]+gauss[26], 
-                     gauss[27]+gauss[28]+gauss[29],
-                     gauss[30]+gauss[31]+gauss[32],
-                     gauss[33]+gauss[34]+gauss[35],
-                     gauss[36]+gauss[37]+gauss[38],
-                     gauss[39]+gauss[40]+gauss[41],
-                     gauss[42]+gauss[43]+gauss[44],
-                     gauss[45]+gauss[46]+gauss[47],
-                     gauss[48]+gauss[49]+gauss[50],
-                     gauss[51]+gauss[52]+gauss[53],
-                     gauss[54]+gauss[55]+gauss[56],
-                     gauss[57]+gauss[58]+gauss[59],
-                     gauss[60]+gauss[61]+gauss[62],
-                     gauss[63]+gauss[64]+gauss[65]]
+            if mult == 3:
+                gauss = [gauss[0]+gauss[1]+gauss[2],
+                        gauss[3]+gauss[4]+gauss[5],
+                        gauss[6]+gauss[7]+gauss[8], 
+                        gauss[9]+gauss[10]+gauss[11],
+                        gauss[12]+gauss[13]+gauss[14], 
+                        gauss[15]+gauss[16]+gauss[17],
+                        gauss[18]+gauss[19]+gauss[20], 
+                        gauss[21]+gauss[22]+gauss[23], 
+                        gauss[24]+gauss[25]+gauss[26], 
+                        gauss[27]+gauss[28]+gauss[29],
+                        gauss[30]+gauss[31]+gauss[32],
+                        gauss[33]+gauss[34]+gauss[35],
+                        gauss[36]+gauss[37]+gauss[38],
+                        gauss[39]+gauss[40]+gauss[41],
+                        gauss[42]+gauss[43]+gauss[44],
+                        gauss[45]+gauss[46]+gauss[47],
+                        gauss[48]+gauss[49]+gauss[50],
+                        gauss[51]+gauss[52]+gauss[53],
+                        gauss[54]+gauss[55]+gauss[56],
+                        gauss[57]+gauss[58]+gauss[59],
+                        gauss[60]+gauss[61]+gauss[62],
+                        gauss[63]+gauss[64]+gauss[65]]
+            else:
+                ...
             """
             gggg_ssss_new, gggg_sssp_new, gggg_sspp_new, \
                 gggg_spsp_new, gggg_ppsp_new, gggg_pppp_new, \
@@ -5432,15 +5621,32 @@ class Output():
                 mmmm_mmmm_new
             """        
             if self.has_nongauss and self.has_ssc:
-                cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(len(gauss))]
+                if self.has_gauss:
+                    cov = [gauss[idx]+nongauss[idx]+ssc[idx] for idx in range(len(gauss))]
+                else:
+                    cov = [nongauss[idx]+ssc[idx] for idx in range(len(gauss))]
             if self.has_nongauss and not self.has_ssc:
-                cov = [gauss[idx]+nongauss[idx] for idx in range(len(gauss))]
+                if self.has_gauss:
+                    cov = [gauss[idx]+nongauss[idx] for idx in range(len(gauss))]
+                else:
+                    cov = [nongauss[idx] for idx in range(len(gauss))]
             if not self.has_nongauss and self.has_ssc:
-                cov = [gauss[idx]+ssc[idx] for idx in range(len(gauss))]
+                if self.has_gauss:
+                    cov = [gauss[idx]+ssc[idx] for idx in range(len(gauss))]
+                else:
+                    cov = [ssc[idx] for idx in range(len(gauss))]
             if not self.has_nongauss and not self.has_ssc:
                 cov = [gauss[idx] for idx in range(len(gauss))]
             
-
+            self.six_times_two_ss_spatial_index = None
+            self.six_times_two_ps_spatial_index = None
+            self.six_times_two_pp_spatial_index = None
+            self.six_times_two_sm_spatial_index = None
+            self.six_times_two_pm_spatial_index = None
+            self.six_times_two_mm_spatial_index = None
+            self.six_times_two_s_tomo_bin = None
+            self.six_times_two_p_tomo_bin = None
+            self.six_times_two_m_tomo_bin = None
             cov_diag = []
             if gg:
                 covariance_gggg_ssss = self.__create_matrix_diagonal(cov[0], True, True, True, True)
@@ -5449,7 +5655,11 @@ class Output():
                 covariance_gggg_spsp = self.__create_matrix(cov[3],False, False)
                 covariance_gggg_ppsp = self.__create_matrix(cov[4],True, False)
                 covariance_gggg_pppp = self.__create_matrix(cov[5],True, True)
-
+                self.six_times_two_ss_spatial_index = len(cov[0][:,0,0,0,0,0,0,0])
+                self.six_times_two_ps_spatial_index = len(cov[1][0,:,0,0,0,0,0,0])
+                self.six_times_two_pp_spatial_index = len(cov[2][0,:,0,0,0,0,0,0])
+                self.six_times_two_s_tomo_bin = len(cov[0][0,0,0,0,:,0,0,0])
+                self.six_times_two_p_tomo_bin = len(cov[1][0,0,0,0,0,0,0,:])
                 cov2d = np.block([[covariance_gggg_ssss, covariance_gggg_sssp, covariance_gggg_sspp],
                                   [covariance_gggg_sssp.T, covariance_gggg_spsp, covariance_gggg_ppsp.T],
                                   [covariance_gggg_sspp.T, covariance_gggg_ppsp, covariance_gggg_pppp]])
@@ -5460,6 +5670,10 @@ class Output():
                 if gm:
                     covariance_gggm_sssm = self.__create_matrix_diagonal(cov[6], True, False, True, False)
                     covariance_gggm_sspm = self.__create_matrix_diagonal(cov[7], True, False, True, False)
+                    self.six_times_two_sm_spatial_index = len(cov[6][0,:,0,0,0,0,0,0])
+                    self.six_times_two_pm_spatial_index = len(cov[7][0,:,0,0,0,0,0,0])
+                    self.six_times_two_m_tomo_bin = len(cov[6][0,0,0,0,0,0,0,:])
+
                     covariance_gggm_spsm = self.__create_matrix(cov[8], False, False)
                     covariance_gggm_sppm = self.__create_matrix(cov[9],False,False)
                     covariance_gggm_ppsm = self.__create_matrix(cov[10],True,False)
@@ -5477,6 +5691,7 @@ class Output():
                                       [covariance_gggm_sspm.T, covariance_gggm_sppm.T, covariance_gggm_pppm.T, covariance_gmgm_pmsm, covariance_gmgm_pmpm]])
                     if mm:
                         covariance_mmmm_mmmm = self.__create_matrix(cov[21],True,True)
+                        self.six_times_two_mm_spatial_index = len(cov[21][0,:,0,0,0,0,0,0])
                         cov_diag.append(covariance_mmmm_mmmm)
                         covariance_ggmm_ssmm = self.__create_matrix_diagonal(cov[12],True,False,True,True)
                         covariance_ggmm_spmm = self.__create_matrix(cov[13],False,True)
@@ -5491,6 +5706,9 @@ class Output():
                                           [covariance_ggmm_ssmm.T, covariance_ggmm_spmm.T, covariance_ggmm_ppmm.T, covariance_mmgm_mmsm, covariance_mmgm_mmpm, covariance_mmmm_mmmm]])
                 elif mm:
                     covariance_mmmm_mmmm = self.__create_matrix(cov[21],True,True)
+                    self.six_times_two_m_tomo_bin = len(cov[21][0,0,0,0,0,0,0,:])
+                    self.six_times_two_mm_spatial_index = len(cov[21][0,:,0,0,0,0,0,0])
+
                     cov_diag.append(covariance_mmmm_mmmm)
                     covariance_ggmm_ssmm = self.__create_matrix_diagonal(cov[12],True,False,True,True)
                     covariance_ggmm_spmm = self.__create_matrix(cov[13],False,True)
@@ -5504,6 +5722,10 @@ class Output():
                 covariance_gmgm_smpm = self.__create_matrix(cov[16],False,False)
                 covariance_gmgm_pmsm = self.__create_matrix(cov[17],False,False)
                 covariance_gmgm_pmpm = self.__create_matrix(cov[18],False,False)
+                self.six_times_two_sm_spatial_index = len(cov[15][0,:,0,0,0,0,0,0])
+                self.six_times_two_pm_spatial_index = len(cov[16][0,:,0,0,0,0,0,0])
+                self.six_times_two_m_tomo_bin = len(cov[6][0,0,0,0,0,0,0,:])
+
                 cov_diag.append(covariance_gmgm_smsm)
                 cov_diag.append(covariance_gmgm_pmpm)
                 cov2d = np.block([[covariance_gmgm_smsm, covariance_gmgm_smpm],
@@ -5518,9 +5740,11 @@ class Output():
                                       [covariance_mmgm_mmsm, covariance_mmgm_mmpm, covariance_mmmm_mmmm]])
             elif mm:
                 covariance_mmmm_mmmm = self.__create_matrix(cov[21],True,True)
+                self.six_times_two_m_tomo_bin = len(cov[21][0,0,0,0,0,0,0,:])
                 cov_diag.append(covariance_mmmm_mmmm)
                 cov2d = covariance_mmmm_mmmm
             cov2d_total = np.copy(cov2d)
+            
 
             if cov_dict['split_gauss']:
                 cov = [gauss[idx] for idx in range(len(gauss))]
@@ -5782,37 +6006,45 @@ class Output():
                             cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                         if self.has_ssc:
                             cov2d_ssc[j,i] = cov2d_ssc[i,j]
-            if len(np.where(np.linalg.eig(cov2d_total)[0] < 0)[0]) > 0:
+            if len(np.where(np.linalg.eig(cov2d_total)[0] <= 0)[0]) > 0:
                 print("ALARM: The resulting covariance matrix has negative eigenvalues")
                 print("Try to adjust the accuracy settings in the config file:")
                 print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
                 print("For bandpower covariance reduce bandpower_accuracy.")
                 print("For COSEBI covariance reduce En_accuracy.")
-            '''if obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
-                obslist[7] = 'CE_mmCE_mm'
-                obslist[9] = 'CB_mmCB_mm'
-            if obs_dict['observables']['est_clust'] == 'bandpowers' and obs_dict['observables']['clustering'] == True:
-                obslist[0] = 'CE_ggCE_gg'
-            if obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
-                obslist[4] = 'CE_gmCE_gm
-                '''
             
-            hdr_str = 'Covariance matrix with the diagonals in the order: '
-            '''hdr_str += obslist[0]+' ' if obsbool[0] else ''
-            if obslength == 6:
-                hdr_str += obslist[3]+' ' if obsbool[3] else ''
-                hdr_str += obslist[5]+' ' if obsbool[5] else ''
-            elif obslength == 10:
-                hdr_str += obslist[4]+' ' if obsbool[4] else ''
-                hdr_str += obslist[7]+' ' if obsbool[7] else ''
-                hdr_str += obslist[9]+' ' if obsbool[9] else ''
-            hdr_str += 'with '
-            if n_tomo_clust is not None:
-                hdr_str += str(n_tomo_clust) + ' tomographic clustering bins and '
-            if n_tomo_lens is not None:
-                hdr_str += str(n_tomo_lens) + ' tomographic lensing bins and '
-            hdr_str += str(len(proj_quant)) + ' elements per tomographic bin'
-            '''
+            hdr_str = 'Covariance matrix with the diagonals in the order:\n'
+            if gg:
+                hdr_str += 'spec_spec with '
+                hdr_str += str(self.six_times_two_ss_spatial_index) + ' spatial indices and '
+                hdr_str += str(self.six_times_two_s_tomo_bin) + ' tomographic bins\n'
+                hdr_str += 'spec_phot with '
+                hdr_str += str(self.six_times_two_ps_spatial_index) + ' spatial indices and '
+                hdr_str += str(self.six_times_two_s_tomo_bin) + ' and ' + str(self.six_times_two_p_tomo_bin) + ' tomographic bins respectively\n'
+                hdr_str += 'phot_phot with '
+                hdr_str += str(self.six_times_two_pp_spatial_index) + ' spatial indices and '
+                hdr_str += str(self.six_times_two_p_tomo_bin) + ' tomographic bins\n'
+                
+            if gm:
+                hdr_str += 'spec_shear with '
+                hdr_str += str(self.six_times_two_sm_spatial_index) + ' spatial indices and '
+                hdr_str += str(self.six_times_two_s_tomo_bin) + ' and ' + str(self.six_times_two_m_tomo_bin) + ' tomographic bins respectively\n'
+
+                hdr_str += 'phot_shear with '
+                hdr_str += str(self.six_times_two_pm_spatial_index) + ' spatial indices and '
+                hdr_str += str(self.six_times_two_p_tomo_bin) + ' and ' + str(self.six_times_two_m_tomo_bin) + ' tomographic bins respectively\n'
+                
+            if mm:
+                hdr_str += 'shear_shear with '
+                hdr_str += str(self.six_times_two_mm_spatial_index) + ' spatial indices and '
+                hdr_str += str(self.six_times_two_m_tomo_bin) + ' tomographic bins\n'
+                
+
+            if self.plot:
+                self.plot_corrcoeff_matrix_6x2pt(obs_dict, cov2d_total, cov_diag, proj_quant, n_tomo_clust, 
+                    n_tomo_lens, sampledim, self.plot ,fct_args)
+        
+            
             if 'matrix' in self.style:
                 if not cov_dict['split_gauss']:
                     print("Writing matrix output file.")

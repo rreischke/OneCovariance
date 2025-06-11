@@ -776,7 +776,7 @@ class Input:
                                 config_name + ", [covELLspace settings]: 'ell_spec_min = 100'.")
                 if self.ell_spec_max is None:
                     raise Exception("ConfigError: An estimator is " +
-                                "'C_ell' but no maximum ell for the spectroscopic projection is " +
+                                "'C_ell' but no maximum ell for the spectrsoscopic projection is " +
                                 "specified. Must be adjusted in config file " +
                                 config_name + ", [covELLspace settings]: 'ell_spec_max = 2000'.")
                 if self.ell_spec_bins is None:
@@ -849,11 +849,13 @@ class Input:
         if self.ell_type is None:
             self.ell_type = 'log'
         if self.cosmicshear and self.est_shear == 'C_ell' and (self.ell_min_lensing is not None and self.ell_bins_lensing is not None and self.ell_max_lensing is not None and self.ell_type_lensing is not None):
-            self.ell_min = self.ell_min_lensing
-            self.ell_max = self.ell_max_lensing
+            if self.ell_min > self.ell_min_lensing:
+                self.ell_min = self.ell_min_lensing
+            if self.ell_max < self.ell_max_lensing:
+                self.ell_max = self.ell_max_lensing
             self.ell_bins = 100
             self.ell_type = 'log'
-        if ((self.ggl and self.est_ggl == 'C_ell') or (self.clustering and self.est_clust == 'C_ell')) and (self.ell_min_lensing is not None and self.ell_bins_lensing is not None and self.ell_max_lensing is not None and self.ell_type_lensing is not None):
+        if ((self.ggl and self.est_ggl == 'C_ell') or (self.clustering and self.est_clust == 'C_ell')) and (self.ell_min_clustering is not None and self.ell_bins_clustering is not None and self.ell_max_clustering is not None and self.ell_type_clustering is not None):
             if self.ell_min > self.ell_min_clustering:
                 self.ell_min = self.ell_min_clustering
             if self.ell_max < self.ell_max_clustering:

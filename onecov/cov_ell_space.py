@@ -224,7 +224,8 @@ class CovELLSpace(PolySpectra):
         
         if (self.mm and self.est_shear == 'C_ell') and ((self.gm and self.est_ggl == 'C_ell') or (self.gg and self.est_clust == 'C_ell')):
             if (self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is None) or (self.ellrange_clustering_ul is None and self.ellrange_lensing_ul is not None):
-                raise Exception("ConfigError: You require the C_ell covariance for lensing and clustering or ggl. However, you only specified the ellrange for lensing and not for clustering/GGL or vice versa. Please fix this in the config file under covELLspace settings.")     
+                if self.ellrange_spec_ul is None and self.ellrange_photo_ul is None:
+                    raise Exception("ConfigError: You require the C_ell covariance for lensing and clustering or ggl. However, you only specified the ellrange for lensing and not for clustering/GGL or vice versa. Please fix this in the config file under covELLspace settings.")     
         self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
         self.deg2torad2 = 180 / np.pi * 180 / np.pi
         self.arcmin2torad2 = 60*60 * self.deg2torad2
@@ -388,25 +389,27 @@ class CovELLSpace(PolySpectra):
                                         + np.log(self.ellrange_lensing_ul[:-1])))
 
 
+        self.ellrange_spec_ul = None
+        self.ellrange_photo_ul = None
         if covELLspacesettings['n_spec'] is not None and covELLspacesettings['n_spec'] != 0:
             if covELLspacesettings['ell_spec_type'] == 'lin':
                 self.ellrange_spec_ul = np.linspace(
                     covELLspacesettings['ell_spec_min'],
                     covELLspacesettings['ell_spec_max'],
-                    covELLspacesettings['ell_spec_bins'] + 1)
+                    covELLspacesettings['ell_spec_bins'] + 1).astype(int)
                 self.ellrange_spec = .5 * (self.ellrange_spec_ul[1:] + self.ellrange_spec_ul[:-1])
             else:
-                self.ellrange_spec_ul = np.geomspace(covELLspacesettings['ell_spec_min'], covELLspacesettings['ell_spec_max'], covELLspacesettings['ell_spec_bins'] + 1)
+                self.ellrange_spec_ul = np.geomspace(covELLspacesettings['ell_spec_min'], covELLspacesettings['ell_spec_max'], covELLspacesettings['ell_spec_bins'] + 1).astype(int)
                 self.ellrange_spec = np.exp(.5 * (np.log(self.ellrange_spec_ul[1:])
                                     + np.log(self.ellrange_spec_ul[:-1])))
             if covELLspacesettings['ell_photo_type'] == 'lin':
                 self.ellrange_photo_ul = np.linspace(
                     covELLspacesettings['ell_photo_min'],
                     covELLspacesettings['ell_photo_max'],
-                    covELLspacesettings['ell_photo_bins'] + 1)
+                    covELLspacesettings['ell_photo_bins'] + 1).astype(int)
                 self.ellrange_photo = .5 * (self.ellrange_photo_ul[1:] + self.ellrange_photo_ul[:-1])
             else:
-                self.ellrange_photo_ul = np.geomspace(covELLspacesettings['ell_photo_min'], covELLspacesettings['ell_photo_max'], covELLspacesettings['ell_photo_bins'] + 1)
+                self.ellrange_photo_ul = np.geomspace(covELLspacesettings['ell_photo_min'], covELLspacesettings['ell_photo_max'], covELLspacesettings['ell_photo_bins'] + 1).astype(int)
                 self.ellrange_photo = np.exp(.5 * (np.log(self.ellrange_photo_ul[1:])
                                     + np.log(self.ellrange_photo_ul[:-1])))
 
@@ -2472,6 +2475,7 @@ class CovELLSpace(PolySpectra):
             up_limit_4 = self.n_tomo_lens
     
         covariance_aux = covariance[:, :, :, :, lo_limit_1 : up_limit_1, lo_limit_2 : up_limit_2, lo_limit_3 : up_limit_3, lo_limit_4 : up_limit_4]
+        
         ellrange_12 = self.ellrange_photo
         ellrange_12_ul = self.ellrange_photo_ul
         if field1_spec or field2_spec:
@@ -2483,8 +2487,15 @@ class CovELLSpace(PolySpectra):
             ellrange_34 = self.ellrange_spec
             ellrange_34_ul = self.ellrange_spec_ul
         
+        if probe12 == "lens":
+            ellrange_12 = self.ellrange_lensing
+            ellrange_12_ul = self.ellrange_lensing_ul
+
+        if probe34 == "lens":
+            ellrange_34 = self.ellrange_lensing
+            ellrange_34_ul = self.ellrange_lensing_ul
+
         binned_covariance = np.zeros((len(ellrange_12), len(ellrange_34), self.sample_dim, self.sample_dim, up_limit_1 - lo_limit_1, up_limit_2 - lo_limit_2, up_limit_3 - lo_limit_3, up_limit_4 - lo_limit_4))
-            
         for i_ell in range(len(ellrange_12)):
             for j_ell in range(len(ellrange_34)):
                 integration_ell_12 = np.arange(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1]).astype(int)
@@ -2497,9 +2508,9 @@ class CovELLSpace(PolySpectra):
                         for j_tomo in range(up_limit_2 - lo_limit_2):
                             for k_tomo in range(up_limit_3 - lo_limit_3):
                                 for l_tomo in range(up_limit_4 - lo_limit_4):
-                                    if len(np.where(np.diagonal(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
-                                        spline = UnivariateSpline(self.ellrange,np.log(np.diagonal(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo])), k=2, s=0, ext=1)
-                                        result = full_sky_angle / max(area_12,area_34)/np.sum((2.*overlapping_elements + 1)/np.exp(spline(overlapping_elements)))
+                                    if np.any(np.diagonal(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo])!=0):
+                                        spline = UnivariateSpline(self.ellrange,np.diagonal(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo]), k=2, s=0, ext=1)
+                                        result = full_sky_angle / max(area_12,area_34)*np.sum(spline(overlapping_elements)/(2.*overlapping_elements + 1))/len(integration_ell_12)/len(integration_ell_34)
                                         binned_covariance[i_ell, j_ell, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo] = result
         return binned_covariance
     
@@ -2755,43 +2766,55 @@ class CovELLSpace(PolySpectra):
         if field3_spec or field4_spec:
             ellrange_34 = self.ellrange_spec
             ellrange_34_ul = self.ellrange_spec_ul
+
+        if probe12 == "lens":
+            ellrange_12 = self.ellrange_lensing
+            ellrange_12_ul = self.ellrange_lensing_ul
+
+        if probe34 == "lens":
+            ellrange_34 = self.ellrange_lensing
+            ellrange_34_ul = self.ellrange_lensing_ul
         
         binned_covariance = np.zeros((len(ellrange_12), len(ellrange_34), self.sample_dim, self.sample_dim, up_limit_1 - lo_limit_1, up_limit_2 - lo_limit_2, up_limit_3 - lo_limit_3, up_limit_4 - lo_limit_4))
-            
-        global aux__bin_non_Gaussian
 
-        def aux__bin_non_Gaussian(i_ell):
-            aux_result = np.zeros((len(ellrange_34), self.sample_dim, self.sample_dim, up_limit_1 - lo_limit_1, up_limit_2 - lo_limit_2, up_limit_3 - lo_limit_3, up_limit_4 - lo_limit_4))
-            for j_ell in range(len(ellrange_34)):
-                area12_ell = (ellrange_12_ul[i_ell +1] - ellrange_12_ul[i_ell])*ellrange_12[i_ell]
-                area34_ell = (ellrange_34_ul[j_ell +1] - ellrange_34_ul[j_ell])*ellrange_34[j_ell]
-                Numberi = int((np.abs(self.ellrange - ellrange_12_ul[i_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_12_ul[i_ell])).argmin())
-                Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())
-                integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
-                integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],Numberj)
-                ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34, indexing='ij')
-                for i_tomo in range(up_limit_1 - lo_limit_1):
-                    for j_tomo in range(up_limit_2 - lo_limit_2):
-                        for k_tomo in range(up_limit_3 - lo_limit_3):
-                            for l_tomo in range(up_limit_4 - lo_limit_4):
-                                if len(np.where(np.diagonal(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
-                                    if(np.all(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo] > 0)):
-                                        spline = RegularGridInterpolator((self.ellrange,self.ellrange), np.log(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo]),bounds_error= False, fill_value = None)
+        for i_tomo in range(up_limit_1 - lo_limit_1):
+            for j_tomo in range(up_limit_2 - lo_limit_2):
+                for k_tomo in range(up_limit_3 - lo_limit_3):
+                    for l_tomo in range(up_limit_4 - lo_limit_4):
+                        if len(np.where(np.diagonal(covariance_aux[:, :, 0,0, i_tomo, j_tomo, k_tomo, l_tomo]))[0]):
+                            islog = True
+                            if(np.all(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo] > 0)):
+                                spline = RegularGridInterpolator((self.ellrange,self.ellrange), np.log(covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo]),bounds_error= False, fill_value = None)
+                            else:
+                                islog = False
+                                spline = RegularGridInterpolator((self.ellrange,self.ellrange), covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
+                            for i_ell in range(len(ellrange_12_ul) - 1):
+                                area12_ell = np.pi*((ellrange_12_ul[i_ell +1])**2 - (ellrange_12_ul[i_ell])**2)                                            
+                                Numberi = int((np.abs(self.ellrange - ellrange_12_ul[i_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_12_ul[i_ell])).argmin())
+                                if Numberi < 3:
+                                        Numberi = 3
+                                if Numberi > 10:
+                                    Numberi = 10
+                                integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
+                                for j_ell in range(len(ellrange_34_ul) - 1):
+                                    area34_ell = np.pi*((ellrange_34_ul[j_ell +1])**2 - (ellrange_34_ul[j_ell])**2)                                            
+                                    Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())                
+                                    if Numberj < 3:
+                                        Numberj = 3
+                                    if Numberj > 10:
+                                        Numberj = 10
+                                    integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],Numberj)
+                                    ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34,indexing='ij')
+                                    if islog:
                                         result = simpson(simpson(np.exp(spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[None, :], x = integration_ell_34), x = integration_ell_12)
                                     else:
-                                        spline = RegularGridInterpolator(self.ellrange,self.ellrange, covariance_aux[:, :, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo],bounds_error= False, fill_value = None)
-                                        result = simpson(simpson((spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[:, None], x = integration_ell_34), x = integration_ell_12)
+                                        result = simpson(simpson((spline((ell1, ell2)))*integration_ell_12[:,None]*integration_ell_34[None, :], x = integration_ell_34), x = integration_ell_12)
                                     result /= (area12_ell*area34_ell)
+                                    result *= 4*np.pi**2
                                     if connected:
-                                        result *= full_sky_angle / max(area_12,area_34)
-                                    aux_result[ j_ell, 0, 0, i_tomo, j_tomo, k_tomo, l_tomo] = result
-            return aux_result
-        
-        pool = mp.Pool(self.num_cores)
-        binned_covariance = np.array(pool.map(
-            aux__bin_non_Gaussian, [i_ell for i_ell in range(len(ellrange_12))]))
-        pool.close()
-        pool.terminate()
+                                        result *=  self.deg2torad2/max(area_12,area_34)
+                                    binned_covariance[i_ell, j_ell, 0,0, i_tomo, j_tomo, k_tomo, l_tomo] = result  
+
         return binned_covariance
                                     
 
@@ -5169,7 +5192,11 @@ class CovELLSpace(PolySpectra):
                         x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                         flat_idx +=1
                 power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance_gggg = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+                if self.ellrange_spec is not None:
+                    area = np.sqrt(survey_params_dict['survey_area_clust'][0]*survey_params_dict['survey_area_clust'][1])
+                    survey_variance_gggg = np.sum(power * sum_m_a_lm,axis = 1)/(area**2/self.deg2torad2**2)
+                else:
+                    survey_variance_gggg = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     survey_params_dict['survey_area_clust']/self.deg2torad2/np.pi)
@@ -5228,7 +5255,11 @@ class CovELLSpace(PolySpectra):
                         x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                         flat_idx +=1
                 power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance_gmgm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
+                if self.ellrange_spec is not None:
+                    area = np.sqrt(survey_params_dict['survey_area_ggl'][0]*survey_params_dict['survey_area_ggl'][1])
+                    survey_variance_gmgm = np.sum(power * sum_m_a_lm,axis = 1)/(area**2/self.deg2torad2**2)
+                else:
+                    survey_variance_gmgm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     survey_params_dict['survey_area_ggl']/self.deg2torad2/np.pi)
@@ -5258,7 +5289,11 @@ class CovELLSpace(PolySpectra):
                         x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                         flat_idx +=1
                 power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance_gggm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_ggl']/self.deg2torad2**2)
+                if self.ellrange_spec is not None:
+                    area2 = np.sqrt(survey_params_dict['survey_area_clust'][0]*survey_params_dict['survey_area_clust'][1]*survey_params_dict['survey_area_ggl'][0]*survey_params_dict['survey_area_ggl'][1])
+                    survey_variance_gggm = np.sum(power * sum_m_a_lm,axis = 1)/(area2/self.deg2torad2**2)
+                else:
+                    survey_variance_gggm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_ggl']/self.deg2torad2**2)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     min(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_ggl'])/self.deg2torad2/np.pi)
@@ -5288,7 +5323,11 @@ class CovELLSpace(PolySpectra):
                         x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                         flat_idx +=1
                 power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance_ggmm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
+                if self.ellrange_spec is not None:
+                    area = np.sqrt(survey_params_dict['survey_area_clust'][0]*survey_params_dict['survey_area_clust'][1])
+                    survey_variance_ggmm = np.sum(power * sum_m_a_lm,axis = 1)/(area*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
+                else:
+                    survey_variance_ggmm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']*survey_params_dict['survey_area_lens']/self.deg2torad2**2)
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     min(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2/np.pi)
@@ -5317,7 +5356,12 @@ class CovELLSpace(PolySpectra):
                         x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                         flat_idx +=1
                 power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance_mmgm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens']*survey_params_dict['survey_area_ggl']/self.deg2torad2**2)
+                if self.ellrange_spec is not None:
+                    area = np.sqrt(survey_params_dict['survey_area_ggl'][0]*survey_params_dict['survey_area_ggl'][1])
+                    survey_variance_mmgm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens']*area/self.deg2torad2**2)
+                else:
+                    survey_variance_mmgm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens']*survey_params_dict['survey_area_ggl']/self.deg2torad2**2)
+                
             else:
                 angular_scale_of_circular_survey_in_rad = np.sqrt(
                     min(survey_params_dict['survey_area_ggl'], survey_params_dict['survey_area_lens'])/self.deg2torad2/np.pi)
