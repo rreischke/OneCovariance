@@ -1449,7 +1449,7 @@ class Setup():
                             overwrite=True)
         if ell is None:
             ell, sum_m_a_lm = [], []
-            NSIDE = 512
+            NSIDE = 1024
             NPIX = healpy.nside2npix(NSIDE)
             survey_area = max(survey_params_dict['survey_area_'+est1][0], survey_params_dict['survey_area_'+est2][0])
             survey_area_in_rad = survey_area*np.pi**2/(180**2)

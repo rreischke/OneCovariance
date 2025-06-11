@@ -3142,6 +3142,7 @@ class Input:
                               "given.")
 
         # logical order of how it is called later on gg -> mm -> gm
+        '''
         if self.read_mask_clust and self.read_mask_lens:
             if self.mask_file_clust == self.mask_file_lens:
                 self.read_mask_lens = False
@@ -3160,7 +3161,7 @@ class Input:
         if self.read_alm_lens and self.read_alm_ggl:
             if self.alm_file_lens == self.alm_file_ggl:
                 self.read_alm_ggl = False
-
+        '''
         # onto the cross terms
         if self.ssc and self.cross_terms:
             self.read_mask_clust_lens = False

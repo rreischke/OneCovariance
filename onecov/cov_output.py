@@ -531,7 +531,7 @@ class Output():
         self.has_csmf = obs_dict['observables']['csmf']
         self.is_cell = obs_dict['observables']['is_cell']
         gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
-        if obs_dict['ELLspace']['n_spec'] != 0:
+        if obs_dict['ELLspace']['n_spec'] != 0 and obs_dict['ELLspace']['n_spec'] is not None:
             self.style = "matrix"
             self.filename = [s for s in self.filename if 'matrix' in s or 'mat' in s]
             print("For 6x2pt type covariances matrices, only the matrix output is supported.")
@@ -2602,8 +2602,6 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         if np.any(self.projected_clust):
                                                             ri = self.projected_clust[i_r1]
                                                             rj = self.projected_clust[i_r2]
@@ -2701,8 +2699,6 @@ class Output():
                                             for i_s2 in range(sampledim2):
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
-                                                        ri = proj_quant[i_r1]
-                                                        rj = proj_quant[i_r2]
                                                         if np.any(self.projected_lens):
                                                             rj = self.projected_lens[i_r2]
                                                         else:

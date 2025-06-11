@@ -5403,6 +5403,8 @@ class CovELLSpace(PolySpectra):
                 spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
                                                 (self.aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
         else:
+            save_mm = self.mm
+            self.mm = True
             aux_gg = np.zeros((len(self.los_chi),
                                         len(self.mass_func.k),
                                         self.sample_dim))
@@ -5422,23 +5424,24 @@ class CovELLSpace(PolySpectra):
             t0 = time.time()
             for i_chi in range(self.los_interpolation_sampling):
                 self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
+                
                 aux_gg[i_chi, :, :], aux_gm[i_chi, :, :], self.aux_response_mm[i_chi, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
                 if self.gm:
                     for i_sample in range(self.sample_dim):
                         for i_tomo in range(self.n_tomo_clust):
                             bias_i_tomo = self.bias_of_zet[i_tomo](self.los_z[i_chi])
-                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] = self.aux_response_mm[i_chi, :, i_sample]*bias_i_tomo
-                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[:, i_sample]*bias_i_tomo**2
-                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] /= bias_i_tomo
+                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] = self.aux_response_mm[i_chi, :, i_sample]
+                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[:, i_sample]*bias_i_tomo
+                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] *= bias_i_tomo
                 if self.gg:
                     for i_sample in range(self.sample_dim):
                         for i_tomo in range(self.n_tomo_clust):
                             bias_i_tomo = self.bias_of_zet[i_tomo](self.los_z[i_chi])
                             for j_tomo in range(self.n_tomo_clust):
                                 bias_j_tomo = self.bias_of_zet[j_tomo](self.los_z[i_chi])
-                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] = self.aux_response_mm[i_chi, :, i_sample]*bias_i_tomo*bias_j_tomo
-                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_i_tomo + bias_j_tomo)*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]*bias_i_tomo*bias_j_tomo
-                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] /= (bias_i_tomo*bias_j_tomo)
+                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] = self.aux_response_mm[i_chi, :, i_sample]
+                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_i_tomo + bias_j_tomo)*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]
+                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] *= (bias_i_tomo*bias_j_tomo)
                 eta = (time.time()-t0) * \
                     (len(self.los_z)/(i_chi+1)-1)
                 print('\rPreparations for SSC calculation at '
@@ -5457,7 +5460,7 @@ class CovELLSpace(PolySpectra):
                                                         (self.aux_response_gg[:, :, i_sample, i_tomo, j_tomo]),bounds_error= False, fill_value = None))
             self.spline_responsePgg = spline_responsePgg    
             self.spline_responsePgm = spline_responsePgm   
-                    
+            self.mm = save_mm
 
         print("")
         print("Calculating SSC contribution in ell space")
