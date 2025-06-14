@@ -32,11 +32,36 @@ def main():
 
     ell_min = 1 # Minimum multipole
     ell_max = 1e5 # Maximum multipole
-    N_ell = args.nf # Number of Fourier modes
-    N_theta = args.nt
+    N_ell = args.nfourier # Number of Fourier modes
+    N_theta = args.ntheta
     get_W_ell_as_well = True # If true the Well are calculated
     num_cores = args.nthread #number of cores used
 
+
+    hdr_str_mm_plus_fourier = 'dimensionless COSEBI weights for En in Fourier space\n'
+    hdr_str_mm_plus_fourier += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'highest theta boundary = ' + str(tmax_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'ell      W(ell)'
+
+    hdr_str_mm_minus_fourier = 'dimensionless COSEBI weights for Bn in Fourier space\n'
+    hdr_str_mm_minus_fourier += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'highest theta boundary = ' + str(tmax_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'ell      W(ell)'
+
+
+    hdr_str_mm_plus_real = 'dimensionless COSEBI weights for En in Real space\n'
+    hdr_str_mm_plus_real += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_plus_real += 'highest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_plus_real += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_plus_real += 'theta[arcmin]      T_+(theta)'
+
+    hdr_str_mm_minus_real = 'dimensionless COSEBI weights for En in Real space\n'
+    hdr_str_mm_minus_real += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_minus_real += 'highest theta boundary = ' + str(tmax_mm) + '\n'
+    hdr_str_mm_minus_real += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_minus_real += 'theta[arcmin]      T_-(theta)'
 
     mp.dps = 160
     arcmintorad = 1./60./180.*np.pi
@@ -48,7 +73,6 @@ def main():
     tmin_mm *= arcmintorad
     tmax_mm *= arcmintorad
     theta_mm = np.geomspace(tmin_mm,tmax_mm, N_theta)
-
 
 
     #####################
@@ -205,10 +229,10 @@ def main():
             file_tpn = "./../dimless_cosebis/dimensionless_Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
             file_tmn = "./../dimless_cosebis/dimensionless_Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
             file_Wn = "./../dimless_cosebis/dimensionless_Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-        np.savetxt(file_tpn,tpn)
-        np.savetxt(file_tmn,tmn)    
+        np.savetxt(file_tpn,tpn, header=hdr_str_mm_plus_real)
+        np.savetxt(file_tmn,tmn, header=hdr_str_mm_minus_real)    
         if get_W_ell_as_well:
-            np.savetxt(file_Wn, np.array([ell,result_Well]).T)
+            np.savetxt(file_Wn, np.array([ell,result_Well]).T, header=hdr_str_mm_plus_fourier)
 
 if __name__ == '__main__':
     main()

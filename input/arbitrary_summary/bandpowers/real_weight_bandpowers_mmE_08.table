@@ -1,3 +1,12 @@
+# Bandpower weights for C_E in Fourier space
+# lowest theta boundary = 0.5
+# highest theta boundary = 300
+# apodization beand width = 0.5
+# minimum multipole = 100
+# maximum multipole = 1500
+# number of bandpowers modes = 8
+# binning type for multipoles = log
+# theta[arcmin]      R(theta)
 3.895346980473423093e-01 5.994686570285955085e+00
 3.898034500559438009e-01 5.395160363009669169e+01
 3.900723874848493478e-01 1.498634964266598786e+02

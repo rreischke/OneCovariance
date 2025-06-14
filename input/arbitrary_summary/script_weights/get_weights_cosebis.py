@@ -59,6 +59,59 @@ def main():
     tmin_gg = args.tmin_gg
     tmax_gg = args.tmax_gg
 
+    hdr_str_mm_plus_fourier = 'COSEBI weights for En in Fourier space\n'
+    hdr_str_mm_plus_fourier += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'highest theta boundary = ' + str(tmax_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'ell      W(ell)'
+
+    hdr_str_mm_minus_fourier = 'COSEBI weights for Bn in Fourier space\n'
+    hdr_str_mm_minus_fourier += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'highest theta boundary = ' + str(tmax_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'ell      W(ell)'
+
+
+    hdr_str_mm_plus_real = 'COSEBI weights for En in Real space\n'
+    hdr_str_mm_plus_real += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_plus_real += 'highest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_plus_real += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_plus_real += 'theta[arcmin]      T_+(theta)'
+
+    hdr_str_mm_minus_real = 'COSEBI weights for En in Real space\n'
+    hdr_str_mm_minus_real += 'lowest theta boundary = ' + str(tmin_mm) + '\n'
+    hdr_str_mm_minus_real += 'highest theta boundary = ' + str(tmax_mm) + '\n'
+    hdr_str_mm_minus_real += 'number of COSEBI modes = ' + str(Nmax_mm) + '\n'
+    hdr_str_mm_minus_real += 'theta[arcmin]      T_-(theta)'
+
+
+    
+    hdr_str_gm_real = 'Psi stats weights for ggl in Real space\n'
+    hdr_str_gm_real += 'lowest theta boundary = ' + str(tmin_gm) + '\n'
+    hdr_str_gm_real += 'highest theta boundary = ' + str(tmax_gm) + '\n'
+    hdr_str_gm_real += 'number of COSEBI modes = ' + str(Nmax_gm) + '\n'
+    hdr_str_gm_real += 'theta[arcmin]      Q(theta)'
+
+    hdr_str_gm_fourier = 'Psi stats weights for ggl in Fourier space\n'
+    hdr_str_gm_fourier += 'lowest theta boundary = ' + str(tmin_gm) + '\n'
+    hdr_str_gm_fourier += 'highest theta boundary = ' + str(tmax_gm) + '\n'
+    hdr_str_gm_fourier += 'number of COSEBI modes = ' + str(Nmax_gm) + '\n'
+    hdr_str_gm_fourier += 'ell      W(ell)'
+
+
+    hdr_str_gg_real = 'Psi stats weights for clustering in Real space\n'
+    hdr_str_gg_real += 'lowest theta boundary = ' + str(tmin_gg) + '\n'
+    hdr_str_gg_real += 'highest theta boundary = ' + str(tmax_gg) + '\n'
+    hdr_str_gg_real += 'number of COSEBI modes = ' + str(Nmax_gg) + '\n'
+    hdr_str_gg_real += 'theta[arcmin]      U(theta)'
+
+    hdr_str_gg_fourier = 'Psi stats weights for clustering in Fourier space\n'
+    hdr_str_gg_fourier += 'lowest theta boundary = ' + str(tmin_gg) + '\n'
+    hdr_str_gg_fourier += 'highest theta boundary = ' + str(tmax_gg) + '\n'
+    hdr_str_gg_fourier += 'number of COSEBI modes = ' + str(Nmax_gg) + '\n'
+    hdr_str_gg_fourier += 'ell      W(ell)'
+
+
 
     tmin_mm *= arcmintorad
     tmax_mm *= arcmintorad
@@ -70,6 +123,7 @@ def main():
     theta_mm = np.geomspace(tmin_mm,tmax_mm, N_theta)
     theta_gm = np.geomspace(tmin_gm,tmax_gm, N_theta)
 
+    
 
 
     #####################
@@ -217,7 +271,7 @@ def main():
         theta_integral_weight = np.ones((len(theta),len(theta)))
         theta_integral_weight = np.triu(theta_integral_weight)[None, :, :]*np.ones(Nmax)[:, None, None]
         theta_integral_weight += (np.diag(np.ones_like(theta)))[None,:,:]
-        return 2/theta**2*integrate.simpson(theta_integral_weight*theta[None,:,None]*Un[:,:,None],theta,axis = 1) - Un
+        return 2/theta**2*integrate.simpson(theta_integral_weight*theta[None,:,None]*Un[:,:,None], x=theta,axis = 1) - Un
 
     def get_Wpsi_ell(n, Un, theta):
         lev = levin.Levin(0, 16, 32, 1e-8, 200, num_cores)
@@ -245,10 +299,10 @@ def main():
             file_tpn = "./../cosebis/Tp_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
             file_tmn = "./../cosebis/Tm_" +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
             file_Wn = "./../cosebis/Wn_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-        np.savetxt(file_tpn,tpn)
-        np.savetxt(file_tmn,tmn)    
+        np.savetxt(file_tpn,tpn,header=hdr_str_mm_plus_real)
+        np.savetxt(file_tmn,tmn,header=hdr_str_mm_minus_real)    
         if get_W_ell_as_well:
-            np.savetxt(file_Wn, np.array([ell,result_Well]).T)
+            np.savetxt(file_Wn, np.array([ell,result_Well]).T, header=hdr_str_mm_plus_fourier)
         
 
     Ungg = get_Un(tmax_gg, tmin_gg, theta_gg, Nmax_gg)
@@ -263,9 +317,9 @@ def main():
         else:
             file_Ugg = "./../cosebis/Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
             file_Wn = "./../cosebis/Wn_psigg"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-        np.savetxt(file_Ugg,np.array([theta_gg/arcmintorad,Ungg[nn-1,:]*arcmintorad**2]).T)
+        np.savetxt(file_Ugg,np.array([theta_gg/arcmintorad,Ungg[nn-1,:]*arcmintorad**2]).T, header=hdr_str_gg_real)
         if get_W_ell_as_well:
-            np.savetxt(file_Wn, np.array([ell,Wpsigg]).T)
+            np.savetxt(file_Wn, np.array([ell,Wpsigg]).T, header=hdr_str_gg_fourier)
 
     for nn in range(1,Nmax_gm+1):
         Wpsigm = get_Wpsi_ell(nn - 1, Ungm[nn-1,:], theta_gm)
@@ -275,9 +329,9 @@ def main():
         else:
             file_Qgm = "./../cosebis/Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
             file_Wn = "./../cosebis/Wn_psigm"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-        np.savetxt(file_Qgm,np.array([theta_gm/arcmintorad,Qngm[nn-1,:]*arcmintorad**2]).T)
+        np.savetxt(file_Qgm,np.array([theta_gm/arcmintorad,Qngm[nn-1,:]*arcmintorad**2]).T, header=hdr_str_gm_real)
         if get_W_ell_as_well:
-            np.savetxt(file_Wn, np.array([ell,Wpsigm]).T)
+            np.savetxt(file_Wn, np.array([ell,Wpsigm]).T, header=hdr_str_gm_fourier)
 
 if __name__ == '__main__':
     main()

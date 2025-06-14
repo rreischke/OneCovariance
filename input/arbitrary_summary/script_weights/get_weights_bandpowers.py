@@ -66,7 +66,87 @@ def main():
     L_bins_gg = args.L_bins_gg
     L_type_gg = args.L_type_gg
 
+    hdr_str_mm_plus_fourier = 'Bandpower weights for C_E in Fourier space\n'
+    hdr_str_mm_plus_fourier += 'lowest theta boundary = ' + str(theta_lo_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'highest theta boundary = ' + str(theta_up_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'apodization beand width = ' + str(delta_ln_theta_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'minimum multipole = ' + str(L_min_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'maximum multipole = ' + str(L_max_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'number of bandpowers modes = ' + str(L_bins_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'binning type for multipoles = ' + str(L_type_mm) + '\n'
+    hdr_str_mm_plus_fourier += 'ell      W(ell)'
 
+    hdr_str_mm_minus_fourier = 'Bandpower weights for C_B in Fourier space\n'
+    hdr_str_mm_minus_fourier += 'lowest theta boundary = ' + str(theta_lo_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'highest theta boundary = ' + str(theta_up_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'apodization beand width = ' + str(delta_ln_theta_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'minimum multipole = ' + str(L_min_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'maximum multipole = ' + str(L_max_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'number of bandpowers modes = ' + str(L_bins_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'binning type for multipoles = ' + str(L_type_mm) + '\n'
+    hdr_str_mm_minus_fourier += 'ell      W(ell)'
+
+
+    hdr_str_mm_plus_real = 'Bandpower weights for C_E in Fourier space\n'
+    hdr_str_mm_plus_real += 'lowest theta boundary = ' + str(theta_lo_mm) + '\n'
+    hdr_str_mm_plus_real += 'highest theta boundary = ' + str(theta_up_mm) + '\n'
+    hdr_str_mm_plus_real += 'apodization beand width = ' + str(delta_ln_theta_mm) + '\n'
+    hdr_str_mm_plus_real += 'minimum multipole = ' + str(L_min_mm) + '\n'
+    hdr_str_mm_plus_real += 'maximum multipole = ' + str(L_max_mm) + '\n'
+    hdr_str_mm_plus_real += 'number of bandpowers modes = ' + str(L_bins_mm) + '\n'
+    hdr_str_mm_plus_real += 'binning type for multipoles = ' + str(L_type_mm) + '\n'
+    hdr_str_mm_plus_real += 'theta[arcmin]      R(theta)'
+
+    hdr_str_mm_minus_real = 'Bandpower weights for C_B in Fourier space\n'
+    hdr_str_mm_minus_real += 'lowest theta boundary = ' + str(theta_lo_mm) + '\n'
+    hdr_str_mm_minus_real += 'highest theta boundary = ' + str(theta_up_mm) + '\n'
+    hdr_str_mm_minus_real += 'apodization beand width = ' + str(delta_ln_theta_mm) + '\n'
+    hdr_str_mm_minus_real += 'minimum multipole = ' + str(L_min_mm) + '\n'
+    hdr_str_mm_minus_real += 'maximum multipole = ' + str(L_max_mm) + '\n'
+    hdr_str_mm_minus_real += 'number of bandpowers modes = ' + str(L_bins_mm) + '\n'
+    hdr_str_mm_minus_real += 'binning type for multipoles = ' + str(L_type_mm) + '\n'
+    hdr_str_mm_minus_real += 'theta[arcmin]      R(theta)'
+
+
+    hdr_str_gm_fourier = 'Bandpower weights for C of ggl in Fourier space\n'
+    hdr_str_gm_fourier += 'lowest theta boundary = ' + str(theta_lo_gm) + '\n'
+    hdr_str_gm_fourier += 'highest theta boundary = ' + str(theta_up_gm) + '\n'
+    hdr_str_gm_fourier += 'apodization beand width = ' + str(delta_ln_theta_gm) + '\n'
+    hdr_str_gm_fourier += 'minimum multipole = ' + str(L_min_gm) + '\n'
+    hdr_str_gm_fourier += 'maximum multipole = ' + str(L_max_gm) + '\n'
+    hdr_str_gm_fourier += 'number of bandpowers modes = ' + str(L_bins_gm) + '\n'
+    hdr_str_gm_fourier += 'binning type for multipoles = ' + str(L_type_gm) + '\n'
+    hdr_str_gm_fourier += 'ell      W(ell)'
+
+    hdr_str_gm_real = 'Bandpower weights for C of ggl in Fourier space\n'
+    hdr_str_gm_real += 'lowest theta boundary = ' + str(theta_lo_gm) + '\n'
+    hdr_str_gm_real += 'highest theta boundary = ' + str(theta_up_gm) + '\n'
+    hdr_str_gm_real += 'apodization beand width = ' + str(delta_ln_theta_gm) + '\n'
+    hdr_str_gm_real += 'minimum multipole = ' + str(L_min_gm) + '\n'
+    hdr_str_gm_real += 'maximum multipole = ' + str(L_max_gm) + '\n'
+    hdr_str_gm_real += 'number of bandpowers modes = ' + str(L_bins_gm) + '\n'
+    hdr_str_gm_real += 'binning type for multipoles = ' + str(L_type_gm) + '\n'
+    hdr_str_gm_real += 'theta[arcmin]      R(theta)'
+
+    hdr_str_gg_fourier = 'Bandpower weights for C of clustering in Fourier space\n'
+    hdr_str_gg_fourier += 'lowest theta boundary = ' + str(theta_lo_gg) + '\n'
+    hdr_str_gg_fourier += 'highest theta boundary = ' + str(theta_up_gg) + '\n'
+    hdr_str_gg_fourier += 'apodization beand width = ' + str(delta_ln_theta_gg) + '\n'
+    hdr_str_gg_fourier += 'minimum multipole = ' + str(L_min_gg) + '\n'
+    hdr_str_gg_fourier += 'maximum multipole = ' + str(L_max_gg) + '\n'
+    hdr_str_gg_fourier += 'number of bandpowers modes = ' + str(L_bins_gg) + '\n'
+    hdr_str_gg_fourier += 'binning type for multipoles = ' + str(L_type_gg) + '\n'
+    hdr_str_gg_fourier += 'ell      W(ell)'
+
+    hdr_str_gg_real = 'Bandpower weights for C of clustering Fourier space\n'
+    hdr_str_gg_real += 'lowest theta boundary = ' + str(theta_lo_gg) + '\n'
+    hdr_str_gg_real += 'highest theta boundary = ' + str(theta_up_gg) + '\n'
+    hdr_str_gg_real += 'apodization beand width = ' + str(delta_ln_theta_gg) + '\n'
+    hdr_str_gg_real += 'minimum multipole = ' + str(L_min_gg) + '\n'
+    hdr_str_gg_real += 'maximum multipole = ' + str(L_max_gg) + '\n'
+    hdr_str_gg_real += 'number of bandpowers modes = ' + str(L_bins_gg) + '\n'
+    hdr_str_gg_real += 'binning type for multipoles = ' + str(L_type_gg) + '\n'
+    hdr_str_gg_real += 'theta[arcmin]      R(theta)'
 
     theta_min_gm = np.exp(np.log(theta_lo_gm) - delta_ln_theta_gm/2) # real lower limit after apodisation
     theta_max_gm = np.exp(np.log(theta_up_gm) + delta_ln_theta_gm/2) # real upper limit after apodisation
@@ -166,17 +246,17 @@ def main():
                 filename_gm = "./../bandpowers/real_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
                 filename_gg = "./../bandpowers/real_weight_bandpowers_gg_" + str(i_ell+1) + ".table"
             if type == 'mm':
-                np.savetxt(filename_mm,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T)
+                np.savetxt(filename_mm,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T, header=hdr_str_mm_plus_real)
             if type == 'gg':
-                np.savetxt(filename_gg,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T)
+                np.savetxt(filename_gg,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T, header=hdr_str_gg_real)
             if type == 'gm':
-                np.savetxt(filename_gm,np.array([thetabins,h_ell[i_ell, :]*T_of_theta*2*np.pi/Norm[i_ell]]).T)
+                np.savetxt(filename_gm,np.array([thetabins,h_ell[i_ell, :]*T_of_theta*2*np.pi/Norm[i_ell]]).T, header=hdr_str_gm_real)
             if i_ell+1 < 10:
                 filename_mm = "./../bandpowers/real_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
             else:
                 filename_mm = "./../bandpowers/real_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
             if type == 'mm':
-                np.savetxt(filename_mm,np.array([thetabins,g_minus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T)
+                np.savetxt(filename_mm,np.array([thetabins,g_minus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T, header=hdr_str_mm_minus_real)
             
         
         return g_plus, g_minus, h_ell
@@ -278,18 +358,18 @@ def main():
                 filename_gm = "./../bandpowers/fourier_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
                 filename_gg = "./../bandpowers/fourier_weight_bandpowers_gg_" + str(i_ell+1) + "table"
             if type == "mm":
-                np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi/Norm[i_ell]]).T)
+                np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi/Norm[i_ell]]).T, header=hdr_str_mm_plus_fourier)
             if type == "gm":
-                np.savetxt(filename_gm,np.array([ell_fourier_integral,Wl_nE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T)
+                np.savetxt(filename_gm,np.array([ell_fourier_integral,Wl_nE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T, header=hdr_str_gm_fourier)
             if type == "gg":
-                np.savetxt(filename_gg,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T)
+                np.savetxt(filename_gg,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T, header=hdr_str_gg_fourier)
             
             if i_ell+1 < 10:
                 filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
             else:
                 filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmB_" + str(i_ell+1) + ".table"
             if type == "mm":
-                np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EB[i_ell, :]*np.pi/Norm[i_ell]]).T)
+                np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EB[i_ell, :]*np.pi/Norm[i_ell]]).T,  header=hdr_str_mm_minus_fourier)
         print("")
         
 

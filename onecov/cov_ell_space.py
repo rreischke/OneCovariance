@@ -232,7 +232,7 @@ class CovELLSpace(PolySpectra):
         if self.redshift_dep_bias:
             self.bias_of_zet = [] 
             for i_tomo in range(self.n_tomo_clust):
-                self.bias_of_zet.append(UnivariateSpline(self.cosmology.comoving_distance(read_in_tables['zclust']['z']).value * self.cosmology.h,read_in_tables['zet_dep_bias'][i_tomo,:],k=3,s=0,ext=0))
+                self.bias_of_zet.append(UnivariateSpline(read_in_tables['zclust']['z'],read_in_tables['zet_dep_bias'][i_tomo,:],k=3,s=0,ext=1))
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'], read_in_tables)
         self.__check_krange_support(
             obs_dict, cosmo_dict, bias_dict, hod_dict, prec)
@@ -5278,7 +5278,7 @@ class CovELLSpace(PolySpectra):
         if self.gg and self.gm and self.cross_terms:
             print("Getting survey modes for gggm")
             ell, sum_m_a_lm = \
-                self.calc_a_lm('gg', 'gm', survey_params_dict)
+                self.calc_a_lm('gm', 'gm', survey_params_dict)
             if ell is not None:
                 ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
                 x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
@@ -5312,7 +5312,7 @@ class CovELLSpace(PolySpectra):
         if self.gg and self.mm and self.cross_terms:
             print("Getting survey modes for ggmm")
             ell, sum_m_a_lm = \
-                self.calc_a_lm('gg', 'mm', survey_params_dict)
+                self.calc_a_lm('gm', 'gm', survey_params_dict)
             if ell is not None:
                 ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
                 x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
@@ -5345,7 +5345,7 @@ class CovELLSpace(PolySpectra):
         if self.gm and self.mm and self.cross_terms:
             print("Getting survey modes for mmgm")
             ell, sum_m_a_lm = \
-                self.calc_a_lm('mm', 'gm', survey_params_dict)
+                self.calc_a_lm('gm', 'gm', survey_params_dict)
             if ell is not None:
                 ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
                 x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
@@ -5432,7 +5432,6 @@ class CovELLSpace(PolySpectra):
                             bias_i_tomo = self.bias_of_zet[i_tomo](self.los_z[i_chi])
                             self.aux_response_gm[i_chi, :, i_sample, i_tomo] = self.aux_response_mm[i_chi, :, i_sample]
                             self.aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[:, i_sample]*bias_i_tomo
-                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] *= bias_i_tomo
                 if self.gg:
                     for i_sample in range(self.sample_dim):
                         for i_tomo in range(self.n_tomo_clust):
@@ -5441,7 +5440,6 @@ class CovELLSpace(PolySpectra):
                                 bias_j_tomo = self.bias_of_zet[j_tomo](self.los_z[i_chi])
                                 self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] = self.aux_response_mm[i_chi, :, i_sample]
                                 self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_i_tomo + bias_j_tomo)*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]
-                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] *= (bias_i_tomo*bias_j_tomo)
                 eta = (time.time()-t0) * \
                     (len(self.los_z)/(i_chi+1)-1)
                 print('\rPreparations for SSC calculation at '

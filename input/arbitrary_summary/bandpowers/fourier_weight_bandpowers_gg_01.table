@@ -1,3 +1,12 @@
+# Bandpower weights for C of clustering in Fourier space
+# lowest theta boundary = 0.5
+# highest theta boundary = 300
+# apodization beand width = 0.5
+# minimum multipole = 100
+# maximum multipole = 1500
+# number of bandpowers modes = 8
+# binning type for multipoles = log
+# ell      W(ell)
 1.000000000000000000e+00 -5.451509319849039414e-01
 1.000921550516792990e+00 -5.451415225304930834e-01
 1.001843950288941132e+00 -5.451320957598048134e-01
