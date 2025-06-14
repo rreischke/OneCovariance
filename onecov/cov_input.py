@@ -4,7 +4,7 @@ import glob
 from os import walk, path
 from astropy.io import ascii, fits
 from scipy.interpolate import interp1d
-
+import os
 
 
 class Input:
@@ -74,6 +74,7 @@ class Input:
         self.save_configs = None
         self.save_Cells = None
         self.save_trispecs = None
+        self.output_suffix = None
         self.save_alms = None
         self.use_tex = None
         self.list_style_spatial_first = None
@@ -1814,7 +1815,12 @@ class Input:
         if 'output settings' in config:
             if 'directory' in config['output settings']:
                 self.output_dir = config['output settings']['directory']
-
+                if not os.path.exists(self.output_dir):
+                    os.makedirs(self.output_dir)
+            if 'output_suffix' in config['output settings']:
+                self.output_suffix = '_' + str(config['output settings']['output_suffix'])
+                if self.output_suffix == '':
+                    self.output_suffix = None
             if 'style' in config['output settings']:
                 self.output_style = \
                     config['output settings']['style'].replace(
@@ -1886,7 +1892,9 @@ class Input:
                         config['output settings']['save_configs']
             if type(self.save_configs) is bool and self.save_configs:
                 self.save_configs = 'save_configs.ini'
-
+            if self.output_suffix is not None:
+                everything_else,file_extension = os.path.splitext(self.save_configs)
+                self.save_configs = everything_else + self.output_suffix + file_extension
             self.save_Cells = False
             if 'save_Cells' in config['output settings']:
                 if (config['output settings']
@@ -1900,6 +1908,8 @@ class Input:
                         config['output settings']['save_Cells']
             if type(self.save_Cells) is bool and self.save_Cells:
                 self.save_Cells = 'Cell.ascii'
+
+
 
             self.save_trispecs = False
             if 'save_trispectra' in config['output settings']:
@@ -3649,11 +3659,14 @@ class Input:
         self.observables_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
+        aux_suffix = ''
+        if self.output_suffix is not None:
+            aux_suffix = self.output_suffix
         keys = ['directory', 'file', 'style', 'corrmatrix_plot',
-                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
+                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary','output_suffix']
         values = [self.output_dir, self.output_file, self.output_style,
                   self.make_plot, self.save_configs, self.save_Cells,
-                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary]
+                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary, self.output_suffix[1:]]
         self.output_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         self.output_abr['file'] = \
@@ -3670,6 +3683,15 @@ class Input:
         if self.save_trispecs and self.output_dir is not None:
             self.save_trispecs = path.join(self.output_dir, self.save_trispecs)
         keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
+
+        if self.output_suffix is not None:
+            for i_file in range(len(self.output_file)):
+                everything_else,file_extension = os.path.splitext(self.output_file[i_file])
+                self.output_file[i_file] = everything_else + self.output_suffix + file_extension
+            everything_else,file_extension = os.path.splitext(self.save_Cells)
+            self.save_Cells = everything_else + self.output_suffix + file_extension
+            everything_else,file_extension = os.path.splitext(self.make_plot)
+            self.make_plot = everything_else + self.output_suffix + file_extension        
         values = [self.output_file, self.output_style, self.make_plot,
                   self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary]
         self.output = dict(zip(keys, values))
@@ -4602,7 +4624,6 @@ class FileInput:
                 self.save_configs = 'save_configs.ini'
         else:
             self.save_configs = 'save_configs.ini'
-
         if 'bias' in config:
             if 'log10mass_bins' in config['bias']:
                 logmass_bins = \
