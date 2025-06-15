@@ -1819,7 +1819,7 @@ class Input:
                     os.makedirs(self.output_dir)
             if 'output_suffix' in config['output settings']:
                 self.output_suffix = '_' + str(config['output settings']['output_suffix'])
-                if self.output_suffix == '':
+                if self.output_suffix == '_':
                     self.output_suffix = None
             if 'style' in config['output settings']:
                 self.output_style = \
@@ -1893,8 +1893,10 @@ class Input:
             if type(self.save_configs) is bool and self.save_configs:
                 self.save_configs = 'save_configs.ini'
             if self.output_suffix is not None:
-                everything_else,file_extension = os.path.splitext(self.save_configs)
-                self.save_configs = everything_else + self.output_suffix + file_extension
+                if self.save_configs is not None:
+                    if self.save_configs:
+                        everything_else,file_extension = os.path.splitext(self.save_configs)
+                        self.save_configs = everything_else + self.output_suffix + file_extension
             self.save_Cells = False
             if 'save_Cells' in config['output settings']:
                 if (config['output settings']
@@ -3666,7 +3668,7 @@ class Input:
                 'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary','output_suffix']
         values = [self.output_dir, self.output_file, self.output_style,
                   self.make_plot, self.save_configs, self.save_Cells,
-                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary, self.output_suffix[1:]]
+                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary, aux_suffix]
         self.output_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         self.output_abr['file'] = \
@@ -3685,13 +3687,18 @@ class Input:
         keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
 
         if self.output_suffix is not None:
-            for i_file in range(len(self.output_file)):
-                everything_else,file_extension = os.path.splitext(self.output_file[i_file])
-                self.output_file[i_file] = everything_else + self.output_suffix + file_extension
-            everything_else,file_extension = os.path.splitext(self.save_Cells)
-            self.save_Cells = everything_else + self.output_suffix + file_extension
-            everything_else,file_extension = os.path.splitext(self.make_plot)
-            self.make_plot = everything_else + self.output_suffix + file_extension        
+            if self.output_file is not None:
+                for i_file in range(len(self.output_file)):
+                    everything_else,file_extension = os.path.splitext(self.output_file[i_file])
+                    self.output_file[i_file] = everything_else + self.output_suffix + file_extension
+            if self.save_Cells is not None:
+                if self.save_Cells:
+                    everything_else,file_extension = os.path.splitext(self.save_Cells)
+                    self.save_Cells = everything_else + self.output_suffix + file_extension
+            if self.make_plot is not None:
+                if self.make_plot:
+                    everything_else,file_extension = os.path.splitext(self.make_plot)
+                    self.make_plot = everything_else + self.output_suffix + file_extension        
         values = [self.output_file, self.output_style, self.make_plot,
                   self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary]
         self.output = dict(zip(keys, values))
