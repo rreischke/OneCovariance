@@ -151,7 +151,7 @@ class Setup():
         self.zet_lens = read_in_tables['zlens']
         self.zet_csmf = read_in_tables['zcsmf']
         self.zet_min, self.zet_max, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_csmf = \
-            self.__consistency_checks_for_z_support_in_tabs()
+            self.__consistency_checks_for_z_support_in_tabs(read_in_tables)
         self.tomos_6x2pt_clust = \
             self.__consistency_checks_for_tomographic_dims(survey_params_dict)
         self.__consistency_checks_for_k_support_in_tabs(prec['powspec'])
@@ -191,7 +191,7 @@ class Setup():
         rho_bg = (cosmology.Om(0)*(cosmology.critical_density(0).to(u.M_sun/u.Mpc**3)/cosmology.h**2)).value
         return cosmology, rho_bg
 
-    def __consistency_checks_for_z_support_in_tabs(self):
+    def __consistency_checks_for_z_support_in_tabs(self, read_in_tables):
         """
         Performs consistency checks for the tabulated power spectra and
         effective bias against the tabulated redshift distribution(s). 
@@ -259,6 +259,31 @@ class Setup():
                                 " while the redshift distribution requires " +
                                 str(round(zet_max, 4)) + ". Must be " +
                                 "adjusted to go on.")
+        if read_in_tables['arb_radial']['do_arbitrary_radial_weights']:
+            if read_in_tables['arb_radial']['number_radial_weights_gg'] is not None:
+                if read_in_tables['arb_radial']['add_to_galaxy']:
+                    n_tomo_clust += read_in_tables['arb_radial']['number_radial_weights_gg']
+                else:
+                    n_tomo_clust = read_in_tables['arb_radial']['number_radial_weights_gg']
+            if read_in_tables['arb_radial']['number_radial_weights_mm'] is not None:
+                if read_in_tables['arb_radial']['add_to_matter']:
+                    n_tomo_lens += read_in_tables['arb_radial']['number_radial_weights_mm']
+                else:
+                    n_tomo_lens = read_in_tables['arb_radial']['number_radial_weights_mm']
+            try:
+                zet_min_arb = min(read_in_tables['arb_radial']['z_gg'][0], read_in_tables['arb_radial']['z_mm'][0])
+                zet_max_arb = max(read_in_tables['arb_radial']['z_gg'][-1], read_in_tables['arb_radial']['z_mm'][-1])
+            except TypeError:
+                if read_in_tables['arb_radial']['z_gg'] is not None:
+                    zet_min_arb = read_in_tables['arb_radial']['z_gg'][0]
+                    zet_max_arb = read_in_tables['arb_radial']['z_gg'][-1]
+                if read_in_tables['arb_radial']['z_mm'] is not None:
+                    zet_min_arb = read_in_tables['arb_radial']['z_mm'][0]
+                    zet_max_arb = read_in_tables['arb_radial']['z_mm'][-1]
+            if zet_min_arb < zet_min:
+                zet_min = zet_min_arb
+            if zet_max_arb > zet_max:
+                zet_max = zet_max_arb
         return zet_min, zet_max, n_tomo_clust, n_tomo_lens, n_tomo_csmf
 
     def __consistency_checks_for_tomographic_dims(self,
@@ -1404,29 +1429,29 @@ class Setup():
                     #data = np.where(data > .0, 1, 0)
                     Nside = healpy.npix2nside(len(data))
                     ellmax = 3 * Nside - 1
-                    if est1 == est2:
+                    '''if est1 == est2:
                         # default range suggested by healpy
                         aux_ell = np.arange(ellmax)
                         ell.append(aux_ell)
                         C_ell = healpy.anafast(data, use_weights=True)
                         sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-                    else:
-                        for mfile2 in \
-                                survey_params_dict['mask_file_'+est1+'_'+est2]:
-                            print("Reading in the second mask file " + mfile +
-                                " to get the cross survey area modes.")
-                            data2 = fits.getdata(mfile2, 1).field(0)
-                            data2 = data2.flatten()
-                            #data2 = np.where(data2 > 0.0, 1, 0)
-                            Nside2 = healpy.npix2nside(len(data2))
-                            ellmax2 = 3 * Nside2 - 1
-                            ellmax = ellmax if ellmax < ellmax2 else ellmax2
+                    else:'''
+                    for mfile2 in \
+                            survey_params_dict['mask_file_'+est1+'_'+est2]:
+                        print("Reading in the second mask file " + mfile +
+                            " to get the cross survey area modes.")
+                        data2 = fits.getdata(mfile2, 1).field(0)
+                        data2 = data2.flatten()
+                        #data2 = np.where(data2 > 0.0, 1, 0)
+                        Nside2 = healpy.npix2nside(len(data2))
+                        ellmax2 = 3 * Nside2 - 1
+                        ellmax = ellmax if ellmax < ellmax2 else ellmax2
 
-                            aux_ell = np.arange(ellmax)
-                            ell.append(aux_ell)
-                            C_ell = healpy.anafast(data, data2, use_weights=True)
-                            sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-                        failure = False
+                        aux_ell = np.arange(ellmax)
+                        ell.append(aux_ell)
+                        C_ell = healpy.anafast(data, data2, use_weights=True)
+                        sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
+                    failure = False
                 except:
                     print("WARNING: mask file " + mfile + " not found. Will use circular mask for response")
                     ell, sum_m_a_lm = None, None
@@ -1451,19 +1476,21 @@ class Setup():
             ell, sum_m_a_lm = [], []
             NSIDE = 1024
             NPIX = healpy.nside2npix(NSIDE)
-            survey_area = max(survey_params_dict['survey_area_'+est1][0], survey_params_dict['survey_area_'+est2][0])
-            survey_area_in_rad = survey_area*np.pi**2/(180**2)
-            radius_mask = np.arccos(1 - survey_area_in_rad / (2 * np.pi))
-            center_coord = healpy.ang2vec(0, 0)
-            ipix_disc = healpy.query_disc(nside=NSIDE, vec=center_coord, radius=radius_mask)
-            m = np.zeros(NPIX)
-            m[ipix_disc] = 1
-            ellmax = 3 * NSIDE - 1
-            aux_ell = np.arange(ellmax)
-            ell.append(aux_ell)
-            C_ell = healpy.sphtfunc.anafast(m, use_weights=True)
-            sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-            print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")   
+            for i in range(len(survey_params_dict['survey_area_'+est1])):
+                for j in range(len(survey_params_dict['survey_area_'+est2])):
+                    survey_area = max(survey_params_dict['survey_area_'+est1][i], survey_params_dict['survey_area_'+est2][j])
+                    survey_area_in_rad = survey_area*np.pi**2/(180**2)
+                    radius_mask = np.arccos(1 - survey_area_in_rad / (2 * np.pi))
+                    center_coord = healpy.ang2vec(0, 0)
+                    ipix_disc = healpy.query_disc(nside=NSIDE, vec=center_coord, radius=radius_mask)
+                    m = np.zeros(NPIX)
+                    m[ipix_disc] = 1
+                    ellmax = 3 * NSIDE - 1
+                    aux_ell = np.arange(ellmax)
+                    ell.append(aux_ell)
+                    C_ell = healpy.sphtfunc.anafast(m, use_weights=True)
+                    sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
+                    print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")   
         return ell, sum_m_a_lm
 
 

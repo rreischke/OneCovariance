@@ -6,6 +6,7 @@ from onecov.cov_cosebis import CovCOSEBI
 from onecov.cov_bandpowers import CovBandPowers
 from onecov.cov_arbitrary_summary import CovARBsummary
 import sys
+import numpy as np
 import os
 import platform
 if len(platform.mac_ver()[0]) > 0 and (platform.processor() == 'arm' or int(platform.mac_ver()[0][:(platform.mac_ver()[0]).find(".")]) > 13):
@@ -40,6 +41,7 @@ if not observables['arbitrary_summary']['do_arbitrary_summary']:
         
         covariance_in_ell_space = covell.calc_covELL(
             observables, output, bias,  hod, survey_params, prec, read_in_tables)
+        
         observables['observables']['is_cell'] = True
         out = Output(output, covell.ellrange_clustering, covell.ellrange_lensing)
         covterms['gauss'] = safe_gauss

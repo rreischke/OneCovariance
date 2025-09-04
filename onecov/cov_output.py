@@ -1,6 +1,8 @@
 import enum
 import numpy as np
 import os
+import psutil
+import gc
 
 
 from astropy.units.cgs import K
@@ -71,6 +73,9 @@ class Output():
         self.tex = output_dict['use_tex']
         self.save_as_binary = output_dict['save_as_binary']
         self.list_style_spatial_first = output_dict['list_style_spatial_first']
+        self.adjacent = 1
+        if output_dict['adjacent_clustering_bins']:
+            self.adjacent = 2
         self.projected_lens = projected_lens
         self.projected_clust = projected_clust
     
@@ -633,7 +638,6 @@ class Output():
                 nongauss[idx] = self.__check_for_empty_input(nongauss[idx], nongauss[idx].shape)
             if isinstance(ssc[idx], np.ndarray):
                 ssc[idx] = self.__check_for_empty_input(ssc[idx], ssc[idx].shape)
-
         if ('terminal' in self.style or 'list' in self.style):
             fct_args = [obslist, obsbool]
             if self.list_style_spatial_first:
@@ -843,7 +847,7 @@ class Output():
         if filename is not None:
             fig.savefig(filename, bbox_inches='tight', pad_inches=0.1)
 
-        print("Plotting correlation matrix")
+        #print("Plotting correlation matrix")
    
 
     def plot_corrcoeff_matrix_arbitrary(self,
@@ -1017,7 +1021,7 @@ class Output():
         if filename is not None:
             fig.savefig(filename, bbox_inches='tight', pad_inches=0.1)
 
-        print("Plotting correlation matrix")
+        #print("Plotting correlation matrix")
 
     
     def plot_corrcoeff_matrix_6x2pt(self,
@@ -1105,12 +1109,16 @@ class Output():
         old_position = 0
         if gg:
             sub_position_tomo = 0
-            for sub_tomo in range(int(self.six_times_two_s_tomo_bin*(self.six_times_two_s_tomo_bin + 1)/2)):
+            if self.adjacent != 1:
+                loopmax = int(2*self.six_times_two_s_tomo_bin -1)
+            else:
+                loopmax = self.six_times_two_s_tomo_bin
+            for sub_tomo in range(loopmax):
                 sub_position_sample = sub_position_tomo
                 sub_position_tomo += self.six_times_two_ss_spatial_index
                 ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
                 ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
-            position += self.six_times_two_ss_spatial_index*self.six_times_two_s_tomo_bin*(self.six_times_two_s_tomo_bin + 1)/2
+            position += self.six_times_two_ss_spatial_index*loopmax
             old_position = position
             labels_position.append(position/2)
             labels_position_y.append(len(covmatrix) - position/2)
@@ -1195,7 +1203,7 @@ class Output():
         if filename is not None:
             fig.savefig(filename, bbox_inches='tight', pad_inches=0.1)
 
-    print("Plotting correlation matrix")
+    #print("Plotting correlation matrix")
 
     def __write_cov_list(self,
                          cov_dict,
@@ -1209,6 +1217,7 @@ class Output():
                          ssc,
                          fct_args):
         obslist, obsbool = fct_args
+
         proj_quant_str = 'x1\tx2\t'
 
         for observables in obs_dict['observables'].values():
@@ -4716,50 +4725,75 @@ class Output():
     
     def __create_matrix_diagonal(self,covlist, diagonal_1, diagonal_2, is_i_smaller_j, is_m_smaller_n):
         if diagonal_1 and diagonal_2:
-            data_size_ij = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
-            data_size_mn = int(len(covlist[0,0,0,0,0,0,:,0]))*len(covlist[0,:,0,0,0,0,0,0])
+            if self.adjacent != 1:
+                data_size_ij = int(2*len(covlist[0,0,0,0,:,0,0,0]) - 1)*len(covlist[:,0,0,0,0,0,0,0])
+                data_size_mn = int(2*len(covlist[0,0,0,0,0,0,:,0]) - 1)*len(covlist[0,:,0,0,0,0,0,0])
+            else:
+                data_size_ij = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
+                data_size_mn = int(len(covlist[0,0,0,0,0,0,:,0]))*len(covlist[0,:,0,0,0,0,0,0])
             covariance = np.zeros((data_size_ij,data_size_mn))
             i = 0
             for i_tomo in range(len(covlist[0,0,0,0,:,0,0,0])):
-                for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
-                    j = 0
-                    for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
-                        for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
-                                covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,i_tomo,m_tomo,m_tomo] 
-                                j += 1
-                    i += 1
+                for j_tomo in range(i_tomo, i_tomo + self.adjacent):
+                    if j_tomo == len(covlist[0,0,0,0,0,:,0,0]):
+                        continue
+                    for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
+                        j = 0
+                        for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
+                            for k_tomo in range(m_tomo, m_tomo + self.adjacent):
+                                if k_tomo == len(covlist[0,0,0,0,0,0,0,:]):
+                                    continue
+                                for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
+                                    covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,j_tomo,m_tomo,k_tomo] 
+                                    j += 1
+                        i += 1
         if diagonal_1 and not diagonal_2:
             if is_m_smaller_n:
-                data_size_ij = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
+                if self.adjacent != 1:
+                    data_size_ij = int(2*len(covlist[0,0,0,0,:,0,0,0]) - 1)*len(covlist[:,0,0,0,0,0,0,0])
+                else:        
+                    data_size_ij = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
                 data_size_mn = int(len(covlist[0,0,0,0,0,0,:,0]) * (len(covlist[0,0,0,0,0,0,0,:]) + 1)/2)*len(covlist[0, :,0,0,0,0,0,0])
                 covariance = np.zeros((data_size_ij,data_size_mn))
                 i = 0
                 for i_tomo in range(len(covlist[0,0,0,0,:,0,0,0])):
-                    for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
-                        j = 0
-                        for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
-                            for n_tomo in range(m_tomo, len(covlist[0,0,0,0,0,0,0,:])):
-                                for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
-                                    covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,i_tomo,m_tomo,n_tomo] 
-                                    j += 1
-                        i += 1
+                    for j_tomo in range(i_tomo, i_tomo + self.adjacent):
+                        if j_tomo == len(covlist[0,0,0,0,0,:,0,0]):
+                            continue
+                        for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
+                            j = 0
+                            for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
+                                for n_tomo in range(m_tomo, len(covlist[0,0,0,0,0,0,0,:])):
+                                    for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
+                                        covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,i_tomo,m_tomo,n_tomo] 
+                                        j += 1
+                            i += 1
             else:
-                data_size_ij = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
+                if self.adjacent != 1:
+                    data_size_ij = int(2*len(covlist[0,0,0,0,:,0,0,0]) - 1)*len(covlist[:,0,0,0,0,0,0,0])
+                else:        
+                    data_size_ij = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
                 data_size_mn = int(len(covlist[0,0,0,0,0,0,:,0]) * (len(covlist[0,0,0,0,0,0,0,:])))*len(covlist[0, :,0,0,0,0,0,0])
                 covariance = np.zeros((data_size_ij,data_size_mn))
                 i = 0
                 for i_tomo in range(len(covlist[0,0,0,0,:,0,0,0])):
-                    for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
-                        j = 0
-                        for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
-                            for n_tomo in range(len(covlist[0,0,0,0,0,0,0,:])):
-                                for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
-                                    covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,i_tomo,m_tomo,n_tomo] 
-                                    j += 1
-                        i += 1
+                    for j_tomo in range(i_tomo, i_tomo + self.adjacent):
+                        if j_tomo == len(covlist[0,0,0,0,0,:,0,0]):
+                            continue
+                        for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
+                            j = 0
+                            for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
+                                for n_tomo in range(len(covlist[0,0,0,0,0,0,0,:])):
+                                    for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
+                                        covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,i_tomo,m_tomo,n_tomo] 
+                                        j += 1
+                            i += 1
         if diagonal_2 and not diagonal_1:
             if is_i_smaller_j:
-                data_size_mn = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
+                if self.adjacent != 1:
+                    data_size_mn = int(2*len(covlist[0,0,0,0,:,0,0,0]) -1)*len(covlist[:,0,0,0,0,0,0,0])
+                else:        
+                    data_size_mn = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
                 data_size_ij = int(len(covlist[0,0,0,0,0,0,:,0]) * (len(covlist[0,0,0,0,0,0,0,:]) + 1)/2)*len(covlist[0, :,0,0,0,0,0,0])
                 covariance = np.zeros((data_size_ij,data_size_mn))
                 i = 0
@@ -4768,12 +4802,19 @@ class Output():
                         for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
                             j = 0
                             for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
-                                for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
-                                    covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,j_tomo,m_tomo,m_tomo] 
-                                    j += 1
+                                for k_tomo in range(m_tomo, m_tomo + self.adjacent):
+                                    if k_tomo == len(covlist[0,0,0,0,0,0,0,:]):
+                                        continue
+                                
+                                    for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
+                                        covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,j_tomo,m_tomo,m_tomo] 
+                                        j += 1
                         i += 1
             else:
-                data_size_mn = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
+                if self.adjacent != 1:
+                    data_size_mn = int(2*len(covlist[0,0,0,0,:,0,0,0]) -1)*len(covlist[:,0,0,0,0,0,0,0])
+                else:        
+                    data_size_mn = int(len(covlist[0,0,0,0,:,0,0,0]))*len(covlist[:,0,0,0,0,0,0,0])
                 data_size_ij = int(len(covlist[0,0,0,0,0,0,:,0]) * (len(covlist[0,0,0,0,0,0,0,:])))*len(covlist[0, :,0,0,0,0,0,0])
                 covariance = np.zeros((data_size_ij,data_size_mn))
                 i = 0
@@ -4782,9 +4823,12 @@ class Output():
                         for i_theta in range(len(covlist[:,0,0,0,0,0,0,0])):
                             j = 0
                             for m_tomo in range(len(covlist[0,0,0,0,0,0,:,0])):
-                                for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
-                                    covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,j_tomo,m_tomo,m_tomo] 
-                                    j += 1
+                                for k_tomo in range(m_tomo, m_tomo + self.adjacent):
+                                    if k_tomo == len(covlist[0,0,0,0,0,0,0,:]):
+                                        continue
+                                    for j_theta in range(len(covlist[0,:,0,0,0,0,0,0])):
+                                        covariance[i,j] = covlist[i_theta,j_theta,0,0,i_tomo,j_tomo,m_tomo,m_tomo] 
+                                        j += 1
                         i += 1
         return covariance
         
@@ -5659,9 +5703,11 @@ class Output():
                 cov2d = np.block([[covariance_gggg_ssss, covariance_gggg_sssp, covariance_gggg_sspp],
                                   [covariance_gggg_sssp.T, covariance_gggg_spsp, covariance_gggg_ppsp.T],
                                   [covariance_gggg_sspp.T, covariance_gggg_ppsp, covariance_gggg_pppp]])
-                cov_diag.append(covariance_gggg_ssss)
-                cov_diag.append(covariance_gggg_spsp)
-                cov_diag.append(covariance_gggg_pppp)
+                cov_diag.append(covariance_gggg_ssss.shape)
+                cov_diag.append(covariance_gggg_spsp.shape)
+                cov_diag.append(covariance_gggg_pppp.shape)
+                
+                
                 
                 if gm:
                     covariance_gggm_sssm = self.__create_matrix_diagonal(cov[6], True, False, True, False)
@@ -5700,6 +5746,16 @@ class Output():
                                           [covariance_gggm_sssm.T, covariance_gggm_spsm.T, covariance_gggm_ppsm.T, covariance_gmgm_smsm, covariance_gmgm_smpm, covariance_mmgm_mmsm.T],
                                           [covariance_gggm_sspm.T, covariance_gggm_sppm.T, covariance_gggm_pppm.T, covariance_gmgm_pmsm, covariance_gmgm_pmpm, covariance_mmgm_mmpm.T],
                                           [covariance_ggmm_ssmm.T, covariance_ggmm_spmm.T, covariance_ggmm_ppmm.T, covariance_mmgm_mmsm, covariance_mmgm_mmpm, covariance_mmmm_mmmm]])
+                        
+                        
+                        del cov
+                        del covariance_gggg_ssss, covariance_gggg_sssp, covariance_gggg_sspp, covariance_gggm_sssm, covariance_gggm_sspm, covariance_ggmm_ssmm
+                        del covariance_gggg_spsp, covariance_gggg_ppsp, covariance_gggm_spsm, covariance_gggm_sppm, covariance_ggmm_spmm
+                        del covariance_gggg_pppp, covariance_gggm_ppsm, covariance_gggm_pppm, covariance_ggmm_ppmm
+                        del covariance_gmgm_smsm, covariance_gmgm_smpm, covariance_mmgm_mmsm
+                        del covariance_gmgm_pmpm, covariance_mmgm_mmpm
+                        del covariance_mmmm_mmmm
+                        gc.collect()
                 elif mm:
                     covariance_mmmm_mmmm = self.__create_matrix(cov[21],True,True)
                     self.six_times_two_m_tomo_bin = len(cov[21][0,0,0,0,0,0,0,:])
@@ -5713,6 +5769,9 @@ class Output():
                                       [covariance_gggg_sssp.T, covariance_gggg_spsp, covariance_gggg_ppsp.T, covariance_ggmm_spmm],
                                       [covariance_gggg_sspp.T, covariance_gggg_ppsp, covariance_gggg_pppp, covariance_ggmm_ppmm],
                                       [covariance_ggmm_ssmm.T, covariance_ggmm_spmm.T, covariance_ggmm_ppmm.T, covariance_mmmm_mmmm]])
+
+
+            
             elif gm:
                 covariance_gmgm_smsm = self.__create_matrix(cov[15],False,False)
                 covariance_gmgm_smpm = self.__create_matrix(cov[16],False,False)
@@ -5740,9 +5799,9 @@ class Output():
                 cov_diag.append(covariance_mmmm_mmmm)
                 cov2d = covariance_mmmm_mmmm
             cov2d_total = np.copy(cov2d)
-            
+            print("Collected Gaussian covariance")
 
-            if cov_dict['split_gauss']:
+            if cov_dict['split_gauss'] and (self.has_ssc or self.has_nongauss):
                 cov = [gauss[idx] for idx in range(len(gauss))]
                 cov_diag = []
                 if gg:
@@ -5792,6 +5851,14 @@ class Output():
                                             [covariance_gggm_sssm.T, covariance_gggm_spsm.T, covariance_gggm_ppsm.T, covariance_gmgm_smsm, covariance_gmgm_smpm, covariance_mmgm_mmsm.T],
                                             [covariance_gggm_sspm.T, covariance_gggm_sppm.T, covariance_gggm_pppm.T, covariance_gmgm_pmsm, covariance_gmgm_pmpm, covariance_mmgm_mmpm.T],
                                             [covariance_ggmm_ssmm.T, covariance_ggmm_spmm.T, covariance_ggmm_ppmm.T, covariance_mmgm_mmsm, covariance_mmgm_mmpm, covariance_mmmm_mmmm]])
+                            del cov
+                            del covariance_gggg_ssss, covariance_gggg_sssp, covariance_gggg_sspp, covariance_gggm_sssm, covariance_gggm_sspm, covariance_ggmm_ssmm
+                            del covariance_gggg_spsp, covariance_gggg_ppsp, covariance_gggm_spsm, covariance_gggm_sppm, covariance_ggmm_spmm
+                            del covariance_gggg_pppp, covariance_gggm_ppsm, covariance_gggm_pppm, covariance_ggmm_ppmm
+                            del covariance_gmgm_smsm, covariance_gmgm_smpm, covariance_mmgm_mmsm
+                            del covariance_gmgm_pmpm, covariance_mmgm_mmpm
+                            del covariance_mmmm_mmmm
+                            gc.collect()
                     elif mm:
                         covariance_mmmm_mmmm = self.__create_matrix(cov[21],True,True)
                         cov_diag.append(covariance_mmmm_mmmm)
@@ -5990,9 +6057,11 @@ class Output():
                         cov_diag.append(covariance_mmmm_mmmm)
                         cov2d = covariance_mmmm_mmmm
                     cov2d_nongauss = np.copy(cov2d)
+            else:
+                cov2d_gauss = np.copy(cov2d_total)
 
+            print("Collected non-Gaussian and/or SSC covariance")
                 
-
             for i in range(len(cov2d[:,0])):
                 for j in range(len(cov2d[:,0])):
                     cov2d_total[j,i] = cov2d_total[i,j]
@@ -6034,15 +6103,58 @@ class Output():
                 hdr_str += 'shear_shear with '
                 hdr_str += str(self.six_times_two_mm_spatial_index) + ' spatial indices and '
                 hdr_str += str(self.six_times_two_m_tomo_bin) + ' tomographic bins\n'
-                
 
-            if self.plot:
+            if self.plot and len(cov2d_total[:,0]) < 1000:
                 self.plot_corrcoeff_matrix_6x2pt(obs_dict, cov2d_total, cov_diag, proj_quant, n_tomo_clust, 
                     n_tomo_lens, sampledim, self.plot ,fct_args)
+            else:
+                print("This is a rather large covariance matrix, will not produce a plot, please do it yourself.")
         
+
+
             
+
             if 'matrix' in self.style:
                 if not cov_dict['split_gauss']:
+                    print("Writing matrix output file.")
+                    fn = self.filename[self.style.index('matrix')]
+                    if self.save_as_binary:
+                        name, extension = os.path.splitext(fn)
+                        np.save(name, cov2d_total)
+                    else:
+                        np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
+                                newline='\n', header=hdr_str, comments='# ')
+                else:
+                    print("Writing matrix output file.")
+                    if self.save_as_binary:
+                        fn = self.filename[self.style.index('matrix')]
+                        name, extension = os.path.splitext(fn)
+                        np.save(name, cov2d_total)
+                        fn_gauss = name + "_gauss"
+                        fn_nongauss = name + "_nongauss"
+                        fn_ssc = name + "_SSC"
+                        np.save(fn_gauss, cov2d_gauss)
+                        if self.has_nongauss:
+                            np.save(fn_nongauss, cov2d_nongauss)
+                        if self.has_ssc:
+                            np.save(fn_ssc, cov2d_ssc)
+                    else:
+                        fn = self.filename[self.style.index('matrix')]
+                        np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
+                                newline='\n', header=hdr_str, comments='# ')
+                        name, extension = os.path.splitext(fn)
+                        fn_gauss = name + "_gauss" + extension
+                        fn_nongauss = name + "_nongauss" + extension
+                        fn_ssc = name + "_SSC" + extension
+                        np.savetxt(fn_gauss, cov2d_gauss, fmt='%.6e', delimiter=' ',
+                                newline='\n', header=hdr_str, comments='# ')
+                        if self.has_nongauss:
+                            np.savetxt(fn_nongauss, cov2d_nongauss, fmt='%.6e', delimiter=' ',
+                                    newline='\n', header=hdr_str, comments='# ')
+                        if self.has_ssc:
+                            np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
+                                    newline='\n', header=hdr_str, comments='# ')
+                '''if not cov_dict['split_gauss']:
                     print("Writing matrix output file.")
                     fn = self.filename[self.style.index('matrix')]
                     np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
@@ -6063,7 +6175,7 @@ class Output():
                                 newline='\n', header=hdr_str, comments='# ')
                     if self.has_ssc:
                         np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
-                                newline='\n', header=hdr_str, comments='# ')
+                                newline='\n', header=hdr_str, comments='# ')'''
 
     def __write_cov_matrix_arbitrary(self,
                                 obs_dict,

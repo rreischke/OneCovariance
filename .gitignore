@@ -24,4 +24,8 @@ levin.egg-info
 !/docs/requirements.txt
 /comparison_davide
 /my_inputs/*
+/my_config/*
+/my_input/*
+
+
 test.ipynb

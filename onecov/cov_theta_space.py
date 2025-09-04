@@ -1262,7 +1262,6 @@ class CovTHETASpace(CovELLSpace):
             t0, theta = time.time(), 0
             theta_comb = (len(self.theta_bins_lensing)) **2
             
-
             for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
                 for n_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
                     local_ell_limit = self.ell_limits[m_mode][:]
@@ -1327,7 +1326,6 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_plus[None, :, None, :, None, None, :, :])
             gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
-     
         else:
             gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, gauss_xipm_sn = 0, 0, 0, 0, 0, 0, 0
 

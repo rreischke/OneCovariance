@@ -104,6 +104,11 @@ class Input:
         self.ell_photo_max = None
         self.ell_photo_bins = None
         self.ell_photo_type = None
+        self.ell_spec_photo_min = None
+        self.ell_spec_photo_max = None
+        self.ell_spec_photo_bins = None
+        self.ell_spec_photo_type = None
+        self.adjacent_clustering_bins = None
         self.ell_min_lensing = None
         self.ell_max_lensing = None
         self.ell_bins_lensing = None
@@ -689,6 +694,19 @@ class Input:
                         config['covELLspace settings']['ell_photo_bins'])
                 if 'ell_photo_type' in config['covELLspace settings']:
                     self.ell_photo_type = config['covELLspace settings']['ell_photo_type']
+                if 'ell_spec_photo_min' in config['covELLspace settings']:
+                    self.ell_spec_photo_min = float(
+                        config['covELLspace settings']['ell_spec_photo_min'])
+                if 'ell_spec_photo_max' in config['covELLspace settings']:
+                    self.ell_spec_photo_max = float(
+                        config['covELLspace settings']['ell_spec_photo_max'])
+                if 'ell_spec_photo_bins' in config['covELLspace settings']:
+                    self.ell_spec_photo_bins = int(
+                        config['covELLspace settings']['ell_spec_photo_bins'])
+                if 'ell_spec_photo_type' in config['covELLspace settings']:
+                    self.ell_spec_photo_type = config['covELLspace settings']['ell_spec_photo_type']
+                if 'adjacent_clustering_bins' in config['covELLspace settings']:
+                    self.adjacent_clustering_bins = config['covELLspace settings'].getboolean('adjacent_clustering_bins')
             if 'ell_min_clustering' in config['covELLspace settings']:
                 self.ell_min_clustering = float(
                     config['covELLspace settings']['ell_min_clustering'])
@@ -808,12 +826,35 @@ class Input:
                     self.ell_photo_type = 'log'
                     print("The binning type for photometric ell bins " +
                         "[covELLspace settings]: 'ell_photo_type' is set to 'log'.")
+                
+                if self.ell_spec_photo_min is None:
+                    self.ell_spec_photo_min = self.ell_photo_min
+                    print("ConfigWarning: The minimum ell for photometric x spectroscopic probes " +
+                        "[covELLspace settings]: 'ell_spec_photo_min' is set to " + str(self.ell_photo_min))
+                if self.ell_spec_photo_max is None:
+                    self.ell_spec_photo_max = self.ell_photo_max
+                    print("ConfigWarning: The maximum ell for photometric x spectroscopic probes " +
+                        "[covELLspace settings]: 'ell_spec_photo_max' is set to " + str(self.ell_photo_max))
+                if self.ell_spec_photo_bins is None:
+                    self.ell_spec_photo_bins = self.ell_photo_bins
+                    print("ConfigWarning: The number of ell bins for photometric x spectroscopic probes " +
+                        "[covELLspace settings]: 'ell_spec_photo_bins' is set to " + str(self.ell_photo_bins))
+                if self.ell_spec_photo_type is None:
+                    self.ell_spec_photo_type = 'log'
+                    print("ConfigWarning: The binning type for photometric x spectroscopic ell bins " +
+                        "[covELLspace settings]: 'ell_photo_type' is set to 'log'.")
+
                 if self.ell_spec_min < self.ell_min:
                     self.ell_min = self.ell_spec_min
+                if self.ell_spec_photo_min < self.ell_min:
+                    self.ell_min = self.ell_spec_photo_min
                 if self.ell_photo_min < self.ell_min:
                     self.ell_min = self.ell_photo_min
+                
                 if self.ell_photo_max > self.ell_max:
-                    self.ell_max = self.ell_spec_max
+                    self.ell_max = self.ell_photo_max
+                if self.ell_spec_photo_max > self.ell_max:
+                    self.ell_max = self.ell_spec_photo_max
                 if self.ell_photo_max > self.ell_max:
                     self.ell_max = self.ell_photo_max
 
@@ -2619,204 +2660,107 @@ class Input:
                 self.mask_dir = ''
 
             self.survey_area_clust = []
-            if 'survey_area_clust_specz_in_deg2' in config['survey specs']:
-                self.survey_area_clust.append(float(config['survey specs']
-                                                    ['survey_area_clust_specz_in_deg2']))
-            if len(self.survey_area_clust) == 1:
-                if 'survey_area_clust_photz_in_deg2' in config['survey specs']:
-                    self.survey_area_clust.append(float(config['survey specs']
-                                                        ['survey_area_clust_photz_in_deg2']))
-                else:
-                    self.survey_area_clust.append(float(config['survey specs']
-                                                        ['survey_area_clust_specz_in_deg2']))
-                    print("The survey area for a photometric sample of " +
-                          "galaxy clustering is implicitely set to [survey " +
-                          "specs]: 'survey_area_clust_photz_in_deg2 = " +
-                          config['survey specs']['survey_area_clust_specz_in_deg2'] +
-                          " sqdeg. This parameter belongs to the extended " +
-                          "6x2pt-analysis functionality.")
-            elif 'survey_area_clust_photz_in_deg2' in config['survey specs']:
-                raise Exception("ConfigError: The survey area for a " +
-                                "photometric sample of galaxy clustering [survey " +
-                                "specs]: 'survey_area_clust_photz_in_deg2' is given but " +
-                                "no [survey specs]: 'survey_area_clust_specz_in_deg2'. " +
-                                "Both parameters belong to the extended 6x2pt-analysis " +
-                                "functionality and the 'specz' parameter must be passed.")
-            if len(self.survey_area_clust) == 2:
-                if 'survey_area_clust_cross_in_deg2' in config['survey specs']:
-                    self.survey_area_clust.append(float(config['survey specs']
-                                                        ['survey_area_clust_cross_in_deg2']))
-                else:
-                    if self.survey_area_clust[0] == self.survey_area_clust[1]:
-                        self.survey_area_clust.append(float(config['survey specs']
-                                                            ['survey_area_clust_specz_in_deg2']))
-                    else:
-                        print("The survey area overlap for a spectroscopic " +
-                              "and a photometric sample of galaxy " +
-                              "clustering will be set to the larger area of " +
-                              "both samples [survey specs]: " +
-                              "'survey_area_clust_cross_in_deg2 = " +
-                              str(max(self.survey_area_clust)) + " sqdeg'. " +
-                              "This parameter belongs to the extended " +
-                              "6x2pt-analysis functionality.")
-                self.survey_area_clust = np.array(self.survey_area_clust)
-            elif 'survey_area_clust_cross_in_deg2' in config['survey specs']:
-                raise Exception("ConfigError: The survey area overlap for a " +
-                                "spectroscopic and a photometric sample of galaxy " +
-                                "clustering [survey specs]: " +
-                                "'survey_area_clust_cross_in_deg2' is given but no " +
-                                "[survey specs]: 'survey_area_clust_specz_in_deg2' " +
-                                "and 'survey_area_clust_photz_in_deg2'. All parameters " +
-                                "belong to the extended 6x2pt-analysis functionality " +
-                                "and the 'specz' and 'photz' parameter must be passed.")
-            if len(self.survey_area_clust) == 0:
-                if 'survey_area_clust_in_deg2' in config['survey specs']:
-                    self.survey_area_clust = np.array(config['survey specs']
-                                                      ['survey_area_clust_in_deg2'].split(','))
-                    if self.n_spec is not None and len(self.survey_area_clust) < 2 and self.n_spec != 0 :
-                        self.survey_area_clust = np.append(self.survey_area_clust,self.survey_area_clust[0])
-                    try:
-                        self.survey_area_clust = \
-                            (self.survey_area_clust).astype(float)
-                    except ValueError:
-                        raise Exception("ConfigError: Cannot convert string " +
-                                        "in [survey specs]: 'survey_area_clust_in_deg2' " +
-                                        "= " +
-                                        config['survey specs']['survey_area_clust_in_deg2'] +
-                                        "' to numpy array. Must be adjusted in config " +
-                                        "file " + config_name + ".")
-                else:
-                    self.survey_area_clust = None
+            if 'survey_area_clust_in_deg2' in config['survey specs']:
+                self.survey_area_clust = np.array(config['survey specs']
+                                                    ['survey_area_clust_in_deg2'].split(','))
+                if self.n_spec is not None and len(self.survey_area_clust) < 3 and self.n_spec != 0 :
+                    print("ConfigWarning: you are requesting spectroscopic and photometric clustering "
+                              "via 'n_spec='" +str(self.n_spec)+". However, you have only provided "
+                               + str(len(self.survey_area_clust)) + " survey area(s). I will use the area "
+                               + str(self.survey_area_clust[0]) + " to append the array. The required order for the areas is: "
+                               " specspec, specphot, photphot.")
+                    while len(self.survey_area_clust) < 3:
+                        self.survey_area_clust = np.append(self.survey_area_clust, self.survey_area_clust[0])
+                if len(self.survey_area_clust) > 3:
+                    raise Exception("ConfigError: You provided " + str(len(self.survey_area_clust)) +
+                                    " survey areas for clustering in [survey specs]. A maximum of three is allowed. "
+                                    "Please adjust in config file " + config_name + ".")
+                try:
+                    self.survey_area_clust = \
+                        (self.survey_area_clust).astype(float)
+                except ValueError:
+                    raise Exception("ConfigError: Cannot convert string " +
+                                    "in [survey specs]: 'survey_area_clust_in_deg2' " +
+                                    "= " +
+                                    config['survey specs']['survey_area_clust_in_deg2'] +
+                                    "' to numpy array. Must be adjusted in config " +
+                                    "file " + config_name + ".")
+            else:
+                raise Exception("ConfigError: You requested clustering " +
+                                "in [observables]: But did not specify 'survey_area_clust_in_deg2'" +
+                                "in '[survey specs]'. Must be adjusted in config " +
+                                "file " + config_name + ".")
 
             self.mask_file_clust = []
-            if 'mask_file_clust_specz' in config['survey specs']:
-                self.mask_file_clust.append(
-                    config['survey specs']['mask_file_clust_specz'])
-            if len(self.mask_file_clust) == 1:
-                if 'mask_file_clust_photz' in config['survey specs']:
-                    self.mask_file_clust.append(
-                        config['survey specs']['mask_file_clust_photz'])
-                else:
-                    self.mask_file_clust.append(
-                        config['survey specs']['mask_file_clust_specz'])
-                    if self.survey_area_clust is None:
-                        print("The name of the mask file for a photometric " +
-                              "sample of galaxy clustering is implicitely set " +
-                              "to [survey specs]: 'mask_file_clust_photz = " +
-                              config['survey specs']['mask_file_clust_specz'] +
-                              ". This parameter belongs to the extended " +
-                              "6x2pt-analysis functionality.")
-            elif 'mask_file_clust_photz' in config['survey specs']:
-                raise Exception("ConfigError: The mask file for a " +
-                                "photometric sample of galaxy clustering [survey " +
-                                "specs]: 'mask_file_clust_photz' is given but no " +
-                                "[survey specs]: 'mask_file_clust_specz'. Both " +
-                                "parameters belong to the extended 6x2pt-analysis " +
-                                "functionality and the 'specz' parameter must be passed.")
-            if len(self.mask_file_clust) == 2:
-                if 'mask_file_clust_cross' in config['survey specs']:
-                    self.mask_file_clust.append(
-                        config['survey specs']['mask_file_clust_cross'])
-                else:
-                    if self.mask_file_clust[0] == self.mask_file_clust[1]:
-                        self.mask_file_clust = \
-                            [config['survey specs']['mask_file_clust_specz']]
-                    else:
-                        if self.survey_area_clust is None:
-                            raise Exception("The mask file for the survey " +
-                                            "area overlap for a spectroscopic and a " +
-                                            "photometric sample of galaxy clustering " +
-                                            "is missing. Please add [survey specs]: " +
-                                            "'mask_file_clust_cross' to continue. This " +
-                                            "parameter belongs to the extended " +
-                                            "6x2pt-analysis functionality.")
-            elif 'mask_file_clust_cross' in config['survey specs']:
-                raise Exception("ConfigError: The mask file for the survey " +
-                                "area overlap for a spectroscopic and a photometric " +
-                                "sample of galaxy clustering [survey specs]: " +
-                                "'mask_file_clust_cross' is given but no [survey specs]: " +
-                                "'mask_file_clust_specz' and 'mask_file_clust_photz'. " +
-                                "All parameters belong to the extended 6x2pt-analysis " +
-                                "functionality and the 'specz' and 'photz' parameter " +
-                                "must be passed.")
-            if len(self.mask_file_clust) == 0:
-                if 'mask_file_clust' in config['survey specs']:
-                    self.mask_file_clust = (config['survey specs']
-                                            ['mask_file_clust'].replace(" ", "")).split(',')
-                else:
-                    self.mask_file_clust = None
+            if 'mask_file_clust' in config['survey specs']:
+                self.mask_file_clust = (config['survey specs']
+                                        ['mask_file_clust'].replace(" ", "")).split(',')
+                if self.n_spec is not None and len(self.mask_file_clust) < 3 and self.n_spec != 0 :
+                    print("ConfigWarning: you are requesting spectroscopic and photometric clustering "
+                            "via 'n_spec='" +str(self.n_spec)+". However, you have only provided "
+                            + str(len(self.mask_file_clust)) + " mask files. I will use the mask "
+                            + str(self.mask_file_clust[0]) + " to append the array. The required order for the masks is: "
+                            " specspec, specphot, photphot.")
+                    while len(self.mask_file_clust) < 3:
+                        self.mask_file_clust = np.append(self.mask_file_clust, self.mask_file_clust[0])
+                if len(self.mask_file_clust) > 3:
+                    raise Exception("ConfigError: You provided " + str(len(self.mask_file_clust)) +
+                                    " survey areas for clustering in [survey specs]. A maximum of three is allowed. "
+                                    "Please adjust in config file " + config_name + ".")
+            else:
+                self.mask_file_clust = None
 
             self.survey_area_ggl = []
-            if 'survey_area_ggl_specz_in_deg2' in config['survey specs']:
-                self.survey_area_ggl.append(float(config['survey specs']
-                                                  ['survey_area_ggl_specz_in_deg2']))
-            if len(self.survey_area_ggl) == 1:
-                if 'survey_area_ggl_photz_in_deg2' in config['survey specs']:
-                    self.survey_area_ggl.append(float(config['survey specs']
-                                                      ['survey_area_ggl_photz_in_deg2']))
-                else:
-                    self.survey_area_ggl.append(float(config['survey specs']
-                                                      ['survey_area_ggl_specz_in_deg2']))
-                    print("The survey area for a photometric sample of " +
-                          "galaxy-galaxy lensing is implicitely set to " +
-                          "[survey specs]: 'survey_area_ggl_photz_in_deg2 = " +
-                          config['survey specs']['survey_area_ggl_specz_in_deg2'] +
-                          " sqdeg. This parameter belongs to the extended " +
-                          "6x2pt-analysis functionality.")
-                self.survey_area_ggl = np.array(self.survey_area_ggl)
-            elif 'survey_area_ggl_photz_in_deg2' in config['survey specs']:
-                raise Exception("ConfigError: The survey area for a " +
-                                "photometric sample of galaxy-galaxy lensing [survey " +
-                                "specs]: 'survey_area_ggl_photz_in_deg2' is given but " +
-                                "no [survey specs]: 'survey_area_ggl_specz_in_deg2'. " +
-                                "Both parameters belong to the extended 6x2pt-analysis " +
-                                "functionality and the 'specz' parameter must be passed.")
-            if len(self.survey_area_ggl) == 0:
-                if 'survey_area_ggl_in_deg2' in config['survey specs']:
-                    self.survey_area_ggl = np.array(config['survey specs']
-                                                    ['survey_area_ggl_in_deg2'].split(','))
-                    try:
-                        self.survey_area_ggl = \
-                            (self.survey_area_ggl).astype(float)
-                    except ValueError:
-                        raise Exception("ConfigError: Cannot convert string " +
-                                        "in [survey specs]: 'survey_area_ggl_in_deg2' = " +
-                                        config['survey specs']['survey_area_ggl_in_deg2'] +
-                                        "' to numpy array. Must be adjusted in config " +
-                                        "file " + config_name + ".")
-                else:
-                    self.survey_area_ggl = None
-            if self.n_spec is not None and self.n_spec != 0 and len(self.survey_area_ggl) < 2 and len(self.survey_area_ggl) > 0:
-                self.survey_area_ggl = np.append(self.survey_area_ggl,self.survey_area_ggl[0])
+            
+            if 'survey_area_ggl_in_deg2' in config['survey specs']:
+                self.survey_area_ggl = np.array(config['survey specs']
+                                                ['survey_area_ggl_in_deg2'].split(','))
+                if self.n_spec is not None and len(self.survey_area_ggl) < 2 and self.n_spec != 0 :
+                    print("ConfigWarning: you are requesting spectroscopic and photometric GGL "
+                              "via 'n_spec='" +str(self.n_spec)+". However, you have only provided "
+                               + str(len(self.survey_area_ggl)) + " survey area. I will use the area "
+                               + str(self.survey_area_ggl[0]) + " to append the array. The required order for the areas is: "
+                               " spec, phot.")
+                    while len(self.survey_area_ggl) < 2:
+                        self.survey_area_ggl = np.append(self.survey_area_ggl, self.survey_area_ggl[0])
+                if len(self.survey_area_ggl) > 2:
+                    raise Exception("ConfigError: You provided " + str(len(self.survey_area_ggl)) +
+                                    " survey areas for GGL in [survey specs]. A maximum of two is allowed. "
+                                    "Please adjust in config file " + config_name + ".")
+                try:
+                    self.survey_area_ggl = \
+                        (self.survey_area_ggl).astype(float)
+                except ValueError:
+                    raise Exception("ConfigError: Cannot convert string " +
+                                    "in [survey specs]: 'survey_area_ggl_in_deg2' " +
+                                    "= " +
+                                    config['survey specs']['survey_area_ggl_in_deg2'] +
+                                    "' to numpy array. Must be adjusted in config " +
+                                    "file " + config_name + ".")
+            else:
+                raise Exception("ConfigError: You requested GGL " +
+                                "in [observables]: But did not specify 'survey_area_ggl_in_deg2'" +
+                                "in '[survey specs]'. Must be adjusted in config " +
+                                "file " + config_name + ".")
+            
             self.mask_file_ggl = []
-            if 'mask_file_ggl_specz' in config['survey specs']:
-                self.mask_file_ggl.append(
-                    config['survey specs']['mask_file_ggl_specz'])
-            if len(self.mask_file_ggl) == 1:
-                if 'mask_file_ggl_photz' in config['survey specs']:
-                    self.mask_file_ggl.append(
-                        config['survey specs']['mask_file_ggl_photz'])
-                else:
-                    if self.survey_area_ggl is None:
-                        print("The name of the mask file for a photometric " +
-                              "sample of galaxy-galaxy lensing is implicitely " +
-                              "set to [survey specs]: 'mask_file_ggl_photz = " +
-                              config['survey specs']['mask_file_ggl_specz'] +
-                              ". This parameter belongs to the extended " +
-                              "6x2pt-analysis functionality.")
-            elif 'mask_file_ggl_photz' in config['survey specs']:
-                raise Exception("ConfigError: The mask file for a " +
-                                "photometric sample of galaxy-galaxy lensing [survey " +
-                                "specs]: 'mask_file_ggl_photz' is given but no [survey " +
-                                "specs]: 'mask_file_ggl_specz'. Both " +
-                                "parameters belong to the extended 6x2pt-analysis " +
-                                "functionality and the 'specz' parameter must be passed.")
-            if len(self.mask_file_ggl) == 0:
-                if 'mask_file_ggl' in config['survey specs']:
-                    self.mask_file_ggl = (config['survey specs']
-                                          ['mask_file_ggl'].replace(" ", "")).split(',')
-                else:
-                    self.mask_file_ggl = None
+            if 'mask_file_ggl' in config['survey specs']:
+                self.mask_file_ggl = (config['survey specs']
+                                        ['mask_file_ggl'].replace(" ", "")).split(',')
+                if self.n_spec is not None and len(self.mask_file_ggl) < 2 and self.n_spec != 0 :
+                    print("ConfigWarning: you are requesting spectroscopic and photometric GGL "
+                            "via 'n_spec='" +str(self.n_spec)+". However, you have only provided "
+                            + str(len(self.mask_file_ggl)) + " mask file. I will use the mask "
+                            + str(self.mask_file_ggl[0]) + " to append the array. The required order for the masks is: "
+                            " spec, phot.")
+                    while len(self.mask_file_ggl) < 2:
+                        self.mask_file_ggl = np.append(self.mask_file_ggl, self.mask_file_ggl[0])
+                if len(self.mask_file_ggl) > 2:
+                    raise Exception("ConfigError: You provided " + str(len(self.mask_file_ggl)) +
+                                    " survey areas for GGL in [survey specs]. A maximum of two is allowed. "
+                                    "Please adjust in config file " + config_name + ".")
+            else:
+                self.mask_file_ggl = None
 
             if 'survey_area_lensing_in_deg2' in config['survey specs']:
                 self.survey_area_lens = np.array(config['survey specs']
@@ -3191,9 +3135,9 @@ class Input:
                        self.alm_file_clust is not None and \
                        self.alm_file_clust != self.alm_file_lens:
                         self.read_alm_clust_lens = True
-                    elif self.mask_file_clust is not None and \
-                            self.mask_file_clust != self.mask_file_lens:
-                        self.read_mask_clust_lens = True
+                    #elif self.mask_file_clust is not None and \
+                    #        self.mask_file_clust != self.mask_file_lens:
+                    #    self.read_mask_clust_lens = True
                     if not self.read_alm_clust_lens and \
                             self.alm_file_clust_lens is not None:
                         fn = [path.join(self.mask_dir, afile)
@@ -3208,9 +3152,9 @@ class Input:
                     if self.alm_file_clust_ggl is not None and \
                        self.alm_file_clust != self.alm_file_ggl:
                         self.read_alm_clust_ggl = True
-                    elif self.mask_file_clust is not None and \
-                            self.mask_file_clust != self.mask_file_ggl:
-                        self.read_mask_clust_ggl = True
+                    #elif self.mask_file_clust is not None and \
+                    #        self.mask_file_clust != self.mask_file_ggl:
+                    #    self.read_mask_clust_ggl = True
                     if not self.read_alm_clust_ggl and \
                             self.alm_file_clust_ggl is not None:
                         fn = [path.join(self.mask_dir, afile)
@@ -3684,7 +3628,7 @@ class Input:
             self.save_Cells = path.join(self.output_dir, self.save_Cells)
         if self.save_trispecs and self.output_dir is not None:
             self.save_trispecs = path.join(self.output_dir, self.save_trispecs)
-        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary']
+        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary', 'adjacent_clustering_bins']
 
         if self.output_suffix is not None:
             if self.output_file is not None:
@@ -3700,11 +3644,12 @@ class Input:
                     everything_else,file_extension = os.path.splitext(self.make_plot)
                     self.make_plot = everything_else + self.output_suffix + file_extension        
         values = [self.output_file, self.output_style, self.make_plot,
-                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary]
+                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary, self.adjacent_clustering_bins]
         self.output = dict(zip(keys, values))
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
                 'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type',
+                'ell_spec_photo_min', 'ell_spec_photo_max', 'ell_spec_photo_bins', 'ell_spec_photo_type',
                 'ell_min_clustering', 'ell_max_clustering', 'ell_bins_clustering', 'ell_type_clustering',
                 'ell_min_lensing', 'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing']
         values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
@@ -3712,12 +3657,27 @@ class Input:
                   self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.n_spec,
                   self.ell_spec_min, self.ell_spec_max, self.ell_spec_bins, self.ell_spec_type,
                   self.ell_photo_min, self.ell_photo_max, self.ell_photo_bins, self.ell_photo_type,
+                  self.ell_spec_photo_min, self.ell_spec_photo_max, self.ell_spec_photo_bins, self.ell_spec_photo_type,
                   self.ell_min_clustering, self.ell_max_clustering, self.ell_bins_clustering, self.ell_type_clustering,
                   self.ell_min_lensing, self.ell_max_lensing, self.ell_bins_lensing, self.ell_type_lensing]
         self.covELLspace_settings = dict(zip(keys, values))
+
+        keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
+                'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
+                'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type',
+                'ell_spec_photo_min', 'ell_spec_photo_max', 'ell_spec_photo_bins', 'ell_spec_photo_type',
+                'ell_min_clustering', 'ell_max_clustering', 'ell_bins_clustering', 'ell_type_clustering',
+                'ell_min_lensing', 'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing','adjacent_clustering_bins']
+        values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
+                  self.delta_z, self.integration_steps, self.nz_polyorder,
+                  self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.n_spec,
+                  self.ell_spec_min, self.ell_spec_max, self.ell_spec_bins, self.ell_spec_type,
+                  self.ell_photo_min, self.ell_photo_max, self.ell_photo_bins, self.ell_photo_type,
+                  self.ell_spec_photo_min, self.ell_spec_photo_max, self.ell_spec_photo_bins, self.ell_spec_photo_type,
+                  self.ell_min_clustering, self.ell_max_clustering, self.ell_bins_clustering, self.ell_type_clustering,
+                  self.ell_min_lensing, self.ell_max_lensing, self.ell_bins_lensing, self.ell_type_lensing,self.adjacent_clustering_bins]
         self.covELLspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
-
         if self.cosmicshear or self.ggl:
             self.covELLspace_settings_abr['mult_shear_bias'] = \
                     ', '.join(map(str, self.multiplicative_shear_bias_uncertainty))
@@ -4496,6 +4456,19 @@ class FileInput:
         self.mmE_summary_name = None
         self.mmB_summary_name = None
 
+        # files for arbitrary radial kernel
+        self.arbitrary_radial_weight = dict()
+        self.arbitrary_radial_weight_dir = None
+        self.arb_radial_weight_gg_file = None
+        self.arb_radial_weight_mm_file = None
+        self.arb_radial_weight_number_gg = None
+        self.arb_radial_weight_number_mm = None
+        self.do_arbitrary_radial_weight = None
+        self.add_to_matter = None
+        self.add_to_galaxy = None
+
+
+
         # for save_config.ini
         self.zet_input = dict()
         self.tab_input = dict()
@@ -4516,6 +4489,7 @@ class FileInput:
         self.hod_model_scatter_cen = None
         self.csmf_N_log10M_bin = None
         self.do_arbitrary_obs = None
+
 
     def __find_filename_two_inserts(self, fn, n_tomo1, n_tomo2):
         loc_pt1 = fn.find('?')
@@ -4660,6 +4634,20 @@ class FileInput:
                 self.do_arbitrary_obs = config['arbitrary_summary'].getboolean('do_arbitrary_obs')
             else:
                 self.do_arbitrary_obs = False
+        if 'arbitrary_kernel' in config:
+            if 'do_arbitrary_radial_weight' in config['arbitrary_kernel']:
+                self.do_arbitrary_radial_weight = config['arbitrary_kernel'].getboolean('do_arbitrary_radial_weight')
+            else:
+                self.do_arbitrary_radial_weight = False
+            if 'add_to_matter' in config['arbitrary_kernel']:
+                self.add_to_matter = config['arbitrary_kernel'].getboolean('add_to_matter')
+            else:
+                self.add_to_matter = False
+            if 'add_to_galaxy' in config['arbitrary_kernel']:
+                self.add_to_galaxy = config['arbitrary_kernel'].getboolean('add_to_galaxy')
+            else:
+                self.add_to_galaxy = False
+
 
 
         return True
@@ -4881,13 +4869,13 @@ class FileInput:
                         save_zet_clust_nz.append(data[colname])
                 else:
                     save_zet_clust_z.append(np.array(data[data.colnames[0]]))
-                    if len(np.array(data[data.colnames[0]])) != len(self.zet_clust_z):
+                    if len(np.array(data[data.colnames[0]])) != len(self.zet_clust_z) or data[data.colnames[0]][0] !=  self.zet_clust_z[0] or data[data.colnames[0]][-1] !=  self.zet_clust_z[-1]:
                         redshift_increment = min(self.zet_clust_z[1]- self.zet_clust_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
                         redshift_max = max(np.max(min(self.zet_clust_z)),np.max(np.array(data[data.colnames[0]])))
                         redshift_min = min(np.min(min(self.zet_clust_z)),np.min(np.array(data[data.colnames[0]])))
                         self.zet_clust_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
                         different_redshifts = True         
-                        print("ConfigWarning: Adjusting the redshift range in the zclust_files due to different redshift ranges in clustering redshift distribution")
+                        print("ConfigWarning: Adjusting the redshift range in the zclust_files due to different redshift ranges in clustering redshift distribution. This should not be a problem.")
                     if not different_redshifts:
                         for colname in data.colnames[1:]:
                             self.zet_clust_nz = \
@@ -5164,509 +5152,6 @@ class FileInput:
             self.n_tomo_lens = len(self.zet_lens_photoz)
         return True
     
-    def __read_in_arbitrary_weight_files(self,
-                                         config,
-                                         config_name):
-        """
-        Reads in the arbitrary weight files for which the covariance 
-        should be calculated. Checks if they are required by the user
-        and if they are found. An exception is raised if they are required
-        but not found
-
-        Parameters
-        ----------
-        config : class
-            This class holds all the information specified the config 
-            file. It originates from the configparser module.
-        config_name : string
-            Name of the config file. Needed for giving meaningful
-            exception texts.
-
-        File structure :
-        --------------
-        # chi     W(chi)
-        0.1     4.1e-4
-        0.2     1.3e-3
-        ...     ...
-        1.1     0.0
-
-        """
-        if 'arbitrary radial weights' in config:
-            #if 'has_arbitrary_weights_m' in config['arbitrary radial weights']:
-            if 'arbitrary_weights_directory' in config['arbitrary radial weights']:
-                self.arbitrary_weights_dir = \
-                    config['arbitrary radial weights']['arbitrary_weights_directory']
-            elif 'z_directory' in config['redshift']:
-                self.zet_clust_dir = \
-                    config['redshift']['z_directory']
-            else:
-                self.zet_clust_dir = ''
-
-            if 'zclust_specz_file' in config['redshift'] and \
-               'zclust_photz_file' in config['redshift']:
-                self.zet_clust_file = \
-                    (config['redshift']['zclust_specz_file'].replace(
-                        " ", "")).split(',') \
-                    + (config['redshift']['zclust_photz_file'].replace(
-                        " ", "")).split(',')
-                self.tomos_6x2pt_clust = np.array(
-                    [len(config['redshift']['zclust_specz_file'].replace(
-                        " ", "")).split(','),
-                     len(config['redshift']['zclust_photz_file'].replace(
-                         " ", "")).split(',')])
-            elif ('zclust_specz_file' in config['redshift']) != \
-                 ('zclust_photz_file' in config['redshift']):
-                raise Exception("ConfigError: The redshift files for the " +
-                                "extended 6x2pt analysis [redshift]: " +
-                                "'zclust_specz_file' and 'zclust_photz_file' must " +
-                                "always be passed together.")
-            elif 'zclust_file' in config['redshift']:
-                self.zet_clust_file = \
-                    (config['redshift']['zclust_file'].replace(
-                        " ", "")).split(',')
-            if 'zclust_extension' in config['redshift']:
-                self.zet_clust_ext = \
-                    config['redshift']['zclust_extension'].casefold()
-            if 'value_loc_in_clustbin' in config['redshift']:
-                self.value_loc_in_clustbin = \
-                    config['redshift']['value_loc_in_clustbin']
-            elif 'value_loc_in_bin' in config['redshift']:
-                self.value_loc_in_clustbin = \
-                    config['redshift']['value_loc_in_bin']
-            else:
-                self.value_loc_in_clustbin = 'mid'
-
-            if 'zlens_directory' in config['redshift']:
-                self.zet_lens_dir = config['redshift']['zlens_directory']
-            elif 'z_directory' in config['redshift']:
-                self.zet_lens_dir = config['redshift']['z_directory']
-            else:
-                self.zet_lens_dir = ''
-            if 'zlens_file' in config['redshift']:
-                self.zet_lens_file = \
-                    (config['redshift']['zlens_file'].replace(
-                        " ", "")).split(',')
-            if 'zlens_extension' in config['redshift']:
-                self.zet_lens_ext = \
-                    config['redshift']['zlens_extension'].casefold()
-            if 'value_loc_in_lensbin' in config['redshift']:
-                self.value_loc_in_lensbin = \
-                    config['redshift']['value_loc_in_lensbin']
-            elif 'value_loc_in_bin' in config['redshift']:
-                self.value_loc_in_lensbin = \
-                    config['redshift']['value_loc_in_bin']
-            else:
-                self.value_loc_in_lensbin = 'mid'
-            if 'zcsmf_file' in config['redshift'] and self.cstellar_mf:
-                self.zet_csmf_file =  \
-                    (config['redshift']['zcsmf_file'].replace(
-                        " ", "")).split(',')
-            if 'zcsmf_extension' in config['redshift']:
-                self.zet_csmf_ext = \
-                    config['redshift']['zcsmf_extension'].casefold()
-            if 'value_loc_in_csmfbin' in config['redshift']:
-                self.value_loc_in_csmfbin = \
-                    config['redshift']['value_loc_in_csmfbin']
-            elif 'value_loc_in_bin' in config['redshift']:
-                self.value_loc_in_csmfbin = \
-                    config['redshift']['value_loc_in_bin']
-            else:
-                self.value_loc_in_csmfbin = 'mid'
-            if 'zcsmf_directory' in config['redshift']:
-                self.zet_csmf_dir = config['redshift']['zlens_directory']
-            elif 'z_directory' in config['redshift']:
-                self.zet_csmf_dir = config['redshift']['z_directory']
-            
-
-        else:
-            self.has_arbitrary_weights_m = False
-            self.has_arbitrary_weights_g = False
-
-        if self.zet_clust_file is None:
-            if (self.ggl and
-                self.est_ggl != 'k_space' and
-                self.est_ggl != 'projected_real') or \
-               (self.clustering and
-                self.est_clust != 'k_space' and
-                    self.est_clust != 'projected_real'):
-                raise Exception("ConfigError: No file(s) with redshift " +
-                                "distributions for clustering have been specified. Must " +
-                                "be adjusted in config file " + config_name + ", " +
-                                "[redshift]: 'zclust_file = ...' (separated by comma/s).")
-        else:
-            if (self.clustering and self.est_clust == 'projected_real') or \
-               (self.ggl and self.est_ggl == 'projected_real'):
-                # self.zet_clust_file = None
-                # do I need the lens files? I don't think so ??? work here
-                print("The estimator 'projected_real' will be calculated " +
-                      "with the mean redshifts only. In especially, the " +
-                      "[redshift]: 'zclust_file = ...' will be ignored.")
-            if '.fits' in self.zet_clust_file[0] and \
-               self.zet_clust_ext is None:
-                raise Exception("ConfigError: A fits zclust_file is " +
-                                "specified for the redshift distribution this requires " +
-                                "the name of the extension where to find the n(z). " +
-                                "Please adjust '[redshift]: zclust_extension = ' to go " +
-                                "on.")
-        if (self.ggl and
-            self.est_ggl != 'k_space' and
-            self.est_ggl != 'projected_real') or \
-           (self.clustering and
-            self.est_clust != 'k_space' and
-                self.est_clust != 'projected_real'):
-            pass
-        else:
-            print("InputWarning: The files for the clustering redshift " +
-                  "distribution will be ignored as no clustering estimator " +
-                  "is calculated.")
-            self.zet_clust_file = None
-
-        if self.zet_lens_file is None:
-            if (self.ggl and
-                self.est_ggl != 'k_space' and
-                self.est_ggl != 'projected_real') or \
-               (self.cosmicshear and
-                    self.est_shear != 'k_space'):
-                raise Exception("ConfigError: No file(s) with redshift " +
-                                "distributions for lensing have been specified. Must " +
-                                "be adjusted in config file " + config_name + ", " +
-                                "[redshift]: 'zlens_file = ...' (separated by comma/s).")
-        else:
-            if '.fits' in self.zet_lens_file and self.zet_lens_ext is None:
-                raise Exception("ConfigError: A fits zlens_file is " +
-                                "specified for the redshift distribution which requires " +
-                                "the name of the extension where to find the n(z). " +
-                                "Please adjust '[redshift]: zlens_extension = ' to go on.")
-        if self.zet_csmf_file is None:
-            if self.cstellar_mf:
-                raise Exception("ConfigError: No file(s) with redshift " +
-                                "distributions for the conditional stellar mass function have been specified. Must " +
-                                "be adjusted in config file " + config_name + ", " +
-                                "[redshift]: 'zcsmf_file = ...' (separated by comma/s).")
-
-
-        if (self.ggl and
-            self.est_ggl != 'k_space' and
-            self.est_ggl != 'projected_real') or \
-           (self.cosmicshear and
-                self.est_shear != 'k_space'):
-            pass
-        else:
-            print("InputWarning: The files for the lensing redshift " +
-                  "distribution will be ignored as no lensing estimator is " +
-                  "calculated.")
-            self.zet_lens_file = None
-
-        self.zet_clust_nz = np.array([])
-        try:  # ascii
-            save_zet_clust_z = []
-            save_zet_clust_nz = []
-            for fidx, file in enumerate(self.zet_clust_file):
-                print("Reading in redshift distributions for clustering " +
-                      "from file " + path.join(self.zet_clust_dir, file) + ".")
-                data = ascii.read(path.join(self.zet_clust_dir, file))
-                if len(data.colnames) < 2:
-                    print("InputWarning: The file " + file + " in keyword " +
-                          "'zclust_file' has less than 2 columns. The data " +
-                          "file should provide the redshift on the first " +
-                          "column and the redshift distribution in the " +
-                          "second. This file will be ignored.")
-                    continue
-                different_redshifts = False
-                if fidx == 0:
-                    self.zet_clust_z = np.array(data[data.colnames[0]])
-                    save_zet_clust_z.append(self.zet_clust_z)
-                    self.zet_clust_nz = np.array(data[data.colnames[1]])
-                    save_zet_clust_nz.append(self.zet_clust_nz)
-                    for colname in data.colnames[2:]:
-                        self.zet_clust_nz = \
-                            np.vstack([self.zet_clust_nz, data[colname]])
-                        save_zet_clust_nz.append(data[colname])
-                else:
-                    save_zet_clust_z.append(np.array(data[data.colnames[0]]))
-                    if len(np.array(data[data.colnames[0]])) != len(self.zet_clust_z):
-                        redshift_increment = min(self.zet_clust_z[1]- self.zet_clust_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
-                        redshift_max = max(np.max(min(self.zet_clust_z)),np.max(np.array(data[data.colnames[0]])))
-                        redshift_min = min(np.min(min(self.zet_clust_z)),np.min(np.array(data[data.colnames[0]])))
-                        self.zet_clust_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
-                        different_redshifts = True         
-                        print("ConfigWarning: Adjusting the redshift range in the zclust_files due to different redshift ranges in clustering redshift distribution")
-                    if not different_redshifts:
-                        for colname in data.colnames[1:]:
-                            self.zet_clust_nz = \
-                                np.vstack([self.zet_clust_nz, data[colname]])
-                            save_zet_clust_nz.append(data[colname])
-                    else:
-                        for colname in data.colnames[1:]:
-                            save_zet_clust_nz.append(data[colname])
-            if different_redshifts:
-                self.zet_clust_nz = np.array([])
-                for i_z in range(len(save_zet_clust_nz)):
-                    if i_z == 0:
-                        self.zet_clust_nz = np.interp(self.zet_clust_z,
-                                                        save_zet_clust_z[i_z],
-                                                        save_zet_clust_nz[i_z],
-                                                        left = 0,
-                                                        right = 0)
-                    else:
-                        self.zet_clust_nz = np.vstack([self.zet_clust_nz, np.interp(self.zet_clust_z,
-                                                                                    save_zet_clust_z[i_z],
-                                                                                    save_zet_clust_nz[i_z],
-                                                                                    left = 0,
-                                                                                    right = 0)])
-        except TypeError:
-            self.zet_clust_nz = None
-        except UnicodeDecodeError:  # fits
-            hdul = fits.open(path.join(self.zet_clust_dir, file))
-            ext = 1
-            try:
-                while self.zet_clust_ext != \
-                        hdul[ext].header['EXTNAME'].casefold():
-                    ext += 1
-            except IndexError:
-                raise Exception('ConfigError: The extension name ' +
-                                self.zet_clust_ext + ' could not be found in the file ' +
-                                path.join(self.zet_clust_dir, file) + '. Must be ' +
-                                'adjusted to go on.')
-
-            try:
-                self.zet_clust_z = hdul[ext].data['Z_MID']
-                self.value_loc_in_clustbin = 'mid'
-            except KeyError:
-                self.zet_clust_z = hdul[ext].data['Z_LOW']
-                self.value_loc_in_clustbin = 'left'
-
-            bin_idx = 1
-            while 'BIN'+str(bin_idx) in hdul[ext].data.names:
-                self.zet_clust_nz = np.concatenate((self.zet_clust_nz,
-                                                    hdul[ext].data['BIN'+str(bin_idx)]))
-                bin_idx += 1
-            self.zet_clust_nz = self.zet_clust_nz.reshape((bin_idx-1,
-                                                           hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
-
-        self.zet_lens_photoz = np.array([])
-        try:
-            save_zet_lens_z = []
-            save_zet_lens_nz = []
-            for fidx, file in enumerate(self.zet_lens_file):
-                print("Reading in redshift distributions for lensing from " +
-                      "file " + path.join(self.zet_lens_dir, file) + ".")
-                data = ascii.read(path.join(self.zet_lens_dir, file))
-                if len(data.colnames) < 2:
-                    print("InputWarning: The file " + file + " in keyword " +
-                          "'zlens_file' has less than 2 columns. The data " +
-                          "file should provide the redshift on the first " +
-                          "column and the redshift distribution in the " +
-                          "second. This file will be ignored.")
-                    continue
-                different_redshifts = False
-                if fidx == 0:
-                    self.zet_lens_z = np.array(data[data.colnames[0]])
-                    save_zet_lens_z.append(self.zet_lens_z)
-                    self.zet_lens_photoz = np.array(data[data.colnames[1]])
-                    save_zet_lens_nz.append(self.zet_lens_photoz)
-                    for colname in data.colnames[2:]:
-                        self.zet_lens_photoz = \
-                            np.vstack([self.zet_lens_photoz, data[colname]])
-                        save_zet_lens_nz.append(data[colname])
-                else:
-                    save_zet_lens_z.append(np.array(data[data.colnames[0]]))
-                    if len(np.array(data[data.colnames[0]])) != len(self.zet_lens_z):
-                        redshift_increment = min(self.zet_lens_z[1]- self.zet_lens_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
-                        redshift_max = max(np.max(min(self.zet_lens_z)),np.max(np.array(data[data.colnames[0]])))
-                        redshift_min = min(np.min(min(self.zet_lens_z)),np.min(np.array(data[data.colnames[0]])))
-                        self.zet_lens_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
-                        different_redshifts = True         
-                        print("ConfigWarning: Adjusting the redshift range in the zlens_files due to different redshift ranges in lensing redshift distribution")
-                    if not different_redshifts:
-                        for colname in data.colnames[1:]:
-                            self.zet_lens_photoz = \
-                                np.vstack([self.zet_lens_photoz, data[colname]])
-                            save_zet_lens_nz.append(data[colname])
-                    else:
-                        for colname in data.colnames[1:]:
-                            save_zet_lens_nz.append(data[colname])
-            if different_redshifts:
-                self.zet_lens_photoz = np.array([])
-                for i_z in range(len(save_zet_lens_nz)):
-                    if i_z == 0:
-                        self.zet_lens_photoz = np.interp(self.zet_lens_z,
-                                                        save_zet_lens_z[i_z],
-                                                        save_zet_lens_nz[i_z],
-                                                        left = 0,
-                                                        right = 0)
-                    else:
-                        self.zet_lens_photoz = np.vstack([self.zet_lens_photoz, np.interp(self.zet_lens_z,
-                                                                                    save_zet_lens_z[i_z],
-                                                                                    save_zet_lens_nz[i_z],
-                                                                                    left = 0,
-                                                                                    right = 0)])
-        except TypeError:
-            self.zet_lens_photoz = None
-        except UnicodeDecodeError:  # fits
-            hdul = fits.open(path.join(self.zet_lens_dir, file))
-            ext = 1
-            try:
-                while self.zet_lens_ext != \
-                        hdul[ext].header['EXTNAME'].casefold():
-                    ext += 1
-            except IndexError:
-                raise Exception('ConfigError: The extension name ' +
-                                self.zet_lens_ext + ' could not be found in the file ' +
-                                path.join(self.zet_lens_dir, file) + '. Must be adjusted ' +
-                                'to go on.')
-
-            try:
-                self.zet_lens_z = hdul[ext].data['Z_MID']
-                self.value_loc_in_lensbin = 'mid'
-            except KeyError:
-                self.zet_lens_z = hdul[ext].data['Z_LOW']
-                self.value_loc_in_lensbin = 'left'
-
-            bin_idx = 1
-            while 'BIN'+str(bin_idx) in hdul[ext].data.names:
-                self.zet_lens_photoz = np.concatenate((self.zet_lens_photoz,
-                                                       hdul[ext].data['BIN'+str(bin_idx)]))
-                bin_idx += 1
-            self.zet_lens_photoz = self.zet_lens_photoz.reshape((bin_idx-1,
-                                                                 hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
-        
-        if self.zet_clust_z is not None:
-            if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
-                self.zet_clust_z = self.zet_clust_z[1:]
-                if len(self.zet_clust_nz.shape) == 1:
-                    self.zet_clust_nz = self.zet_clust_nz[1:]
-                else:
-                    self.zet_clust_nz = self.zet_clust_nz[:, 1:]
-            if len(self.zet_clust_nz.shape) == 1:
-                self.zet_clust_nz = np.array([self.zet_clust_nz])
-            self.n_tomo_clust = len(self.zet_clust_nz)
-        if self.zet_lens_z is not None:
-            if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
-                try:
-                    self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
-                    self.zet_lens_z = self.zet_lens_z[1:]
-                except:
-                    self.zet_lens_z = self.zet_lens_z[1:]
-                    self.zet_lens_photoz = self.zet_lens_photoz[1:]
-            if len(self.zet_lens_photoz.shape) == 1:
-                self.zet_lens_photoz = np.array([self.zet_lens_photoz])
-            self.n_tomo_lens = len(self.zet_lens_photoz)
-
-        self.zet_csmf_pz = np.array([])
-        try:
-            save_zet_csmf_z = []
-            save_zet_csmf_nz = []
-            for fidx, file in enumerate(self.zet_csmf_file):
-                print("Reading in redshift distributions for csmf from " +
-                      "file " + path.join(self.zet_csmf_dir, file) + ".")
-                data = ascii.read(path.join(self.zet_csmf_dir, file))
-                if len(data.colnames) < 2:
-                    print("InputWarning: The file " + file + " in keyword " +
-                          "'zcsmf_file' has less than 2 columns. The data " +
-                          "file should provide the redshift on the first " +
-                          "column and the redshift distribution in the " +
-                          "second. This file will be ignored.")
-                    continue
-                different_redshifts = False
-                if fidx == 0:
-                    self.zet_csmf_z = np.array(data[data.colnames[0]])
-                    save_zet_csmf_z.append(self.zet_csmf_z)
-                    self.zet_csmf_pz = np.array(data[data.colnames[1]])
-                    save_zet_csmf_nz.append(self.zet_csmf_pz)
-                    for colname in data.colnames[2:]:
-                        self.zet_csmf_pz = \
-                            np.vstack([self.zet_csmf_pz, data[colname]])
-                        save_zet_csmf_nz.append(data[colname])
-                else:
-                    save_zet_csmf_z.append(np.array(data[data.colnames[0]]))
-                    if len(np.array(data[data.colnames[0]])) != len(self.zet_csmf_z):
-                        redshift_increment = min(self.zet_csmf_z[1]- self.zet_csmf_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
-                        redshift_max = max(np.max(min(self.zet_csmf_z)),np.max(np.array(data[data.colnames[0]])))
-                        redshift_min = min(np.min(min(self.zet_csmf_z)),np.min(np.array(data[data.colnames[0]])))
-                        self.zet_csmf_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
-                        different_redshifts = True         
-                        print("ConfigWarning: Adjusting the redshift range in the zcsmf_files due to different redshift ranges in csmf redshift distribution")
-                    if not different_redshifts:
-                        for colname in data.colnames[1:]:
-                            self.zet_csmf_pz = \
-                                np.vstack([self.zet_csmf_pz, data[colname]])
-                            save_zet_csmf_nz.append(data[colname])
-                    else:
-                        for colname in data.colnames[1:]:
-                            save_zet_csmf_nz.append(data[colname])
-            if different_redshifts:
-                self.zet_csmf_pz = np.array([])
-                for i_z in range(len(save_zet_csmf_nz)):
-                    if i_z == 0:
-                        self.zet_csmf_pz = np.interp(self.zet_csmf_z,
-                                                        save_zet_csmf_z[i_z],
-                                                        save_zet_csmf_nz[i_z],
-                                                        left = 0,
-                                                        right = 0)
-                    else:
-                        self.zet_csmf_pz = np.vstack([self.zet_csmf_pz, np.interp(self.zet_csmf_z,
-                                                                                    save_zet_csmf_z[i_z],
-                                                                                    save_zet_csmf_nz[i_z],
-                                                                                    left = 0,
-                                                                                    right = 0)])
-        except TypeError:
-            self.zet_csmf_pz = None
-        except UnicodeDecodeError:  # fits
-            hdul = fits.open(path.join(self.zet_csmf_dir, file))
-            ext = 1
-            try:
-                while self.zet_csmf_ext != \
-                        hdul[ext].header['EXTNAME'].casefold():
-                    ext += 1
-            except IndexError:
-                raise Exception('ConfigError: The extension name ' +
-                                self.zet_csmf_ext + ' could not be found in the file ' +
-                                path.join(self.zet_csmf_dir, file) + '. Must be adjusted ' +
-                                'to go on.')
-
-            try:
-                self.zet_csmf_z = hdul[ext].data['Z_MID']
-                self.value_loc_in_csmfbin = 'mid'
-            except KeyError:
-                self.zet_csmf_z = hdul[ext].data['Z_LOW']
-                self.value_loc_in_csmfbin = 'left'
-
-            bin_idx = 1
-            while 'BIN'+str(bin_idx) in hdul[ext].data.names:
-                self.zet_csmf_pz = np.concatenate((self.zet_csmf_pz,
-                                                       hdul[ext].data['BIN'+str(bin_idx)]))
-                bin_idx += 1
-            self.zet_csmf_pz = self.zet_csmf_pz.reshape((bin_idx-1,
-                                                                 hdul[ext].data['BIN'+str(bin_idx-1)].shape[0]))
-
-        
-        if self.zet_clust_z is not None:
-            if self.zet_clust_z[0] < 1e-2 and self.value_loc_in_clustbin != 'left':
-                self.zet_clust_z = self.zet_clust_z[1:]
-                if len(self.zet_clust_nz.shape) == 1:
-                    self.zet_clust_nz = self.zet_clust_nz[1:]
-                else:
-                    self.zet_clust_nz = self.zet_clust_nz[:, 1:]
-            if len(self.zet_clust_nz.shape) == 1:
-                self.zet_clust_nz = np.array([self.zet_clust_nz])
-            self.n_tomo_clust = len(self.zet_clust_nz)
-        if self.zet_csmf_z is not None:
-            if self.zet_csmf_z[0] < 1e-2 and self.value_loc_in_csmfbin != 'left':
-                self.zet_csmf_z = self.zet_csmf_z[1:]
-                self.zet_csmf_pz = self.zet_csmf_pz[:, 1:]
-            if len(self.zet_csmf_pz.shape) == 1:
-                self.zet_csmf_pz = np.array([self.zet_csmf_pz])
-            self.n_tomo_csmf = len(self.zet_csmf_pz)
-        if self.zet_lens_z is not None:
-            if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
-                self.zet_lens_z = self.zet_lens_z[1:]
-                self.zet_lens_photoz = self.zet_lens_photoz[:, 1:]
-            if len(self.zet_lens_photoz.shape) == 1:
-                self.zet_lens_photoz = np.array([self.zet_lens_photoz])
-            self.n_tomo_lens = len(self.zet_lens_photoz)
-        return True
-
     def __read_in_csmf_files(self, config):
         """
         Reads in the files for the conditional stellar mass function
@@ -6322,7 +5807,8 @@ class FileInput:
                         
                         self.bias_bz = np.vstack([self.bias_bz, interp(self.zet_clust_z)])
                 if not self.unbiased_clustering:
-                    print("Using redshft dependent bias and NOT HoD for galaxy count modelling from file " + self.bias_files[0] + "...")
+                    if self.arb_radial_weight_number_gg is None:
+                        print("Using redshft dependent bias and NOT HoD for galaxy count modelling from file " + self.bias_files[0] + "...")
                 else:
                     print("Using unbiased clustering for galaxy count modelling.")
                 if(len(save_zet_bias_bz) != self.n_tomo_clust):
@@ -7691,6 +7177,165 @@ class FileInput:
         Tn = data[:, 1]
 
         return Tn_theta, Tn
+    
+    def __read_in_radial_weight_files(self,
+                                       wfile):
+        """
+        Reads in ...
+
+        Parameters
+        ----------
+        wfile : string
+            Name of the filter file.
+
+        File structure :
+        --------------
+        # z     radial filter
+        0       0.123456789
+        0.1     0.234567891
+        ...         ...
+        5.0     0.912345678
+
+        """
+        print("Reading in tabulated kernels for arbitrary radial weight from file " +
+              path.join(self.arbitrary_radial_weight_dir, wfile) + ".")
+        data = np.loadtxt(path.join(self.arbitrary_radial_weight_dir, wfile))
+        if len(data[0]) != 2:
+            raise Exception("FileInputError: The file " +
+                            path.join(self.arbitrary_radial_weight_dir, wfile) +
+                            " has not exactly 2 columns. The data file " +
+                            "should provide the redshift in the first column, and " +
+                            "the second column should hold the radial weight value.")
+        zet = data[:, 0]
+        wz = data[:, 1]
+        return zet, wz
+    
+    def __get_arbitrary_radial_weights_tabs(self,
+                                             config):
+        """
+        Reads in the ... Allows for an auto-generation of filenames if all files
+        are named in the same way and only the numbers for the
+        tomographic bin combination is changed. In such a case, replace
+        the two bin number with a '?' each.
+
+        Parameters
+        ----------
+        config : class
+            This class holds all the information specified the config 
+            file. It originates from the configparser module.
+
+        """
+
+        if not self.do_arbitrary_radial_weight:
+            return False
+        else:
+            if 'tabulated inputs files' in config:
+                if 'arb_radial_weight_directory' in config['tabulated inputs files']:
+                    self.arbitrary_radial_weight_dir = \
+                        config['tabulated inputs files']['arb_radial_weight_directory']
+                elif 'input_directory' in config['tabulated inputs files']:
+                    self.arbitrary_radial_weight_dir = \
+                        config['tabulated inputs files']['input_directory']
+                else:
+                    self.arbitrary_radial_weight_dir = ''
+                if self.clustering:
+                    if 'arb_radial_filter_gg_file' in config['tabulated inputs files']:
+                        self.arb_radial_weight_gg_file =(config['tabulated inputs files']
+                                                            ['arb_radial_filter_gg_file'].replace(" ", "")).split(',')
+                        self.arb_radial_weight_gg_file_save = np.copy(self.arb_radial_weight_gg_file)
+                    else:
+                        raise Exception("ConfigError: To use the arbitrary radial weights for clustering, " +
+                                        "files for the corresponding weight must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_radial_filter_gg_file")
+
+                if self.cosmicshear:
+                    if 'arb_radial_filter_mm_file' in config['tabulated inputs files']:
+                        self.arb_radial_weight_mm_file =(config['tabulated inputs files']
+                                                            ['arb_radial_filter_mm_file'].replace(" ", "")).split(',')
+                        self.arb_radial_weight_mm_file_save = np.copy(self.arb_radial_weight_mm_file)
+                    else:
+                        raise Exception("ConfigError: To use the arbitrary radial weights for cosmic shear, " +
+                                        "files for the corresponding weight must be provided. Please adjust in" +
+                                        "the config file under [tabulated inputs files] and arb_radial_filter_mm_file")
+
+                if self.clustering:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    self.arb_radial_weight_gg_file = self.arb_radial_weight_gg_file[0]
+                    if '?' in self.arb_radial_weight_gg_file:
+                        last_slash_index = self.arb_radial_weight_gg_file.rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_gg_file[:last_slash_index + 1]))
+                        file_id = self.arb_radial_weight_gg_file[:self.arb_radial_weight_gg_file.find('?')]
+                        aux_dir = self.arb_radial_weight_gg_file[:last_slash_index + 1]
+                        self.arb_radial_weight_number_gg = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr]))
+                        if self.add_to_galaxy:
+                            self.n_tomo_clust += self.arb_radial_weight_number_gg
+                        else:
+                            self.n_tomo_clust = self.arb_radial_weight_number_gg
+                        for i_files in range(self.arb_radial_weight_number_gg):
+                            aux_arb_file.append(None)
+                            end_index += 1
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(self.arb_radial_weight_number_gg):
+                            start_index += 1
+                        self.arb_radial_weight_gg_file = aux_arb_file
+                        self.wz_gg = []
+                        if len(self.arb_radial_weight_gg_file) == 0:
+                            raise Exception("ConfigError: galaxy clustering requested but the radial weight files, please check the path in " + str(self.config_name))
+                        for wfile in self.arb_radial_weight_gg_file:
+                            z, wz = self.__read_in_radial_weight_files(wfile)
+                            self.wz_gg.append(wz)
+                        self.z_gg = z
+
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary radial weights for clustering in the desired format")
+           
+                else:
+                    self.wz_gg, self.z_gg = None, None
+
+                if self.cosmicshear:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    self.arb_radial_weight_mm_file = self.arb_radial_weight_mm_file[0]
+                    if '?' in self.arb_radial_weight_mm_file:
+                        last_slash_index = self.arb_radial_weight_mm_file.rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_mm_file[:last_slash_index + 1]))
+                        file_id = self.arb_radial_weight_mm_file[:self.arb_radial_weight_mm_file.find('?')]
+                        aux_dir = self.arb_radial_weight_mm_file[:last_slash_index + 1]
+                        self.arb_radial_weight_number_mm = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr]))
+                        if self.add_to_matter:
+                            self.n_tomo_lens += self.arb_radial_weight_number_mm
+                        else:
+                            self.n_tomo_lens = self.arb_radial_weight_number_mm
+                        for i_files in range(self.arb_radial_weight_number_mm):
+                            aux_arb_file.append(None)
+                            end_index += 1
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(self.arb_radial_weight_number_mm):
+                            start_index += 1
+                        self.arb_radial_weight_mm_file = aux_arb_file
+                        self.wz_mm = []
+                        if len(self.arb_radial_weight_mm_file) == 0:
+                            raise Exception("ConfigError: cosmic shear requested but the radial weight files, please check the path in " + str(self.config_name))
+                        for wfile in self.arb_radial_weight_mm_file:
+                            z, wz = self.__read_in_radial_weight_files(wfile)
+                            self.wz_mm.append(wz)
+                        self.z_mm = z
+                    else:
+                        raise Exception("ConfigError: Please pass the arbitrary radial weights for cosmic shear in the desired format")
+           
+                else:
+                    self.wz_mm, self.z_mm = None, None
 
     def __get_arbitrary_filter_tabs(self,
                                     config):
@@ -8560,6 +8205,26 @@ class FileInput:
             self.arbitrary_summary = dict(zip(keys, values))
         else:
             self.arbitrary_summary = dict([])
+
+        if self.do_arbitrary_radial_weight:
+            keys = ['z_gg', 'wz_gg',
+                    'z_mm', 'wz_mm',
+                    'number_radial_weights_gg',
+                    'number_radial_weights_mm',
+                    'do_arbitrary_radial_weights',
+                    'add_to_matter',
+                    'add_to_galaxy']
+            values = [self.z_gg, self.wz_gg,
+                      self.z_mm, self.wz_mm,
+                      self.arb_radial_weight_number_gg,
+                      self.arb_radial_weight_number_mm,
+                      self.do_arbitrary_radial_weight,
+                      self.add_to_matter,
+                      self.add_to_galaxy]
+            self.arbitrary_radial_weight = dict(zip(keys, values))
+        else:
+            self.arbitrary_radial_weight = {'do_arbitrary_radial_weights': False}
+        
         keys = []
         values = []
         if self.npair_gg_file is not None or \
@@ -8838,7 +8503,6 @@ class FileInput:
         self.__read_config_for_consistency_checks(config, config_name)
         self.__read_in_z_files(config, config_name)
         self.__read_in_csmf_files(config)
-        self.__read_in_bias_files(config, config_name)
         self.__get_npair_tabs(config)
         self.__get_powspec_tabs(config)
         self.__get_Cell_tabs(config)  
@@ -8849,6 +8513,8 @@ class FileInput:
         self.__get_trispec_tabs(config)
         #self.__get_cosebi_tabs(config)
         self.__get_arbitrary_filter_tabs(config)
+        self.__get_arbitrary_radial_weights_tabs(config)
+        self.__read_in_bias_files(config, config_name)
         self.__zip_to_dicts()
         self.__write_params()
 
@@ -8866,5 +8532,6 @@ class FileInput:
                 'occnum': self.occnum_tab,
                 'tri': self.tri_tab,
                 'COSEBIs': self.cosebis,
-                'arb_summary': self.arbitrary_summary}
+                'arb_summary': self.arbitrary_summary,
+                'arb_radial': self.arbitrary_radial_weight}
 

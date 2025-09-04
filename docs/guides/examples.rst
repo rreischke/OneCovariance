@@ -469,6 +469,71 @@ that people only want to consider particular bin combinations, this can be done 
 If they are not set, the code falls back to the default for the respective tracer. So for example if you want to only consider the auto-correlations for clustering and 
 you specified 2 redshift files for clustering you might do this by writing:
 
-``combinations_clustering = 0-0,1-1```
+``combinations_clustering = 0-0,1-1``
 
 The code will still calculate all combinations. However, it will produce an additional matrix file with ``your_matrix_file_name_reduced.mat`` with only the specified tomographic bins.
+
+6x2pt analysis for :math:`C_\ell` 
+---------------------------------
+The file ``config_6x2pt_pure_Cell.ini`` in the directory ``config_files`` illustrates how to caclulate the covariance matrix in a :math:`6\times 2` analysis. 
+The main feature the OneCovariance is allows to have different binning schemes (and survey areas) for the photometric and spectroscopic clustering samples respectively.
+We can activate this mode by navigating to ``covELLspace settings`` in the configuration file and set the variable:
+
+``n_spec = 2``
+
+This will tell the code that the first two bins which are passed in the ``redshift section``are treated as spectroscopic and the remaining bins as photometric.
+The corresponding bins in multipoles can be specified as follows:
+
+::
+
+   ell_min_lensing = 30
+   ell_max_lensing = 500
+   ell_bins_lensing = 15
+   ell_type_lensing = log
+
+   ell_spec_min = 10
+   ell_spec_max = 500
+   ell_spec_bins = 6
+   ell_spec_type = log
+
+   ell_photo_min = 10
+   ell_photo_max = 700
+   ell_photo_bins = 8
+   ell_photo_type = log
+
+   ell_spec_photo_min = 100
+   ell_spec_photo_max = 500
+   ell_spec_photo_bins = 12
+   ell_spec_photo_type = lin
+
+
+which should be pretty self-explanatory. The values ``ell_min`` and ``ell_max`` etc. are used for interpolating the :math:`C_\ell` covariance. The code will rebin
+it accordingly in the desired bins. The variables ``ell_spec_photo_min`` etc. corresponds to the definition of the :math:`\ell` binning if a spectroscopic and a photometric
+sample are involved in an observable, e.g. photometric cross spectroscopic clustering but also for GGL with a spectroscopic sample as lenses.
+Furthermore, since we have now effectively three clustering measurements and to GGL ones, we have to specify the respective areas accordingly:
+
+::
+
+   survey_area_clust_in_deg2 = 1100,777,777
+   survey_area_ggl_in_deg2 = 777,777
+
+The expected order here is the following: for ``survey_area_clust_in_deg2`` it is spec :math:`\times` spec, spec :math:`\times` phot and phot :math:`\times` phot, while GGL expects
+spec :math:`\times` sources and phot :math:`\times` sources. The same order translates to the mask files if you want to pass some.
+Lastly, by default the spectroscopic cross spectroscopic clustering signal will only put out the auto-correlations. However, if redshift space distortions are taken into account in the
+corresponding redshift distributions, there might be some overlap and adjacent bins can contain some information. This can be enabled by settings 
+
+::
+
+   adjacent_clustering_bins = True
+
+Which will then use also the adjacent bins for spectroscopic cross spectroscopic clustering. Running the code in the :math:`6\times 2` mode will only produce the matrix output. The corresponding
+correlation coefficient looks as follows:
+
+.. image:: 6x2ptcell.png
+   :width: 790
+
+
+We have three unique combinations of spectroscopic cross spectroscopic bins because we also took the adjacent bin into account. They are binned into six :math:`\ell` bins. 
+The spectroscopic cross photometric clustering has four unique bin combinations from the two spectroscopic and two photometric bins and with 12 :math:`\ell` bins each.
+Photometric cross photometric clustering has three unique bin combinations and 8 :math:`\ell` bins. Spectroscopic GGL has 10 bin combinations with 12 :math:`\ell`bins each and lastly,
+Photometric GGL has also 10 bin combinations with 8 :math:`\ell` bins.
