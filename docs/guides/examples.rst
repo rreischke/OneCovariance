@@ -481,7 +481,7 @@ We can activate this mode by navigating to ``covELLspace settings`` in the confi
 
 ``n_spec = 2``
 
-This will tell the code that the first two bins which are passed in the ``redshift section``are treated as spectroscopic and the remaining bins as photometric.
+This will tell the code that the first two bins which are passed in the ``redshift section`` are treated as spectroscopic and the remaining bins as photometric.
 The corresponding bins in multipoles can be specified as follows:
 
 ::
