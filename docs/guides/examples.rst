@@ -535,5 +535,5 @@ correlation coefficient looks as follows:
 
 We have three unique combinations of spectroscopic cross spectroscopic bins because we also took the adjacent bin into account. They are binned into six :math:`\ell` bins. 
 The spectroscopic cross photometric clustering has four unique bin combinations from the two spectroscopic and two photometric bins and with 12 :math:`\ell` bins each.
-Photometric cross photometric clustering has three unique bin combinations and 8 :math:`\ell` bins. Spectroscopic GGL has 10 bin combinations with 12 :math:`\ell`bins each and lastly,
+Photometric cross photometric clustering has three unique bin combinations and 8 :math:`\ell` bins. Spectroscopic GGL has 10 bin combinations with 12 :math:`\ell` bins each and lastly,
 Photometric GGL has also 10 bin combinations with 8 :math:`\ell` bins.
