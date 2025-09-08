@@ -537,3 +537,56 @@ We have three unique combinations of spectroscopic cross spectroscopic bins beca
 The spectroscopic cross photometric clustering has four unique bin combinations from the two spectroscopic and two photometric bins and with 12 :math:`\ell` bins each.
 Photometric cross photometric clustering has three unique bin combinations and 8 :math:`\ell` bins. Spectroscopic GGL has 10 bin combinations with 12 :math:`\ell` bins each and lastly,
 Photometric GGL has also 10 bin combinations with 8 :math:`\ell` bins.
+
+3x2pt analysis and stellar mass function 
+----------------------------------------
+The file ``config_3x2pt_pure_Cell_SMF.ini`` in the directory ``config_files`` illustrates how to caclulate the covariance matrix in a :math:`3\times 2 + 1pt` analysis, where the 1pt refers the stellar mass function (SMF).
+To do so, you first need to set
+
+::
+
+   [observables]
+   cstellar_mf = True
+
+You can then include the settings in the following section
+
+::
+
+   [csmf settings]
+   csmf_log10Mmin = 7
+   csmf_log10Mmax = 12.5
+   csmf_N_log10M_bin = 30
+   #csmf_log10M_bins = 
+   #csmf_log10M_bins_upper = 10.1, 10.1, 10.1, 10.1, 10.1
+   #csmf_log10M_bins_lower = 9.1, 9.3, 9.5, 9.7, 9.9
+   csmf_directory = ./input/conditional_smf/
+   V_max_file = V_max.asc
+   f_tomo_file = f_tomo.asc
+   csmf_diagonal = False
+
+In this case we use 30 bins from :math:`10^7\,h^{-1}M_\odot` to :math:`10^{12.5}\,h^{-1}M_\odot`, logarithmically spaced. Alternatively, you can use ``csmf_log10M_bins`` to define the boundaries of the bins
+if they are non-overlapping, or directly provide the upper and lower limits via ``csmf_log10M_bins_upper`` and ``csmf_log10M_bins_lower`` respectively. Since the stellar mass function uses the
+:math:`V_\mathrm{max}` estimator, you need to specify a file with the corresponding number of entries for :math:`V_\mathrm{max}` which is usually directly estimated from the data. The file ``f_tomo.asc``should
+contain the fraction of galaxies in each tomographic bin used for the SMF, in our example we only have a single bin. Lastly, ``csmf_diagonal`` specifies whether all combinations of tomographic bins (for the SMF) 
+and the stellar mass bins should be calculated. If ``csmf_diagonal = True``, the code only calculates the diagonals, this of course only works if the number of stellar mass bins equals the number of
+tomographic bins for the SMF. The last question is, how do I specify the latter? You go to the ``redshift section`` and set
+
+::
+
+   zcsmf_file = bright_DR4_NS_fluxscale_corrected_nz_LB1.txt
+   value_loc_in_csmfbin = left
+
+This works in exactly the same way as all other tomographic bins. If you use the SMF, you probably want to use it to constrain the parameters of the HOD, it will therefore be wise to 
+set the mass-range used for the galaxy clustering measurement to the same mass-range over which the SMF is estiamted, therefore, we set in the ``bias section``
+
+::
+
+   log10mass_bins = 7, 12.5
+
+Running this notebook will calculate the previously calcualted :math:`3\times 2` covariance, the SMF covariance and their cross-correlations in the following order:
+
+.. image:: corr_smf.png
+   :width: 790
+
+It should be noted, that the SMF is rescaled with the stellar mass and :math:`\ln(10)`, often the masses are expressed in units of :math:`h^{-2}M_\odot`, note that the 
+OneCovariance does not do this but uses the standard :math:`h^{-2}M_\odot`, so remember to convert on input and output.

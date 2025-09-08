@@ -78,6 +78,8 @@ class Output():
             self.adjacent = 2
         self.projected_lens = projected_lens
         self.projected_clust = projected_clust
+        self.N_stellar_mass_bins = None
+
     
     def __check_filetype(self):
         for idx,fn in enumerate(self.filename):
@@ -839,6 +841,14 @@ class Output():
                 old_position = position
                 ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
                 ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+
+        if self.has_csmf:
+            position += self.N_stellar_mass_bins
+            labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
+            labels_text.append(r'$\Phi(M_\star^\mu)M_\star^\mu\ln(10)$')
+            labels_position.append(old_position + (position- old_position)/2)
+
+        
         ax.xaxis.tick_top()
 
         plt.yticks(labels_position_y, labels_text)
@@ -4568,6 +4578,8 @@ class Output():
 
     def __create_matrix_csmf(self,covlist, want_diagonal_csmf = False):
         number_m_bins = int(len(covlist[:,0,0,0]))
+        if self.N_stellar_mass_bins is None:
+            self.N_stellar_mass_bins = number_m_bins
         number_tomo_bins = int(len(covlist[0,0,:,0]))
         if want_diagonal_csmf:
             data_size = number_m_bins

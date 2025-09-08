@@ -61,6 +61,8 @@ class Input:
         self.csmf_N_log10M_bin = None
         self.csmf_log10M_bins = None
         self.csmf_diagonal = None
+        self.csmf_log10M_bins_upper = None
+        self.csmf_log10M_bins_lower = None
 
         
 
@@ -512,6 +514,17 @@ class Input:
         if 'csmf settings' in config and self.cstellar_mf:
             if 'csmf_log10M_bins' in config['csmf settings']:
                 self.csmf_log10M_bins = np.array(config['csmf settings']['csmf_log10M_bins'].split(',')).astype(float)
+            if 'csmf_log10M_bins_upper' in config['csmf settings']:
+                if not 'csmf_log10M_bins_lower' in config['csmf settings']:
+                    print("ConfigWarning: You have specified 'csmf_log10M_bins_upper' " +
+                            "in section [csmf settings] in config file " + config_name + ". However, " +
+                            "you did not specify csmf_log10M_bins_lower." +
+                            "Will use 'csmf_log10M_bins' instead.")
+                else:
+                    self.csmf_log10M_bins_upper = np.array(config['csmf settings']['csmf_log10M_bins_upper'].split(',')).astype(float)
+                    self.csmf_log10M_bins_lower = np.array(config['csmf settings']['csmf_log10M_bins_lower'].split(',')).astype(float)
+
+            
             if 'csmf_diagonal' in config['csmf settings']:
                 self.csmf_diagonal = config['csmf settings'].getboolean('csmf_diagonal')
             else:
@@ -3594,14 +3607,21 @@ class Input:
         self.covterms = dict(zip(keys, values))
 
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
-                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal",
+                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal", 'csmf_log10M_bins_upper', 'csmf_log10M_bins_lower',
                 'combinations_clustering',
                 'combinations_ggl','combinations_lensing']
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
-                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal,
+                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal, self.csmf_log10M_bins_upper,self.csmf_log10M_bins_lower,
                   self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
         self.observables = dict(zip(keys, values))
+        
+        values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
+                  self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
+                  self.cstellar_mf, None, None, None, None, None,
+                  self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
+        
+        
         self.observables_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
@@ -3770,7 +3790,7 @@ class Input:
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
                 'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins', 'has_csmf']
         values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, self.cstellar_mf]
+                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, None]
         self.bias_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.logmass_bins is not None:
@@ -4629,6 +4649,8 @@ class FileInput:
                 self.csmf_N_log10M_bin = int(config['csmf settings']['csmf_N_log10M_bin'])
             if 'csmf_log10M_bins' in config['csmf settings']:
                 self.csmf_N_log10M_bin = int(len(np.array(config['csmf settings']['csmf_log10M_bins'].split(',')).astype(float)) - 1)
+            if 'csmf_log10M_bins_upper' in config['csmf settings'] and 'csmf_log10M_bins_lower' in config['csmf settings']:
+                self.csmf_N_log10M_bin = int(len(np.array(config['csmf settings']['csmf_log10M_bins_lower'].split(',')).astype(float)))
         if 'arbitrary_summary' in config:
             if 'do_arbitrary_obs' in config['arbitrary_summary']:
                 self.do_arbitrary_obs = config['arbitrary_summary'].getboolean('do_arbitrary_obs')
