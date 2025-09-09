@@ -566,7 +566,7 @@ You can then include the settings in the following section
 
 In this case we use 30 bins from :math:`10^7\,h^{-1}M_\odot` to :math:`10^{12.5}\,h^{-1}M_\odot`, logarithmically spaced. Alternatively, you can use ``csmf_log10M_bins`` to define the boundaries of the bins
 if they are non-overlapping, or directly provide the upper and lower limits via ``csmf_log10M_bins_upper`` and ``csmf_log10M_bins_lower`` respectively. Since the stellar mass function uses the
-:math:`V_\mathrm{max}` estimator, you need to specify a file with the corresponding number of entries for :math:`V_\mathrm{max}` which is usually directly estimated from the data. The file ``f_tomo.asc``should
+:math:`V_\mathrm{max}` estimator, you need to specify a file with the corresponding number of entries for :math:`V_\mathrm{max}` which is usually directly estimated from the data. The file ``f_tomo.asc`` should
 contain the fraction of galaxies in each tomographic bin used for the SMF, in our example we only have a single bin. Lastly, ``csmf_diagonal`` specifies whether all combinations of tomographic bins (for the SMF) 
 and the stellar mass bins should be calculated. If ``csmf_diagonal = True``, the code only calculates the diagonals, this of course only works if the number of stellar mass bins equals the number of
 tomographic bins for the SMF. The last question is, how do I specify the latter? You go to the ``redshift section`` and set
