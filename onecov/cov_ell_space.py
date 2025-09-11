@@ -446,8 +446,6 @@ class CovELLSpace(PolySpectra):
                 self.ellrange_spec_photo_ul = np.geomspace(covELLspacesettings['ell_spec_photo_min'], covELLspacesettings['ell_spec_photo_max'], covELLspacesettings['ell_spec_photo_bins'] + 1).astype(int)
                 self.ellrange_spec_photo = np.exp(.5 * (np.log(self.ellrange_spec_photo_ul[1:])
                                     + np.log(self.ellrange_spec_photo_ul[:-1])))
-            
-
         if covELLspacesettings['ell_type'] == 'lin':
             return np.linspace(
                 covELLspacesettings['ell_min'],

@@ -583,7 +583,9 @@ set the mass-range used for the galaxy clustering measurement to the same mass-r
 
    log10mass_bins = 7, 12.5
 
-Running this notebook will calculate the previously calcualted :math:`3\times 2` covariance, the SMF covariance and their cross-correlations in the following order:
+Alternative, you can, similarly to the bins in which the stellar mass function is estimated, set the upper/lower limits here explictely via ``log10mass_bins_upper`` and ``log10mass_bins_lower`` respectively.
+In that case, you should remove the ``log10mass_bins`` variable from the config file as it is used otherwise.
+Running this config file will calculate the previously calcualted :math:`3\times 2` covariance, the SMF covariance and their cross-correlations in the following order:
 
 .. image:: corr_smf.png
    :width: 790

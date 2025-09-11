@@ -137,7 +137,10 @@ class Setup():
                  read_in_tables):
 
         self.cosmology, self.rho_bg = self.__set_cosmology(cosmo_dict)
-        self.sample_dim = len(bias_dict['logmass_bins']) - 1
+        if (bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_lower'] is not None):
+            self.sample_dim = len(bias_dict['logmass_bins_upper'])
+        else:
+            self.sample_dim = len(bias_dict['logmass_bins']) - 1
         self.bias_dict = bias_dict
 
         self.Pxy_tab = read_in_tables['Pxy']

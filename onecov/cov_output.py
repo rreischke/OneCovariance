@@ -5558,42 +5558,52 @@ class Output():
             if obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
                 obslist[4] = 'CE_gmCE_gm'
             
-            hdr_str = 'Covariance matrix with the diagonals in the order: '
-            hdr_str += obslist[0]+' ' if obsbool[0] else ''
-            if obslength == 6:
-                hdr_str += obslist[3]+' ' if obsbool[3] else ''
-                hdr_str += obslist[5]+' ' if obsbool[5] else ''
-            elif obslength == 10:
-                hdr_str += obslist[4]+' ' if obsbool[4] else ''
-                hdr_str += obslist[7]+' ' if obsbool[7] else ''
-                hdr_str += obslist[9]+' ' if obsbool[9] else ''
+            hdr_str = 'Covariance matrix for the following probes (in this order) :\n'
+            if gg:
+                hdr_str += 'galaxy clustering with ' + str(n_tomo_clust) + ' tomographic bins (only the unique bin combinations) and ' + str(len(self.projected_clust)) + ' spatial bins and' + str(sampledim) + ' stellar mass bins. \n'
+            if gm:  
+                hdr_str += 'galaxy galaxy lensing ' + str(n_tomo_clust) + ' tomographic lens bins and ' + str(n_tomo_lens) + ' tomographic source bins (all bin combinations) and ' + str(len(self.projected_clust)) + ' spatial bins and' + str(sampledim) + ' stellar mass bins.\n'
+            if gg:
+                hdr_str += 'cosmic shear with ' + str(n_tomo_lens) + ' tomographic bins (only the unique bin combinations) and ' + str(len(self.projected_lens)) + ' spatial bins.\n'
+            if gg:
+                hdr_str += 'cosmic shear with ' + str(n_tomo_lens) + ' tomographic bins (only the unique bin combinations) and ' + str(len(self.projected_lens)) + ' spatial bins.\n'
             if self.has_csmf:
-                hdr_str += " csmf "
-            hdr_str += 'with '
-            if n_tomo_clust is not None:
-                hdr_str += str(n_tomo_clust) + ' tomographic clustering bins and '
-            if n_tomo_lens is not None:
-                hdr_str += str(n_tomo_lens) + ' tomographic lensing bins and '
-            alternative = False
-            if self.projected_clust is not None:
-                hdr_str += str(len(self.projected_clust)) + ' spatial elements per tomographic clustering bin '
-                alternative = True
-            if self.projected_lens is not None:
-                if not alternative:
-                    hdr_str += str(len(self.projected_lens)) + ' spatial elements per tomographic lensing bin '
-                else:
-                    hdr_str += str(len(self.projected_lens)) + ' spatial elements per tomographic lensing bin and'
-                alternative = True
-            if not alternative:
-                hdr_str += str(len(proj_quant)) + ' spatial elements per tomographic bin'
-            
+                hdr_str += 'stellar mass function with ' + str((self.N_stellar_mass_bins)) + ' stellar mass bins.\n'
+
+            hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
+            if gg:
+                hdr_str += "galaxy clustering: gg^{stellar mass sample bin}_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+            if gm:
+                hdr_str += "galaxy galaxy lensing: gm^{stellar mass sample bin}_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+            if mm:
+                hdr_str += "cosmic shear: mm_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+            if self.has_csmf:
+                hdr_str += "stellar mass function: phi_(mass index k))\n"
+            if gg:
+                hdr_str += "gg^{1}_{11}(1) ... gg^{1}_{11}(" + str(len(self.projected_clust))+ ") gg^{2}_{11}(1) ... gg^{" +str(sampledim) + "}_{11}(" + str(len(self.projected_clust))+ ")"
+                hdr_str += " gg^{1}_{12}(1) ... gg^{" +str(sampledim) + "}_{1"+ str(n_tomo_clust) + "}(" + str(len(self.projected_clust))+ ")"
+                hdr_str += " gg^{1}_{22}(1) ... gg^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_clust) + "}(" + str(len(self.projected_clust))+ ")"
+                hdr_str += "\n"
+            if gm:
+                hdr_str += "gm^{1}_{11}(1) ... gm^{1}_{11}(" + str(len(self.projected_clust))+ ") gm^{2}_{11}(1) ... gm^{" +str(sampledim) + "}_{11}(" + str(len(self.projected_clust))+ ")"
+                hdr_str += " gm^{1}_{12}(1) ... gm^{" +str(sampledim) + "}_{1"+ str(n_tomo_lens) + "}(" + str(len(self.projected_clust))+ ")"
+                hdr_str += " gm^{1}_{21}(1) ... gm^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_lens) + "}(" + str(len(self.projected_clust))+ ")"
+                hdr_str += "\n"
+            if mm:
+                hdr_str += "mm_{11}(1) ... mm_{11}(" + str(len(self.projected_lens))+ ") mm_{11}(1) ... mm_{11}(" + str(len(self.projected_lens))+ ")"
+                hdr_str += " mm_{12}(1) ... mm_{1"+ str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
+                hdr_str += " mm_{21}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
+                hdr_str += "\n"
+            if self.has_csmf:
+                hdr_str += "phi_(1) ... phi(" + str(self.N_stellar_mass_bins)+ ")\n"
+
             if 'matrix' in self.style:
                 if not cov_dict['split_gauss']:
                     print("Writing matrix output file.")
                     if self.save_as_binary:
                         fn = self.filename[self.style.index('matrix')]
                         name, extension = os.path.splitext(fn)
-                        np.save(name, cov2d_total)
+                        np.savez(name, covariance = cov2d_total, header = hdr_str)
                     else:
                         fn = self.filename[self.style.index('matrix')]
                         np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
@@ -5603,15 +5613,15 @@ class Output():
                     if self.save_as_binary:
                         fn = self.filename[self.style.index('matrix')]
                         name, extension = os.path.splitext(fn)
-                        np.save(name, cov2d_total)
+                        np.savez(name, covariance = cov2d_total, header = hdr_str)
                         fn_gauss = name + "_gauss"
                         fn_nongauss = name + "_nongauss"
                         fn_ssc = name + "_SSC"
-                        np.save(fn_gauss, cov2d_gauss)
+                        np.savez(fn_gauss, covariance = cov2d_gauss, header = hdr_str)
                         if self.has_nongauss:
-                            np.save(fn_nongauss, cov2d_nongauss)
+                            np.savez(fn_nongauss, covariance = cov2d_nongauss, header = hdr_str)
                         if self.has_ssc:
-                            np.save(fn_ssc, cov2d_ssc)
+                            np.savez(fn_ssc, covariance = cov2d_ssc, header = hdr_str)
                     else:
                         fn = self.filename[self.style.index('matrix')]
                         np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
@@ -6094,7 +6104,11 @@ class Output():
             if gg:
                 hdr_str += 'spec_spec with '
                 hdr_str += str(self.six_times_two_ss_spatial_index) + ' spatial indices and '
-                hdr_str += str(self.six_times_two_s_tomo_bin) + ' tomographic bins\n'
+                hdr_str += str(self.six_times_two_s_tomo_bin) + ' tomographic bins. '
+                if self.adjacent:
+                    hdr_str += 'I am considering adjacent tomographic bins.\n'
+                else:
+                    hdr_str += 'I am considering only auto tomographic bins.\n'
                 hdr_str += 'spec_phot with '
                 hdr_str += str(self.six_times_two_ps_spatial_index) + ' spatial indices and '
                 hdr_str += str(self.six_times_two_s_tomo_bin) + ' and ' + str(self.six_times_two_p_tomo_bin) + ' tomographic bins respectively\n'
@@ -6115,6 +6129,46 @@ class Output():
                 hdr_str += 'shear_shear with '
                 hdr_str += str(self.six_times_two_mm_spatial_index) + ' spatial indices and '
                 hdr_str += str(self.six_times_two_m_tomo_bin) + ' tomographic bins\n'
+            hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
+            if gg:
+                hdr_str += "spec-spec clustering: ss_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+                hdr_str += "spec-phot clustering: sp_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+                hdr_str += "phot-phot clustering: pp_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+            if gm:
+                hdr_str += "spec galaxy galaxy lensing: sm_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+                hdr_str += "phot galaxy galaxy lensing: pm_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+            if mm:
+                hdr_str += "cosmic shear: mm_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+            if gg:
+                hdr_str += "ss_{11}(1) ... ss_{11}(" + str(self.six_times_two_ss_spatial_index)+ ")"
+                if self.adjacent:
+                    hdr_str += " ss_{12}(1) ... ss_{12}(" + str(self.six_times_two_ss_spatial_index)+ ") ss_{22}(1) ... ss_{" +str(self.six_times_two_s_tomo_bin) + str(self.six_times_two_s_tomo_bin) + "}(" + str(self.six_times_two_ss_spatial_index) +")" 
+                else:
+                    hdr_str += " ss_{22}(1) ... ss_{" +str(self.six_times_two_s_tomo_bin) + str(self.six_times_two_s_tomo_bin) + "}(" + str(self.six_times_two_ss_spatial_index) +")" 
+                hdr_str += "\n"
+                hdr_str += "sp_{11}(1) ... sp_{11}(" + str(self.six_times_two_ps_spatial_index)+ ")"
+                hdr_str += " sp_{12}(1) ... sp_{1"+ str(self.six_times_two_p_tomo_bin) + "}(" + str(self.six_times_two_ps_spatial_index)+ ")"
+                hdr_str += " sp_{21}(1) ... sp_{2"+ str(self.six_times_two_p_tomo_bin) + "}(" + str(self.six_times_two_ps_spatial_index)+ ")... sp_{"+ str(self.six_times_two_s_tomo_bin) + str(self.six_times_two_p_tomo_bin) + "}(" + str(self.six_times_two_ps_spatial_index)+ ")"
+                hdr_str += "\n"
+                hdr_str += "pp_{11}(1) ... pp_{11}(" + str(self.six_times_two_pp_spatial_index)+ ")"
+                hdr_str += " pp_{12}(1) ... pp_{1"+ str(self.six_times_two_p_tomo_bin) + "}(" + str(self.six_times_two_pp_spatial_index)+ ")"
+                hdr_str += " pp_{22}(1) ... pp_{2"+ str(self.six_times_two_p_tomo_bin) + "}(" + str(self.six_times_two_pp_spatial_index)+ ")... pp_{"+ str(self.six_times_two_p_tomo_bin) + str(self.six_times_two_p_tomo_bin) + "}(" + str(self.six_times_two_pp_spatial_index)+ ")"
+                hdr_str += "\n"
+            if gm:
+                hdr_str += "sm_{11}(1) ... sm_{11}(" + str(self.six_times_two_sm_spatial_index)+ ")"
+                hdr_str += " sm_{12}(1) ... sm_{1"+ str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_sm_spatial_index)+ ")"
+                hdr_str += " sm_{21}(1) ... sm_{2"+ str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_sm_spatial_index)+ ")... sp_{"+ str(self.six_times_two_s_tomo_bin) + str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_sm_spatial_index)+ ")"
+                hdr_str += "\n"
+                hdr_str += "pm_{11}(1) ... pm_{11}(" + str(self.six_times_two_pm_spatial_index)+ ")"
+                hdr_str += " pm_{12}(1) ... pm_{1"+ str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_pm_spatial_index)+ ")"
+                hdr_str += " pm_{21}(1) ... pm_{2"+ str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_pm_spatial_index)+ ")... sp_{"+ str(self.six_times_two_p_tomo_bin) + str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_pm_spatial_index)+ ")"
+                hdr_str += "\n"
+            if mm:
+                hdr_str += "mm_{11}(1) ... mm_{11}(" + str(self.six_times_two_mm_spatial_index)+ ")"
+                hdr_str += " mm_{12}(1) ... mm_{1"+ str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_mm_spatial_index)+ ")"
+                hdr_str += " mm_{22}(1) ... mm_{2"+ str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_mm_spatial_index)+ ")... mm_{"+ str(self.six_times_two_m_tomo_bin) + str(self.six_times_two_m_tomo_bin) + "}(" + str(self.six_times_two_mm_spatial_index)+ ")"
+                hdr_str += "\n"
+
 
             if self.plot and len(cov2d_total[:,0]) < 1000:
                 self.plot_corrcoeff_matrix_6x2pt(obs_dict, cov2d_total, cov_diag, proj_quant, n_tomo_clust, 
@@ -6132,7 +6186,7 @@ class Output():
                     fn = self.filename[self.style.index('matrix')]
                     if self.save_as_binary:
                         name, extension = os.path.splitext(fn)
-                        np.save(name, cov2d_total)
+                        np.savez(name, covariance = cov2d_total, header = hdr_str)
                     else:
                         np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
                                 newline='\n', header=hdr_str, comments='# ')
@@ -6141,15 +6195,15 @@ class Output():
                     if self.save_as_binary:
                         fn = self.filename[self.style.index('matrix')]
                         name, extension = os.path.splitext(fn)
-                        np.save(name, cov2d_total)
+                        np.savez(name, covariance = cov2d_total, header = hdr_str)
                         fn_gauss = name + "_gauss"
                         fn_nongauss = name + "_nongauss"
                         fn_ssc = name + "_SSC"
-                        np.save(fn_gauss, cov2d_gauss)
+                        np.savez(fn_gauss, covariance = cov2d_gauss, header = hdr_str)
                         if self.has_nongauss:
-                            np.save(fn_nongauss, cov2d_nongauss)
+                            np.savez(fn_nongauss, covariance = cov2d_nongauss, header = hdr_str)
                         if self.has_ssc:
-                            np.save(fn_ssc, cov2d_ssc)
+                            np.savez(fn_ssc, covariance = cov2d_ssc, header = hdr_str)
                     else:
                         fn = self.filename[self.style.index('matrix')]
                         np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
@@ -6483,207 +6537,212 @@ class Output():
                                 [csmf_block.T, covariange_csmf]])
             cov2d_gauss = np.copy(cov2d)
 
-
-            cov = [ssc[idx] for idx in range(obslength)]
-            cov_diag = []
-            if gg:
-                covariance_ww = self.__create_matrix_arbitrary(cov[0],True,True,'gg','gg',summary)
-                cov2d = covariance_ww
-                cov_diag.append(covariance_ww)
-                
-                if gm:
-                    covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False,'gm', 'gm', summary)
-                    cov_diag.append(covariance_gtgt)
-                    covariance_wgt = self.__create_matrix_arbitrary(cov[1],True,False,'gg', 'gm', summary)
-                    cov2d = np.block([[covariance_ww, covariance_wgt],
-                                    [covariance_wgt.T, covariance_gtgt]])
+            if self.has_ssc:
+                cov = [ssc[idx] for idx in range(obslength)]
+                cov_diag = []
+                if gg:
+                    covariance_ww = self.__create_matrix_arbitrary(cov[0],True,True,'gg','gg',summary)
+                    cov2d = covariance_ww
+                    cov_diag.append(covariance_ww)
                     
-                    if xipp:
-                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
-                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
-                        cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
-                                        [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
-                                        [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                    if gm:
+                        covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False,'gm', 'gm', summary)
+                        cov_diag.append(covariance_gtgt)
+                        covariance_wgt = self.__create_matrix_arbitrary(cov[1],True,False,'gg', 'gm', summary)
+                        cov2d = np.block([[covariance_ww, covariance_wgt],
+                                        [covariance_wgt.T, covariance_gtgt]])
+                        
+                        if xipp:
+                            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                            covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
+                            covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                            cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
+                                            [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
+                                            [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                            cov_diag.append(covariance_xipxip)
+                            if ximm:
+                                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                                cov_diag.append(covariance_ximxim)
+                                covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                                covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                                cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                                [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                                if xipm:
+                                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                    cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                                    [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                    [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                                    [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                        
+                    elif xipp:
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
+                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
+                        cov2d = np.block([[covariance_ww, covariance_wxip],
+                                        [covariance_wxip.T, covariance_xipxip]])
                         cov_diag.append(covariance_xipxip)
                         if ximm:
                             covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                            cov_diag.append(covariance_ximxim)
                             covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
-                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
-                            cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
-                                            [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                            [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                            [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                            cov_diag.append(covariance_ximxim)
+                            cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                            [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                            [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                             if xipm:
                                 covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                                cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
-                                                [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                                [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-                    
-                elif xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
-                    covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
-                    cov2d = np.block([[covariance_ww, covariance_wxip],
-                                    [covariance_wxip.T, covariance_xipxip]])
-                    cov_diag.append(covariance_xipxip)
-                    if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                        covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
-                        cov_diag.append(covariance_ximxim)
-                        cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                        [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                        [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                        if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                            cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                            [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
-                                            [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
-            elif gm:
-                covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False, 'gm', 'gm', summary)
-                cov2d = covariance_gtgt
-                cov_diag.append(covariance_gtgt)        
-                if xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
-                    covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
-                    cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
-                                    [covariance_xipgt, covariance_xipxip]])
-                    cov_diag.append(covariance_xipxip)
-                    if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                        covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
-                        cov_diag.append(covariance_ximxim)
-                        cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                        [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                        [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                        if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                            cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                        [covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                        [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-            elif xipp:
-                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                cov2d = covariance_xipxip
-                cov_diag.append(covariance_xipxip)
-                if ximm:
-                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                    cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                    [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                    cov_diag.append(covariance_ximxim)
-                    if xipm:
-                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                        cov2d = np.block([[covariance_xipxip, covariance_xipxim],
-                                        [covariance_xipxim.T, covariance_ximxim]])
-            elif ximm:
-                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                cov2d = covariance_xipxip
-                cov_diag.append(covariance_ximxim)
-            elif xipm:
-                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                cov2d = covariance_xipxim
-            cov2d_ssc = np.copy(cov2d)
-
-            cov = [nongauss[idx] for idx in range(obslength)]
-            cov_diag = []
-            if gg:
-                covariance_ww = self.__create_matrix_arbitrary(cov[0],True,True,'gg','gg',summary)
-                cov2d = covariance_ww
-                cov_diag.append(covariance_ww)
-                
-                if gm:
-                    covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False,'gm', 'gm', summary)
-                    cov_diag.append(covariance_gtgt)
-                    covariance_wgt = self.__create_matrix_arbitrary(cov[1],True,False,'gg', 'gm', summary)
-                    cov2d = np.block([[covariance_ww, covariance_wgt],
-                                    [covariance_wgt.T, covariance_gtgt]])
-                    
+                                cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                                [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
+                                                [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
+                elif gm:
+                    covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False, 'gm', 'gm', summary)
+                    cov2d = covariance_gtgt
+                    cov_diag.append(covariance_gtgt)        
                     if xipp:
-                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
                         covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
-                        cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
-                                        [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
-                                        [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                        cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
+                                        [covariance_xipgt, covariance_xipxip]])
                         cov_diag.append(covariance_xipxip)
                         if ximm:
                             covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                            cov_diag.append(covariance_ximxim)
-                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
                             covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
-                            cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
-                                            [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                            [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                            [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                            cov_diag.append(covariance_ximxim)
+                            cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                            [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                            [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                             if xipm:
                                 covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                            [covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                            [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                elif xipp:
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                    cov2d = covariance_xipxip
+                    cov_diag.append(covariance_xipxip)
+                    if ximm:
+                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                        cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                        [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                        cov_diag.append(covariance_ximxim)
+                        if xipm:
+                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                            cov2d = np.block([[covariance_xipxip, covariance_xipxim],
+                                            [covariance_xipxim.T, covariance_ximxim]])
+                elif ximm:
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                    cov2d = covariance_xipxip
+                    cov_diag.append(covariance_ximxim)
+                elif xipm:
+                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                    cov2d = covariance_xipxim
+                cov2d_ssc = np.copy(cov2d)
+            else:
+                cov2d_ssc = np.zeros_like(cov2d_gauss)
+
+            if self.has_nongauss:
+                cov = [nongauss[idx] for idx in range(obslength)]
+                cov_diag = []
+                if gg:
+                    covariance_ww = self.__create_matrix_arbitrary(cov[0],True,True,'gg','gg',summary)
+                    cov2d = covariance_ww
+                    cov_diag.append(covariance_ww)
+                    
+                    if gm:
+                        covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False,'gm', 'gm', summary)
+                        cov_diag.append(covariance_gtgt)
+                        covariance_wgt = self.__create_matrix_arbitrary(cov[1],True,False,'gg', 'gm', summary)
+                        cov2d = np.block([[covariance_ww, covariance_wgt],
+                                        [covariance_wgt.T, covariance_gtgt]])
+                        
+                        if xipp:
+                            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                            covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
+                            covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                            cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
+                                            [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
+                                            [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
+                            cov_diag.append(covariance_xipxip)
+                            if ximm:
+                                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                                cov_diag.append(covariance_ximxim)
+                                covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                                covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
                                 cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                                 [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                                [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                                [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-                    
-                elif xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
-                    covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
-                    cov2d = np.block([[covariance_ww, covariance_wxip],
-                                    [covariance_wxip.T, covariance_xipxip]])
-                    cov_diag.append(covariance_xipxip)
-                    if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                        covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
-                        cov_diag.append(covariance_ximxim)
-                        cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                        [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                        [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
-                        if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                                [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                                [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
+                                if xipm:
+                                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                    cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
+                                                    [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                                    [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                                    [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                        
+                    elif xipp:
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
+                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
+                        cov2d = np.block([[covariance_ww, covariance_wxip],
+                                        [covariance_wxip.T, covariance_xipxip]])
+                        cov_diag.append(covariance_xipxip)
+                        if ximm:
+                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                            cov_diag.append(covariance_ximxim)
                             cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
-                                            [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
-                                            [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
-            elif gm:
-                covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False, 'gm', 'gm', summary)
-                cov2d = covariance_gtgt
-                cov_diag.append(covariance_gtgt)        
-                if xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
-                    covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
-                    cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
-                                    [covariance_xipgt, covariance_xipxip]])
+                                            [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                            [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                            if xipm:
+                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
+                                                [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
+                                                [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
+                elif gm:
+                    covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False, 'gm', 'gm', summary)
+                    cov2d = covariance_gtgt
+                    cov_diag.append(covariance_gtgt)        
+                    if xipp:
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
+                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                        cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
+                                        [covariance_xipgt, covariance_xipxip]])
+                        cov_diag.append(covariance_xipxip)
+                        if ximm:
+                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                            cov_diag.append(covariance_ximxim)
+                            cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                            [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                            [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                            if xipm:
+                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
+                                            [covariance_xipgt, covariance_xipxip, covariance_xipxim],
+                                            [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
+                elif xipp:
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                    cov2d = covariance_xipxip
                     cov_diag.append(covariance_xipxip)
                     if ximm:
                         covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                        covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                        cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
+                                        [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                         cov_diag.append(covariance_ximxim)
-                        cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                        [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                        [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                         if xipm:
                             covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                            cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
-                                        [covariance_xipgt, covariance_xipxip, covariance_xipxim],
-                                        [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
-            elif xipp:
-                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                cov2d = covariance_xipxip
-                cov_diag.append(covariance_xipxip)
-                if ximm:
+                            cov2d = np.block([[covariance_xipxip, covariance_xipxim],
+                                            [covariance_xipxim.T, covariance_ximxim]])
+                elif ximm:
                     covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                    cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
-                                    [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
+                    cov2d = covariance_xipxip
                     cov_diag.append(covariance_ximxim)
-                    if xipm:
-                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                        cov2d = np.block([[covariance_xipxip, covariance_xipxim],
-                                        [covariance_xipxim.T, covariance_ximxim]])
-            elif ximm:
-                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                cov2d = covariance_xipxip
-                cov_diag.append(covariance_ximxim)
-            elif xipm:
-                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
-                cov2d = covariance_xipxim
-            cov2d_nongauss = np.copy(cov2d)    
-        
+                elif xipm:
+                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                    cov2d = covariance_xipxim
+                cov2d_nongauss = np.copy(cov2d)    
+            else:
+                cov2d_nongauss = np.zeros_like(cov2d_gauss)
+
         for i in range(len(cov2d[:,0])):
             for j in range(len(cov2d[:,0])):
                 cov2d_total[j,i] = cov2d_total[i,j]
@@ -6710,38 +6769,97 @@ class Output():
         if obs_dict['observables']['est_ggl'] == 'bandpowers' and obs_dict['observables']['ggl'] == True:
             obslist[4] = 'CE_gmCE_gm'
         
-        hdr_str = 'Covariance matrix with the diagonals in the order: '
-        hdr_str += obslist[0]+' ' if obsbool[0] else ''
-        hdr_str += obslist[4]+' ' if obsbool[4] else ''
-        hdr_str += obslist[7]+' ' if obsbool[7] else ''
-        hdr_str += obslist[9]+' ' if obsbool[9] else ''
-        hdr_str += 'with '
-        if n_tomo_clust is not None:
-            hdr_str += str(n_tomo_clust) + ' tomographic clustering bins and '
-        if n_tomo_lens is not None:
-            hdr_str += str(n_tomo_lens) + ' tomographic lensing bins and '
-        if obs_dict['observables']['clustering']:
-            hdr_str += str(len(summary['WL_gg'])) + ' elements per tomographic bin in gg, '
-            hdr_str += str(int(summary['arb_number_first_summary_gg'])) + ' spatial indices for probe 1 '
-            if summary['number_summary_gg'] > 1:
-                hdr_str += 'and ' + str(int( len(summary['WL_gg']) - summary['arb_number_first_summary_gg'])) + ' spatial indices for probe 2. '
-        if obs_dict['observables']['ggl']:
-            hdr_str += str(len(summary['WL_gm'])) + ' elements per tomographic bin in gm ' 
-            hdr_str += str(int(summary['arb_number_first_summary_gm'])) + ' spatial indices for probe 1 '
-            if summary['number_summary_gm'] > 1:
-                hdr_str += 'and ' + str(int( len(summary['WL_gm']) - summary['arb_number_first_summary_gm'])) + ' spatial indices for probe 2. '
-        if obs_dict['observables']['cosmic_shear']:
-            hdr_str += str(len(summary['WL_mmE'])) + ' elements per tomographic bin in mm' 
-            hdr_str += str(int(summary['arb_number_first_summary_mm'])) + ' spatial indices for probe 1 '
-            if summary['number_summary_mm'] > 1:
-                hdr_str += 'and ' + str(int( len(summary['WL_mmE']) - summary['arb_number_first_summary_mm'])) + ' spatial indices for probe 2, both for E and B mode.'
+        two_gg = False
+        two_gm = False
+        two_mm = False
+        if summary['number_summary_gg'] > 1:
+            two_gg = True
+        if summary['number_summary_gm'] > 1:
+            two_gm = True
+        if summary['number_summary_mm'] > 1:
+            two_mm = True
+        spatial_first_probe_gg = summary['arb_number_first_summary_gg']
+        spatial_second_probe_gg = len(summary['WL_gg']) - summary['arb_number_first_summary_gg']
+        spatial_first_probe_gm = summary['arb_number_first_summary_gm']
+        spatial_second_probe_gm = len(summary['WL_gm']) - summary['arb_number_first_summary_gm']
+        spatial_first_probe_mm = summary['arb_number_first_summary_mm']
+        spatial_second_probe_mm = len(summary['WL_mmE']) - summary['arb_number_first_summary_mm']
+
+        hdr_str = 'Covariance matrix for the following probes (in this order) :\n'
+        if gg:
+            hdr_str += 'galaxy clustering with ' + str(n_tomo_clust) + ' tomographic bins (only the unique bin combinations) and ' + str(spatial_first_probe_gg) + ' spatial bins for the first probe and '
+            if two_gg:
+                hdr_str += str(spatial_second_probe_gg) + " for the second probe and "
+            hdr_str += str(sampledim) + ' stellar mass bins. \n'
+        if gm:  
+            hdr_str += 'galaxy galaxy lensing with ' + str(n_tomo_clust) + ' tomographic lens bins and ' + str(n_tomo_lens) + ' tomographic source bins (all bin combinations) and ' + str(spatial_first_probe_gm) + ' spatial bins for the first probe and '
+            if two_gm:
+                hdr_str += str(spatial_second_probe_gm) + " for the second probe and "
+            hdr_str += str(sampledim) + ' stellar mass bins. \n'
+        if mm:  
+            hdr_str += 'cosmic shear with ' + str(n_tomo_lens) + ' tomographic bins (only the unique bin combinations) and ' + str(spatial_first_probe_mm) + ' spatial bins for the first probe and '
+            if two_mm:
+                hdr_str += str(spatial_second_probe_mm) + " for the second probe and "
+        if self.has_csmf:
+            hdr_str += 'stellar mass function with ' + str((self.N_stellar_mass_bins)) + ' stellar mass bins.\n'
+
+        hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
+        if gg:
+            hdr_str += "galaxy clustering: gg^{stellar mass sample bin}_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+        if gm:
+            hdr_str += "galaxy galaxy lensing: gm^{stellar mass sample bin}_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+        if mm:
+            hdr_str += "cosmic shear: mm_{tomographic bin i tomographic bin j}(spatial bin k)\n"
+        if self.has_csmf:
+            hdr_str += "stellar mass function: phi_(mass index k))\n"
+        if gg:
+            hdr_str += "gg^{1}_{11}(1) ... gg^{1}_{11}(" + str(spatial_first_probe_gg)+ ") gg^{2}_{11}(1) ... gg^{" +str(sampledim) + "}_{11}(" + str(spatial_first_probe_gg)+ ")"
+            hdr_str += " gg^{1}_{12}(1) ... gg^{" +str(sampledim) + "}_{1"+ str(n_tomo_clust) + "}(" + str(spatial_first_probe_gg)+ ")"
+            hdr_str += " gg^{1}_{22}(1) ... gg^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_clust) + "}(" + str(spatial_first_probe_gg)+ ")"
+            if two_gg:
+                hdr_str += "\n"
+                hdr_str += "Followed by the second gg summary"
+                hdr_str += "\n"
+                hdr_str += "gg^{1}_{11}(1) ... gg^{1}_{11}(" + str(spatial_second_probe_gg)+ ") gg^{2}_{11}(1) ... gg^{" +str(sampledim) + "}_{11}(" + str(spatial_second_probe_gg)+ ")"
+                hdr_str += " gg^{1}_{12}(1) ... gg^{" +str(sampledim) + "}_{1"+ str(n_tomo_clust) + "}(" + str(spatial_second_probe_gg)+ ")"
+                hdr_str += " gg^{1}_{22}(1) ... gg^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_clust) + "}(" + str(spatial_second_probe_gg)+ ")"
+            hdr_str += "\n"
+        if gm:
+            hdr_str += "gm^{1}_{11}(1) ... gm^{1}_{11}(" + str(spatial_first_probe_gm)+ ") gm^{2}_{11}(1) ... gm^{" +str(sampledim) + "}_{11}(" + str(spatial_first_probe_gm)+ ")"
+            hdr_str += " gm^{1}_{12}(1) ... gm^{" +str(sampledim) + "}_{1"+ str(n_tomo_lens) + "}(" + str(spatial_first_probe_gm)+ ")"
+            hdr_str += " gm^{1}_{21}(1) ... gm^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_lens) + "}(" + str(spatial_first_probe_gm)+ ")"
+            if two_gm:
+                hdr_str += "\n"
+                hdr_str += "Followed by the second gm summary"
+                hdr_str += "\n"
+                hdr_str += "gm^{1}_{11}(1) ... gm^{1}_{11}(" + str(spatial_second_probe_gm)+ ") gm^{2}_{11}(1) ... gm^{" +str(sampledim) + "}_{11}(" + str(spatial_second_probe_gm)+ ")"
+                hdr_str += " gm^{1}_{12}(1) ... gm^{" +str(sampledim) + "}_{1"+ str(n_tomo_lens) + "}(" + str(spatial_second_probe_gm)+ ")"
+                hdr_str += " gm^{1}_{21}(1) ... gm^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_lens) + "}(" + str(spatial_second_probe_gm)+ ")"
+            hdr_str += "\n"
+        if mm:
+            hdr_str += "mm_{11}(1) ... mm_{11}(" + str(spatial_first_probe_mm)+ ") mm_{11}(1) ... mm_{11}(" + str(spatial_first_probe_mm)+ ")"
+            hdr_str += " mm_{12}(1) ... mm_{1"+ str(n_tomo_lens) + "}(" + str(spatial_first_probe_mm)+ ")"
+            hdr_str += " mm_{21}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(spatial_first_probe_mm)+ ")"
+            if two_mm:
+                hdr_str += "\n"
+                hdr_str += "Followed by the second mm summary"
+                hdr_str += "\n"
+                hdr_str += "mm_{11}(1) ... mm_{11}(" + str(spatial_second_probe_mm)+ ") mm_{11}(1) ... mm_{11}(" + str(spatial_second_probe_mm)+ ")"
+                hdr_str += " mm_{12}(1) ... mm_{1"+ str(n_tomo_lens) + "}(" + str(spatial_second_probe_mm)+ ")"
+                hdr_str += " mm_{21}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(spatial_second_probe_mm)+ ")"
+            hdr_str += "\n"
+            hdr_str += "The same block is then repeated for the second component summaries of mm.\n"
+        if self.has_csmf:
+            hdr_str += "phi_(1) ... phi(" + str(self.N_stellar_mass_bins)+ ")\n"
+
+
         if 'matrix' in self.style:
             if not cov_dict['split_gauss']:
                 print("Writing matrix output file.")
                 fn = self.filename[self.style.index('matrix')]
                 if self.save_as_binary:
                     name, extension = os.path.splitext(fn)
-                    np.save(name, cov2d_total)
+                    np.savez(name, covariance = cov2d_total, header = hdr_str)
                 else:
                     np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',
                             newline='\n', header=hdr_str, comments='# ')
@@ -6750,15 +6868,15 @@ class Output():
                 if self.save_as_binary:
                     fn = self.filename[self.style.index('matrix')]
                     name, extension = os.path.splitext(fn)
-                    np.save(name, cov2d_total)
+                    np.savez(name, covariance = cov2d_total, header = hdr_str)
                     fn_gauss = name + "_gauss"
                     fn_nongauss = name + "_nongauss"
                     fn_ssc = name + "_SSC"
-                    np.save(fn_gauss, cov2d_gauss)
+                    np.savez(fn_gauss, covariance = cov2d_gauss, header = hdr_str)
                     if self.has_nongauss:
-                        np.save(fn_nongauss, cov2d_nongauss)
+                        np.savez(fn_nongauss, covariance = cov2d_nongauss, header = hdr_str)
                     if self.has_ssc:
-                        np.save(fn_ssc, cov2d_ssc)
+                        np.savez(fn_ssc, covariance = cov2d_ssc, header = hdr_str)
                 else:
                     fn = self.filename[self.style.index('matrix')]
                     np.savetxt(fn, cov2d_total, fmt='%.6e', delimiter=' ',

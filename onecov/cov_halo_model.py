@@ -1188,9 +1188,10 @@ class HaloModel(Setup):
         aux_M[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = self.hod.Mbins[len(self.hod.Mbins[:,0]) - 1,:]
         aux_c[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_c[len(self.hod.Mbins[:,0]) - 1,:]
         aux_s[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_s[len(self.hod.Mbins[:,0]) - 1,:]
-        self.stellar_mass = aux_M
-        self.galaxy_smf_c = UnivariateSpline(np.array(aux_M), np.array(aux_c) , k=2, s=0, ext=0)
-        self.galaxy_smf_s = UnivariateSpline(np.array(aux_M), np.array(aux_s) , k=2, s=0, ext=0)
+        indices = np.unique(aux_M,return_index = True)[1]
+        
+        self.galaxy_smf_c = UnivariateSpline(aux_M[indices], np.array(aux_c)[indices] , k=2, s=0, ext=0)
+        self.galaxy_smf_s = UnivariateSpline(aux_M[indices], np.array(aux_s)[indices] , k=2, s=0, ext=0)
 
     def set_spline_galaxy_stellar_mf_bias(self,
                                             hod_dict,bias_dict, hm_prec):
@@ -1219,8 +1220,10 @@ class HaloModel(Setup):
         aux_M[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = self.hod.Mbins[len(self.hod.Mbins[:,0]) - 1,:]
         aux_c[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_c[len(self.hod.Mbins[:,0]) - 1,:]
         aux_s[(len(self.hod.Mbins[:,0]) - 1)*len(self.hod.Mbins[0,:-1]):] = aux_smf_s[len(self.hod.Mbins[:,0]) - 1,:]
-        self.galaxy_smf_bias_c = UnivariateSpline(np.array(aux_M), np.array(aux_c) , k=2, s=0, ext=0)
-        self.galaxy_smf_bias_s = UnivariateSpline(np.array(aux_M), np.array(aux_s) , k=2, s=0, ext=0)        
+        
+        indices = np.unique(aux_M,return_index = True)[1]
+        self.galaxy_smf_bias_c = UnivariateSpline(np.array(aux_M)[indices], np.array(aux_c)[indices], k=2, s=0, ext=0)
+        self.galaxy_smf_bias_s = UnivariateSpline(np.array(aux_M)[indices], np.array(aux_s)[indices], k=2, s=0, ext=0)        
 
     def conditional_galaxy_stellar_mf(self,
                                       hod_dict,
@@ -1333,9 +1336,10 @@ class HaloModel(Setup):
         """
 
         aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
+        indices = np.unique(aux_M,return_index = True)[1]
         aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
         aux_bispec_count_mm = aux_bispec_count_mm.reshape((len(aux_bispec_count_mm[:,0,0]), len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0])))
         count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
         for i_k in range(len(self.mass_func.k)):
-            count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M), np.log(aux_bispec_count_mm[i_k,:])))
+            count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M[indices]), np.log(aux_bispec_count_mm[i_k,indices])))
         return count_matter_bispec

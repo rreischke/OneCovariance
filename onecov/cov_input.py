@@ -242,6 +242,8 @@ class Input:
         self.norm_Mc_relation_cen = None
         self.norm_Mc_relation_sat = None
         self.logmass_bins = None
+        self.logmass_bins_upper = None
+        self.logmass_bins_lower = None
         self.sampledim = None
 
         # intrinsic alignment parameters
@@ -2249,7 +2251,15 @@ class Input:
                                     "array. Must be adjusted in config file " +
                                     config_name + ".")
             else:
-                self.sampledim = 1
+                if 'log10mass_bins_upper' and 'log10mass_bins_lower' in config['bias']:
+                    self.logmass_bins_lower = \
+                        np.array(config['bias']['log10mass_bins_lower'].split(',')).astype(float)
+                    self.logmass_bins_upper = \
+                        np.array(config['bias']['log10mass_bins_upper'].split(',')).astype(float)
+                    self.sampledim = len(self.logmass_bins_upper)
+                    
+                else:
+                    self.sampledim = 1
             if self.logmass_bins is not None and len(self.logmass_bins) == 1:
                 raise Exception("ConfigError: Only one value is given for " +
                                 "[bias]: 'log10mass_bins' but at least two values must "
@@ -3788,9 +3798,9 @@ class Input:
         
 
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins', 'has_csmf']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'log10mass_bins', 'has_csmf','log10mass_bins_upper','log10mass_bins_lower']
         values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, None]
+                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, None, self.logmass_bins_upper, self.logmass_bins_lower]
         self.bias_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.logmass_bins is not None:
@@ -3799,9 +3809,15 @@ class Input:
         else:
             self.logmass_bins = np.array([0, 0])
             values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                      self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, self.cstellar_mf]
+                      self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, self.cstellar_mf,self.logmass_bins_upper, self.logmass_bins_lower]
+        if self.logmass_bins_upper is not None and self.logmass_bins_upper is not None:
+            self.bias_abr['log10mass_bins_upper'] = \
+                ', '.join(map(str, self.logmass_bins_upper))
+            self.bias_abr['log10mass_bins_lower'] = \
+                ', '.join(map(str, self.logmass_bins_lower))
+        
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
-                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins', 'has_csmf']
+                'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins', 'has_csmf','logmass_bins_upper','logmass_bins_lower']
         self.bias = dict(zip(keys, values))
         keys = ['A_IA', 'eta_IA', 'z_pivot_IA']
         values = [self.A_IA, self.eta_IA, self.z_pivot_IA]
