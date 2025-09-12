@@ -212,18 +212,19 @@ class CovTHETASpace(CovELLSpace):
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = save_n_eff_lens
         if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
-            self.__get_weights()
-            self.ell_limits = []
-            for mode in range(len(self.WXY_stack[:,0])):
-                limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
-                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
-                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
-                limits_at_mode_append[0] = self.ell_fourier_integral[0]
-                limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
-                self.ell_limits.append(limits_at_mode_append)
-            self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
-            self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
-            self.__get_signal(obs_dict)
+            if not self.cov_dict['sn_only']:
+                self.__get_weights()
+                self.ell_limits = []
+                for mode in range(len(self.WXY_stack[:,0])):
+                    limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
+                    limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
+                    limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
+                    limits_at_mode_append[0] = self.ell_fourier_integral[0]
+                    limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
+                    self.ell_limits.append(limits_at_mode_append)
+                self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
+                self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
+                self.__get_signal(obs_dict)
         
     def __set_theta_bins(self,
                          covTHETAspacesettings):
@@ -1163,6 +1164,8 @@ class CovTHETASpace(CovELLSpace):
                             str(round(theta/theta_comb*100, 1)) + '% in ' +
                             str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                             str(round(eta, 1)) + 'min', end="")
+                adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.gt[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
+                gauss_gtgt_sva[:, :, :, :, :, :, :, :] = gauss_gtgt_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             gauss_gtgt_sn = \
                 kron_delta_tomo_clust[None, None, None, :, None, :, None] \
                 * kron_delta_tomo_lens[None, None, None, None, :, None, :] \
@@ -1171,8 +1174,6 @@ class CovTHETASpace(CovELLSpace):
             gauss_gtgt_sn = \
                 gauss_gtgt_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.theta_bins_clustering))[:, :, None, None, None, None, None, None]
-            adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.gt[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
-            gauss_gtgt_sva[:, :, :, :, :, :, :, :] = gauss_gtgt_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             
         else:
             gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn = 0, 0, 0
@@ -1239,10 +1240,10 @@ class CovTHETASpace(CovELLSpace):
                             str(round(theta/theta_comb*100, 1)) + '% in ' +
                             str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                             str(round(eta, 1)) + 'min', end="")
-            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
-            gauss_ximgt_sva[:, :, 0, :, :, :, :, :] = gauss_ximgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
-            adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
-            gauss_xipgt_sva[:, :, 0, :, :, :, :, :] = gauss_xipgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
+                adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
+                gauss_ximgt_sva[:, :, 0, :, :, :, :, :] = gauss_ximgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
+                adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
+                gauss_xipgt_sva[:, :, 0, :, :, :, :, :] = gauss_xipgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
         else:
             gauss_xipgt_sva, gauss_ximgt_sva, gauss_xipgt_mix, gauss_ximgt_mix = 0, 0, 0 ,0
 
@@ -1316,6 +1317,12 @@ class CovTHETASpace(CovELLSpace):
                             str(round(theta/theta_comb*100, 1)) + '% in ' +
                             str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
                             str(round(eta, 1)) + 'min', end="")
+                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
+                gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] = gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
+                gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_plus[None, :, None, :, None, None, :, :])
+                gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             gauss_xipm_sn = \
                 (kron_delta_tomo_lens[None, None, None, :, None, :, None]
                  * kron_delta_tomo_lens[None, None, None, None, :, None, :]
@@ -1325,12 +1332,6 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipm_sn = \
                 gauss_xipm_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.theta_bins_lensing))[:, :, None, None, None, None, None, None]
-            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
-            gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] = gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
-            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
-            gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
-            adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_plus[None, :, None, :, None, None, :, :])
-            gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
         else:
             gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, gauss_xipm_sn = 0, 0, 0, 0, 0, 0, 0
 
