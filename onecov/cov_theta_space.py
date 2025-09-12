@@ -1012,27 +1012,28 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             t0, theta = time.time(), 0
             theta_comb = (len(self.theta_bins_clustering)) **2
-            for m_mode in range(self.gg_summaries):
-                for n_mode in range(self.gg_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                        local_ell_limit = self.ell_limits[n_mode][:]
-                    if self.cov_dict['split_gauss']:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_sva_flat)*self.ellrange,0,-1), True, True)
-                        gauss_ww_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_mix_flat)*self.ellrange,0,-1), True, True)
-                        gauss_ww_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                    else:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_sva_flat + gaussELLgggg_mix_flat)*self.ellrange,0,-1), True, True)
-                        gauss_ww_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                         
-                    theta += 1
-                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                    print('\rProjection for Gaussian term for the '
-                          'real-space covariance ww at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
+            if not self.cov_dict['sn_only']:
+                for m_mode in range(self.gg_summaries):
+                    for n_mode in range(self.gg_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                            local_ell_limit = self.ell_limits[n_mode][:]
+                        if self.cov_dict['split_gauss']:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_sva_flat)*self.ellrange,0,-1), True, True)
+                            gauss_ww_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_mix_flat)*self.ellrange,0,-1), True, True)
+                            gauss_ww_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        else:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggg_sva_flat + gaussELLgggg_mix_flat)*self.ellrange,0,-1), True, True)
+                            gauss_ww_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./(2.0*np.pi*survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            
+                        theta += 1
+                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                        print('\rProjection for Gaussian term for the '
+                            'real-space covariance ww at ' +
+                            str(round(theta/theta_comb*100, 1)) + '% in ' +
+                            str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                            str(round(eta, 1)) + 'min', end="")
             gauss_ww_sn = \
                 (kron_delta_tomo_clust[None, None, None, :, None, :, None]
                  * kron_delta_tomo_clust[None, None, None, None, :, None, :]
@@ -1063,27 +1064,28 @@ class CovTHETASpace(CovELLSpace):
             
             t0, theta = time.time(), 0
             theta_comb = (len(self.theta_bins_clustering)) ** 2
-            for m_mode in range(self.gg_summaries):
-                for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                        local_ell_limit = self.ell_limits[n_mode][:]
-                    if self.cov_dict['split_gauss']:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_sva_flat)*self.ellrange,0,-1), True, True)
-                        gauss_wgt_sva[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_mix_flat)*self.ellrange,0,-1), True, True)
-                        gauss_wgt_mix[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                    else:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_sva_flat + gaussELLgggm_mix_flat)*self.ellrange,0,-1), True, True)
-                        gauss_wgt_sva[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        
-                    theta += 1
-                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                    print('\rProjection for Gaussian term for the '
-                          'real-space covariance wgt at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
+            if not self.cov_dict['sn_only']:
+                for m_mode in range(self.gg_summaries):
+                    for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                            local_ell_limit = self.ell_limits[n_mode][:]
+                        if self.cov_dict['split_gauss']:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_sva_flat)*self.ellrange,0,-1), True, True)
+                            gauss_wgt_sva[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_mix_flat)*self.ellrange,0,-1), True, True)
+                            gauss_wgt_mix[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        else:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgggm_sva_flat + gaussELLgggm_mix_flat)*self.ellrange,0,-1), True, True)
+                            gauss_wgt_sva[m_mode, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            
+                        theta += 1
+                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                        print('\rProjection for Gaussian term for the '
+                            'real-space covariance wgt at ' +
+                            str(round(theta/theta_comb*100, 1)) + '% in ' +
+                            str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                            str(round(eta, 1)) + 'min', end="")
         else:
             gauss_wgt_sva, gauss_wgt_mix = 0, 0
 
@@ -1101,25 +1103,26 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             t0, theta = time.time(), 0
             theta_comb = (len(self.theta_bins_clustering)*len(self.theta_bins_lensing))
-            for m_mode in range(self.gg_summaries):
-                for n_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                        local_ell_limit = self.ell_limits[n_mode][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLggmm_sva_flat)*self.ellrange,0,-1), True, True)
-                    if self.xi_pp:
-                        gauss_wxip_sva[m_mode, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                    if self.xi_mm:
-                        if len(local_ell_limit) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
-                            local_ell_limit = self.ell_limits[n_mode + self.mmE_summaries][:]
-                        gauss_wxim_sva[m_mode, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
-                    theta += 1
-                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                    print('\rProjection for Gaussian term for the '
-                          'real-space covariance wxipm at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
+            if not self.cov_dict['sn_only']:
+                for m_mode in range(self.gg_summaries):
+                    for n_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                            local_ell_limit = self.ell_limits[n_mode][:]
+                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLggmm_sva_flat)*self.ellrange,0,-1), True, True)
+                        if self.xi_pp:
+                            gauss_wxip_sva[m_mode, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        if self.xi_mm:
+                            if len(local_ell_limit) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
+                                local_ell_limit = self.ell_limits[n_mode + self.mmE_summaries][:]
+                            gauss_wxim_sva[m_mode, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
+                        theta += 1
+                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                        print('\rProjection for Gaussian term for the '
+                            'real-space covariance wxipm at ' +
+                            str(round(theta/theta_comb*100, 1)) + '% in ' +
+                            str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                            str(round(eta, 1)) + 'min', end="")
         else:
             gauss_wxip_sva, gauss_wxim_sva = 0, 0
 
@@ -1139,26 +1142,27 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             t0, theta = time.time(), 0
             theta_comb = (len(self.theta_bins_clustering)) **2
-            for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
-                for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                        local_ell_limit = self.ell_limits[n_mode][:]
-                    if self.cov_dict['split_gauss']:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_sva_flat)*self.ellrange,0,-1), True, True)
-                        gauss_gtgt_sva[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_mix_flat)*self.ellrange,0,-1), True, True)
-                        gauss_gtgt_mix[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                    else:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_sva_flat + gaussELLgmgm_mix_flat)*self.ellrange,0,-1), True, True)
-                        gauss_gtgt_sva[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                    theta += 1
-                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                    print('\rProjection for Gaussian term for the '
-                          'real-space covariance gtgt at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
+            if not self.cov_dict['sn_only']:
+                for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                    for n_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                            local_ell_limit = self.ell_limits[n_mode][:]
+                        if self.cov_dict['split_gauss']:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_sva_flat)*self.ellrange,0,-1), True, True)
+                            gauss_gtgt_sva[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                            gauss_gtgt_mix[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        else:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLgmgm_sva_flat + gaussELLgmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                            gauss_gtgt_sva[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                        theta += 1
+                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                        print('\rProjection for Gaussian term for the '
+                            'real-space covariance gtgt at ' +
+                            str(round(theta/theta_comb*100, 1)) + '% in ' +
+                            str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                            str(round(eta, 1)) + 'min', end="")
             gauss_gtgt_sn = \
                 kron_delta_tomo_clust[None, None, None, :, None, :, None] \
                 * kron_delta_tomo_lens[None, None, None, None, :, None, :] \
@@ -1196,44 +1200,45 @@ class CovTHETASpace(CovELLSpace):
             
             t0, theta = time.time(), 0
             theta_comb = (len(self.theta_bins_clustering)*len(self.theta_bins_lensing))
-            for m_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
-                for n_mode in range(self.gg_summaries, self.gg_summaries + self.gm_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                        local_ell_limit = self.ell_limits[n_mode][:]
-                    if self.cov_dict['split_gauss']:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat)*self.ellrange,0,-1), True, True)
-                        if self.xi_pp:
-                            gauss_xipgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        if self.xi_mm:
-                            if len(local_ell_limit) < len(self.ell_limits[m_mode + self.mmE_summaries][:]):
-                                local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
-                            gauss_ximgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_mix_flat)*self.ellrange,0,-1), True, True)
+            if not self.cov_dict['sn_only']:
+                for m_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
+                    for n_mode in range(self.gg_summaries, self.gg_summaries + self.gm_summaries):
                         local_ell_limit = self.ell_limits[m_mode][:]
                         if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
                             local_ell_limit = self.ell_limits[n_mode][:]
-                        if self.xi_pp:
-                            gauss_xipgt_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        if self.xi_mm:
-                            if len(local_ell_limit) < len(self.ell_limits[m_mode + self.mmE_summaries][:]):
-                                local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
-                            gauss_ximgt_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
-                    else:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat + gaussELLmmgm_mix_flat)*self.ellrange,0,-1), True, True)
-                        if self.xi_pp:
-                            gauss_xipgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        if self.xi_mm:
-                            if len(local_ell_limit) < len(self.ell_limits[m_mode + self.mmE_summaries][:]):
-                                local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
-                            gauss_ximgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
-                    theta += 1
-                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                    print('\rProjection for Gaussian term for the '
-                          'real-space covariance xipmgt at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
+                        if self.cov_dict['split_gauss']:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat)*self.ellrange,0,-1), True, True)
+                            if self.xi_pp:
+                                gauss_xipgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            if self.xi_mm:
+                                if len(local_ell_limit) < len(self.ell_limits[m_mode + self.mmE_summaries][:]):
+                                    local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
+                                gauss_ximgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                                local_ell_limit = self.ell_limits[n_mode][:]
+                            if self.xi_pp:
+                                gauss_xipgt_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            if self.xi_mm:
+                                if len(local_ell_limit) < len(self.ell_limits[m_mode + self.mmE_summaries][:]):
+                                    local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
+                                gauss_ximgt_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
+                        else:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmgm_sva_flat + gaussELLmmgm_mix_flat)*self.ellrange,0,-1), True, True)
+                            if self.xi_pp:
+                                gauss_xipgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            if self.xi_mm:
+                                if len(local_ell_limit) < len(self.ell_limits[m_mode + self.mmE_summaries][:]):
+                                    local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
+                                gauss_ximgt_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode)),original_shape)
+                        theta += 1
+                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                        print('\rProjection for Gaussian term for the '
+                            'real-space covariance xipmgt at ' +
+                            str(round(theta/theta_comb*100, 1)) + '% in ' +
+                            str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                            str(round(eta, 1)) + 'min', end="")
             adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
             gauss_ximgt_sva[:, :, 0, :, :, :, :, :] = gauss_ximgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
@@ -1261,56 +1266,56 @@ class CovTHETASpace(CovELLSpace):
                 self.ellrange), flat_length))
             t0, theta = time.time(), 0
             theta_comb = (len(self.theta_bins_lensing)) **2
-            
-            for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
-                for n_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                        local_ell_limit = self.ell_limits[n_mode][:]
-                    if self.cov_dict['split_gauss']:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat)*self.ellrange,0,-1), True, True)
-                        if self.xi_pp:
-                            gauss_xipxip_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        if self.xi_mm:
-                            local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
-                            if len(self.ell_limits[m_mode + self.mmE_summaries][:]) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
-                                local_ell_limit = self.ell_limits[n_mode + self.mmE_summaries][:]
-                            gauss_ximxim_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
-                            if self.cross_terms:
-                                gauss_xipxim_sva[m_mode  - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_mix_flat)*self.ellrange,0,-1), True, True)
-                        if self.xi_pp:
-                            local_ell_limit = self.ell_limits[m_mode][:]
-                            if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                                local_ell_limit = self.ell_limits[n_mode][:]         
-                            gauss_xipxip_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        if self.xi_mm:
-                            local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
-                            if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
-                                local_ell_limit = self.ell_limits[n_mode][:]        
-                            gauss_ximxim_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
-                            if self.cross_terms:
-                                gauss_xipxim_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
-                    else:
-                        self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat + gaussELLmmmm_mix_flat)*self.ellrange,0,-1), True, True)
-                        t01 = time.time()
-                        if self.xi_pp:
-                            gauss_xipxip_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                        t01 = time.time()
-                        if self.xi_mm:
-                            local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
-                            if len(self.ell_limits[m_mode + self.mmE_summaries][:]) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
-                                local_ell_limit = self.ell_limits[n_mode + self.mmE_summaries][:]        
-                            gauss_ximxim_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
-                            if self.cross_terms:
-                                gauss_xipxim_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape) 
-                    theta += 1
-                    eta = (time.time()-t0)/60 * (theta_comb/theta-1)
-                    print('\rProjection for Gaussian term for the '
-                          'real-space covariance xipmxipm at ' +
-                          str(round(theta/theta_comb*100, 1)) + '% in ' +
-                          str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
-                          str(round(eta, 1)) + 'min', end="")
+            if not self.cov_dict['sn_only']:
+                for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
+                    for n_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                            local_ell_limit = self.ell_limits[n_mode][:]
+                        if self.cov_dict['split_gauss']:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat)*self.ellrange,0,-1), True, True)
+                            if self.xi_pp:
+                                gauss_xipxip_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            if self.xi_mm:
+                                local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
+                                if len(self.ell_limits[m_mode + self.mmE_summaries][:]) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
+                                    local_ell_limit = self.ell_limits[n_mode + self.mmE_summaries][:]
+                                gauss_ximxim_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
+                                if self.cross_terms:
+                                    gauss_xipxim_sva[m_mode  - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_mix_flat)*self.ellrange,0,-1), True, True)
+                            if self.xi_pp:
+                                local_ell_limit = self.ell_limits[m_mode][:]
+                                if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
+                                    local_ell_limit = self.ell_limits[n_mode][:]         
+                                gauss_xipxip_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            if self.xi_mm:
+                                local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
+                                if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
+                                    local_ell_limit = self.ell_limits[n_mode][:]        
+                                gauss_ximxim_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
+                                if self.cross_terms:
+                                    gauss_xipxim_mix[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape)
+                        else:
+                            self.levin_int_fourier.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELLmmmm_sva_flat + gaussELLmmmm_mix_flat)*self.ellrange,0,-1), True, True)
+                            t01 = time.time()
+                            if self.xi_pp:
+                                gauss_xipxip_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            t01 = time.time()
+                            if self.xi_mm:
+                                local_ell_limit = self.ell_limits[m_mode + self.mmE_summaries][:]
+                                if len(self.ell_limits[m_mode + self.mmE_summaries][:]) < len(self.ell_limits[n_mode + self.mmE_summaries][:]):
+                                    local_ell_limit = self.ell_limits[n_mode + self.mmE_summaries][:]        
+                                gauss_ximxim_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)),original_shape)
+                                if self.cross_terms:
+                                    gauss_xipxim_sva[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] =  1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.mmE_summaries)),original_shape) 
+                        theta += 1
+                        eta = (time.time()-t0)/60 * (theta_comb/theta-1)
+                        print('\rProjection for Gaussian term for the '
+                            'real-space covariance xipmxipm at ' +
+                            str(round(theta/theta_comb*100, 1)) + '% in ' +
+                            str(round((time.time()-t0)/60, 1)) + 'min  ETA in ' +
+                            str(round(eta, 1)) + 'min', end="")
             gauss_xipm_sn = \
                 (kron_delta_tomo_lens[None, None, None, :, None, :, None]
                  * kron_delta_tomo_lens[None, None, None, None, :, None, :]
@@ -1332,38 +1337,41 @@ class CovTHETASpace(CovELLSpace):
         if self.csmf:
             if self.gg:
                 csmf_w = np.zeros((self.gg_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-                original_shape = csmf_gg[0, :, :, :, :, :].shape
-                flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
-                csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                for m_mode in range(self.gg_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                    csmf_w[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                if not self.cov_dict['sn_only']:
+                    original_shape = csmf_gg[0, :, :, :, :, :].shape
+                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
+                    csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
+                    for m_mode in range(self.gg_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
+                        csmf_w[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
             else:
                 csmf_w = 0
             if self.gm:
                 csmf_gt = np.zeros((self.gm_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-                original_shape = csmf_gm[0, :, :, :, :, :].shape
-                flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
-                csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                    csmf_gt[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                if not self.cov_dict['sn_only']:
+                    original_shape = csmf_gm[0, :, :, :, :, :].shape
+                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
+                    csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
+                    for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
+                        csmf_gt[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
             else:
                 csmf_gt = 0
             
             if self.mm:
                 csmf_xip = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                 csmf_xim = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                original_shape = csmf_mm[0, :, :, :, :, :].shape
-                flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
-                csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
-                    local_ell_limit = self.ell_limits[m_mode][:]
-                    self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                    csmf_xip[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-                    csmf_xim[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.mmE_summaries)),original_shape)            
+                if not self.cov_dict['sn_only']:
+                    original_shape = csmf_mm[0, :, :, :, :, :].shape
+                    flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
+                    csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
+                    for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
+                        local_ell_limit = self.ell_limits[m_mode][:]
+                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
+                        csmf_xip[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                        csmf_xim[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.mmE_summaries)),original_shape)            
 
             else:
                 csmf_xip, csmf_xim = 0, 0

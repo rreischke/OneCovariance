@@ -40,6 +40,7 @@ class Input:
         self.split_gauss = None
         self.nongauss = None
         self.ssc = None
+        self.sn_only = None
 
         # observables and their estimator
         self.observables = dict()
@@ -409,6 +410,14 @@ class Input:
             else:
                 self.ssc = True
                 print("The super-sample covariance will be calculated.")
+            if 'sn_only' in config['covariance terms']:
+                self.sn_only = config['covariance terms'].getboolean('sn_only')
+            else:
+                self.sn_only = False
+            if self.sn_only:
+                self.nongauss = False
+                self.ssc = False
+                self.gauss = True
         else:
             self.gauss = True
             print("The Gaussian covariance will be calculated.")
@@ -3612,8 +3621,8 @@ class Input:
         file.
 
         """
-        keys = ['gauss', 'split_gauss', 'nongauss', 'ssc']
-        values = [self.gauss, self.split_gauss, self.nongauss, self.ssc]
+        keys = ['gauss', 'split_gauss', 'nongauss', 'ssc', 'sn_only']
+        values = [self.gauss, self.split_gauss, self.nongauss, self.ssc, self.sn_only]
         self.covterms = dict(zip(keys, values))
 
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
@@ -3631,7 +3640,9 @@ class Input:
                   self.cstellar_mf, None, None, None, None, None,
                   self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
         
-        
+        if not self.sn_only:
+            values = [self.gauss, self.split_gauss, self.nongauss, self.ssc, None]
+ 
         self.observables_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
