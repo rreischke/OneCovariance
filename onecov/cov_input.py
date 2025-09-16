@@ -555,7 +555,7 @@ class Input:
                     self.csmf_N_log10M_bin = int(config['csmf settings']['csmf_N_log10M_bin'])
                 if self.csmf_N_log10M_bin is not None and self.csmf_log10Mmax is not None and self.csmf_log10Mmin is not None:
                     self.csmf_log10M_bins = np.linspace(self.csmf_log10Mmin, self.csmf_log10Mmax, self.csmf_N_log10M_bin + 1)
-            if self.csmf_log10M_bins is None:
+            if self.csmf_log10M_bins is None and (self.csmf_log10M_bins_upper is None or self.csmf_log10M_bins_lower is None):
                 raise Exception("ConfigError: You requested the stellar mass function as an observable, "+
                                 "but did not specify the mass bins. Please adjust "
                                 + config_name + " in the [csmf settings] section ")
