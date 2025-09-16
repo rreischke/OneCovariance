@@ -10,8 +10,10 @@ import camb
 from camb import model
 from scipy.signal import argrelextrema
 
-
 from scipy.interpolate import RegularGridInterpolator
+
+DEG2TORAD2 = (180 / np.pi) ** 2
+ARCMIN2TORAD2 = (60 * 60) * DEG2TORAD2
 
 
 try:
@@ -128,38 +130,49 @@ class CovELLSpace(PolySpectra):
 
     Attributes
     ----------
-    see CovKSpace class
-    ellrange : array
-        Multipoles at which the covariance is calculated
-    deg2torad2 : float
-        Conversion factor from degrees to radian squared
-    arcmin2torad2 : float
-        Conversion factor from arcminutes to radian squared
-    spline_zclust : list
-        List of spline objects for the redshift distributuon for each
-        tomographic bin of the clustering analysis
-    spline_zlens : list
-        List of spline objects for the redshift distributuon for each
-        tomographic bin of the lensing analysis
-    los_integration_chi : array
-        Values of the comoving distance at which the line of sight integration
-        is carriend out.
-    spline_z_of_chi : spline_object
-        ...
-    spline_lensweight : list
-        List of spline objects for the lensing weight for each
-        tomographic bin of the lensing analysis
-    Cell_gg : array
-        Array storing the C_ell of the clustering analysis with shape
-        (# ell modes, # sample bins, # tomographic bins,
-        # tomographic bins)
-    Cell_gm, Cell_gkappa : array
-        Array storing the C_ell of the galaxy-galaxy lensing analysis
-        with shape (# ell modes, # sample bins, # tomographic bins,
-        # tomographic bins)
-    Cell_mm, Cell_kappakappa : array
-        Array storing the C_ell of the cosmic shear analysis with shape
-        (# ell modes, # tomographic bins, # tomographic bins)
+        see CovKSpace class
+
+        ellrange : array
+            Multipoles at which the covariance is calculated
+
+        deg2torad2 : float
+            Conversion factor from degrees to radian squared
+
+        arcmin2torad2 : float
+            Conversion factor from arcminutes to radian squared
+
+        spline_zclust : list
+            List of spline objects for the redshift distribution for each
+            tomographic bin of the clustering analysis
+
+        spline_zlens : list
+            List of spline objects for the redshift distribution for each
+            tomographic bin of the lensing analysis
+
+        los_integration_chi : array
+            Values of the comoving distance at which the line of sight
+            integration is carried out.
+
+        spline_z_of_chi : spline_object
+            ...
+
+        spline_lensweight : list
+            List of spline objects for the lensing weight for each
+            tomographic bin of the lensing analysis
+
+        Cell_gg : array
+            Array storing the C_ell of the clustering analysis with shape
+            (# ell modes, # sample bins, # tomographic bins,
+            # tomographic bins)
+
+        Cell_gm, Cell_gkappa : array
+            Array storing the C_ell of the galaxy-galaxy lensing analysis
+            with shape (# ell modes, # sample bins, # tomographic bins,
+            # tomographic bins)
+
+        Cell_mm, Cell_kappakappa : array
+            Array storing the C_ell of the cosmic shear analysis with shape
+            (# ell modes, # tomographic bins, # tomographic bins)
 
     Example :
     ---------
@@ -228,6 +241,8 @@ class CovELLSpace(PolySpectra):
         self.est_clust = obs_dict['observables']['est_clust']
         self.clustering_z = obs_dict['observables']['clustering_z']
         self.csmf = obs_dict['observables']['csmf']
+        self.csmf_diagonal_lenses = False   
+        self.csmf_diagonal = False
         if self.csmf:
             if obs_dict['observables']['csmf_log10M_bins_upper'] is not None and obs_dict['observables']['csmf_log10M_bins_lower'] is not None:
                 self.deltaM_csmf = 10**obs_dict['observables']['csmf_log10M_bins_upper'] - 10**obs_dict['observables']['csmf_log10M_bins_lower']
@@ -240,10 +255,15 @@ class CovELLSpace(PolySpectra):
             self.f_tomo[:] = read_in_tables['csmf']['f_tomo']
             self.csmf_number_mass_bins = len(self.log10csmf_mass_bins)
             self.csmf_diagonal = obs_dict['observables']['csmf_diagonal']
-            if self.csmf_diagonal and self.n_tomo_csmf != self.csmf_number_mass_bins:
+            self.csmf_diagonal_lenses = obs_dict['observables']['csmf_diagonal_lenses']
+            if self.csmf_diagonal and (self.n_tomo_csmf != self.csmf_number_mass_bins):
                 raise Exception("ConfigError: You ask for the diagonal-only mode in the stellar mass function, i.e. considering only bins i with tomographic bin j. However, "
                                 "the number of tomographic bins is " + str(self.n_tomo_csmf) + ", while the number of mass bins is " + str(self.csmf_number_mass_bins) +
                                 ". Please fix this in the config so that they are equal, or deactivate 'csmf_diagonal'.") 
+            if self.csmf_diagonal_lenses and (self.n_tomo_clust != self.sample_dim):
+                raise Exception("ConfigError: You ask for the diagonal-only mode in the stellar mass function for the clustering measurement, i.e. considering only stellar mass bins i with tomographic bin i. However, "
+                                "the number of tomographic bins for clustering is " + str(self.n_tomo_clust) + ", while the number of stellar mass bins for clustering is " + str(self.sample_dim) +
+                                ". Please fix this in the config so that they are equal, or deactivate 'csmf_diagonal_lenses'.") 
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
         self.Cells, self.tab_bools = self.__check_for_tabulated_Cells(read_in_tables['Cxy'])
         
@@ -252,33 +272,56 @@ class CovELLSpace(PolySpectra):
                 if self.ellrange_spec_ul is None and self.ellrange_photo_ul is None:
                     raise Exception("ConfigError: You require the C_ell covariance for lensing and clustering or ggl. However, you only specified the ellrange for lensing and not for clustering/GGL or vice versa. Please fix this in the config file under covELLspace settings.")     
         self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
-        self.deg2torad2 = 180 / np.pi * 180 / np.pi
-        self.arcmin2torad2 = 60*60 * self.deg2torad2
+        self.deg2torad2 = DEG2TORAD2
+        self.arcmin2torad2 = ARCMIN2TORAD2
+        # Handle redshift-dependent bias if enabled
         if self.redshift_dep_bias:
-            self.bias_of_zet = [] 
+            self.bias_of_zet = []
             for i_tomo in range(self.n_tomo_clust):
-                self.bias_of_zet.append(UnivariateSpline(read_in_tables['zclust']['z'],read_in_tables['zet_dep_bias'][i_tomo,:],k=3,s=0,ext=1))
+                self.bias_of_zet.append(
+                    UnivariateSpline(
+                        read_in_tables['zclust']['z'],
+                        read_in_tables['zet_dep_bias'][i_tomo, :],
+                        k=3, s=0, ext=1
+                    )
+                )
+        # Set up redshift distribution splines
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'], read_in_tables)
+        # Check k-range support for ell calculations
         self.__check_krange_support(
             obs_dict, cosmo_dict, bias_dict, hod_dict, prec)
-        if obs_dict['ELLspace']['pixelised_cell']:
-            obs_dict['ELLspace']['ellmax'] = int(3*obs_dict['ELLspace']['pixel_Nside'] + 1)
+        # Pixel window function and weights
+        if obs_dict['ELLspace'].get('pixelised_cell', False):
+            pixel_Nside = obs_dict['ELLspace']['pixel_Nside']
+            obs_dict['ELLspace']['ellmax'] = int(3 * pixel_Nside + 1)
             self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
             integer_ell = np.copy(self.ellrange.astype(int))
-            self.pixel_weight = (hp.sphtfunc.pixwin(obs_dict['ELLspace']['pixel_Nside']))[integer_ell]
-            self.pixelweight_matrix = (self.pixel_weight**2)[:,None]*(self.pixel_weight**2)[None,:]
+            # Healpy pixel window function
+            self.pixel_weight = hp.sphtfunc.pixwin(pixel_Nside)[integer_ell]
+            self.pixelweight_matrix = (
+                self.pixel_weight[:, None] ** 2 * self.pixel_weight[None, :] ** 2
+            )
             self.Cells, self.tab_bools = None, [False, False, False]
         else:
             self.pixel_weight = np.ones_like(self.ellrange)
-        self.camb_pars.set_matter_power(kmax=self.mass_func.k[-1], redshifts = [0])
+        # Set up CAMB parameters for matter power spectrum
+        self.camb_pars.set_matter_power(kmax=self.mass_func.k[-1], redshifts=[0])
         results = camb.get_results(self.camb_pars_new)
-        self.camb_pars_new.InitPower.set_params(ns=cosmo_dict['ns'],
-                                As = 1.8e-9/results.get_sigma8()**2*cosmo_dict['sigma8']**2)
-        self.num_cores_save = self.num_cores       
+        # Update initial power spectrum parameters
+        self.camb_pars_new.InitPower.set_params(
+            ns=cosmo_dict['ns'],
+            As=1.8e-9 / results.get_sigma8() ** 2 * cosmo_dict['sigma8'] ** 2
+        )
+        self.num_cores_save = self.num_cores
+        # Calculate survey area
         self.calc_survey_area(survey_params_dict)
-        self.get_Cells(obs_dict, output_dict,
-                       bias_dict, iA_dict, hod_dict, prec, read_in_tables)
+        # Compute Cells (angular power spectra)
+        self.get_Cells(
+            obs_dict, output_dict,
+            bias_dict, iA_dict, hod_dict, prec, read_in_tables
+        )
         
+       
     
     def __check_krange_support(self,
                                obs_dict,
@@ -782,14 +825,14 @@ class CovELLSpace(PolySpectra):
                                 for i_tomo in range(len(Cgg[0,0,0,:,0])):
                                     for j_tomo in range(len(Cgg[0,0,0,0,:])):
                                         Cggspline = UnivariateSpline(ellrange_clustering, Cgg[:,i_sample, j_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
-                                        Cgg_aux[i_sample, j_sample, i_tomo,j_tomo] = Cggspline(ellrange_lensing)
+                                        Cgg_aux[:,i_sample, j_sample, i_tomo,j_tomo] = Cggspline(ellrange_lensing)
                         Cgg = Cgg_aux
                         Cgm_aux = np.zeros((len(Cmm[:,0,0,0]), len(Cgm[0, :,0,0]), len(Cgm[0, 0, :,0]), len(Cgm[0,0,0,:])))
                         for i_sample in range(len(Cgm[0,:,0,0])):
                             for i_tomo in range(len(Cgm[0,0,:,0])):
                                 for j_tomo in range(len(Cgm[0,0,0,:])):
                                         Cgmspline = UnivariateSpline(ellrange_clustering, Cgm[:,i_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
-                                        Cmm_aux[i_sample, i_tomo,j_tomo] = Cgmspline(ellrange_lensing)
+                                        Cmm_aux[:,i_sample, i_tomo,j_tomo] = Cgmspline(ellrange_lensing)
                         Cgm = Cgm_aux
                         self.ellrange = ellrange_lensing
                     else:
@@ -798,7 +841,7 @@ class CovELLSpace(PolySpectra):
                             for i_tomo in range(len(Cmm[0,0,:,0])):
                                 for j_tomo in range(len(Cmm[0,0,0,:])):
                                         Cmmspline = UnivariateSpline(ellrange_lensing, Cmm[:,i_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
-                                        Cmm_aux[i_sample, i_tomo,j_tomo] = Cgmspline(ellrange_clustering)
+                                        Cmm_aux[:,i_sample, i_tomo,j_tomo] = Cmmspline(ellrange_clustering)
                         Cmm = Cmm_aux
                         self.ellrange = ellrange_clustering
                 else:
@@ -809,6 +852,8 @@ class CovELLSpace(PolySpectra):
                 else:
                     self.ellrange = ellrange_clustering
             self.checked_input_cells = True
+
+            
             return [Cgg, Cgm, Cmm], [gg_tab_bool, gm_tab_bool, mm_tab_bool]
         else:
             self.checked_input_cells = True
@@ -5161,11 +5206,15 @@ class CovELLSpace(PolySpectra):
                         if self.ellrange_photo is not None:
                             j_tomo_start = 0
                         for j_tomo in range(j_tomo_start, self.n_tomo_clust):
+                            if self.csmf_diagonal_lenses and (i_sample != i_tomo or i_tomo != j_tomo):
+                                continue
                             for k_tomo in range(self.n_tomo_clust):
                                 l_tomo_start = k_tomo
                                 if self.ellrange_photo is not None:
                                     l_tomo_start = 0
                                 for l_tomo in range(l_tomo_start, self.n_tomo_clust):
+                                    if self.csmf_diagonal_lenses and (j_sample != k_tomo or l_tomo != k_tomo):
+                                        continue
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo], self.chi_min_clust[k_tomo], self.chi_min_clust[l_tomo])
                                     chi_high = min(
@@ -5202,7 +5251,11 @@ class CovELLSpace(PolySpectra):
                         if self.ellrange_photo is not None:
                             j_tomo_start = 0
                         for j_tomo in range(j_tomo_start, self.n_tomo_clust):
+                            if self.csmf_diagonal_lenses and (i_sample != i_tomo or i_tomo != j_tomo):
+                                continue
                             for k_tomo in range(self.n_tomo_clust):
+                                if self.csmf_diagonal_lenses and (j_sample != k_tomo):
+                                    continue
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo], self.chi_min_clust[k_tomo])
@@ -5241,6 +5294,8 @@ class CovELLSpace(PolySpectra):
                         if self.ellrange_photo is not None:
                             j_tomo_start = 0
                         for j_tomo in range(j_tomo_start, self.n_tomo_clust):
+                            if self.csmf_diagonal_lenses and (i_sample != i_tomo or i_tomo != j_tomo):
+                                continue
                             for k_tomo in range(self.n_tomo_lens):
                                 for l_tomo in range(k_tomo, self.n_tomo_lens):
                                     chi_low = max(
@@ -5274,8 +5329,12 @@ class CovELLSpace(PolySpectra):
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
+                        if self.csmf_diagonal_lenses and (i_sample != i_tomo):
+                            continue
                         for j_tomo in range(self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_clust):
+                                if self.csmf_diagonal_lenses and (j_sample != k_tomo):
+                                    continue
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[k_tomo])
@@ -5311,6 +5370,8 @@ class CovELLSpace(PolySpectra):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_clust):
+                                if self.csmf_diagonal_lenses and (j_sample != k_tomo):
+                                    continue
                                 for l_tomo in range(self.n_tomo_lens):
                                     weight = 1/self.los_integration_chi**6.0*self.spline_lensweight[i_tomo](self.los_integration_chi) * self.spline_lensweight[j_tomo](self.los_integration_chi)*self.spline_zclust[k_tomo](self.los_integration_chi)*self.spline_lensweight[l_tomo](self.los_integration_chi)
                                     nongaussELLmmgm[:,  :, i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo] = simpson(trispec_integrand_mmgm[:, :, :, i_sample, j_sample]*weight[:, None, None], x = self.los_integration_chi, axis = 0)
@@ -5697,11 +5758,15 @@ class CovELLSpace(PolySpectra):
                         if self.ellrange_photo is not None:
                             j_tomo_start = 0
                         for j_tomo in range(j_tomo_start, self.n_tomo_clust):
+                            if self.csmf_diagonal_lenses and (i_sample != i_tomo or i_tomo != j_tomo):
+                                continue
                             for k_tomo in range(self.n_tomo_clust):
                                 l_tomo_start = k_tomo
                                 if self.ellrange_photo is not None:
                                     l_tomo_start = 0
                                 for l_tomo in range(l_tomo_start, self.n_tomo_clust):
+                                    if self.csmf_diagonal_lenses and (j_sample != k_tomo or k_tomo != l_tomo):
+                                        continue
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo], self.chi_min_clust[k_tomo], self.chi_min_clust[l_tomo])
                                     chi_high = min(
@@ -5755,7 +5820,11 @@ class CovELLSpace(PolySpectra):
                         if self.ellrange_photo is not None:
                             j_tomo_start = 0
                         for j_tomo in range(j_tomo_start, self.n_tomo_clust):
+                            if self.csmf_diagonal_lenses and (i_sample != i_tomo or i_tomo != j_tomo):
+                                continue
                             for k_tomo in range(self.n_tomo_clust):
+                                if self.csmf_diagonal_lenses and (j_sample != k_tomo):
+                                    continue
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo], self.chi_min_clust[k_tomo])
@@ -5810,6 +5879,8 @@ class CovELLSpace(PolySpectra):
                         if self.ellrange_photo is not None:
                             j_tomo_start = 0
                         for j_tomo in range(j_tomo_start, self.n_tomo_clust):
+                            if self.csmf_diagonal_lenses and (i_sample != i_tomo or i_tomo != j_tomo):
+                                continue
                             for k_tomo in range(self.n_tomo_lens):
                                 for l_tomo in range(k_tomo, self.n_tomo_lens):
                                     chi_low = max(
@@ -5861,9 +5932,13 @@ class CovELLSpace(PolySpectra):
                         if len(survey_variance_gmgm[:, 0,0]) == 1:
                             integrand = P1_response[:, :, None]*P2_response[:, None, :]*survey_variance_gmgm[0, 0, :, None, None]
                     for i_tomo in range(self.n_tomo_clust):
+                        if self.csmf_diagonal_lenses and (i_sample != i_tomo):
+                            continue
                         for j_tomo in range(self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_clust):
                                 for l_tomo in range(self.n_tomo_lens):
+                                    if self.csmf_diagonal_lenses and (j_sample != k_tomo):
+                                        continue
                                     chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[k_tomo])
                                     chi_high = min(
@@ -5914,6 +5989,8 @@ class CovELLSpace(PolySpectra):
                     for i_tomo in range(self.n_tomo_lens):
                         for j_tomo in range(i_tomo, self.n_tomo_lens):
                             for k_tomo in range(self.n_tomo_clust):
+                                if self.csmf_diagonal_lenses and (j_sample != k_tomo):
+                                    continue       
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = self.chi_min_clust[k_tomo]
                                     chi_high = self.chi_max_clust[k_tomo]
