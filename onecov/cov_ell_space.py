@@ -1322,7 +1322,6 @@ class CovELLSpace(PolySpectra):
             if not self.mm:
                 save_mm = True
                 self.mm = True
-        data = np.array(np.loadtxt("./my_input/bright_DR4_NS_fluxscale_corrected_LB1_smf.txt"))
 
         for zet in range(self.los_interpolation_sampling):
             self.update_mass_func(self.los_z[zet], bias_dict, hod_dict, prec)
