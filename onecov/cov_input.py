@@ -63,6 +63,7 @@ class Input:
         self.csmf_log10M_bins = None
         self.csmf_diagonal = None
         self.csmf_diagonal_lenses = None
+        self.csmf_auto_only = None
         self.csmf_log10M_bins_upper = None
         self.csmf_log10M_bins_lower = None
 
@@ -545,6 +546,10 @@ class Input:
                 self.csmf_diagonal_lenses = config['csmf settings'].getboolean('csmf_diagonal_lenses')
             else:
                 self.csmf_diagonal_lenses = False
+            if 'csmf_auto_only' in config['csmf settings']:
+                self.csmf_auto_only = config['csmf settings'].getboolean('csmf_auto_only')
+            else:
+                self.csmf_auto_only = False
             
             if not isinstance(self.csmf_log10M_bins, np.ndarray):
                 if 'csmf_log10Mmin' in config['csmf settings']:
@@ -3632,12 +3637,12 @@ class Input:
         self.covterms = dict(zip(keys, values))
 
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
-                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal", "csmf_diagonal_lenses", 'csmf_log10M_bins_upper', 'csmf_log10M_bins_lower',
+                'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal", "csmf_auto_only","csmf_diagonal_lenses", 'csmf_log10M_bins_upper', 'csmf_log10M_bins_lower',
                 'combinations_clustering',
                 'combinations_ggl','combinations_lensing']
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
-                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal, self.csmf_diagonal_lenses, self.csmf_log10M_bins_upper,self.csmf_log10M_bins_lower,
+                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal, self.csmf_auto_only, self.csmf_diagonal_lenses, self.csmf_log10M_bins_upper,self.csmf_log10M_bins_lower,
                   self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
         self.observables = dict(zip(keys, values))
         

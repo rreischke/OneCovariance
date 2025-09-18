@@ -247,6 +247,7 @@ class CovELLSpace(PolySpectra):
         self.csmf = obs_dict['observables']['csmf']
         self.csmf_diagonal_lenses = False   
         self.csmf_diagonal = False
+        self.csmf_auto_only = False
         if self.csmf:
             if obs_dict['observables']['csmf_log10M_bins_upper'] is not None and obs_dict['observables']['csmf_log10M_bins_lower'] is not None:
                 self.deltaM_csmf = 10**obs_dict['observables']['csmf_log10M_bins_upper'] - 10**obs_dict['observables']['csmf_log10M_bins_lower']
@@ -260,6 +261,7 @@ class CovELLSpace(PolySpectra):
             self.csmf_number_mass_bins = len(self.log10csmf_mass_bins)
             self.csmf_diagonal = obs_dict['observables']['csmf_diagonal']
             self.csmf_diagonal_lenses = obs_dict['observables']['csmf_diagonal_lenses']
+            self.csmf_auto_only = obs_dict['observables']['csmf_auto_only']
             if self.csmf_diagonal and (self.n_tomo_csmf != self.csmf_number_mass_bins):
                 raise Exception("ConfigError: You ask for the diagonal-only mode in the stellar mass function, i.e. considering only bins i with tomographic bin j. However, "
                                 "the number of tomographic bins is " + str(self.n_tomo_csmf) + ", while the number of mass bins is " + str(self.csmf_number_mass_bins) +
@@ -1349,8 +1351,9 @@ class CovELLSpace(PolySpectra):
             if self.csmf:
                 aux_stellar_mass_func[zet,:] = self.galaxy_smf_c(10**self.log10csmf_mass_bins)  + self.galaxy_smf_s(10**self.log10csmf_mass_bins)
                 aux_stellar_mass_func_bias[zet,:] = self.galaxy_smf_bias_c(10**self.log10csmf_mass_bins)  + self.galaxy_smf_bias_s(10**self.log10csmf_mass_bins)
-                self.csmf_count_matter_bispectrum[:, zet,:] = self.get_count_matter_bispectrum(bias_dict, hod_dict, prec['hm'], self.log10csmf_mass_bins)
-                aux_response_gg[zet, :, :], aux_response_gm[zet, :, :], aux_response_mm[zet, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
+                if not self.csmf_auto_only:
+                    self.csmf_count_matter_bispectrum[:, zet,:] = self.get_count_matter_bispectrum(bias_dict, hod_dict, prec['hm'], self.log10csmf_mass_bins)
+                    aux_response_gg[zet, :, :], aux_response_gm[zet, :, :], aux_response_mm[zet, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
             print('\rPreparations for C_ell calculation at '
                     + str(round((zet+1)/self.los_interpolation_sampling*100, 1))
                     + '% in ' + str(round((time.time()-t0), 1)
@@ -1370,7 +1373,7 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     self.spline_responsePgg.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gg[:, :, i_sample]).T,bounds_error= False, fill_value = None))
         else:
-            if self.csmf:
+            if self.csmf and not self.csmf_auto_only:
                 if self.mm:
                     self.spline_responsePmm = RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), np.log(aux_response_mm[:, :, 0]).T,bounds_error= False, fill_value = None)
                 if self.gm:
@@ -6149,88 +6152,90 @@ class CovELLSpace(PolySpectra):
         """
         if self.gg:
             covELL_smf_cross_gg = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-            for i_mass in range(len(self.log10csmf_mass_bins)):
-                spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
-                for i_smf_tomo in range(self.n_tomo_csmf):
-                    for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
-                            chi_low = max(
-                                    self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo])
-                            chi_high = min(
-                                self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
-                            if chi_low >= chi_high:
-                                continue
-                            if chi_low < self.los_integration_chi[0]:
-                                chi_low = self.los_integration_chi[0]
-                            if chi_high > self.los_integration_chi[-1]:
-                                chi_high = self.los_integration_chi[-1]
-                            los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                            weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
-                            x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
-                            flat_idx = 0
-                            for i_chi in range(len(los_integration_chi_update)):
-                                for i_ell in range(len(self.ellrange)):
-                                    ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
-                                    x_values[1,flat_idx] = los_integration_chi_update[i_chi]
-                                    x_values[0,flat_idx] = ki
-                                    flat_idx +=1
-                            spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
-                            covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo]
+            if not self.csmf_auto_only:
+                for i_mass in range(len(self.log10csmf_mass_bins)):
+                    spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
+                    for i_smf_tomo in range(self.n_tomo_csmf):
+                        for i_tomo in range(self.n_tomo_clust):
+                            for j_tomo in range(i_tomo, self.n_tomo_clust):
+                                chi_low = max(
+                                        self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo])
+                                chi_high = min(
+                                    self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
+                                if chi_low >= chi_high:
+                                    continue
+                                if chi_low < self.los_integration_chi[0]:
+                                    chi_low = self.los_integration_chi[0]
+                                if chi_high > self.los_integration_chi[-1]:
+                                    chi_high = self.los_integration_chi[-1]
+                                los_integration_chi_update = self.__get_updated_los_integration_chi(
+                                    chi_low, chi_high, covELLspacesettings)
+                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
+                                flat_idx = 0
+                                for i_chi in range(len(los_integration_chi_update)):
+                                    for i_ell in range(len(self.ellrange)):
+                                        ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
+                                        x_values[1,flat_idx] = los_integration_chi_update[i_chi]
+                                        x_values[0,flat_idx] = ki
+                                        flat_idx +=1
+                                spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                                covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo]
         else:
             covELL_smf_cross_gg = 0
         
         if self.gm:
             covELL_smf_cross_gm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-            
-            for i_mass in range(len(self.log10csmf_mass_bins)):
-                spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
-                for i_smf_tomo in range(self.n_tomo_csmf):
-                    for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(self.n_tomo_lens):
-                            chi_low = self.chi_min_clust[i_tomo]
-                            chi_high = self.chi_max_clust[i_tomo]
-                            if chi_low < self.los_integration_chi[0]:
-                                chi_low = self.los_integration_chi[0]
-                            if chi_high > self.los_integration_chi[-1]:
-                                chi_high = self.los_integration_chi[-1]
-                            los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                            weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
-                            x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
-                            flat_idx = 0
-                            for i_chi in range(len(los_integration_chi_update)):
-                                for i_ell in range(len(self.ellrange)):
-                                    ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
-                                    x_values[1,flat_idx] = los_integration_chi_update[i_chi]
-                                    x_values[0,flat_idx] = ki
-                                    flat_idx +=1
-                            spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_gm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+            if not self.csmf_auto_only:
+                for i_mass in range(len(self.log10csmf_mass_bins)):
+                    spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
+                    for i_smf_tomo in range(self.n_tomo_csmf):
+                        for i_tomo in range(self.n_tomo_clust):
+                            for j_tomo in range(self.n_tomo_lens):
+                                chi_low = self.chi_min_clust[i_tomo]
+                                chi_high = self.chi_max_clust[i_tomo]
+                                if chi_low < self.los_integration_chi[0]:
+                                    chi_low = self.los_integration_chi[0]
+                                if chi_high > self.los_integration_chi[-1]:
+                                    chi_high = self.los_integration_chi[-1]
+                                los_integration_chi_update = self.__get_updated_los_integration_chi(
+                                    chi_low, chi_high, covELLspacesettings)
+                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
+                                flat_idx = 0
+                                for i_chi in range(len(los_integration_chi_update)):
+                                    for i_ell in range(len(self.ellrange)):
+                                        ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
+                                        x_values[1,flat_idx] = los_integration_chi_update[i_chi]
+                                        x_values[0,flat_idx] = ki
+                                        flat_idx +=1
+                                spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                covELL_smf_cross_gm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
         else:
             covELL_smf_cross_gm = 0
         if self.mm:
             covELL_smf_cross_mm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-            for i_mass in range(len(self.log10csmf_mass_bins)):
-                spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
-                for i_smf_tomo in range(self.n_tomo_csmf):
-                    for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(self.n_tomo_lens):
-                            los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi)**2 > 0)[0]]
-                            weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
-                            x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
-                            flat_idx = 0
-                            for i_chi in range(len(los_integration_chi_update)):
-                                for i_ell in range(len(self.ellrange)):
-                                    ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
-                                    x_values[1,flat_idx] = los_integration_chi_update[i_chi]
-                                    x_values[0,flat_idx] = ki
-                                    flat_idx +=1
-                            spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+            if not self.csmf_auto_only:
+                for i_mass in range(len(self.log10csmf_mass_bins)):
+                    spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
+                    for i_smf_tomo in range(self.n_tomo_csmf):
+                        for i_tomo in range(self.n_tomo_clust):
+                            for j_tomo in range(self.n_tomo_lens):
+                                los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi)**2 > 0)[0]]
+                                weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
+                                flat_idx = 0
+                                for i_chi in range(len(los_integration_chi_update)):
+                                    for i_ell in range(len(self.ellrange)):
+                                        ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
+                                        x_values[1,flat_idx] = los_integration_chi_update[i_chi]
+                                        x_values[0,flat_idx] = ki
+                                        flat_idx +=1
+                                spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_mm = 0
         return covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm
@@ -6264,140 +6269,140 @@ class CovELLSpace(PolySpectra):
             
         if self.gg:
             covELL_smf_cross_gg = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-            
-            ell, sum_m_a_lm = \
-                self.calc_a_lm('gg', 'gg', survey_params_dict)
-            if ell is not None:
-                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
-                x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
-                flat_idx = 0
-                for i_chi in range(len(self.los_integration_chi)):
-                    for i_ell in range(len(ell)):
-                        x_values[0,flat_idx] = self.los_integration_chi[i_chi]
-                        x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
-                        flat_idx +=1
-                power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-            survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
-            survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
-            for i_mass in range(len(self.log10csmf_mass_bins)):
-                for i_smf_tomo in range(self.n_tomo_csmf):
-                    for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(i_tomo, self.n_tomo_clust):
-                            chi_low = max(
-                                    self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo])
-                            chi_high = min(
-                                self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
-                            if chi_low >= chi_high:
-                                continue
-                            if chi_low < self.los_integration_chi[0]:
-                                chi_low = self.los_integration_chi[0]
-                            if chi_high > self.los_integration_chi[-1]:
-                                chi_high = self.los_integration_chi[-1]
-                            los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                            weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)
-                            weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)/los_integration_chi_update**2
-                            x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
-                            flat_idx = 0
-                            for i_chi in range(len(los_integration_chi_update)):
-                                for i_ell in range(len(self.ellrange)):
-                                    ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
-                                    x_values[1,flat_idx] = los_integration_chi_update[i_chi]
-                                    x_values[0,flat_idx] = ki
-                                    flat_idx +=1
-                            for i_sample in range(self.sample_dim):
-                                spline_eval = self.spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+            if not self.csmf_auto_only:
+                ell, sum_m_a_lm = \
+                    self.calc_a_lm('gg', 'gg', survey_params_dict)
+                if ell is not None:
+                    ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                    x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
+                    flat_idx = 0
+                    for i_chi in range(len(self.los_integration_chi)):
+                        for i_ell in range(len(ell)):
+                            x_values[0,flat_idx] = self.los_integration_chi[i_chi]
+                            x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
+                            flat_idx +=1
+                    power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+                survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
+                for i_mass in range(len(self.log10csmf_mass_bins)):
+                    for i_smf_tomo in range(self.n_tomo_csmf):
+                        for i_tomo in range(self.n_tomo_clust):
+                            for j_tomo in range(i_tomo, self.n_tomo_clust):
+                                chi_low = max(
+                                        self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo])
+                                chi_high = min(
+                                    self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
+                                if chi_low >= chi_high:
+                                    continue
+                                if chi_low < self.los_integration_chi[0]:
+                                    chi_low = self.los_integration_chi[0]
+                                if chi_high > self.los_integration_chi[-1]:
+                                    chi_high = self.los_integration_chi[-1]
+                                los_integration_chi_update = self.__get_updated_los_integration_chi(
+                                    chi_low, chi_high, covELLspacesettings)
+                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)
+                                weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)/los_integration_chi_update**2
+                                x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
+                                flat_idx = 0
+                                for i_chi in range(len(los_integration_chi_update)):
+                                    for i_ell in range(len(self.ellrange)):
+                                        ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
+                                        x_values[1,flat_idx] = los_integration_chi_update[i_chi]
+                                        x_values[0,flat_idx] = ki
+                                        flat_idx +=1
+                                for i_sample in range(self.sample_dim):
+                                    spline_eval = self.spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gg = 0
 
         if self.gm:
             covELL_smf_cross_gm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-            
-            ell, sum_m_a_lm = \
-                self.calc_a_lm('gm', 'gm', survey_params_dict)
-            if ell is not None:
-                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
-                x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
-                flat_idx = 0
-                for i_chi in range(len(self.los_integration_chi)):
-                    for i_ell in range(len(ell)):
-                        x_values[0,flat_idx] = self.los_integration_chi[i_chi]
-                        x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
-                        flat_idx +=1
-                power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-            survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
-            survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
+            if not self.csmf_auto_only:
+                ell, sum_m_a_lm = \
+                    self.calc_a_lm('gm', 'gm', survey_params_dict)
+                if ell is not None:
+                    ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                    x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
+                    flat_idx = 0
+                    for i_chi in range(len(self.los_integration_chi)):
+                        for i_ell in range(len(ell)):
+                            x_values[0,flat_idx] = self.los_integration_chi[i_chi]
+                            x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
+                            flat_idx +=1
+                    power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
+                survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
 
-            for i_mass in range(len(self.log10csmf_mass_bins)):
-                for i_smf_tomo in range(self.n_tomo_csmf):
-                    for i_tomo in range(self.n_tomo_clust):
-                        for j_tomo in range(self.n_tomo_lens):
-                            chi_low = self.chi_min_clust[i_tomo]
-                            chi_high =self.chi_max_clust[i_tomo]
-                            if chi_low >= chi_high:
-                                continue
-                            if chi_low < self.los_integration_chi[0]:
-                                chi_low = self.los_integration_chi[0]
-                            if chi_high > self.los_integration_chi[-1]:
-                                chi_high = self.los_integration_chi[-1]
-                            los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                chi_low, chi_high, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                            weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
-                            weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
-                            x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
-                            flat_idx = 0
-                            for i_chi in range(len(los_integration_chi_update)):
-                                for i_ell in range(len(self.ellrange)):
-                                    ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
-                                    x_values[1,flat_idx] = los_integration_chi_update[i_chi]
-                                    x_values[0,flat_idx] = ki
-                                    flat_idx +=1
-                            for i_sample in range(self.sample_dim):
-                                spline_eval = self.spline_responsePgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                for i_mass in range(len(self.log10csmf_mass_bins)):
+                    for i_smf_tomo in range(self.n_tomo_csmf):
+                        for i_tomo in range(self.n_tomo_clust):
+                            for j_tomo in range(self.n_tomo_lens):
+                                chi_low = self.chi_min_clust[i_tomo]
+                                chi_high =self.chi_max_clust[i_tomo]
+                                if chi_low >= chi_high:
+                                    continue
+                                if chi_low < self.los_integration_chi[0]:
+                                    chi_low = self.los_integration_chi[0]
+                                if chi_high > self.los_integration_chi[-1]:
+                                    chi_high = self.los_integration_chi[-1]
+                                los_integration_chi_update = self.__get_updated_los_integration_chi(
+                                    chi_low, chi_high, covELLspacesettings)
+                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
+                                x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
+                                flat_idx = 0
+                                for i_chi in range(len(los_integration_chi_update)):
+                                    for i_ell in range(len(self.ellrange)):
+                                        ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
+                                        x_values[1,flat_idx] = los_integration_chi_update[i_chi]
+                                        x_values[0,flat_idx] = ki
+                                        flat_idx +=1
+                                for i_sample in range(self.sample_dim):
+                                    spline_eval = self.spline_responsePgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                    covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gm = 0
 
         if self.mm:
             covELL_smf_cross_mm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-            
-            ell, sum_m_a_lm = \
-                self.calc_a_lm('mm', 'mm', survey_params_dict)
-            if ell is not None:
-                ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
-                x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
-                flat_idx = 0
-                for i_chi in range(len(self.los_integration_chi)):
-                    for i_ell in range(len(ell)):
-                        x_values[0,flat_idx] = self.los_integration_chi[i_chi]
-                        x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
-                        flat_idx +=1
-                power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-            survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
-            survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
+            if not self.csmf_auto_only:
+                ell, sum_m_a_lm = \
+                    self.calc_a_lm('mm', 'mm', survey_params_dict)
+                if ell is not None:
+                    ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
+                    x_values = np.zeros((2,len(ell)*len(self.los_integration_chi)))
+                    flat_idx = 0
+                    for i_chi in range(len(self.los_integration_chi)):
+                        for i_ell in range(len(ell)):
+                            x_values[0,flat_idx] = self.los_integration_chi[i_chi]
+                            x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
+                            flat_idx +=1
+                    power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
+                survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
 
-            for i_mass in range(len(self.log10csmf_mass_bins)):
-                for i_smf_tomo in range(self.n_tomo_csmf):
-                    for i_tomo in range(self.n_tomo_lens):
-                        for j_tomo in range(i_tomo, self.n_tomo_lens):
-                            los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                self.chimin, self.chimax, covELLspacesettings)
-                            los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                            weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
-                            weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
-                            x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
-                            flat_idx = 0
-                            for i_chi in range(len(los_integration_chi_update)):
-                                for i_ell in range(len(self.ellrange)):
-                                    ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
-                                    x_values[1,flat_idx] = los_integration_chi_update[i_chi]
-                                    x_values[0,flat_idx] = ki
-                                    flat_idx +=1
-                            spline_eval = np.exp(self.spline_responsePmm((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                            covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                for i_mass in range(len(self.log10csmf_mass_bins)):
+                    for i_smf_tomo in range(self.n_tomo_csmf):
+                        for i_tomo in range(self.n_tomo_lens):
+                            for j_tomo in range(i_tomo, self.n_tomo_lens):
+                                los_integration_chi_update = self.__get_updated_los_integration_chi(
+                                    self.chimin, self.chimax, covELLspacesettings)
+                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
+                                weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
+                                x_values = np.zeros((2,len(self.ellrange)*len(los_integration_chi_update)))
+                                flat_idx = 0
+                                for i_chi in range(len(los_integration_chi_update)):
+                                    for i_ell in range(len(self.ellrange)):
+                                        ki = np.log((self.ellrange[i_ell] + 0.5)/los_integration_chi_update[i_chi])
+                                        x_values[1,flat_idx] = los_integration_chi_update[i_chi]
+                                        x_values[0,flat_idx] = ki
+                                        flat_idx +=1
+                                spline_eval = np.exp(self.spline_responsePmm((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
         else:
             covELL_smf_cross_mm = 0        
         return covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm

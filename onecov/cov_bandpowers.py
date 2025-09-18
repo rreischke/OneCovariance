@@ -1433,7 +1433,7 @@ class CovBandPowers(CovTHETASpace):
         if self.csmf:
             if self.gg:
                 csmf_BPgg = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-                if not self.cov_dict['sn_only']:
+                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
                     original_shape = csmf_gg[0, :, :, :, :, :].shape
                     flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
                     csmf_BP_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
@@ -1445,7 +1445,7 @@ class CovBandPowers(CovTHETASpace):
                 csmf_BPgg = 0
             if self.gm:
                 csmf_BPgm = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-                if not self.cov_dict['sn_only']:
+                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
                     original_shape = csmf_gm[0, :, :, :, :, :].shape
                     flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
                     csmf_BP_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
@@ -1459,7 +1459,7 @@ class CovBandPowers(CovTHETASpace):
             if self.gm:
                 csmf_BPmmE = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                 csmf_BPmmB = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                if not self.cov_dict['sn_only']:
+                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
                     original_shape = csmf_mm[0, :, :, :, :, :].shape
                     flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
                     csmf_BP_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))

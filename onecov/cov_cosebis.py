@@ -1496,7 +1496,7 @@ class CovCOSEBI(CovELLSpace):
         if self.csmf:
             if self.gg:
                 csmf_COSEBIgg = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-                if not self.cov_dict['sn_only']:
+                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
                     original_shape = csmf_gg[0, :, :, :, :, :].shape
                     flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
                     csmf_COSEBI_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
@@ -1508,7 +1508,7 @@ class CovCOSEBI(CovELLSpace):
                 csmf_COSEBIgg = 0
             if self.gm:
                 csmf_COSEBIgm = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-                if not self.cov_dict['sn_only']:
+                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
                     original_shape = csmf_gm[0, :, :, :, :, :].shape
                     flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
                     csmf_COSEBI_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
@@ -1521,7 +1521,7 @@ class CovCOSEBI(CovELLSpace):
             if self.mm:
                 csmf_COSEBImmE = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                 csmf_COSEBImmB = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                if not self.cov_dict['sn_only']:
+                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
                     original_shape = csmf_mm[0, :, :, :, :, :].shape
                     flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
                     csmf_COSEBI_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
