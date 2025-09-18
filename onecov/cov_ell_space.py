@@ -240,6 +240,10 @@ class CovELLSpace(PolySpectra):
         self.est_ggl = obs_dict['observables']['est_ggl']
         self.est_clust = obs_dict['observables']['est_clust']
         self.clustering_z = obs_dict['observables']['clustering_z']
+        if obs_dict['arbitrary_summary']['do_arbitrary_summary'] is not None:
+            self.do_abitrary = obs_dict['arbitrary_summary']['do_arbitrary_summary']
+        else:
+            self.do_abitrary = False
         self.csmf = obs_dict['observables']['csmf']
         self.csmf_diagonal_lenses = False   
         self.csmf_diagonal = False
@@ -266,7 +270,6 @@ class CovELLSpace(PolySpectra):
                                 ". Please fix this in the config so that they are equal, or deactivate 'csmf_diagonal_lenses'.") 
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
         self.Cells, self.tab_bools = self.__check_for_tabulated_Cells(read_in_tables['Cxy'])
-        
         if (self.mm and self.est_shear == 'C_ell') and ((self.gm and self.est_ggl == 'C_ell') or (self.gg and self.est_clust == 'C_ell')):
             if (self.ellrange_clustering_ul is not None and self.ellrange_lensing_ul is None) or (self.ellrange_clustering_ul is None and self.ellrange_lensing_ul is not None):
                 if self.ellrange_spec_ul is None and self.ellrange_photo_ul is None:
@@ -1422,7 +1425,6 @@ class CovELLSpace(PolySpectra):
         fil = np.sqrt((self.ellrange + 2)*(self.ellrange + 1)*(self.ellrange)*(self.ellrange -1))
         self.fijl = fil**2*(self.ellrange+0.5)**(-4)
         print("Calculating angular power spectra (C_ell's).")
-
         if (self.gg or self.gm) and not self.tab_bools[0]:
             Cell_gg = np.zeros((len(self.ellrange), self.sample_dim, self.sample_dim,
                                 self.n_tomo_clust, self.n_tomo_clust))
@@ -3190,11 +3192,11 @@ class CovELLSpace(PolySpectra):
         if self.csmf:
             cov_csmf_auto, cov_csmf_gg, cov_csmf_gm, cov_csmf_mm = self.calc_covELL_csmf(covELLspacesettings, survey_params_dict)
 
-            if self.gg and self.ellrange_clustering_ul is not None:
+            if self.gg and self.ellrange_clustering_ul is not None and self.est_clust == "C_ell" and not self.do_abitrary:
                 cov_csmf_gg = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cov_csmf_gg,True)
-            if self.gm and self.ellrange_clustering_ul is not None:
+            if self.gm and self.ellrange_clustering_ul is not None and self.est_ggl == "C_ell"  and not self.do_abitrary:
                 cov_csmf_gm = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cov_csmf_gm,False)
-            if self.mm and self.ellrange_lensing_ul is not None:
+            if self.mm and self.ellrange_lensing_ul is not None and self.est_shear == "C_ell" and not self.do_abitrary:
                 cov_csmf_mm = self.__bin_cov_ell_csmf(self.ellrange_lensing_ul,cov_csmf_mm,True)
         if covELLspacesettings['pixelised_cell']:
             
@@ -6147,7 +6149,6 @@ class CovELLSpace(PolySpectra):
         """
         if self.gg:
             covELL_smf_cross_gg = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-            
             for i_mass in range(len(self.log10csmf_mass_bins)):
                 spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
                 for i_smf_tomo in range(self.n_tomo_csmf):
