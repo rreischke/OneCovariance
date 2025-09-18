@@ -6,7 +6,6 @@ from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from scipy.interpolate import RegularGridInterpolator
 
 import multiprocessing as mp
-import time
 
 
 try:

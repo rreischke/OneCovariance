@@ -4,7 +4,7 @@ from scipy.special import sici, erf
 from scipy.integrate import simpson
 from astropy import units as u   
 import camb
-from camb import model, initialpower
+from camb import model
 
 
 import hmf
