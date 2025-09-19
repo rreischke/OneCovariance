@@ -948,19 +948,30 @@ class Output():
                 gg_summary_length.append(int(len(summary['WL_gg']) - summary['arb_number_first_summary_gg']))
             sub_position_tomo = 0
             for i in range(summary['number_summary_gg']):
-                for sub_tomo in range(int(n_tomo_clust*(n_tomo_clust + 1)/2)):
-                    sub_position_sample = sub_position_tomo
-                    sub_position_tomo += gg_summary_length[i]*sampledim
-                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
-                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
-                    for sub_sample in range(sampledim):
-                        sub_position_sample += gg_summary_length[i]
-                        ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
-                        ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
-                position += gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2
-                labels_position.append(position - gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2/2)
-                old_position = position
-                labels_position_y.append(len(covmatrix) - (position - gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2/2))
+                if self.csmf_diagonal_lenses:
+                    for sub_tomo in range(int(n_tomo_clust)):
+                        sub_position_sample = sub_position_tomo
+                        sub_position_tomo += gg_summary_length[i]
+                        ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                        ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    position += gg_summary_length[i]*sampledim
+                    labels_position.append(position - gg_summary_length[i]*sampledim/2)
+                    old_position = position
+                    labels_position_y.append(len(covmatrix) - (position - gg_summary_length[i]*sampledim/2))
+                else:
+                    for sub_tomo in range(int(n_tomo_clust*(n_tomo_clust + 1)/2)):
+                        sub_position_sample = sub_position_tomo
+                        sub_position_tomo += gg_summary_length[i]*sampledim
+                        ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                        ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                        for sub_sample in range(sampledim):
+                            sub_position_sample += gg_summary_length[i]
+                            ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
+                            ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
+                    position += gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2
+                    labels_position.append(position - gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2/2)
+                    old_position = position
+                    labels_position_y.append(len(covmatrix) - (position - gg_summary_length[i]*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2/2))
                 labels_text.append(r'$\mathcal{O}_{\mathrm{gg},p_'+str(i+1)+'}(L)$')
                 ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
                 ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
@@ -970,20 +981,31 @@ class Output():
             if summary['number_summary_gm'] > 1:
                 gm_summary_length.append(int(len(summary['WL_gm']) - summary['arb_number_first_summary_gm']))
             sub_position_tomo = old_position
-            for i in range(summary['number_summary_gm']):    
-                for sub_tomo in range(int(n_tomo_clust*n_tomo_lens)):
-                    sub_position_sample = sub_position_tomo
-                    sub_position_tomo += gm_summary_length[i]*sampledim
-                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
-                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
-                    for sub_sample in range(sampledim):
-                        sub_position_sample += gm_summary_length[i]
-                        ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
-                        ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
-                position += gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens
-                labels_position.append(position - gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens/2)
-                labels_position_y.append(len(covmatrix) - (position - gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens/2))
-                old_position = position
+            for i in range(summary['number_summary_gm']):
+                if self.csmf_diagonal_lenses:
+                    for sub_tomo in range(int(n_tomo_clust*n_tomo_lens)):
+                        sub_position_sample = sub_position_tomo
+                        sub_position_tomo += gm_summary_length[i]
+                        ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                        ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    position += gm_summary_length[i]*n_tomo_clust*n_tomo_lens
+                    labels_position.append(position - gm_summary_length[i]*n_tomo_clust*n_tomo_lens/2)
+                    labels_position_y.append(len(covmatrix) - (position - gm_summary_length[i]*n_tomo_clust*n_tomo_lens/2))
+                    old_position = position  
+                else:
+                    for sub_tomo in range(int(n_tomo_clust*n_tomo_lens)):
+                        sub_position_sample = sub_position_tomo
+                        sub_position_tomo += gm_summary_length[i]*sampledim
+                        ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                        ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                        for sub_sample in range(sampledim):
+                            sub_position_sample += gm_summary_length[i]
+                            ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
+                            ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
+                    position += gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens
+                    labels_position.append(position - gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens/2)
+                    labels_position_y.append(len(covmatrix) - (position - gm_summary_length[i]*sampledim*n_tomo_clust*n_tomo_lens/2))
+                    old_position = position
                 labels_text.append(r'$\mathcal{O}_{\mathrm{gm},p_'+str(i+1)+'}(L)$')
                 ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
                 ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
@@ -4691,7 +4713,7 @@ class Output():
     def __create_matrix_csmf_cross_LSS_diagonal_clustering(self,covlist, is_ij_clustering ,want_diagonal_csmf = False, is_ij_lensing = False):
         number_m_bins = int(len(covlist[0,:,0,0,0,0]))
         number_tomo_bins = int(len(covlist[0,0,0,:,0,0]))
-        if is_ij_clustering:
+        if is_ij_clustering and not is_ij_lensing:
             data_size_ij = int(len(covlist[0,0,0,0,:,0])*len(covlist[:,0,0,0,0,0]))
             if want_diagonal_csmf:
                 i = 0
@@ -4733,7 +4755,7 @@ class Output():
                         for i_theta in range(len(covlist[:,0,0,0,0,0])):
                             j = 0
                             for i_mass_tomo in range(number_tomo_bins):
-                                covariance[i,j] = covlist[i_theta, i_mass_tomo, i_tomo, i_mass_tomo, i_tomo, j_tomo]
+                                covariance[i,j] = covlist[i_theta, i_mass_tomo, 0, i_mass_tomo, i_tomo, j_tomo]
                                 j += 1
                             i += 1
             else:
@@ -6549,7 +6571,7 @@ class Output():
                     covariange_csmfgm = self.__create_matrix_csmf_cross_LSS_arbitrary(self.conditional_stellar_mass_function_cov[2],"gm", summary, False, obs_dict['observables']['csmf_diagonal'])
             if mm:
                 if self.csmf_diagonal_lenses:
-                    covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS_diagonal_clustering_arbitrary(self.conditional_stellar_mass_function_cov[3],"mm", summary, True, obs_dict['observables']['csmf_diagonal'],True)                
+                    covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS_diagonal_clustering_arbitrary(self.conditional_stellar_mass_function_cov[3],"mm", summary, True, want_diagonal_csmf=obs_dict['observables']['csmf_diagonal'],is_ij_lensing=True)                
                 else:
                     covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS_arbitrary(self.conditional_stellar_mass_function_cov[3],"mm", summary, True, obs_dict['observables']['csmf_diagonal'])
             if ximm:
@@ -6588,88 +6610,88 @@ class Output():
                                 [covariance_wgt.T, covariance_gtgt]])
                 
                 if xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                    covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
-                    covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                    covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary, is_mn_lensing=True)
+                    covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                     cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
                                     [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
                                     [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
                     cov_diag.append(covariance_xipxip)
                     if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                         cov_diag.append(covariance_ximxim)
-                        covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
-                        covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                        covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
+                        covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                         cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                         [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                         [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                         [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
                         if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                             cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                             [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                             [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                             [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
                 
             elif xipp:
-                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
-                covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
+                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                 cov2d = np.block([[covariance_ww, covariance_wxip],
                                 [covariance_wxip.T, covariance_xipxip]])
                 cov_diag.append(covariance_xipxip)
                 if ximm:
-                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                    covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                    covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                     cov_diag.append(covariance_ximxim)
                     cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                     [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                     [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                     if xipm:
-                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                         cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                         [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
                                         [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
         elif gm:
-            covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False, 'gm', 'gm', summary)
+            covariance_gtgt = self.__create_matrix_arbitrary(cov[4],False,False, 'gm', 'gm', summary, is_mn_lensing=True)
             cov2d = covariance_gtgt
             cov_diag.append(covariance_gtgt)        
             if xipp:
-                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
-                covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                 cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
                                 [covariance_xipgt, covariance_xipxip]])
                 cov_diag.append(covariance_xipxip)
                 if ximm:
-                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                    covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                    covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                     cov_diag.append(covariance_ximxim)
                     cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                     [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                     [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                     if xipm:
-                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                         cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                     [covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                     [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
         elif xipp:
-            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
             cov2d = covariance_xipxip
             cov_diag.append(covariance_xipxip)
             if ximm:
-                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                 cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                 [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                 cov_diag.append(covariance_ximxim)
                 if xipm:
-                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = np.block([[covariance_xipxip, covariance_xipxim],
                                     [covariance_xipxim.T, covariance_ximxim]])
         elif ximm:
-            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
             cov2d = covariance_xipxip
             cov_diag.append(covariance_ximxim)
         elif xipm:
-            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
             cov2d = covariance_xipxim
         
         if self.has_csmf:
@@ -6696,44 +6718,44 @@ class Output():
                                     [covariance_wgt.T, covariance_gtgt]])
                     
                     if xipp:
-                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
-                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary, is_mn_lensing=True)
+                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                         cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
                                         [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
                                         [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
                         cov_diag.append(covariance_xipxip)
                         if ximm:
-                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                             cov_diag.append(covariance_ximxim)
-                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
-                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
+                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                             cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                             [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                             [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                             [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
                             if xipm:
-                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                 cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                                 [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                                 [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                                 [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
                     
                 elif xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
-                    covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                    covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                     cov2d = np.block([[covariance_ww, covariance_wxip],
                                     [covariance_wxip.T, covariance_xipxip]])
                     cov_diag.append(covariance_xipxip)
                     if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                        covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                        covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                         cov_diag.append(covariance_ximxim)
                         cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                         [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                         [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                         if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                             cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                             [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
                                             [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
@@ -6742,42 +6764,42 @@ class Output():
                 cov2d = covariance_gtgt
                 cov_diag.append(covariance_gtgt)        
                 if xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
-                    covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                    covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                     cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
                                     [covariance_xipgt, covariance_xipxip]])
                     cov_diag.append(covariance_xipxip)
                     if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                        covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                        covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                         cov_diag.append(covariance_ximxim)
                         cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                         [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                         [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                         if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                             cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                         [covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                         [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
             elif xipp:
-                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                 cov2d = covariance_xipxip
                 cov_diag.append(covariance_xipxip)
                 if ximm:
-                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                     [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                     cov_diag.append(covariance_ximxim)
                     if xipm:
-                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                        covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                         cov2d = np.block([[covariance_xipxip, covariance_xipxim],
                                         [covariance_xipxim.T, covariance_ximxim]])
             elif ximm:
-                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                 cov2d = covariance_xipxip
                 cov_diag.append(covariance_ximxim)
             elif xipm:
-                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                 cov2d = covariance_xipxim
             if self.has_csmf:
                 cov_diag.append(covariange_csmf)
@@ -6801,44 +6823,44 @@ class Output():
                                         [covariance_wgt.T, covariance_gtgt]])
                         
                         if xipp:
-                            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                            covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
-                            covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                            covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary, is_mn_lensing=True)
+                            covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                             cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
                                             [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
                                             [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
                             cov_diag.append(covariance_xipxip)
                             if ximm:
-                                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                 cov_diag.append(covariance_ximxim)
-                                covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
-                                covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                                covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
+                                covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                                 cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                                 [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                                 [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                                 [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
                                 if xipm:
-                                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                     cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                                     [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                                     [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                                     [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
                         
                     elif xipp:
-                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
-                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                         cov2d = np.block([[covariance_ww, covariance_wxip],
                                         [covariance_wxip.T, covariance_xipxip]])
                         cov_diag.append(covariance_xipxip)
                         if ximm:
-                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                             cov_diag.append(covariance_ximxim)
                             cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                             [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                             [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                             if xipm:
-                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                 cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                                 [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
                                                 [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
@@ -6847,42 +6869,42 @@ class Output():
                     cov2d = covariance_gtgt
                     cov_diag.append(covariance_gtgt)        
                     if xipp:
-                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
-                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                         cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
                                         [covariance_xipgt, covariance_xipxip]])
                         cov_diag.append(covariance_xipxip)
                         if ximm:
-                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                             cov_diag.append(covariance_ximxim)
                             cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                             [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                             [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                             if xipm:
-                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                 cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                             [covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                             [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
                 elif xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxip
                     cov_diag.append(covariance_xipxip)
                     if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                         cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                         [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                         cov_diag.append(covariance_ximxim)
                         if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                             cov2d = np.block([[covariance_xipxip, covariance_xipxim],
                                             [covariance_xipxim.T, covariance_ximxim]])
                 elif ximm:
-                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxip
                     cov_diag.append(covariance_ximxim)
                 elif xipm:
-                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxim
                 cov2d_ssc = np.copy(cov2d)
             else:
@@ -6904,44 +6926,44 @@ class Output():
                                         [covariance_wgt.T, covariance_gtgt]])
                         
                         if xipp:
-                            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
-                            covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary)
-                            covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                            covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                            covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True,'gg', 'mm', summary, is_mn_lensing=True)
+                            covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                             cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip],
                                             [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T],
                                             [covariance_wxip.T, covariance_xipgt, covariance_xipxip]])
                             cov_diag.append(covariance_xipxip)
                             if ximm:
-                                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                                covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                 cov_diag.append(covariance_ximxim)
-                                covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
-                                covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                                covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
+                                covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                                 cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                                 [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                                 [covariance_wxip.T, covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                                 [covariance_wxim.T, covariance_ximgt, np.zeros_like(covariance_ximxim), covariance_ximxim]])
                                 if xipm:
-                                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                     cov2d = np.block([[covariance_ww, covariance_wgt, covariance_wxip, covariance_wxim],
                                                     [covariance_wgt.T, covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                                     [covariance_wxip.T, covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                                     [covariance_wxim.T, covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
                         
                     elif xipp:
-                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary)
-                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary)
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True ,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                        covariance_wxip = self.__create_matrix_arbitrary(cov[2],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                         cov2d = np.block([[covariance_ww, covariance_wxip],
                                         [covariance_wxip.T, covariance_xipxip]])
                         cov_diag.append(covariance_xipxip)
                         if ximm:
-                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary)
+                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                            covariance_wxim = self.__create_matrix_arbitrary(cov[3],True,True, 'gg', 'mm', summary, is_mn_lensing=True)
                             cov_diag.append(covariance_ximxim)
                             cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                             [covariance_wxip.T, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                             [covariance_wxim.T, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                             if xipm:
-                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary,is_ij_lensing=True, is_mn_lensing=True)
                                 cov2d = np.block([[covariance_ww, covariance_wxip,covariance_wxim],
                                                 [covariance_wxip.T, covariance_xipxip, covariance_xipxim],
                                                 [covariance_wxim.T, covariance_xipxim.T, covariance_ximxim]])
@@ -6950,42 +6972,42 @@ class Output():
                     cov2d = covariance_gtgt
                     cov_diag.append(covariance_gtgt)        
                     if xipp:
-                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary)
-                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary)
+                        covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                        covariance_xipgt = self.__create_matrix_arbitrary(cov[5],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                         cov2d = np.block([[covariance_gtgt, covariance_xipgt.T],
                                         [covariance_xipgt, covariance_xipxip]])
                         cov_diag.append(covariance_xipxip)
                         if ximm:
-                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
-                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary)
+                            covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
+                            covariance_ximgt = self.__create_matrix_arbitrary(cov[6],True,False, 'mm', 'gm', summary, is_ij_lensing=True)
                             cov_diag.append(covariance_ximxim)
                             cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                             [covariance_xipgt, covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                             [covariance_ximgt, np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                             if xipm:
-                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                                covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                                 cov2d = np.block([[covariance_gtgt, covariance_xipgt.T, covariance_ximgt.T],
                                             [covariance_xipgt, covariance_xipxip, covariance_xipxim],
                                             [covariance_ximgt, covariance_xipxim.T, covariance_ximxim]])
                 elif xipp:
-                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary)
+                    covariance_xipxip = self.__create_matrix_arbitrary(cov[7],True,True,'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxip
                     cov_diag.append(covariance_xipxip)
                     if ximm:
-                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                        covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                         cov2d = np.block([[covariance_xipxip, np.zeros_like(covariance_ximxim)],
                                         [np.zeros_like(covariance_ximxim).T, covariance_ximxim]])
                         cov_diag.append(covariance_ximxim)
                         if xipm:
-                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                            covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                             cov2d = np.block([[covariance_xipxip, covariance_xipxim],
                                             [covariance_xipxim.T, covariance_ximxim]])
                 elif ximm:
-                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary)
+                    covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxip
                     cov_diag.append(covariance_ximxim)
                 elif xipm:
-                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary)
+                    covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxim
                 cov2d_nongauss = np.copy(cov2d)    
             else:
@@ -7020,7 +7042,7 @@ class Output():
         two_gg = False
         two_gm = False
         two_mm = False
-        if summary['number_summary_gm'] is not None:
+        if summary['number_summary_gg'] is not None:
             if summary['number_summary_gg'] > 1:
                 two_gg = True
             spatial_first_probe_gg = summary['arb_number_first_summary_gg']

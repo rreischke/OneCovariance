@@ -160,8 +160,22 @@ class HaloModel(Setup):
         self.norm_bias = -1
         self.effective_bias = self.calc_effective_bias(
             bias_dict, hod_dict, prec['hm'])
-        self.set_spline_galaxy_stellar_mf(hod_dict)
-        self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
+        if self.hod.mass_bins_disagree:
+            save_bias = bias_dict.copy()
+            if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
+                bias_dict['logmass_bins_upper'][-1] = bias_dict['csmf_log10M_bins'][-1]
+                bias_dict['logmass_bins_lower'][0] = bias_dict['csmf_log10M_bins'][0]
+            else:
+                bias_dict['logmass_bins'][0] = bias_dict['csmf_log10M_bins'][0]
+                bias_dict['logmass_bins'][-1] = bias_dict['csmf_log10M_bins'][-1]
+            self.hod.hod_update(bias_dict, prec['hm'])
+            self.set_spline_galaxy_stellar_mf(hod_dict)
+            self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
+            bias_dict = save_bias
+            self.hod.hod_update(bias_dict, prec['hm'])
+        else:
+            self.set_spline_galaxy_stellar_mf(hod_dict)
+            self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
         self.zet= zet
 
     def calc_mass_func(self,
@@ -1302,7 +1316,7 @@ class HaloModel(Setup):
         """
         halo_profile = self.uk(bias_dict)
         halo_bias = self.bias(bias_dict,hm_prec)
-        csmf = self.conditional_galaxy_stellar_mf(hod_dict,'cen')
+        csmf = self.conditional_galaxy_stellar_mf(hod_dict,'cen') + self.conditional_galaxy_stellar_mf(hod_dict,'sat')
         term1 = self.mass_func.dndm[None, None, None, :]*csmf[None, :, :, :]*(self.mass_func.m**2)[None, None, None,:]/self.rho_bg**2*(halo_profile**2)[:, None, None, :]
         term2 = self.mass_func.dndm[None, None, None, :]*csmf[None, :, :, :]*(self.mass_func.m)[None, None, None,:]/self.rho_bg*(halo_profile)[:, None, None, :]*halo_bias[None, None , None, :]
         term3 = self.mass_func.dndm[None,:]*(self.mass_func.m)[None,:]/self.rho_bg*(halo_profile)[:, :]*halo_bias[None,:]
@@ -1334,12 +1348,30 @@ class HaloModel(Setup):
             with the following keys (To be passed from the read_input method
             of the Input class.)
         """
-
-        aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
-        indices = np.unique(aux_M,return_index = True)[1]
-        aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
-        aux_bispec_count_mm = aux_bispec_count_mm.reshape((len(aux_bispec_count_mm[:,0,0]), len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0])))
-        count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
-        for i_k in range(len(self.mass_func.k)):
-            count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M[indices]), np.log(aux_bispec_count_mm[i_k,indices])))
+        if self.hod.mass_bins_disagree:
+            save_bias = bias_dict.copy()
+            if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
+                bias_dict['logmass_bins_upper'][-1] = bias_dict['csmf_log10M_bins'][-1]
+                bias_dict['logmass_bins_lower'][0] = bias_dict['csmf_log10M_bins'][0]
+            else:
+                bias_dict['logmass_bins'][0] = bias_dict['csmf_log10M_bins'][0]
+                bias_dict['logmass_bins'][-1] = bias_dict['csmf_log10M_bins'][-1]
+            self.hod.hod_update(bias_dict, hm_prec)
+            aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
+            indices = np.unique(aux_M,return_index = True)[1]
+            aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
+            aux_bispec_count_mm = aux_bispec_count_mm.reshape((len(aux_bispec_count_mm[:,0,0]), len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0])))
+            count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
+            for i_k in range(len(self.mass_func.k)):
+                count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M[indices]), np.log(aux_bispec_count_mm[i_k,indices])))
+            bias_dict = save_bias
+            self.hod.hod_update(bias_dict, hm_prec)
+        else:
+            aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
+            indices = np.unique(aux_M,return_index = True)[1]
+            aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
+            aux_bispec_count_mm = aux_bispec_count_mm.reshape((len(aux_bispec_count_mm[:,0,0]), len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0])))
+            count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
+            for i_k in range(len(self.mass_func.k)):
+                count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M[indices]), np.log(aux_bispec_count_mm[i_k,indices])))
         return count_matter_bispec

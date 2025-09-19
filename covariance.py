@@ -30,7 +30,6 @@ else:
 safe_gauss = covterms['gauss']
 covterms['gauss'] = True
 
-
 if not observables['arbitrary_summary']['do_arbitrary_summary']:
     if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
         print("CALCULATING COVARIANCE FOR ANGULAR POWER SPECTRA")
