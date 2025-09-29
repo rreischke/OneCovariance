@@ -3838,7 +3838,7 @@ class Input:
             self.bias_abr['log10mass_bins_lower'] = \
                 ', '.join(map(str, self.logmass_bins_lower))
         values = [self.bias_model, self.bias_2h, self.Mc_relation_cen,
-                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, None, self.logmass_bins_upper, self.logmass_bins_lower, self.csmf_log10M_bins, self.csmf_log10M_bins_upper, self.csmf_log10M_bins_lower]
+                  self.Mc_relation_sat, self.norm_Mc_relation_sat, self.norm_Mc_relation_cen, self.logmass_bins, self.cstellar_mf, self.logmass_bins_upper, self.logmass_bins_lower, self.csmf_log10M_bins, self.csmf_log10M_bins_upper, self.csmf_log10M_bins_lower]
         keys = ['model', 'bias_2h', 'Mc_relation_cen',
                 'Mc_relation_sat', 'norm_Mc_relation_sat', 'norm_Mc_relation_cen', 'logmass_bins', 'has_csmf','logmass_bins_upper','logmass_bins_lower', 'csmf_log10M_bins','csmf_log10M_bins_upper','csmf_log10M_bins_lower']
         self.bias = dict(zip(keys, values))

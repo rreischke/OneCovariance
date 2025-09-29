@@ -67,12 +67,13 @@ class HOD():
                  bias_dict, 
                  hm_prec):
         self.mass_bins_disagree = False
-        if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
-            if bias_dict['logmass_bins_lower'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins_upper'][-1] < bias_dict['csmf_log10M_bins'][-1]:
-                self.mass_bins_disagree = True
-        else:
-            if bias_dict['logmass_bins'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins'][-1] < bias_dict['csmf_log10M_bins'][-1]:
-                self.mass_bins_disagree = True
+        if bias_dict['has_csmf']:
+            if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
+                if bias_dict['logmass_bins_lower'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins_upper'][-1] < bias_dict['csmf_log10M_bins'][-1]:
+                    self.mass_bins_disagree = True
+            else:
+                if bias_dict['logmass_bins'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins'][-1] < bias_dict['csmf_log10M_bins'][-1]:
+                    self.mass_bins_disagree = True
         self.N_stellar_mass = 300
         self.Mrange = np.logspace(
             hm_prec['log10M_min'], hm_prec['log10M_max'], hm_prec['M_bins'])
