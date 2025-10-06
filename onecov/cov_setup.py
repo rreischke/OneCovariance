@@ -309,7 +309,13 @@ class Setup():
         if survey_params_dict['n_eff_clust'] is not None and \
            self.n_tomo_clust > 0:
             if len(survey_params_dict['n_eff_clust']) == 1:
-                ...
+                if len(survey_params_dict['n_eff_clust']) != self.n_tomo_clust:
+                    raise Exception("SetupError: The number of tomographic bins " +
+                                "is " + str(self.n_tomo_clust) + " but 'n_eff_clust' has " +
+                                str(len(survey_params_dict['n_eff_clust'])) + " " +
+                                "entries. Must be adjusted to go on.")
+                else:
+                    ...
                 #survey_params_dict['n_eff_clust'] = \
                 #    np.ones((self.sample_dim, self.n_tomo_clust)) \
                 #    * survey_params_dict['n_eff_clust'][0]

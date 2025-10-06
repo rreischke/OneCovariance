@@ -5930,7 +5930,7 @@ class CovELLSpace(PolySpectra):
                 tomos_comb = self.n_tomo_clust*self.n_tomo_lens*self.sample_dim**2
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
-                    if self.redshift_dep_bias:
+                    if not self.redshift_dep_bias:
                         P1_response = spline_responsePgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                         P2_response = spline_responsePgm[j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
                         if len(survey_variance_gmgm[:, 0,0]) == 1:
