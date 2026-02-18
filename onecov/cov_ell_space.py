@@ -5720,9 +5720,9 @@ class CovELLSpace(PolySpectra):
             
 
             
-            responsePgg = np.zeros((self.sample_dim,len(self.los_integration_chi),len(self.ellrange)))
+            responsePgg = np.zeros((self.sample_dim*self.n_tomo_clust*self.n_tomo_clust,len(self.los_integration_chi),len(self.ellrange)))
             responsePgm = np.zeros((self.sample_dim*self.n_tomo_clust, len(self.los_integration_chi),len(self.ellrange)))
-            responsePmm = np.zeros((self.sample_dim*self.n_tomo_clust*self.n_tomo_clust, len(self.los_integration_chi),len(self.ellrange)))
+            responsePmm = np.zeros((self.sample_dim, len(self.los_integration_chi),len(self.ellrange)))
             for i_sample in range(self.sample_dim):
                 spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
                                                 (self.aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
