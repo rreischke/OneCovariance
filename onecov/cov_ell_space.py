@@ -315,7 +315,7 @@ class CovELLSpace(PolySpectra):
         # Update initial power spectrum parameters
         self.camb_pars_new.InitPower.set_params(
             ns=cosmo_dict['ns'],
-            As=1.8e-9 / results.get_sigma8() ** 2 * cosmo_dict['sigma8'] ** 2
+            As=1.8e-9 / results.get_sigma8()[0] ** 2 * cosmo_dict['sigma8'] ** 2
         )
         self.num_cores_save = self.num_cores
         # Calculate survey area
