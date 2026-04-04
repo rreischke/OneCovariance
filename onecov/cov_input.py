@@ -2728,7 +2728,7 @@ class Input:
                                     config['survey specs']['survey_area_clust_in_deg2'] +
                                     "' to numpy array. Must be adjusted in config " +
                                     "file " + config_name + ".")
-            else:
+            elif self.clustering:
                 raise Exception("ConfigError: You requested clustering " +
                                 "in [observables]: But did not specify 'survey_area_clust_in_deg2'" +
                                 "in '[survey specs]'. Must be adjusted in config " +
@@ -2780,7 +2780,7 @@ class Input:
                                     config['survey specs']['survey_area_ggl_in_deg2'] +
                                     "' to numpy array. Must be adjusted in config " +
                                     "file " + config_name + ".")
-            else:
+            elif self.ggl:
                 raise Exception("ConfigError: You requested GGL " +
                                 "in [observables]: But did not specify 'survey_area_ggl_in_deg2'" +
                                 "in '[survey specs]'. Must be adjusted in config " +
