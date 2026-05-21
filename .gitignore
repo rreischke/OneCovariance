@@ -27,5 +27,5 @@ levin.egg-info
 /my_config/*
 /my_input/*
 /my_output/*
-
+/input/arbitrary_summary/script_weights/euclidtest/*
 test.ipynb
