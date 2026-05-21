@@ -28,4 +28,5 @@ levin.egg-info
 /my_input/*
 /my_output/*
 /input/arbitrary_summary/script_weights/euclidtest/*
+/input/arbitrary_summary/script_weights/benchmarks_cosebis/*
 test.ipynb
