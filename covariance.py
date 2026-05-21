@@ -16,7 +16,6 @@ print("#############")
 
 inp = Input()
 
-
 if len(sys.argv) > 1:
     config = str(sys.argv[1])
     covterms, observables, output, cosmo, bias, iA, hod, survey_params, prec = inp.read_input(config)

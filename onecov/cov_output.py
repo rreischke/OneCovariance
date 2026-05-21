@@ -5851,7 +5851,10 @@ class Output():
             if mm:
                 hdr_str += "mm_{11}(1) ... mm_{11}(" + str(len(self.projected_lens))+ ") mm_{11}(1) ... mm_{11}(" + str(len(self.projected_lens))+ ")"
                 hdr_str += " mm_{12}(1) ... mm_{1"+ str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
-                hdr_str += " mm_{21}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
+                hdr_str += " mm_{22}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
+                hdr_str += "Bmm_{11}(1) ... Bmm_{11}(" + str(len(self.projected_lens))+ ") Bmm_{11}(1) ... Bmm_{11}(" + str(len(self.projected_lens))+ ")"
+                hdr_str += " Bmm_{12}(1) ... Bmm_{1"+ str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
+                hdr_str += " Bmm_{22}(1) ... Bmm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
                 hdr_str += "\n"
             if self.has_csmf:
                 hdr_str += "phi_(1) ... phi(" + str(self.N_stellar_mass_bins)+ ")\n"

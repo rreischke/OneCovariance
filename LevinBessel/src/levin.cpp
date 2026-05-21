@@ -17,6 +17,9 @@ Levin::Levin(uint type1, uint col1, uint nsub1, double relative_tol1, uint n_spl
     converged = 1e-4;
     N_thread_max = Nthread;
     setup(type);
+    cquad_workspaces.resize(N_thread_max);
+    for (uint i = 0; i < N_thread_max; i++)
+        cquad_workspaces[i] = gsl_integration_cquad_workspace_alloc(64);
 }
 
 Levin::~Levin()
@@ -37,27 +40,31 @@ Levin::~Levin()
             }
             if (j == 0)
             {
-                delete int_m_mode;
-                delete int_n_mode;
+                delete[] int_m_mode;
+                delete[] int_n_mode;
             }
         }
     }
     if (type < 2)
     {
-        delete int_k_single_bessel;
-        delete int_ell_single_bessel;
+        delete[] int_k_single_bessel;
+        delete[] int_ell_single_bessel;
     }
     else
     {
-        delete int_k1_double_bessel;
-        delete int_ell1_double_bessel;
-        delete int_k2_double_bessel;
-        delete int_ell2_double_bessel;
+        delete[] int_k1_double_bessel;
+        delete[] int_ell1_double_bessel;
+        delete[] int_k2_double_bessel;
+        delete[] int_ell2_double_bessel;
     }
+    for (uint i = 0; i < N_thread_max; i++)
+        gsl_integration_cquad_workspace_free(cquad_workspaces[i]);
+    free_lse_workspaces();
 }
 
 void Levin::setup(uint type)
 {
+    //gsl_set_error_handler_off();
     if (type < 2)
     {
         d = 2;
@@ -72,10 +79,66 @@ void Levin::setup(uint type)
         int_k2_double_bessel = new double[N_thread_max];
         int_ell2_double_bessel = new uint[N_thread_max];
     }
+    allocate_lse_workspaces();
+}
+
+void Levin::allocate_lse_workspaces()
+{
+    uint n_full = ((col + 1) / 2) * 2;
+    uint n_half = ((col / 2 + 1) / 2) * 2;
+    lse_ws_full.resize(N_thread_max);
+    lse_ws_half.resize(N_thread_max);
+    for (uint tid = 0; tid < N_thread_max; tid++)
+    {
+        for (auto *ws : {&lse_ws_full[tid], &lse_ws_half[tid]})
+        {
+            uint n    = (ws == &lse_ws_full[tid]) ? n_full : n_half;
+            uint size = d * n;
+            ws->n          = n;
+            ws->size       = size;
+            ws->matrix_G   = gsl_matrix_alloc(size, size);
+            ws->U          = gsl_matrix_alloc(size, size);
+            ws->F_stacked  = gsl_vector_alloc(size);
+            ws->c          = gsl_vector_alloc(size);
+            ws->P          = gsl_permutation_alloc(size);
+            ws->bf.resize(n * n);
+            ws->bf_prime.resize(n * n);
+            ws->A_mat.resize(d * d * n);
+        }
+    }
+}
+
+void Levin::free_lse_workspaces()
+{
+    for (auto *pool : {&lse_ws_full, &lse_ws_half})
+    {
+        for (auto& ws : *pool)
+        {
+            if (ws.matrix_G)  { gsl_matrix_free(ws.matrix_G);        ws.matrix_G  = nullptr; }
+            if (ws.U)         { gsl_matrix_free(ws.U);               ws.U         = nullptr; }
+            if (ws.F_stacked) { gsl_vector_free(ws.F_stacked);       ws.F_stacked = nullptr; }
+            if (ws.c)         { gsl_vector_free(ws.c);               ws.c         = nullptr; }
+            if (ws.P)         { gsl_permutation_free(ws.P);          ws.P         = nullptr; }
+        }
+        pool->clear();
+    }
 }
 
 void Levin::update_Levin(uint type1, uint col1, uint nsub1, double relative_tol1, double converged1)
 {
+    if (type < 2)
+    {
+        delete[] int_k_single_bessel;
+        delete[] int_ell_single_bessel;
+    }
+    else
+    {
+        delete[] int_k1_double_bessel;
+        delete[] int_ell1_double_bessel;
+        delete[] int_k2_double_bessel;
+        delete[] int_ell2_double_bessel;
+    }
+    free_lse_workspaces();
     type = type1;
     col = col1;
     nsub = nsub1;
@@ -84,16 +147,16 @@ void Levin::update_Levin(uint type1, uint col1, uint nsub1, double relative_tol1
     setup(type);
 }
 
-void Levin::init_w_ell(std::vector<double> ell, std::vector<std::vector<double>> w_ells)
+void Levin::init_w_ell(const std::vector<double>& ell, const std::vector<std::vector<double>>& w_ells)
 {
     ell_w_ell = ell;
+    int_m_mode = new uint[N_thread_max];
+    int_n_mode = new uint[N_thread_max];
+    number_of_modes = w_ells.at(0).size();
     for (uint j = 0; j < N_thread_max; j++)
     {
         spline_w_ell.push_back(std::vector<gsl_spline *>());
         acc_w_ell.push_back(std::vector<gsl_interp_accel *>());
-        int_m_mode = new uint[N_thread_max];
-        int_n_mode = new uint[N_thread_max];
-        number_of_modes = w_ells.at(0).size();
         std::vector<double> y_value(ell.size());
         for (uint i = 0; i < number_of_modes; i++)
         {
@@ -114,8 +177,9 @@ void Levin::init_w_ell(std::vector<double> ell, std::vector<std::vector<double>>
     }
 }
 
-void Levin::init_integral(std::vector<double> x, std::vector<std::vector<double>> integrand, bool logx1, bool logy1)
+void Levin::init_integral(const std::vector<double>& x_in, const std::vector<std::vector<double>>& integrand, bool logx1, bool logy1)
 {
+    std::vector<double> x = x_in;
     number_x_values = x.size();
     uint number_integrals_save = number_integrals;
     number_integrals = integrand.at(0).size();
@@ -261,30 +325,31 @@ std::vector<double> Levin::get_w_ell(std::vector<double> ell, uint m_mode)
     return result;
 }
 
-std::vector<double> Levin::get_integrand(std::vector<double> x, uint j)
+std::vector<double> Levin::get_integrand(const std::vector<double>& x_in, uint j)
 {
-    std::vector<double> result(x.size());
-    for (uint i = 0; i < x.size(); i++)
+    std::vector<double> result(x_in.size());
+    for (uint i = 0; i < x_in.size(); i++)
     {
+        double xi = x_in.at(i);
         if (logx)
         {
-            x.at(i) = log(x.at(i));
+            xi = log(xi);
         }
-        if (x.at(i) < x_max && x.at(i) > x_min)
+        if (xi < x_max && xi > x_min)
         {
-            result.at(i) = gsl_spline_eval(spline_integrand.at(j), x.at(i), acc_integrand.at(j));
+            result.at(i) = gsl_spline_eval(spline_integrand.at(j), xi, acc_integrand.at(j));
         }
         else
         {
-            if (x.at(i) >= x_max)
+            if (xi >= x_max)
             {
                 result.at(i) = gsl_spline_eval(spline_integrand.at(j), x_max, acc_integrand.at(j));
-                result.at(i) += slope.at(j) * (x.at(i) - x_max);
+                result.at(i) += slope.at(j) * (xi - x_max);
             }
             else
             {
                 result.at(i) = gsl_spline_eval(spline_integrand.at(j), x_min, acc_integrand.at(j));
-                result.at(i) += slope0.at(j) * (x.at(i) - x_min);
+                result.at(i) += slope0.at(j) * (xi - x_min);
             }
         }
         if (logy.at(j))
@@ -312,7 +377,6 @@ double Levin::call_integrand(double x, uint i)
 
 double Levin::w_single(double x, double k, uint ell, uint i)
 {
-    gsl_set_error_handler_off();
     gsl_sf_result r;
     int status;
     if (type == 0)
@@ -603,61 +667,103 @@ double Levin::basis_function_prime(double A, double B, double x, uint m)
     return m / (B - A) * pow((x - (A + B) / 2.) / (B - A), (m - 1));
 }
 
-std::vector<double> Levin::solve_LSE_single(double (*function)(double, void *), double A, double B, uint col, std::vector<double> x_j, double k, uint ell)
+std::vector<double> Levin::solve_LSE_single(double (*function)(double, void *), double A, double B, uint col, const std::vector<double>& x_j, double k, uint ell)
 {
     uint n = (col + 1) / 2;
     n *= 2;
-    gsl_vector *F_stacked = gsl_vector_alloc(d * n);
-    gsl_vector *c = gsl_vector_alloc(d * n);
+    uint size = d * n;
+
     if (type >= 2)
-    {
         std::cerr << "Please check the type you want to integrate in the constructor (<2 required for this function)" << std::endl;
-    }
-    for (uint j = 0; j < d * n; j++)
+
+    // Select pre-allocated per-thread workspace; fall back to dynamic only for unexpected sizes
+    uint tid = omp_get_thread_num();
+    LSEWorkspace *ws = nullptr;
+    bool dynamic = false;
+    gsl_matrix *matrix_G, *U;
+    gsl_vector *F_stacked, *c;
+    gsl_permutation *P;
+
+    if (size == lse_ws_full[tid].size)
+        ws = &lse_ws_full[tid];
+    else if (size == lse_ws_half[tid].size)
+        ws = &lse_ws_half[tid];
+
+    if (ws)
     {
-        if (j < n)
-        {
-            gsl_vector_set(F_stacked, j, (*function)(x_j[j], this));
-        }
-        else
-        {
-            gsl_vector_set(F_stacked, j, 0.0);
-        }
+        matrix_G  = ws->matrix_G;
+        U         = ws->U;
+        F_stacked = ws->F_stacked;
+        c         = ws->c;
+        P         = ws->P;
     }
-    gsl_matrix *matrix_G = gsl_matrix_alloc(d * n, d * n);
+    else
+    {
+        dynamic   = true;
+        matrix_G  = gsl_matrix_alloc(size, size);
+        U         = gsl_matrix_alloc(size, size);
+        F_stacked = gsl_vector_alloc(size);
+        c         = gsl_vector_alloc(size);
+        P         = gsl_permutation_alloc(size);
+    }
+
+    // Fill F_stacked
+    for (uint j = 0; j < size; j++)
+        gsl_vector_set(F_stacked, j, j < n ? (*function)(x_j[j], this) : 0.0);
+
+    // Pre-compute basis function and A-matrix tables to avoid redundant pow()/div in inner loop
+    std::vector<double> *bf_ptr, *bf_prime_ptr, *A_mat_ptr;
+    std::vector<double> bf_dyn, bf_prime_dyn, A_mat_dyn;
+    if (ws)
+    {
+        bf_ptr       = &ws->bf;
+        bf_prime_ptr = &ws->bf_prime;
+        A_mat_ptr    = &ws->A_mat;
+    }
+    else
+    {
+        bf_dyn.resize(n * n); bf_prime_dyn.resize(n * n); A_mat_dyn.resize(d * d * n);
+        bf_ptr = &bf_dyn; bf_prime_ptr = &bf_prime_dyn; A_mat_ptr = &A_mat_dyn;
+    }
+
+    // bf[j*n+m]             = basis_function(A,B,x_j[j],m)   — depends only on (j,m)
+    // bf_prime[j*n+m]       = basis_function_prime(...)       — depends only on (j,m)
+    // A_mat[(q*d+i)*n+j]    = A_matrix_single(q,i,x_j[j],...) — depends only on (q,i,j)
+    for (uint j = 0; j < n; j++)
+        for (uint m = 0; m < n; m++)
+        {
+            (*bf_ptr)[j * n + m]       = basis_function(A, B, x_j[j], m);
+            (*bf_prime_ptr)[j * n + m] = basis_function_prime(A, B, x_j[j], m);
+        }
+    for (uint q = 0; q < d; q++)
+        for (uint i = 0; i < d; i++)
+            for (uint j = 0; j < n; j++)
+                (*A_mat_ptr)[(q * d + i) * n + j] = A_matrix_single(q, i, x_j[j], k, ell);
+
+    // Fill matrix_G using pre-computed tables
     gsl_matrix_set_zero(matrix_G);
     for (uint i = 0; i < d; i++)
-    {
         for (uint j = 0; j < n; j++)
-        {
             for (uint q = 0; q < d; q++)
-            {
                 for (uint m = 0; m < n; m++)
                 {
-                    double LSE_coeff = A_matrix_single(q, i, x_j[j], k, ell) * basis_function(A, B, x_j[j], m);
+                    double coeff = (*A_mat_ptr)[(q * d + i) * n + j] * (*bf_ptr)[j * n + m];
                     if (q == i)
-                    {
-                        LSE_coeff += basis_function_prime(A, B, x_j[j], m);
-                    }
-                    gsl_matrix_set(matrix_G, i * n + j, q * n + m, LSE_coeff);
+                        coeff += (*bf_prime_ptr)[j * n + m];
+                    gsl_matrix_set(matrix_G, i * n + j, q * n + m, coeff);
                 }
-            }
-        }
-    }
-    gsl_matrix *U = gsl_matrix_alloc(d * n, d * n);
+
     gsl_matrix_memcpy(U, matrix_G);
     int s;
-    gsl_permutation *P = gsl_permutation_alloc(d * n);
     gsl_linalg_LU_decomp(matrix_G, P, &s);
-    gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
     int lu = gsl_linalg_LU_solve(matrix_G, P, F_stacked, c);
     if (lu) // in case solution via LU decomposition fails, proceed with SVD
     {
-        gsl_matrix *V = gsl_matrix_alloc(d * n, d * n);
-        gsl_vector *S = gsl_vector_alloc(d * n);
-        gsl_vector *aux = gsl_vector_alloc(d * n);
+        gsl_matrix *V = gsl_matrix_alloc(size, size);
+        gsl_vector *S = gsl_vector_alloc(size);
+        gsl_vector *aux = gsl_vector_alloc(size);
         gsl_linalg_SV_decomp(U, V, S, aux);
-        int i = d * n - 1;
+        int i = size - 1;
         while (i > 0 && gsl_vector_get(S, i) < min_sv * gsl_vector_get(S, 0))
         {
             gsl_vector_set(S, i, 0.);
@@ -668,75 +774,114 @@ std::vector<double> Levin::solve_LSE_single(double (*function)(double, void *), 
         gsl_vector_free(S);
         gsl_vector_free(aux);
     }
-    std::vector<double> result(d * n);
-    for (uint j = 0; j < d * n; j++)
-    {
+    std::vector<double> result(size);
+    for (uint j = 0; j < size; j++)
         result[j] = gsl_vector_get(c, j);
+    if (dynamic)
+    {
+        gsl_matrix_free(matrix_G);
+        gsl_matrix_free(U);
+        gsl_vector_free(F_stacked);
+        gsl_vector_free(c);
+        gsl_permutation_free(P);
     }
-    gsl_matrix_free(U);
-    gsl_vector_free(F_stacked);
-    gsl_vector_free(c);
-    gsl_permutation_free(P);
-    gsl_set_error_handler(old_handler);
-    gsl_matrix_free(matrix_G);
     return result;
 }
 
-std::vector<double> Levin::solve_LSE_double(double (*function)(double, void *), double A, double B, uint col, std::vector<double> x_j, double k1, double k2, uint ell_1, uint ell_2)
+std::vector<double> Levin::solve_LSE_double(double (*function)(double, void *), double A, double B, uint col, const std::vector<double>& x_j, double k1, double k2, uint ell_1, uint ell_2)
 {
     uint n = (col + 1) / 2;
     n *= 2;
-    gsl_vector *F_stacked = gsl_vector_alloc(d * n);
-    gsl_vector *c = gsl_vector_alloc(d * n);
+    uint size = d * n;
+
     if (type <= 1)
-    {
         std::cerr << "Please check the type you want to integrate in the constructor (>1 required for this function)" << std::endl;
-    }
-    for (uint j = 0; j < d * n; j++)
+
+    // Select pre-allocated per-thread workspace; fall back to dynamic only for unexpected sizes
+    uint tid = omp_get_thread_num();
+    LSEWorkspace *ws = nullptr;
+    bool dynamic = false;
+    gsl_matrix *matrix_G, *U;
+    gsl_vector *F_stacked, *c;
+    gsl_permutation *P;
+
+    if (size == lse_ws_full[tid].size)
+        ws = &lse_ws_full[tid];
+    else if (size == lse_ws_half[tid].size)
+        ws = &lse_ws_half[tid];
+
+    if (ws)
     {
-        if (j < n)
-        {
-            gsl_vector_set(F_stacked, j, (*function)(x_j[j], this));
-        }
-        else
-        {
-            gsl_vector_set(F_stacked, j, 0.0);
-        }
+        matrix_G  = ws->matrix_G;
+        U         = ws->U;
+        F_stacked = ws->F_stacked;
+        c         = ws->c;
+        P         = ws->P;
     }
-    gsl_matrix *matrix_G = gsl_matrix_alloc(d * n, d * n);
+    else
+    {
+        dynamic   = true;
+        matrix_G  = gsl_matrix_alloc(size, size);
+        U         = gsl_matrix_alloc(size, size);
+        F_stacked = gsl_vector_alloc(size);
+        c         = gsl_vector_alloc(size);
+        P         = gsl_permutation_alloc(size);
+    }
+
+    // Fill F_stacked
+    for (uint j = 0; j < size; j++)
+        gsl_vector_set(F_stacked, j, j < n ? (*function)(x_j[j], this) : 0.0);
+
+    // Pre-compute basis function and A-matrix tables to avoid redundant pow()/div in inner loop
+    std::vector<double> *bf_ptr, *bf_prime_ptr, *A_mat_ptr;
+    std::vector<double> bf_dyn, bf_prime_dyn, A_mat_dyn;
+    if (ws)
+    {
+        bf_ptr       = &ws->bf;
+        bf_prime_ptr = &ws->bf_prime;
+        A_mat_ptr    = &ws->A_mat;
+    }
+    else
+    {
+        bf_dyn.resize(n * n); bf_prime_dyn.resize(n * n); A_mat_dyn.resize(d * d * n);
+        bf_ptr = &bf_dyn; bf_prime_ptr = &bf_prime_dyn; A_mat_ptr = &A_mat_dyn;
+    }
+
+    for (uint j = 0; j < n; j++)
+        for (uint m = 0; m < n; m++)
+        {
+            (*bf_ptr)[j * n + m]       = basis_function(A, B, x_j[j], m);
+            (*bf_prime_ptr)[j * n + m] = basis_function_prime(A, B, x_j[j], m);
+        }
+    for (uint q = 0; q < d; q++)
+        for (uint i = 0; i < d; i++)
+            for (uint j = 0; j < n; j++)
+                (*A_mat_ptr)[(q * d + i) * n + j] = A_matrix_double(q, i, x_j[j], k1, k2, ell_1, ell_2);
+
+    // Fill matrix_G using pre-computed tables
     gsl_matrix_set_zero(matrix_G);
     for (uint i = 0; i < d; i++)
-    {
         for (uint j = 0; j < n; j++)
-        {
             for (uint q = 0; q < d; q++)
-            {
                 for (uint m = 0; m < n; m++)
                 {
-                    double LSE_coeff = A_matrix_double(q, i, x_j[j], k1, k2, ell_1, ell_2) * basis_function(A, B, x_j[j], m);
+                    double coeff = (*A_mat_ptr)[(q * d + i) * n + j] * (*bf_ptr)[j * n + m];
                     if (q == i)
-                    {
-                        LSE_coeff += basis_function_prime(A, B, x_j[j], m);
-                    }
-                    gsl_matrix_set(matrix_G, i * n + j, q * n + m, LSE_coeff);
+                        coeff += (*bf_prime_ptr)[j * n + m];
+                    gsl_matrix_set(matrix_G, i * n + j, q * n + m, coeff);
                 }
-            }
-        }
-    }
-    gsl_matrix *U = gsl_matrix_alloc(d * n, d * n);
+
     gsl_matrix_memcpy(U, matrix_G);
     int s;
-    gsl_permutation *P = gsl_permutation_alloc(d * n);
     gsl_linalg_LU_decomp(matrix_G, P, &s);
-    gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
     int lu = gsl_linalg_LU_solve(matrix_G, P, F_stacked, c);
     if (lu) // in case solution via LU decomposition fails, proceed with SVD
     {
-        gsl_matrix *V = gsl_matrix_alloc(d * n, d * n);
-        gsl_vector *S = gsl_vector_alloc(d * n);
-        gsl_vector *aux = gsl_vector_alloc(d * n);
+        gsl_matrix *V = gsl_matrix_alloc(size, size);
+        gsl_vector *S = gsl_vector_alloc(size);
+        gsl_vector *aux = gsl_vector_alloc(size);
         gsl_linalg_SV_decomp(U, V, S, aux);
-        int i = d * n - 1;
+        int i = size - 1;
         while (i > 0 && gsl_vector_get(S, i) < min_sv * gsl_vector_get(S, 0))
         {
             gsl_vector_set(S, i, 0.);
@@ -747,21 +892,21 @@ std::vector<double> Levin::solve_LSE_double(double (*function)(double, void *), 
         gsl_vector_free(S);
         gsl_vector_free(aux);
     }
-    std::vector<double> result(d * n);
-    for (uint j = 0; j < d * n; j++)
-    {
+    std::vector<double> result(size);
+    for (uint j = 0; j < size; j++)
         result[j] = gsl_vector_get(c, j);
+    if (dynamic)
+    {
+        gsl_matrix_free(matrix_G);
+        gsl_matrix_free(U);
+        gsl_vector_free(F_stacked);
+        gsl_vector_free(c);
+        gsl_permutation_free(P);
     }
-    gsl_matrix_free(U);
-    gsl_vector_free(F_stacked);
-    gsl_vector_free(c);
-    gsl_permutation_free(P);
-    gsl_set_error_handler(old_handler);
-    gsl_matrix_free(matrix_G);
     return result;
 }
 
-double Levin::p(double A, double B, uint i, double x, uint col, std::vector<double> c)
+double Levin::p(double A, double B, uint i, double x, uint col, const std::vector<double>& c)
 {
     uint n = (col + 1) / 2;
     n *= 2;
@@ -807,7 +952,6 @@ double Levin::integrate_double(double (*function)(double, void *), double A, dou
 
 double Levin::iterate_single(double (*function)(double, void *), double A, double B, uint col, double k, uint ell, uint smax, bool verbose)
 {
-    std::vector<double> intermediate_results;
     if (B - A < min_interval)
     {
         return 0.0;
@@ -838,13 +982,8 @@ double Levin::iterate_single(double (*function)(double, void *), double A, doubl
                 std::cerr << std::endl;
             }
         }*/
-        intermediate_results.push_back(result);
         if (abs(result - previous) <= GSL_MAX(relative_tol * abs(result), tol_abs))
         {
-            // if (verbose)
-            // {
-            //     std::cerr << "converged!" << std::endl;
-            // }
             return result;
         }
         previous = result;
@@ -886,7 +1025,6 @@ double Levin::iterate_single(double (*function)(double, void *), double A, doubl
 
 double Levin::iterate_double(double (*function)(double, void *), double A, double B, uint col, double k1, double k2, uint ell_1, uint ell_2, uint smax, bool verbose)
 {
-    std::vector<double> intermediate_results;
     if (B - A < min_interval)
     {
         return 0.0;
@@ -917,7 +1055,6 @@ double Levin::iterate_double(double (*function)(double, void *), double A, doubl
                 std::cerr << std::endl;
             }
         }*/
-        intermediate_results.push_back(result);
         if (abs(result - previous) <= GSL_MAX(relative_tol * abs(result), tol_abs))
         {
             if (verbose)
@@ -937,8 +1074,8 @@ double Levin::iterate_double(double (*function)(double, void *), double A, doubl
                 if (verbose)
                 {
                     std::cerr << "subintervals too narrow for further bisection!" << std::endl;
-                    return result;
                 }
+                return result;
             }
             if (x_sub[i] - x_sub[i - 1] > min_interval)
             {
@@ -963,7 +1100,7 @@ double Levin::iterate_double(double (*function)(double, void *), double A, doubl
     return result;
 }
 
-uint Levin::findMax(const std::vector<double> vec)
+uint Levin::findMax(const std::vector<double>& vec)
 {
     return std::distance(vec.begin(), std::max_element(vec.begin(), vec.end()));
 }
@@ -1075,7 +1212,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
         }
         gsl_set_error_handler(old_handler);
     }
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1152,7 +1289,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
             }
         }
     }
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1187,7 +1324,7 @@ std::vector<double> Levin::double_bessel_many_args(std::vector<double> k1, doubl
             }
         }
     }
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1224,7 +1361,7 @@ std::vector<double> Levin::single_bessel_many_args(std::vector<double> k, uint e
             }
         }
     }
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1264,7 +1401,7 @@ std::vector<double> Levin::single_bessel_many_args_diagonal(std::vector<double> 
         }
     }
     gsl_set_error_handler(old_handler);
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1305,7 +1442,7 @@ std::vector<double> Levin::cquad_integrate(std::vector<double> limits)
             result.at(i) += gslIntegratecquad(cquad_integrand, limits.at(j), limits.at(j + 1));
         }
     }
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1344,7 +1481,7 @@ std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limit
             }
         }
     }
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1384,7 +1521,7 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
             }
         }
     }
-    delete int_index_integral;
+    delete[] int_index_integral;
     return result;
 }
 
@@ -1396,9 +1533,7 @@ double Levin::gslIntegratecquad(double (*fc)(double, void *), double a, double b
     gf.function = fc;
     gf.params = this;
     double e, y;
-    const uint n = 64;
-    gsl_integration_cquad_workspace *w = gsl_integration_cquad_workspace_alloc(n);
-    gsl_integration_cquad(&gf, a, b, tiny, tol, w, &y, &e, NULL);
-    gsl_integration_cquad_workspace_free(w);
+    uint tid = omp_get_thread_num();
+    gsl_integration_cquad(&gf, a, b, tiny, tol, cquad_workspaces[tid], &y, &e, NULL);
     return y;
 }

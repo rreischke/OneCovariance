@@ -122,6 +122,9 @@ class Input:
         self.ell_max_clustering = None
         self.ell_bins_clustering = None
         self.ell_type_clustering = None
+        self.magnification_bias = None
+        self.magnification_bias_s = None
+        self.magnification_bias_z = None
         
 
         # for cosmic shear in projected real space
@@ -939,6 +942,16 @@ class Input:
                 self.ell_max = self.ell_max_clustering
             self.ell_bins = 100
             self.ell_type = 'log'
+
+        if self.ggl or self.clustering:
+            if 'magnification' in config:
+                self.magnification_bias = config['magnification'].getboolean('magnification')
+            else:
+                self.magnification_bias = False
+            if self.magnification_bias:
+                self.magnification_bias_z = config['magnification']['magnification']
+        else:
+            self.magnification_bias = False
         
         return True
 
@@ -2728,7 +2741,7 @@ class Input:
                                     config['survey specs']['survey_area_clust_in_deg2'] +
                                     "' to numpy array. Must be adjusted in config " +
                                     "file " + config_name + ".")
-            else:
+            elif self.clustering:
                 raise Exception("ConfigError: You requested clustering " +
                                 "in [observables]: But did not specify 'survey_area_clust_in_deg2'" +
                                 "in '[survey specs]'. Must be adjusted in config " +
@@ -2780,7 +2793,7 @@ class Input:
                                     config['survey specs']['survey_area_ggl_in_deg2'] +
                                     "' to numpy array. Must be adjusted in config " +
                                     "file " + config_name + ".")
-            else:
+            elif self.ggl:
                 raise Exception("ConfigError: You requested GGL " +
                                 "in [observables]: But did not specify 'survey_area_ggl_in_deg2'" +
                                 "in '[survey specs]'. Must be adjusted in config " +

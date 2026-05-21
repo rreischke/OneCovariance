@@ -241,9 +241,9 @@ class CovELLSpace(PolySpectra):
         self.est_clust = obs_dict['observables']['est_clust']
         self.clustering_z = obs_dict['observables']['clustering_z']
         if obs_dict['arbitrary_summary']['do_arbitrary_summary'] is not None:
-            self.do_abitrary = obs_dict['arbitrary_summary']['do_arbitrary_summary']
+            self.do_arbitrary = obs_dict['arbitrary_summary']['do_arbitrary_summary']
         else:
-            self.do_abitrary = False
+            self.do_arbitrary = False
         self.csmf = obs_dict['observables']['csmf']
         self.csmf_diagonal_lenses = False   
         self.csmf_diagonal = False
@@ -315,7 +315,7 @@ class CovELLSpace(PolySpectra):
         # Update initial power spectrum parameters
         self.camb_pars_new.InitPower.set_params(
             ns=cosmo_dict['ns'],
-            As=1.8e-9 / results.get_sigma8() ** 2 * cosmo_dict['sigma8'] ** 2
+            As=1.8e-9 / results.get_sigma8()[0] ** 2 * cosmo_dict['sigma8'] ** 2
         )
         self.num_cores_save = self.num_cores
         # Calculate survey area
@@ -454,7 +454,7 @@ class CovELLSpace(PolySpectra):
                     self.ellrange_lensing_ul = np.unique(np.geomspace(covELLspacesettings['ell_min_lensing'], covELLspacesettings['ell_max_lensing'], covELLspacesettings['ell_bins_lensing'] + 1).astype(int))
                     if len(self.ellrange_lensing_ul) != covELLspacesettings['ell_bins_lensing'] + 1:
                         print("InputWarning: you required", covELLspacesettings['ell_bins_lensing'],"logarithmically-spaced lensing bins.",
-                              "However, the specified clustering ell-range from", covELLspacesettings['ell_min_lensing'],  "to", covELLspacesettings['ell_max_lensing'], "does not support that many unique bins.", 
+                              "However, the specified lensing ell-range from", covELLspacesettings['ell_min_lensing'],  "to", covELLspacesettings['ell_max_lensing'], "does not support that many unique bins.", 
                               "Adjusting the number of bins to", len(self.ellrange_lensing_ul) - 1, ". The bin boundaries are:") 
                     self.ellrange_lensing = np.exp(.5 * (np.log(self.ellrange_lensing_ul[1:])
                                         + np.log(self.ellrange_lensing_ul[:-1])))
@@ -549,7 +549,7 @@ class CovELLSpace(PolySpectra):
                 / self.cosmology.hubble_distance.value  \
                 / self.cosmology.h
         if self.csmf:
-            dzdchi_csmf= self.cosmology.efunc(self.zet_csmf['z']) \
+            dzdchi_csmf = self.cosmology.efunc(self.zet_csmf['z']) \
                 / self.cosmology.hubble_distance.value  \
                 / self.cosmology.h
         subtract = 0
@@ -750,6 +750,42 @@ class CovELLSpace(PolySpectra):
         if self.add_to_matter:
             for tomo in range(self.number_radial_weights_mm):
                 self.spline_lensweight.append(self.aux_spline_lensweight[tomo])
+
+
+    def __set_lensweight_splines_mu(self,
+                                    covELLspacesettings):
+        r"""
+        Calculates and splines the lensing weight for later integration
+        along the line-of-sight.
+
+        Parameters
+        ----------
+        covELLspacesettings : dictionary
+            Specifies the redshift spacing used for the line-of-sight
+            integration.
+        """
+        self.spline_lensweight_mu = []
+        for tomo in range(self.n_tomo_clust):
+            norm = simpson(self.spline_zclust[tomo](
+                self.los_integration_chi), x = self.los_integration_chi)
+            aux_integral = np.zeros_like(self.los_integration_chi)
+            for zetidx in range(covELLspacesettings['integration_steps']):
+                aux_chi = self.los_integration_chi[zetidx]
+                chi = np.geomspace(
+                    aux_chi, self.chimax, covELLspacesettings['integration_steps'])
+                aux_integral[zetidx] = simpson(self.spline_zclust[tomo](chi)
+                                                * (chi - aux_chi)/chi,
+                                                x = chi)/norm
+            aux_integral = aux_integral * 3/2 \
+                / self.cosmology.hubble_distance.value**2 \
+                / self.cosmology.h**2 \
+                * self.cosmology.Om0 \
+                * self.los_integration_chi \
+                / self.cosmology.scale_factor(
+                    self.spline_z_of_chi(self.los_integration_chi))
+            self.spline_lensweight_mu.append(UnivariateSpline(self.los_integration_chi,
+                                                           aux_integral,
+                                                           k=1, s=0, ext=0))
         
     def __check_for_tabulated_Cells(self,
                                     Cxy_tab):
@@ -3195,11 +3231,11 @@ class CovELLSpace(PolySpectra):
         if self.csmf:
             cov_csmf_auto, cov_csmf_gg, cov_csmf_gm, cov_csmf_mm = self.calc_covELL_csmf(covELLspacesettings, survey_params_dict)
 
-            if self.gg and self.ellrange_clustering_ul is not None and self.est_clust == "C_ell" and not self.do_abitrary:
+            if self.gg and self.ellrange_clustering_ul is not None and self.est_clust == "C_ell" and not self.do_arbitrary:
                 cov_csmf_gg = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cov_csmf_gg,True)
-            if self.gm and self.ellrange_clustering_ul is not None and self.est_ggl == "C_ell"  and not self.do_abitrary:
+            if self.gm and self.ellrange_clustering_ul is not None and self.est_ggl == "C_ell"  and not self.do_arbitrary:
                 cov_csmf_gm = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cov_csmf_gm,False)
-            if self.mm and self.ellrange_lensing_ul is not None and self.est_shear == "C_ell" and not self.do_abitrary:
+            if self.mm and self.ellrange_lensing_ul is not None and self.est_shear == "C_ell" and not self.do_arbitrary:
                 cov_csmf_mm = self.__bin_cov_ell_csmf(self.ellrange_lensing_ul,cov_csmf_mm,True)
         if covELLspacesettings['pixelised_cell']:
             
@@ -4771,6 +4807,8 @@ class CovELLSpace(PolySpectra):
                                     if j_tomo < i_tomo or l_tomo < k_tomo:
                                         gaussELLmmmm_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
                                         gaussELLmmmm_mix[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+            
+
         if self.est_shear != "C_ell" and self.gg:
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
@@ -5720,9 +5758,9 @@ class CovELLSpace(PolySpectra):
             
 
             
-            responsePgg = np.zeros((self.sample_dim*self.n_tomo_clust*self.n_tomo_clust,len(self.los_integration_chi),len(self.ellrange)))
+            responsePmm = np.zeros((self.sample_dim,len(self.los_integration_chi),len(self.ellrange)))
             responsePgm = np.zeros((self.sample_dim*self.n_tomo_clust, len(self.los_integration_chi),len(self.ellrange)))
-            responsePmm = np.zeros((self.sample_dim, len(self.los_integration_chi),len(self.ellrange)))
+            responsePgg = np.zeros((self.sample_dim*self.n_tomo_clust*self.n_tomo_clust, len(self.los_integration_chi),len(self.ellrange)))
             for i_sample in range(self.sample_dim):
                 spline_responsePmm.append(RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),
                                                 (self.aux_response_mm[:, :, i_sample]),bounds_error= False, fill_value = None))
@@ -5737,6 +5775,8 @@ class CovELLSpace(PolySpectra):
                         responsePgg[i_sample*self.n_tomo_clust**2 + i_tomo*self.n_tomo_clust + j_tomo, :, :] = (spline_responsePgg[i_sample*self.n_tomo_clust**2 + i_tomo*self.n_tomo_clust + j_tomo]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange))))
             self.spline_responsePgg = spline_responsePgg    
             self.spline_responsePgm = spline_responsePgm   
+            self.spline_responsePmm = spline_responsePmm
+
             self.mm = save_mm
 
         print("")
