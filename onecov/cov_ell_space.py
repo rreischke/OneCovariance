@@ -1426,19 +1426,24 @@ class CovELLSpace(PolySpectra):
         if self.csmf:
             self.csmf_at_tomo_and_mass = np.zeros((len(self.log10csmf_mass_bins),self.n_tomo_csmf))
             self.phi_tilde_spline = []
+            csmf_evals = np.zeros((len(self.los_integration_chi), len(self.log10csmf_mass_bins)))
+            for i_smf_m_bins in range(len(self.log10csmf_mass_bins)):
+                aux_csmf_spline = UnivariateSpline(self.los_chi, aux_stellar_mass_func[:, i_smf_m_bins], k=2, s=0, ext=0)
+                csmf_evals[:, i_smf_m_bins] = aux_csmf_spline(self.los_integration_chi)
+                self.phi_tilde_spline.append(UnivariateSpline(self.los_chi, aux_stellar_mass_func_bias[:, i_smf_m_bins], k=2, s=0, ext=0))
             for i_tomo in range(self.n_tomo_csmf):
+                zcsmf_eval = self.spline_zcsmf[i_tomo](self.los_integration_chi) * self.f_tomo[i_tomo]
                 for i_smf_m_bins in range(len(self.log10csmf_mass_bins)):
-                    aux_csmf_spline = UnivariateSpline(self.los_chi, aux_stellar_mass_func[:, i_smf_m_bins], k=2, s=0, ext=0)
-                    self.csmf_at_tomo_and_mass[i_smf_m_bins, i_tomo] = simpson(self.spline_zcsmf[i_tomo](self.los_integration_chi)*aux_csmf_spline(self.los_integration_chi)*self.f_tomo[i_tomo], x = self.los_integration_chi)
-                    if i_tomo == 0:
-                        self.phi_tilde_spline.append(UnivariateSpline(self.los_chi, aux_stellar_mass_func_bias[:, i_smf_m_bins], k=2, s=0, ext=0))
-            
+                    self.csmf_at_tomo_and_mass[i_smf_m_bins, i_tomo] = simpson(
+                        zcsmf_eval * csmf_evals[:, i_smf_m_bins], x=self.los_integration_chi)
+
         self.Ngal = np.zeros((self.sample_dim, self.n_tomo_clust))
         for i_sample in range(self.sample_dim):
             spline_nbar = UnivariateSpline(self.los_chi, aux_ngal[:, i_sample], k=2, s=0, ext=0)
+            nbar_chi2 = spline_nbar(self.los_integration_chi) * self.los_integration_chi**2
             for tomo_i in range(self.n_tomo_clust):
                 prob = self.spline_zclust[tomo_i](self.los_integration_chi)*np.append((self.los_integration_chi[1:] -self.los_integration_chi[:-1]),0)
-                self.Ngal[i_sample,tomo_i] = simpson(prob*self.los_integration_chi**2*spline_nbar(self.los_integration_chi), x = self.los_integration_chi)
+                self.Ngal[i_sample,tomo_i] = simpson(prob * nbar_chi2, x = self.los_integration_chi)
         if self.gg or self.gm:
             self.spline_Pgg, spline_Pgm = [], []
             for i_sample in range(self.sample_dim):
@@ -1479,15 +1484,9 @@ class CovELLSpace(PolySpectra):
                                 continue
                             self.__update_los_integration_chi(
                                 chi_low, chi_high, covELLspacesettings)
-                            x_values = np.zeros((2,len(self.ellrange)*len(self.los_integration_chi)))
-                            flat_idx = 0
-                            for i_chi in range(len(self.los_integration_chi)):
-                                 for i_ell in range(len(self.ellrange)):
-                                    ki = np.log10((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                                    x_values[0,flat_idx] = self.los_integration_chi[i_chi]
-                                    x_values[1,flat_idx] = ki
-                                    flat_idx +=1
-                            integrand = self.spline_Pgg[i_sample*self.sample_dim + j_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                            chi_grid, ell_grid = np.meshgrid(self.los_integration_chi, self.ellrange, indexing='ij')
+                            x_values = np.stack([chi_grid.ravel(), np.log10((ell_grid.ravel() + 0.5) / chi_grid.ravel())])
+                            integrand = self.spline_Pgg[i_sample*self.sample_dim + j_sample](x_values.T).reshape((len(self.los_integration_chi),len(self.ellrange)))
                             Cell_gg[:, i_sample, j_sample, tomo_i, tomo_j] = simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_zclust[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x = self.los_integration_chi, axis = 0)
                             Cell_gg[:, i_sample, j_sample, tomo_j, tomo_i] = \
                                 Cell_gg[:, i_sample, j_sample,  tomo_i, tomo_j]
@@ -1510,15 +1509,9 @@ class CovELLSpace(PolySpectra):
                         self.__update_los_integration_chi(
                             chi_low, chi_high, covELLspacesettings)
 
-                        x_values = np.zeros((2,len(self.ellrange)*len(self.los_integration_chi)))
-                        flat_idx = 0
-                        for i_chi in range(len(self.los_integration_chi)):
-                            for i_ell in range(len(self.ellrange)):
-                                ki = np.log10((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                                x_values[0,flat_idx] = self.los_integration_chi[i_chi]
-                                x_values[1,flat_idx] = ki
-                                flat_idx +=1
-                        integrand = spline_Pgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                        chi_grid, ell_grid = np.meshgrid(self.los_integration_chi, self.ellrange, indexing='ij')
+                        x_values = np.stack([chi_grid.ravel(), np.log10((ell_grid.ravel() + 0.5) / chi_grid.ravel())])
+                        integrand = spline_Pgm[i_sample](x_values.T).reshape((len(self.los_integration_chi),len(self.ellrange)))
                         Cell_gm[:, i_sample, tomo_i, tomo_j] = np.sqrt(self.fijl)*simpson(10**integrand*(self.spline_zclust[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x = (self.los_integration_chi), axis = 0)
                         self.__update_los_integration_chi(
                             self.chimin, self.chimax, covELLspacesettings)
@@ -1529,17 +1522,12 @@ class CovELLSpace(PolySpectra):
         if (self.mm or self.gm) and not self.tab_bools[2]:
             Cell_mm = np.zeros((len(self.ellrange),
                                 self.n_tomo_lens, self.n_tomo_lens))
-            x_values = np.zeros((2,len(self.ellrange)*len(self.los_integration_chi)))
-            flat_idx = 0
-            for i_chi in range(len(self.los_integration_chi)):
-                for i_ell in range(len(self.ellrange)):
-                    ki = np.log10((self.ellrange[i_ell] + 0.5)/self.los_integration_chi[i_chi])
-                    x_values[0,flat_idx] = self.los_integration_chi[i_chi]
-                    x_values[1,flat_idx] = ki
-                    flat_idx +=1
+            chi_grid, ell_grid = np.meshgrid(self.los_integration_chi, self.ellrange, indexing='ij')
+            x_values = np.stack([chi_grid.ravel(), np.log10((ell_grid.ravel() + 0.5) / chi_grid.ravel())])
+            xi = x_values.T
             for tomo_i in range(self.n_tomo_lens):
                 for tomo_j in range(tomo_i, self.n_tomo_lens):
-                    integrand = spline_Pmm((x_values[0,:],x_values[1,:])).reshape((len(self.los_integration_chi),len(self.ellrange)))
+                    integrand = spline_Pmm(xi).reshape((len(self.los_integration_chi),len(self.ellrange)))
                     Cell_mm[:, tomo_i, tomo_j] = self.fijl*simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x =(self.los_integration_chi), axis = 0)
                     Cell_mm[:, tomo_j, tomo_i] = Cell_mm[:, tomo_i, tomo_j]
             Cell_mm = Cell_mm[:, None, :, :] \
@@ -5735,20 +5723,19 @@ class CovELLSpace(PolySpectra):
                 self.update_mass_func(self.los_z[i_chi], bias_dict, hod_dict, prec)
                 
                 aux_gg[i_chi, :, :], aux_gm[i_chi, :, :], self.aux_response_mm[i_chi, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
+                if self.gm or self.gg:
+                    bias_at_chi = [self.bias_of_zet[t](self.los_z[i_chi]) for t in range(self.n_tomo_clust)]
                 if self.gm:
                     for i_sample in range(self.sample_dim):
                         for i_tomo in range(self.n_tomo_clust):
-                            bias_i_tomo = self.bias_of_zet[i_tomo](self.los_z[i_chi])
                             self.aux_response_gm[i_chi, :, i_sample, i_tomo] = self.aux_response_mm[i_chi, :, i_sample]
-                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[:, i_sample]*bias_i_tomo
+                            self.aux_response_gm[i_chi, :, i_sample, i_tomo] -= self.Pgm[:, i_sample]*bias_at_chi[i_tomo]
                 if self.gg:
                     for i_sample in range(self.sample_dim):
                         for i_tomo in range(self.n_tomo_clust):
-                            bias_i_tomo = self.bias_of_zet[i_tomo](self.los_z[i_chi])
                             for j_tomo in range(self.n_tomo_clust):
-                                bias_j_tomo = self.bias_of_zet[j_tomo](self.los_z[i_chi])
                                 self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] = self.aux_response_mm[i_chi, :, i_sample]
-                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_i_tomo + bias_j_tomo)*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]
+                                self.aux_response_gg[i_chi, :, i_sample, i_tomo, j_tomo] -= (bias_at_chi[i_tomo] + bias_at_chi[j_tomo])*np.diagonal(self.Pgg, axis1 = -2, axis2 =-1)[:,i_sample]
                 eta = (time.time()-t0) * \
                     (len(self.los_z)/(i_chi+1)-1)
                 print('\rPreparations for SSC calculation at '

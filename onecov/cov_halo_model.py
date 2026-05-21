@@ -716,11 +716,12 @@ class HaloModel(Setup):
         hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
 
         hurly_shape = hurlyX.shape
+        log10k = np.log10(self.mass_func.k)
         hurlyX_spline = [[] for _ in range(hurly_shape[1])]
         for nbin in range(hurly_shape[1]):
             for idxM in range(hurly_shape[2]):
                 hurlyX_spline[nbin].append(UnivariateSpline(
-                    np.log10(self.mass_func.k),
+                    log10k,
                     hurlyX[:, nbin, idxM], s=0, ext=0))
 
         return hurlyX_spline
@@ -835,11 +836,11 @@ class HaloModel(Setup):
                                                                 alpha,
                                                                 type_x))
         integralX_shape = integralX.shape
-
+        log10k = np.log10(self.mass_func.k)
         integralX_spline = []
         for nbin in range(integralX_shape[1]):
             integralX_spline.append(
-                UnivariateSpline(np.log10(self.mass_func.k),
+                UnivariateSpline(log10k,
                                  integralX[:, nbin],
                                  k=1, s=0, ext=0))
 
@@ -902,30 +903,31 @@ class HaloModel(Setup):
             correct = 0
             bias = 1
 
-            if type_x == 'g':
-                hurlyX = \
-                    self.hurly_x(bias_dict, hod_dict, 'cen') \
-                    + self.hurly_x(bias_dict, hod_dict, 'sat')
-                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']
-            elif type_x == 'm':
-                hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
+            is_mm = (type_x == 'm' and type_y == 'm')
+            if type_x == 'g' or type_y == 'g':
+                hurly_cen = self.hurly_x(bias_dict, hod_dict, 'cen')
+                hurly_sat = self.hurly_x(bias_dict, hod_dict, 'sat')
+            if (type_x == 'm' or type_y == 'm') and not is_mm:
+                hurly_m = self.hurly_x(bias_dict, hod_dict, 'm')
+            if not is_mm:
+                bias_val = self.bias(bias_dict, hm_prec)
 
-            if (type_y == 'g'):
-                hurlyY = \
-                    self.hurly_x(bias_dict, hod_dict, 'cen') \
-                    + self.hurly_x(bias_dict, hod_dict, 'sat')
-                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']
-            elif type_y == 'm':
-                hurlyY = self.hurly_x(bias_dict, hod_dict, 'm')
-                bias = self.bias(bias_dict, hm_prec)
+            if type_x == 'g':
+                hurlyX = hurly_cen + hurly_sat
+                bias = bias_val * bias_dict['bias_2h']
+            elif type_x == 'm' and not is_mm:
+                hurlyX = hurly_m
+
+            if type_y == 'g':
+                hurlyY = hurly_cen + hurly_sat
+                bias = bias_val * bias_dict['bias_2h']
+            elif type_y == 'm' and not is_mm:
+                hurlyY = hurly_m
+                bias = bias_val
 
             if type_x == 'g' and type_y == 'g':
-                correct = \
-                    self.hurly_x(
-                        bias_dict, hod_dict, 'cen')[:, None, :,  None, :] \
-                    * self.hurly_x(
-                        bias_dict, hod_dict, 'cen')[None, :, None, :, :]
-                bias = self.bias(bias_dict, hm_prec)
+                correct = hurly_cen[:, None, :, None, :] * hurly_cen[None, :, None, :, :]
+                bias = bias_val
 
             if type_x == 'm' and type_y == 'm':
                 M_min_save = hm_prec["log10M_min"]
@@ -990,13 +992,14 @@ class HaloModel(Setup):
                                                                   type_y))
 
         integralXY_shape = integralXY.shape
+        log10k = np.log10(self.mass_func.k)
         integralXY_spline = []
         for nbin in range(integralXY_shape[2]):
             integralXY_spline.append([])
             for mbin in range(integralXY_shape[3]):
                 integralXY_spline[nbin].append(RectBivariateSpline(
-                    np.log10(self.mass_func.k),
-                    np.log10(self.mass_func.k),
+                    log10k,
+                    log10k,
                     integralXY[:, :, nbin, mbin],
                     kx=1, ky=1, s=0))
 
@@ -1097,9 +1100,10 @@ class HaloModel(Setup):
                                                                     hm_prec,
                                                                     alpha))
 
+        log10k = np.log10(self.mass_func.k)
         return RectBivariateSpline(
-            np.log10(self.mass_func.k),
-            np.log10(self.mass_func.k),
+            log10k,
+            log10k,
             integralmmm[:, :, 0],
             kx=1, ky=1, s=0)
 
@@ -1368,9 +1372,10 @@ class HaloModel(Setup):
             indices = np.unique(aux_M,return_index = True)[1]
             aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
             aux_bispec_count_mm = aux_bispec_count_mm.reshape((len(aux_bispec_count_mm[:,0,0]), len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0])))
+            log10_aux_M = np.log10(aux_M[indices])
             count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
             for i_k in range(len(self.mass_func.k)):
-                count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M[indices]), np.log(aux_bispec_count_mm[i_k,indices])))
+                count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins, log10_aux_M, np.log(aux_bispec_count_mm[i_k,indices])))
             bias_dict = save_bias
             self.hod.hod_update(bias_dict, hm_prec)
         else:
@@ -1378,7 +1383,8 @@ class HaloModel(Setup):
             indices = np.unique(aux_M,return_index = True)[1]
             aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
             aux_bispec_count_mm = aux_bispec_count_mm.reshape((len(aux_bispec_count_mm[:,0,0]), len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0])))
+            log10_aux_M = np.log10(aux_M[indices])
             count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
             for i_k in range(len(self.mass_func.k)):
-                count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins,np.log10(aux_M[indices]), np.log(aux_bispec_count_mm[i_k,indices])))
+                count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins, log10_aux_M, np.log(aux_bispec_count_mm[i_k,indices])))
         return count_matter_bispec
