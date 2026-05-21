@@ -18,7 +18,7 @@ import argparse
 def main():
 
     parser = argparse.ArgumentParser(description='Calculates fourier weights for COSEBIs')
-    parser.add_argument('-n', '--nthread', type=int, default=10, help='number of threads used (default is 10)')
+    parser.add_argument('-n', '--nthread', type=int, default=4, help='number of threads used (default is 4)')
     parser.add_argument('-nf', '--nfourier', type=int, default=int(1e5), help='number of Fourier modes at which the weights are calculated (default is 1e5)')
     parser.add_argument('-nt', '--ntheta', type=int, default=int(1e4), help='number of theta at which the realspace weights are calculated (default is 1e4)')
 
@@ -305,33 +305,37 @@ def main():
             np.savetxt(file_Wn, np.array([ell,result_Well]).T, header=hdr_str_mm_plus_fourier)
         
 
-    Ungg = get_Un(tmax_gg, tmin_gg, theta_gg, Nmax_gg)
-    Ungm = get_Un(tmax_gm, tmin_gm, theta_gm, Nmax_gm)
-    Qngm = get_Qn(Ungm, theta_gm, Nmax_gm)
 
-    for nn in range(1,Nmax_gg+1):
-        Wpsigg = get_Wpsi_ell(nn - 1, Ungg[nn-1,:], theta_gg)
-        if nn < 10:
-            file_Ugg = "./../cosebis/Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigg_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-        else:
-            file_Ugg = "./../cosebis/Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigg_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-        np.savetxt(file_Ugg,np.array([theta_gg/arcmintorad,Ungg[nn-1,:]*arcmintorad**2]).T, header=hdr_str_gg_real)
-        if get_W_ell_as_well:
-            np.savetxt(file_Wn, np.array([ell,Wpsigg]).T, header=hdr_str_gg_fourier)
 
-    for nn in range(1,Nmax_gm+1):
-        Wpsigm = get_Wpsi_ell(nn - 1, Ungm[nn-1,:], theta_gm)
-        if nn < 10:
-            file_Qgm = "./../cosebis/Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigm_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
-        else:
-            file_Qgm = "./../cosebis/Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
-            file_Wn = "./../cosebis/Wn_psigm_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
-        np.savetxt(file_Qgm,np.array([theta_gm/arcmintorad,Qngm[nn-1,:]*arcmintorad**2]).T, header=hdr_str_gm_real)
-        if get_W_ell_as_well:
-            np.savetxt(file_Wn, np.array([ell,Wpsigm]).T, header=hdr_str_gm_fourier)
+    if Nmax_gg > 0:
+        Ungg = get_Un(tmax_gg, tmin_gg, theta_gg, Nmax_gg)
+    
+        for nn in range(1,Nmax_gg+1):
+            Wpsigg = get_Wpsi_ell(nn - 1, Ungg[nn-1,:], theta_gg)
+            if nn < 10:
+                file_Ugg = "./../cosebis/Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
+                file_Wn = "./../cosebis/Wn_psigg_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            else:
+                file_Ugg = "./../cosebis/Ugg_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
+                file_Wn = "./../cosebis/Wn_psigg_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+            np.savetxt(file_Ugg,np.array([theta_gg/arcmintorad,Ungg[nn-1,:]*arcmintorad**2]).T, header=hdr_str_gg_real)
+            if get_W_ell_as_well:
+                np.savetxt(file_Wn, np.array([ell,Wpsigg]).T, header=hdr_str_gg_fourier)
+
+    if Nmax_gm > 0:
+        Ungm = get_Un(tmax_gm, tmin_gm, theta_gm, Nmax_gm)
+        Qngm = get_Qn(Ungm, theta_gm, Nmax_gm)
+        for nn in range(1,Nmax_gm+1):
+            Wpsigm = get_Wpsi_ell(nn - 1, Ungm[nn-1,:], theta_gm)
+            if nn < 10:
+                file_Qgm = "./../cosebis/Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_0"+str(nn)  + ".table"
+                file_Wn = "./../cosebis/Wn_psigm_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_0"+str(nn)  + ".table"
+            else:
+                file_Qgm = "./../cosebis/Qgm_" +str(tmin_gg/arcmintorad) + "_to_" + str(tmax_gg/arcmintorad) + "_"+str(nn)  + ".table"
+                file_Wn = "./../cosebis/Wn_psigm_"  +str(tmin_mm/arcmintorad) + "_to_" + str(tmax_mm/arcmintorad) + "_"+str(nn)  + ".table"
+            np.savetxt(file_Qgm,np.array([theta_gm/arcmintorad,Qngm[nn-1,:]*arcmintorad**2]).T, header=hdr_str_gm_real)
+            if get_W_ell_as_well:
+                np.savetxt(file_Wn, np.array([ell,Wpsigm]).T, header=hdr_str_gm_fourier)
 
 if __name__ == '__main__':
     main()

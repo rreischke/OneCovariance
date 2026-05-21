@@ -4,6 +4,7 @@
 #include <vector>
 #include <numeric>
 #include <omp.h>
+#include <stdint.h>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -40,6 +41,24 @@ private:
   static const double tol_abs;
   static const double min_sv;
   static const double kernel_overlap_eps;
+
+  struct LSEWorkspace {
+      gsl_matrix      *matrix_G  = nullptr;
+      gsl_matrix      *U         = nullptr;
+      gsl_vector      *F_stacked = nullptr;
+      gsl_vector      *c         = nullptr;
+      gsl_permutation *P         = nullptr;
+      std::vector<double> bf;        // n × n basis function values
+      std::vector<double> bf_prime;  // n × n basis function derivative values
+      std::vector<double> A_mat;     // d × d × n A-matrix values
+      uint size = 0;  // d * n
+      uint n    = 0;
+  };
+  std::vector<LSEWorkspace> lse_ws_full;  // per-thread, sized for d * n_full
+  std::vector<LSEWorkspace> lse_ws_half;  // per-thread, sized for d * n_half
+
+  void allocate_lse_workspaces();
+  void free_lse_workspaces();
   uint N_thread_max = std::thread::hardware_concurrency();
   std::vector<uint> ell;
   uint d;
@@ -60,6 +79,8 @@ private:
   std::vector<gsl_spline *> spline_integrand;
   std::vector<std::vector<gsl_interp_accel *>> acc_w_ell;
   std::vector<std::vector<gsl_spline *>> spline_w_ell;
+
+  std::vector<gsl_integration_cquad_workspace *> cquad_workspaces;
 
   std::vector<gsl_interp_accel *> acc_cov_Gauss, acc_cov_SSC;
   std::vector<gsl_spline *> spline_cov_Gauss, spline_cov_SSC;
@@ -123,13 +144,13 @@ public:
    * @param x
    * @param integrand
    */
-  void init_integral(std::vector<double> x, std::vector<std::vector<double>> integrand, bool logx1, bool logy1);
+  void init_integral(const std::vector<double>& x, const std::vector<std::vector<double>>& integrand, bool logx1, bool logy1);
 
-  void init_w_ell(std::vector<double> ell, std::vector<std::vector<double>> w_ells);
+  void init_w_ell(const std::vector<double>& ell, const std::vector<std::vector<double>>& w_ells);
 
   std::vector<double> get_w_ell(std::vector<double> ell, uint m_mode);
 
-  std::vector<double> get_integrand(std::vector<double> x, uint j);
+  std::vector<double> get_integrand(const std::vector<double>& x, uint j);
 
   double call_integrand(double x, uint i);
 
@@ -173,19 +194,19 @@ public:
    * specified by providing the tomographic bin, i_tomo, the wavenumber, k, multipole ell and whether the linear or nonlinear version of the
    * power spectrum should be used. The solution to the LSE is returned as a list.
    **/
-  std::vector<double> solve_LSE_single(double (*function)(double, void *), double A, double B, uint col, std::vector<double> x_j, double k, uint ell);
+  std::vector<double> solve_LSE_single(double (*function)(double, void *), double A, double B, uint col, const std::vector<double>& x_j, double k, uint ell);
 
   /**
    * Solves the linear system of equations for a product of two oscillatory functions in the interval \f$ A,B \f$ at col collactation points with corresponding nodes x_j. The system is
    * specified by providing the tomographic bin, i_tomo, the wavenumber, k, multipole ell and whether the linear or nonlinear version of the
    * power spectrum should be used. The solution to the LSE is returned as a list.
    **/
-  std::vector<double> solve_LSE_double(double (*function)(double, void *), double A, double B, uint col, std::vector<double> x_j, double k1, double k2, uint ell_1, uint ell_2);
+  std::vector<double> solve_LSE_double(double (*function)(double, void *), double A, double B, uint col, const std::vector<double>& x_j, double k1, double k2, uint ell_1, uint ell_2);
 
   /**
    * Returns the \f$i \f$-th component of the vector \f$ p \f$ given the solution to the LSE, c.
    **/
-  double p(double A, double B, uint i, double x, uint col, std::vector<double> c);
+  double p(double A, double B, uint i, double x, uint col, const std::vector<double>& c);
 
   /**
    * Integrates
@@ -220,7 +241,7 @@ public:
   /**
    *  Return the maximum index of a list.
    */
-  uint findMax(const std::vector<double> vec);
+  uint findMax(const std::vector<double>& vec);
 
   /**
    * Returns the integral of the function \p function depending on the value for \f$ k\f$ and \f$ \ell\f$ (compare with the cases in the constructor) in the interval

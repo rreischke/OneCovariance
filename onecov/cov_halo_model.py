@@ -775,11 +775,14 @@ class HaloModel(Setup):
                 hurlyX = \
                     self.hurly_x(bias_dict, hod_dict, 'cen') \
                     + self.hurly_x(bias_dict, hod_dict, 'sat')
-                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']
+                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']*self.norm_bias
+                norm = simpson(self.mass_func.dndm * bias *
+                              self.mass_func.m, x = self.mass_func.m) / self.rho_bg
+                Abmin = (1-norm)*self.rho_bg/self.mass_func.m[0]
                 integral_x = simpson(self.mass_func.dndm
                                       * bias
                                       * hurlyX,
-                                     x = self.mass_func.m)
+                                     x = self.mass_func.m) + Abmin*hurlyX[:, :, 0]
             if type_x == 'm':
                 M_min_save = hm_prec["log10M_min"]
                 step_save = self.mass_func.dlog10m
@@ -791,9 +794,12 @@ class HaloModel(Setup):
                 self.hod.hod_update(bias_dict, hm_prec)
 
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
-                bias = self.bias(bias_dict, hm_prec)
+                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']*self.norm_bias
+                norm = simpson(self.mass_func.dndm * bias *
+                              self.mass_func.m, x = self.mass_func.m) / self.rho_bg
+                Abmin = (1-norm)*self.rho_bg/self.mass_func.m[0]
                 integral_x = simpson(
-                    self.mass_func.dndm * hurlyX * bias, x = self.mass_func.m)
+                    self.mass_func.dndm * hurlyX * bias, x = self.mass_func.m) + Abmin*hurlyX[:, :, 0]
 
                 hm_prec["log10M_min"] = M_min_save
                 self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
@@ -1061,6 +1067,7 @@ class HaloModel(Setup):
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
             hm_prec['M_bins'] = len(self.mass_func.m)
             self.hod.hod_update(bias_dict, hm_prec)
+            
 
         return integral_mmm
 

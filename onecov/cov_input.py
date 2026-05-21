@@ -122,6 +122,9 @@ class Input:
         self.ell_max_clustering = None
         self.ell_bins_clustering = None
         self.ell_type_clustering = None
+        self.magnification_bias = None
+        self.magnification_bias_s = None
+        self.magnification_bias_z = None
         
 
         # for cosmic shear in projected real space
@@ -939,6 +942,16 @@ class Input:
                 self.ell_max = self.ell_max_clustering
             self.ell_bins = 100
             self.ell_type = 'log'
+
+        if self.ggl or self.clustering:
+            if 'magnification' in config:
+                self.magnification_bias = config['magnification'].getboolean('magnification')
+            else:
+                self.magnification_bias = False
+            if self.magnification_bias:
+                self.magnification_bias_z = config['magnification']['magnification']
+        else:
+            self.magnification_bias = False
         
         return True
 
