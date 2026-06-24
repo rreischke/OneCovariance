@@ -1,18 +1,13 @@
-import numpy as np
-import levin
-import matplotlib.pyplot as plt
-from mpmath import mp
-import mpmath
-from scipy.interpolate import interp1d
-import multiprocessing as mpi
-from scipy.signal import argrelextrema
-from scipy.special import p_roots
-from numpy.polynomial.legendre import legcompanion, legval, legder
-import numpy.linalg as la
-from scipy import integrate
-from scipy.special import eval_legendre
-
 import argparse
+
+import levin
+import mpmath
+import numpy as np
+from mpmath import mp
+from scipy import integrate
+from scipy.interpolate import interp1d
+from scipy.signal import argrelextrema
+from scipy.special import eval_legendre
 
 
 def main():

@@ -1,18 +1,19 @@
 import time
+
+import levin
 import numpy as np
 from scipy.interpolate import UnivariateSpline
-import levin
-from scipy.special import jv
 from scipy.signal import argrelextrema
+from scipy.special import jv
 
 try:
-    from onecov.cov_ell_space import CovELLSpace
     from onecov.cov_discrete import *
     from onecov.cov_discrete_utils import *
+    from onecov.cov_ell_space import CovELLSpace
 except:
-    from cov_ell_space import CovELLSpace
     from cov_discrete import *
     from cov_discrete_utils import *
+    from cov_ell_space import CovELLSpace
 
 
 class CovTHETASpace(CovELLSpace):
@@ -887,34 +888,33 @@ class CovTHETASpace(CovELLSpace):
                     gauss_xipxim_sva, gauss_xipxim_mix, gauss_xipxim_sn, \
                     gauss_ximxim_sva, gauss_ximxim_mix, gauss_ximxim_sn, \
                     csmf_auto, csmf_w, csmf_gt, csmf_xip, csmf_xim
+        elif not self.cov_dict['split_gauss']:
+            gauss_ww = gauss_ww_sva + gauss_ww_mix
+            gauss_wgt = gauss_wgt_sva + gauss_wgt_mix
+            gauss_wxip = gauss_wxip_sva + gauss_wxip_mix
+            gauss_wxim = gauss_wxim_sva + gauss_wxim_mix
+            gauss_gtgt = gauss_gtgt_sva + gauss_gtgt_mix
+            gauss_xipgt = gauss_xipgt_sva + gauss_xipgt_mix
+            gauss_ximgt = gauss_ximgt_sva + gauss_ximgt_mix
+            gauss_xipxip = gauss_xipxip_sva + gauss_xipxip_mix
+            gauss_xipxim = gauss_xipxim_sva + gauss_xipxim_mix
+            gauss_ximxim = gauss_ximxim_sva + gauss_ximxim_mix
+            return gauss_ww,     gauss_wgt,    gauss_wxip,  gauss_wxim, \
+                gauss_gtgt,   gauss_xipgt,  gauss_ximgt, \
+                gauss_xipxip, gauss_xipxim, \
+                gauss_ximxim, \
+                gauss_ww_sn, gauss_gtgt_sn, gauss_xipxip_sn, gauss_ximxim_sn
         else:
-            if not self.cov_dict['split_gauss']:
-                gauss_ww = gauss_ww_sva + gauss_ww_mix
-                gauss_wgt = gauss_wgt_sva + gauss_wgt_mix
-                gauss_wxip = gauss_wxip_sva + gauss_wxip_mix
-                gauss_wxim = gauss_wxim_sva + gauss_wxim_mix
-                gauss_gtgt = gauss_gtgt_sva + gauss_gtgt_mix
-                gauss_xipgt = gauss_xipgt_sva + gauss_xipgt_mix
-                gauss_ximgt = gauss_ximgt_sva + gauss_ximgt_mix
-                gauss_xipxip = gauss_xipxip_sva + gauss_xipxip_mix
-                gauss_xipxim = gauss_xipxim_sva + gauss_xipxim_mix
-                gauss_ximxim = gauss_ximxim_sva + gauss_ximxim_mix
-                return gauss_ww,     gauss_wgt,    gauss_wxip,  gauss_wxim, \
-                    gauss_gtgt,   gauss_xipgt,  gauss_ximgt, \
-                    gauss_xipxip, gauss_xipxim, \
-                    gauss_ximxim, \
-                    gauss_ww_sn, gauss_gtgt_sn, gauss_xipxip_sn, gauss_ximxim_sn
-            else:
-                return gauss_ww_sva, gauss_ww_mix, gauss_ww_sn, \
-                    gauss_wgt_sva, gauss_wgt_mix, gauss_wgt_sn, \
-                    gauss_wxip_sva, gauss_wxip_mix, gauss_wxip_sn, \
-                    gauss_wxim_sva, gauss_wxim_mix, gauss_wxim_sn, \
-                    gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn, \
-                    gauss_xipgt_sva, gauss_xipgt_mix, gauss_xipgt_sn, \
-                    gauss_ximgt_sva, gauss_ximgt_mix, gauss_ximgt_sn, \
-                    gauss_xipxip_sva, gauss_xipxip_mix, gauss_xipxip_sn, \
-                    gauss_xipxim_sva, gauss_xipxim_mix, gauss_xipxim_sn, \
-                    gauss_ximxim_sva, gauss_ximxim_mix, gauss_ximxim_sn
+            return gauss_ww_sva, gauss_ww_mix, gauss_ww_sn, \
+                gauss_wgt_sva, gauss_wgt_mix, gauss_wgt_sn, \
+                gauss_wxip_sva, gauss_wxip_mix, gauss_wxip_sn, \
+                gauss_wxim_sva, gauss_wxim_mix, gauss_wxim_sn, \
+                gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn, \
+                gauss_xipgt_sva, gauss_xipgt_mix, gauss_xipgt_sn, \
+                gauss_ximgt_sva, gauss_ximgt_mix, gauss_ximgt_sn, \
+                gauss_xipxip_sva, gauss_xipxip_mix, gauss_xipxip_sn, \
+                gauss_xipxim_sva, gauss_xipxim_mix, gauss_xipxim_sn, \
+                gauss_ximxim_sva, gauss_ximxim_mix, gauss_ximxim_sn
 
     def __covTHETA_split_gaussian(self,
                                   covELLspacesettings,
@@ -1684,13 +1684,12 @@ class CovTHETASpace(CovELLSpace):
             if self.mm:
                 nongaussELLmmmm = nongaussELLmmmm/(survey_params_dict['survey_area_lens'] / self.deg2torad2) + nongaussELLmmmm1
             connected = False
+        elif (connected):
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
+                covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
         else:
-            if (connected):
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
-                    covELLspacesettings, output_dict, bias_dict, hod_dict, hm_prec, tri_tab)
-            else:
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
-                    bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
+                bias_dict, hod_dict, hm_prec, survey_params_dict, covELLspacesettings)
             
         if self.gg:
             print("")
@@ -1834,7 +1833,6 @@ class CovTHETASpace(CovELLSpace):
                           str(round(eta, 1)) + 'min', end="")
         if self.mm and self.gm and self.cross_terms:
             print("")
-            #
             original_shape = nongaussELLmmgm[0, 0, :, :, :, :, :, :].shape
             covxipgt_shape_nongauss = (len(self.theta_bins_lensing), len(self.theta_bins_clustering),
                                        1, self.sample_dim,

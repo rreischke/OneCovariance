@@ -1,10 +1,8 @@
 import time
-import numpy as np
-from scipy.special import jv
-from scipy.signal import argrelextrema
-import multiprocessing as mp
 
 import levin
+import numpy as np
+from scipy.signal import argrelextrema
 
 try:
     from onecov.cov_theta_space import CovTHETASpace
@@ -371,11 +369,10 @@ class CovBandPowers(CovTHETASpace):
                 x = self.log_theta_bins[i_theta]
                 if x < xlo + self.delta_ln_theta_clustering/2.0:
                     self.T_of_theta_clustering[i_theta] = np.cos(np.pi/2.*((x - (xlo + self.delta_ln_theta_clustering/2.))/self.delta_ln_theta_clustering))**2.0
+                elif x >= xlo + self.delta_ln_theta_clustering/2.0 and x < xup - self.delta_ln_theta_clustering/2.0: 
+                    self.T_of_theta_clustering[i_theta] = 1.0
                 else:
-                    if x >= xlo + self.delta_ln_theta_clustering/2.0 and x < xup - self.delta_ln_theta_clustering/2.0: 
-                        self.T_of_theta_clustering[i_theta] = 1.0
-                    else:
-                        self.T_of_theta_clustering[i_theta] = np.cos(np.pi/2.*((x - (xup - self.delta_ln_theta_clustering/2.))/self.delta_ln_theta_clustering))**2.0
+                    self.T_of_theta_clustering[i_theta] = np.cos(np.pi/2.*((x - (xup - self.delta_ln_theta_clustering/2.))/self.delta_ln_theta_clustering))**2.0
         
         if self.mm:
             xlo = np.log(obs_dict['bandpowers']['theta_lo_lensing'])
@@ -384,11 +381,10 @@ class CovBandPowers(CovTHETASpace):
                 x = self.log_theta_bins[i_theta]
                 if x < xlo + self.delta_ln_theta_lensing/2.0:
                     self.T_of_theta_lensing[i_theta] = np.cos(np.pi/2.*((x - (xlo + self.delta_ln_theta_lensing/2.))/self.delta_ln_theta_lensing))**2.0
+                elif x >= xlo + self.delta_ln_theta_lensing/2.0 and x < xup - self.delta_ln_theta_lensing/2.0: 
+                    self.T_of_theta_lensing[i_theta] = 1.0
                 else:
-                    if x >= xlo + self.delta_ln_theta_lensing/2.0 and x < xup - self.delta_ln_theta_lensing/2.0: 
-                        self.T_of_theta_lensing[i_theta] = 1.0
-                    else:
-                        self.T_of_theta_lensing[i_theta] = np.cos(np.pi/2.*((x - (xup - self.delta_ln_theta_lensing/2.))/self.delta_ln_theta_lensing))**2.0
+                    self.T_of_theta_lensing[i_theta] = np.cos(np.pi/2.*((x - (xup - self.delta_ln_theta_lensing/2.))/self.delta_ln_theta_lensing))**2.0
 
     def __call_levin_many_args_WE_non_par(self, ells, ell_up, ell_lo, theta_range, T_of_theta):
         """
@@ -1000,39 +996,38 @@ class CovBandPowers(CovTHETASpace):
                     gauss_BPBBmmmm, \
                     gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
                     csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB 
+        elif not self.cov_dict['split_gauss']:
+            gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
+            gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
+            gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
+            gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
+            gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
+            gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
+            gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
+            gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
+            gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+            gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
+            return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
+                gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
+                gauss_BPEEmmmm, gauss_BPEBmmmm, \
+                gauss_BPBBmmmm, \
+                gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn
         else:
-            if not self.cov_dict['split_gauss']:
-                gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
-                gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
-                gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
-                gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
-                gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
-                gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
-                gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
-                gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
-                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
-                gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
-                return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
-                    gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
-                    gauss_BPEEmmmm, gauss_BPEBmmmm, \
-                    gauss_BPBBmmmm, \
-                    gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn
-            else:
-                gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
-                gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
-                gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
-                gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
-                gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
-                gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
-                gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
-                gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
-                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
-                gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
-                return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
-                    gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
-                    gauss_BPEEmmmm, gauss_BPEBmmmm, \
-                    gauss_BPBBmmmm, \
-                    gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
+            gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
+            gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
+            gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
+            gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
+            gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
+            gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
+            gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
+            gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
+            gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+            gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
+            return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
+                gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
+                gauss_BPEEmmmm, gauss_BPEBmmmm, \
+                gauss_BPBBmmmm, \
+                gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
 
     def __covbandpowers_split_gaussian(self,
                                        obs_dict,
@@ -1763,13 +1758,12 @@ class CovBandPowers(CovTHETASpace):
             if self.mm:
                 nongaussELLmmmm = nongaussELLmmmm/(survey_params_dict['survey_area_lens'] / self.deg2torad2) + nongaussELLmmmm1
             connected = False
+        elif (connected):
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
+                covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
         else:
-            if (connected):
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
-                    covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
-            else:
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
-                    bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
+                bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
         if self.gg:
             nongauss_BPgggg = np.zeros(
                 (len(self.ell_bins_clustering), len(self.ell_bins_clustering), self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))

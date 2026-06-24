@@ -1,21 +1,8 @@
-import numpy as np
-import levin
-import matplotlib.pyplot as plt
-from mpmath import mp
-import mpmath
-from scipy.interpolate import interp1d
-import multiprocessing as mpi
-from scipy.signal import argrelextrema
-from scipy import pi,sqrt,exp
-from scipy.special import p_roots
-from numpy.polynomial.legendre import legcompanion, legval, legder
-import numpy.linalg as la
-from scipy import integrate
-from scipy.special import eval_legendre
-import sys
-from argparse import ArgumentParser
 import os
+from argparse import ArgumentParser
 
+import numpy as np
+from mpmath import mp
 
 parser = ArgumentParser(description='Map COSEBIs to pure E/B mode correlation functions')
 parser.add_argument('--data', dest='data', type=str, required=True, nargs=2, help="File containing E and B COSEBIS measurements")

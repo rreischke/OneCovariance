@@ -1,10 +1,8 @@
 import time
-import numpy as np
-from scipy.special import jv
-from scipy.signal import argrelextrema
-import multiprocessing as mp
 
 import levin
+import numpy as np
+from scipy.signal import argrelextrema
 
 try:
     from onecov.cov_ell_space import CovELLSpace
@@ -1117,34 +1115,33 @@ class CovARBsummary(CovELLSpace):
                         gauss_ASEBmmmm_sva, gauss_ASEBmmmm_mix, gauss_ASEBmmmm_sn, \
                         gauss_ASBBmmmm_sva, gauss_ASBBmmmm_mix, gauss_ASBBmmmm_sn, \
                         csmf_AS_auto, csmf_AS_gg, csmf_AS_gm, csmf_AS_mmE, csmf_AS_mmB
+        elif not self.cov_dict['split_gauss']:
+            gauss_ASgggg = gauss_ASgggg_sva + gauss_ASgggg_mix
+            gauss_ASgggm = gauss_ASgggm_sva + gauss_ASgggm_mix
+            gauss_ASEggmm = gauss_ASEggmm_sva + gauss_ASEggmm_mix
+            gauss_ASBggmm = gauss_ASBggmm_sva + gauss_ASBggmm_mix
+            gauss_ASgmgm = gauss_ASgmgm_sva + gauss_ASgmgm_mix
+            gauss_ASEmmgm = gauss_ASEmmgm_sva + gauss_ASEmmgm_mix
+            gauss_ASBmmgm = gauss_ASBmmgm_sva + gauss_ASBmmgm_mix
+            gauss_ASEEmmmm = gauss_ASEEmmmm_sva + gauss_ASEEmmmm_mix
+            gauss_ASEBmmmm = gauss_ASEBmmmm_sva + gauss_ASEBmmmm_mix
+            gauss_ASBBmmmm = gauss_ASBBmmmm_sva + gauss_ASBBmmmm_mix
+            return gauss_ASgggg, gauss_ASgggm, gauss_ASEggmm, gauss_ASBggmm, \
+                gauss_ASgmgm, gauss_ASEmmgm, gauss_ASBmmgm, \
+                gauss_ASEEmmmm, gauss_ASEBmmmm, \
+                gauss_ASBBmmmm, \
+                gauss_ASgggg_sn, gauss_ASgmgm_sn, gauss_ASEEmmmm_sn, gauss_ASBBmmmm_sn
         else:
-            if not self.cov_dict['split_gauss']:
-                gauss_ASgggg = gauss_ASgggg_sva + gauss_ASgggg_mix
-                gauss_ASgggm = gauss_ASgggm_sva + gauss_ASgggm_mix
-                gauss_ASEggmm = gauss_ASEggmm_sva + gauss_ASEggmm_mix
-                gauss_ASBggmm = gauss_ASBggmm_sva + gauss_ASBggmm_mix
-                gauss_ASgmgm = gauss_ASgmgm_sva + gauss_ASgmgm_mix
-                gauss_ASEmmgm = gauss_ASEmmgm_sva + gauss_ASEmmgm_mix
-                gauss_ASBmmgm = gauss_ASBmmgm_sva + gauss_ASBmmgm_mix
-                gauss_ASEEmmmm = gauss_ASEEmmmm_sva + gauss_ASEEmmmm_mix
-                gauss_ASEBmmmm = gauss_ASEBmmmm_sva + gauss_ASEBmmmm_mix
-                gauss_ASBBmmmm = gauss_ASBBmmmm_sva + gauss_ASBBmmmm_mix
-                return gauss_ASgggg, gauss_ASgggm, gauss_ASEggmm, gauss_ASBggmm, \
-                    gauss_ASgmgm, gauss_ASEmmgm, gauss_ASBmmgm, \
-                    gauss_ASEEmmmm, gauss_ASEBmmmm, \
-                    gauss_ASBBmmmm, \
-                    gauss_ASgggg_sn, gauss_ASgmgm_sn, gauss_ASEEmmmm_sn, gauss_ASBBmmmm_sn
-            else:
-                return gauss_ASgggg_sva, gauss_ASgggg_mix, gauss_ASgggg_sn, \
-                        gauss_ASgggm_sva, gauss_ASgggm_mix, gauss_ASgggm_sn, \
-                        gauss_ASEggmm_sva, gauss_ASEggmm_mix, gauss_ASEggmm_sn, \
-                        gauss_ASBggmm_sva, gauss_ASBggmm_mix, gauss_ASBggmm_sn, \
-                        gauss_ASgmgm_sva, gauss_ASgmgm_mix, gauss_ASgmgm_sn, \
-                        gauss_ASEmmgm_sva, gauss_ASEmmgm_mix, gauss_ASEmmgm_sn, \
-                        gauss_ASBmmgm_sva, gauss_ASBmmgm_mix, gauss_ASBmmgm_sn, \
-                        gauss_ASEEmmmm_sva, gauss_ASEEmmmm_mix, gauss_ASEEmmmm_sn, \
-                        gauss_ASEBmmmm_sva, gauss_ASEBmmmm_mix, gauss_ASEBmmmm_sn, \
-                        gauss_ASBBmmmm_sva, gauss_ASBBmmmm_mix, gauss_ASBBmmmm_sn
+            return gauss_ASgggg_sva, gauss_ASgggg_mix, gauss_ASgggg_sn, \
+                    gauss_ASgggm_sva, gauss_ASgggm_mix, gauss_ASgggm_sn, \
+                    gauss_ASEggmm_sva, gauss_ASEggmm_mix, gauss_ASEggmm_sn, \
+                    gauss_ASBggmm_sva, gauss_ASBggmm_mix, gauss_ASBggmm_sn, \
+                    gauss_ASgmgm_sva, gauss_ASgmgm_mix, gauss_ASgmgm_sn, \
+                    gauss_ASEmmgm_sva, gauss_ASEmmgm_mix, gauss_ASEmmgm_sn, \
+                    gauss_ASBmmgm_sva, gauss_ASBmmgm_mix, gauss_ASBmmgm_sn, \
+                    gauss_ASEEmmmm_sva, gauss_ASEEmmmm_mix, gauss_ASEEmmmm_sn, \
+                    gauss_ASEBmmmm_sva, gauss_ASEBmmmm_mix, gauss_ASEBmmmm_sn, \
+                    gauss_ASBBmmmm_sva, gauss_ASBBmmmm_mix, gauss_ASBBmmmm_sn
 
 
     def __covarbsummary_split_gaussian(self,
@@ -1891,13 +1888,12 @@ class CovARBsummary(CovELLSpace):
             if self.mm:
                 nongaussELLmmmm = nongaussELLmmmm/(survey_params_dict['survey_area_lens'] / self.deg2torad2) + nongaussELLmmmm1
             connected = False
+        elif (connected):
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
+                covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
         else:
-            if (connected):
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
-                    covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
-            else:
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
-                    bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
+                bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
         if self.gg:
             nongauss_ASgggg = np.zeros(
                 (self.gg_summaries, self.gg_summaries, self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))

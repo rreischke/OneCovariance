@@ -1,11 +1,11 @@
-import numpy as np
 import astropy.cosmology
+import numpy as np
 from astropy import units as u
 from scipy.interpolate import interp1d
 from scipy.signal import argrelextrema
 
 
-class Setup():
+class Setup:
     """
     This class provides various methods that set the cosmological model
     via astropy, and normalizes the tabulated redshift distributions. It
@@ -283,10 +283,8 @@ class Setup():
                 if read_in_tables['arb_radial']['z_mm'] is not None:
                     zet_min_arb = read_in_tables['arb_radial']['z_mm'][0]
                     zet_max_arb = read_in_tables['arb_radial']['z_mm'][-1]
-            if zet_min_arb < zet_min:
-                zet_min = zet_min_arb
-            if zet_max_arb > zet_max:
-                zet_max = zet_max_arb
+            zet_min = min(zet_min, zet_min_arb)
+            zet_max = max(zet_max, zet_max_arb)
         return zet_min, zet_max, n_tomo_clust, n_tomo_lens, n_tomo_csmf
 
     def __consistency_checks_for_tomographic_dims(self,
@@ -1435,7 +1433,6 @@ class Setup():
                         "survey area modes.")
                     data = fits.getdata(mfile, 1).field(0)
                     data = data.flatten()
-                    #data = np.where(data > .0, 1, 0)
                     Nside = healpy.npix2nside(len(data))
                     ellmax = 3 * Nside - 1
                     '''if est1 == est2:

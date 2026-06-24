@@ -1,12 +1,10 @@
-import sys
+import distutils.sysconfig
 import os
-from setuptools import setup
+import sys
 
 # Available at setup time due to pyproject.toml
 from pybind11.setup_helpers import Pybind11Extension
-from setuptools import Extension
-
-import distutils.sysconfig
+from setuptools import setup
 
 __version__ = "0.0.1"
 

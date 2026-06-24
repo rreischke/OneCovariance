@@ -1,19 +1,17 @@
-import numpy as np
-from scipy.interpolate import UnivariateSpline, RectBivariateSpline
-from scipy.special import sici, erf
-from scipy.integrate import simpson
-from astropy import units as u   
 import camb
-from camb import model
-
-
 import hmf
+import numpy as np
+from camb import model
+from scipy.integrate import simpson
+from scipy.interpolate import RectBivariateSpline, UnivariateSpline
+from scipy.special import erf, sici
+
 try:
-    from onecov.cov_setup import Setup
     from onecov.cov_hod import HOD
+    from onecov.cov_setup import Setup
 except:
-    from cov_setup import Setup
     from cov_hod import HOD
+    from cov_setup import Setup
 
 
 class HaloModel(Setup):

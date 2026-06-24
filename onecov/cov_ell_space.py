@@ -1,16 +1,12 @@
-import numpy as np
 import time
-from scipy.interpolate import UnivariateSpline, interp1d
-from scipy.integrate import simpson
-from scipy.special import j1
-import multiprocessing as mp
+
+import camb
 import healpy as hp
 import levin
-import camb
+import numpy as np
 from camb import model
-from scipy.signal import argrelextrema
-
-from scipy.interpolate import RegularGridInterpolator
+from scipy.integrate import simpson
+from scipy.interpolate import RegularGridInterpolator, UnivariateSpline, interp1d
 
 DEG2TORAD2 = (180 / np.pi) ** 2
 ARCMIN2TORAD2 = (60 * 60) * DEG2TORAD2
@@ -499,11 +495,10 @@ class CovELLSpace(PolySpectra):
                 covELLspacesettings['ell_min'],
                 covELLspacesettings['ell_max'],
                 covELLspacesettings['ell_bins'])
+        elif covELLspacesettings['limber']:
+            return np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins'])
         else:
-            if covELLspacesettings['limber']:
-                return np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins'])
-            else:
-                return np.unique(np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins']).astype(int)).astype(float)
+            return np.unique(np.geomspace(covELLspacesettings['ell_min'], covELLspacesettings['ell_max'], covELLspacesettings['ell_bins']).astype(int)).astype(float)
         
         
 
@@ -887,11 +882,10 @@ class CovELLSpace(PolySpectra):
                         self.ellrange = ellrange_clustering
                 else:
                     self.ellrange = ellrange_lensing
+            elif ellrange_clustering is None:
+                self.ellrange = ellrange_lensing
             else:
-                if ellrange_clustering is None:
-                    self.ellrange = ellrange_lensing
-                else:
-                    self.ellrange = ellrange_clustering
+                self.ellrange = ellrange_clustering
             self.checked_input_cells = True
 
             
@@ -1307,11 +1301,9 @@ class CovELLSpace(PolySpectra):
         
         self.los_interpolation_sampling = int(
             (self.zet_max - 0) / covELLspacesettings['delta_z'])
-        if (self.los_interpolation_sampling < 3):
-            self.los_interpolation_sampling = 3
+        self.los_interpolation_sampling = max(self.los_interpolation_sampling, 3)
         
-        if (self.los_interpolation_sampling > 250):
-            self.los_interpolation_sampling = 250
+        self.los_interpolation_sampling = min(self.los_interpolation_sampling, 250)
         aux_gg = np.zeros((self.los_interpolation_sampling,
                            len(self.mass_func.k),
                            self.sample_dim, self.sample_dim))
@@ -1334,11 +1326,10 @@ class CovELLSpace(PolySpectra):
             self.camb_pars_new.NonLinear = model.NonLinear_pk
             if prec['powspec']['nl_model'] == "mead2020_feedback":
                 self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'], HMCode_logT_AGN = prec['powspec']['HMCode_logT_AGN'])
+            elif prec['powspec']['nl_model'] == "mead2015" or prec['powspec']['nl_model'] == "mead2016":
+                self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'], HMCode_A_baryon = prec['powspec']['HMCode_A_baryon'], HMCode_eta_baryon = prec['powspec']['HMCode_eta_baryon'])
             else:
-                if prec['powspec']['nl_model'] == "mead2015" or prec['powspec']['nl_model'] == "mead2016":
-                    self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'], HMCode_A_baryon = prec['powspec']['HMCode_A_baryon'], HMCode_eta_baryon = prec['powspec']['HMCode_eta_baryon'])
-                else:
-                    self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
+                self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
             results.calc_power_spectra(self.camb_pars_new)
             _,_, aux_mm = results.get_matter_power_spectrum(minkh=self.mass_func.k[0],
                                                             maxkh=self.mass_func.k[-1],
@@ -1376,9 +1367,8 @@ class CovELLSpace(PolySpectra):
                             aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
                     if self.unbiased_clustering:
                         aux_gm[zet, :, i_sample] = aux_mm[zet,:]
-                    else:
-                        if self.gm or (self.gg and self.mm):
-                            aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
+                    elif self.gm or (self.gg and self.mm):
+                        aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
             if prec['hm']['transfer_model'] != 'CAMB' or self.Pxy_tab['mm'] is not None :
                 aux_mm[zet, :] = self.Pmm[:, 0]
             self.power_mm_lin_z[zet, :] = self.mass_func.power[:]
@@ -1408,18 +1398,17 @@ class CovELLSpace(PolySpectra):
                 self.spline_responsePgg = []
                 for i_sample in range(self.sample_dim):
                     self.spline_responsePgg.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gg[:, :, i_sample]).T,bounds_error= False, fill_value = None))
-        else:
-            if self.csmf and not self.csmf_auto_only:
-                if self.mm:
-                    self.spline_responsePmm = RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), np.log(aux_response_mm[:, :, 0]).T,bounds_error= False, fill_value = None)
-                if self.gm:
-                    self.spline_responsePgm = []
-                    for i_sample in range(self.sample_dim):
-                        self.spline_responsePgm.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gm[:, :, i_sample]).T,bounds_error= False, fill_value = None))
-                if self.gg:
-                    self.spline_responsePgg = []
-                    for i_sample in range(self.sample_dim):
-                        self.spline_responsePgg.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gg[:, :, i_sample]).T,bounds_error= False, fill_value = None))
+        elif self.csmf and not self.csmf_auto_only:
+            if self.mm:
+                self.spline_responsePmm = RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), np.log(aux_response_mm[:, :, 0]).T,bounds_error= False, fill_value = None)
+            if self.gm:
+                self.spline_responsePgm = []
+                for i_sample in range(self.sample_dim):
+                    self.spline_responsePgm.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gm[:, :, i_sample]).T,bounds_error= False, fill_value = None))
+            if self.gg:
+                self.spline_responsePgg = []
+                for i_sample in range(self.sample_dim):
+                    self.spline_responsePgg.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gg[:, :, i_sample]).T,bounds_error= False, fill_value = None))
 
         self.power_mm_lin_spline = RegularGridInterpolator((self.los_chi, np.log(self.mass_func.k)),np.log(self.power_mm_lin_z),bounds_error= False, fill_value = None)
         self.update_mass_func(0, bias_dict, hod_dict, prec)
@@ -1687,27 +1676,26 @@ class CovELLSpace(PolySpectra):
                          gaussELLgmgm_pmpm_new + gaussELLgmgm_pmpm_new_sn,
                          gaussELLmmgm_mmsm_new, gaussELLmmgm_mmpm_new,
                          gaussELLmmmm_mmmm_new + gaussELLmmmm_mmmm_new_sn]
+            elif self.csmf:
+                gaussgggg, gaussgggm, gaussggmm, \
+                gaussgmgm, gaussmmgm, gaussmmmm, \
+                gaussgggg_sn, gaussgmgm_sn, gaussmmmm_sn, \
+                csmf_auto, csmf_gg, csmf_gm, csmf_mm = \
+                self.covELL_gaussian(obs_dict['ELLspace'],
+                                    survey_params_dict, True)
+                gauss = [gaussgggg + gaussgggg_sn, gaussgggm,
+                        gaussggmm, gaussgmgm + gaussgmgm_sn,
+                        gaussmmgm, gaussmmmm + gaussmmmm_sn,
+                        csmf_auto, csmf_gg, csmf_gm, csmf_mm]
             else:
-                if self.csmf:
-                    gaussgggg, gaussgggm, gaussggmm, \
-                    gaussgmgm, gaussmmgm, gaussmmmm, \
-                    gaussgggg_sn, gaussgmgm_sn, gaussmmmm_sn, \
-                    csmf_auto, csmf_gg, csmf_gm, csmf_mm = \
-                    self.covELL_gaussian(obs_dict['ELLspace'],
-                                        survey_params_dict, True)
-                    gauss = [gaussgggg + gaussgggg_sn, gaussgggm,
-                            gaussggmm, gaussgmgm + gaussgmgm_sn,
-                            gaussmmgm, gaussmmmm + gaussmmmm_sn,
-                            csmf_auto, csmf_gg, csmf_gm, csmf_mm]
-                else:
-                    gaussgggg, gaussgggm, gaussggmm, \
-                    gaussgmgm, gaussmmgm, gaussmmmm, \
-                    gaussgggg_sn, gaussgmgm_sn, gaussmmmm_sn = \
-                    self.covELL_gaussian(obs_dict['ELLspace'],
-                                        survey_params_dict, True)
-                    gauss = [gaussgggg + gaussgggg_sn, gaussgggm,
-                            gaussggmm, gaussgmgm + gaussgmgm_sn,
-                            gaussmmgm, gaussmmmm + gaussmmmm_sn]
+                gaussgggg, gaussgggm, gaussggmm, \
+                gaussgmgm, gaussmmgm, gaussmmmm, \
+                gaussgggg_sn, gaussgmgm_sn, gaussmmmm_sn = \
+                self.covELL_gaussian(obs_dict['ELLspace'],
+                                    survey_params_dict, True)
+                gauss = [gaussgggg + gaussgggg_sn, gaussgggm,
+                        gaussggmm, gaussgmgm + gaussgmgm_sn,
+                        gaussmmgm, gaussmmmm + gaussmmmm_sn]
         else:
             gauss = self.covELL_gaussian(obs_dict['ELLspace'],
                                          survey_params_dict, True)
@@ -2896,18 +2884,14 @@ class CovELLSpace(PolySpectra):
                                     for i_ell in range(len(ellrange_12_ul) - 1):
                                         area12_ell = np.pi*((ellrange_12_ul[i_ell +1])**2 - (ellrange_12_ul[i_ell])**2)                                            
                                         Numberi = int((np.abs(self.ellrange - ellrange_12_ul[i_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_12_ul[i_ell])).argmin())
-                                        if Numberi < 3:
-                                                Numberi = 3
-                                        if Numberi > 10:
-                                            Numberi = 10
+                                        Numberi = max(Numberi, 3)
+                                        Numberi = min(Numberi, 10)
                                         integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
                                         for j_ell in range(len(ellrange_34_ul) - 1):
                                             area34_ell = np.pi*((ellrange_34_ul[j_ell +1])**2 - (ellrange_34_ul[j_ell])**2)                                            
                                             Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())                
-                                            if Numberj < 3:
-                                                Numberj = 3
-                                            if Numberj > 10:
-                                                Numberj = 10
+                                            Numberj = max(Numberj, 3)
+                                            Numberj = min(Numberj, 10)
                                             integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],Numberj)
                                             ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34,indexing='ij')
                                             if islog:
@@ -3109,18 +3093,14 @@ class CovELLSpace(PolySpectra):
                             for i_ell in range(len(ellrange_12_ul) - 1):
                                 area12_ell = np.pi*((ellrange_12_ul[i_ell +1])**2 - (ellrange_12_ul[i_ell])**2)                                            
                                 Numberi = int((np.abs(self.ellrange - ellrange_12_ul[i_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_12_ul[i_ell])).argmin())
-                                if Numberi < 3:
-                                        Numberi = 3
-                                if Numberi > 10:
-                                    Numberi = 10
+                                Numberi = max(Numberi, 3)
+                                Numberi = min(Numberi, 10)
                                 integration_ell_12 = np.geomspace(ellrange_12_ul[i_ell], ellrange_12_ul[i_ell+1],Numberi)
                                 for j_ell in range(len(ellrange_34_ul) - 1):
                                     area34_ell = np.pi*((ellrange_34_ul[j_ell +1])**2 - (ellrange_34_ul[j_ell])**2)                                            
                                     Numberj = int((np.abs(self.ellrange - ellrange_34_ul[j_ell+1])).argmin() - (np.abs(self.ellrange - ellrange_34_ul[j_ell])).argmin())                
-                                    if Numberj < 3:
-                                        Numberj = 3
-                                    if Numberj > 10:
-                                        Numberj = 10
+                                    Numberj = max(Numberj, 3)
+                                    Numberj = min(Numberj, 10)
                                     integration_ell_34 = np.geomspace(ellrange_34_ul[j_ell], ellrange_34_ul[j_ell+1],Numberj)
                                     ell1, ell2 = np.meshgrid(integration_ell_12, integration_ell_34,indexing='ij')
                                     if islog:
@@ -3195,27 +3175,26 @@ class CovELLSpace(PolySpectra):
                 self.__covELL_split_gaussian(covELLspacesettings,
                                             survey_params_dict,
                                             False)
+        elif calc_prefac and ((self.mm and self.ellrange_lensing_ul is None) or (self.gm and self.ellrange_clustering_ul is None) or (self.gg and self.ellrange_clustering_ul is None)):
+            gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+                gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
+                gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
+                self.__covELL_split_gaussian(covELLspacesettings,
+                                            survey_params_dict,
+                                            True)
         else:
-            if calc_prefac and ((self.mm and self.ellrange_lensing_ul is None) or (self.gm and self.ellrange_clustering_ul is None) or (self.gg and self.ellrange_clustering_ul is None)):
-                gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
-                    gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
-                    gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
-                    gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
-                    gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
-                    gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
-                    self.__covELL_split_gaussian(covELLspacesettings,
-                                                survey_params_dict,
-                                                True)
-            else:
-                gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
-                    gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
-                    gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
-                    gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
-                    gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
-                    gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
-                    self.__covELL_split_gaussian(covELLspacesettings,
-                                                survey_params_dict,
-                                                False)
+            gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+                gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
+                gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = \
+                self.__covELL_split_gaussian(covELLspacesettings,
+                                            survey_params_dict,
+                                            False)
         if self.csmf:
             cov_csmf_auto, cov_csmf_gg, cov_csmf_gm, cov_csmf_mm = self.calc_covELL_csmf(covELLspacesettings, survey_params_dict)
 
@@ -3796,650 +3775,648 @@ class CovELLSpace(PolySpectra):
                 return gaussELLgggg, gaussELLgggm, gaussELLggmm, \
                     gaussELLgmgm, gaussELLmmgm, gaussELLmmmm, \
                     gaussELLgggg_sn, gaussELLgmgm_sn, gaussELLmmmm_sn
+        elif self.ellrange_spec is not None and calc_prefac:
+            gaussELLgggg_ssss_new_sva = 0
+            gaussELLgggg_sssp_new_sva = 0
+            gaussELLgggg_sspp_new_sva = 0
+            gaussELLgggg_spsp_new_sva = 0
+            gaussELLgggg_ppsp_new_sva = 0
+            gaussELLgggg_pppp_new_sva = 0
+
+            gaussELLgggm_sssm_new_sva = 0
+            gaussELLgggm_sspm_new_sva = 0
+            gaussELLgggm_spsm_new_sva = 0
+            gaussELLgggm_sppm_new_sva = 0
+            gaussELLgggm_ppsm_new_sva = 0
+            gaussELLgggm_pppm_new_sva = 0
+
+            gaussELLggmm_ssmm_new_sva = 0
+            gaussELLggmm_spmm_new_sva = 0
+            gaussELLggmm_ppmm_new_sva = 0
+
+            gaussELLgmgm_smsm_new_sva = 0
+            gaussELLgmgm_smpm_new_sva = 0
+            gaussELLgmgm_pmsm_new_sva = 0
+            gaussELLgmgm_pmpm_new_sva = 0
+
+            gaussELLmmgm_mmsm_new_sva = 0
+            gaussELLmmgm_mmpm_new_sva = 0
+
+            gaussELLmmmm_mmmm_new_sva = 0
+
+
+            gaussELLgggg_ssss_new_mix = 0
+            gaussELLgggg_sssp_new_mix = 0
+            gaussELLgggg_sspp_new_mix = 0
+            gaussELLgggg_spsp_new_mix = 0
+            gaussELLgggg_ppsp_new_mix = 0
+            gaussELLgggg_pppp_new_mix = 0
+
+            gaussELLgggm_sssm_new_mix = 0
+            gaussELLgggm_sspm_new_mix = 0
+            gaussELLgggm_spsm_new_mix = 0
+            gaussELLgggm_sppm_new_mix = 0
+            gaussELLgggm_ppsm_new_mix = 0
+            gaussELLgggm_pppm_new_mix = 0
+
+            gaussELLggmm_ssmm_new_mix = 0
+            gaussELLggmm_spmm_new_mix = 0
+            gaussELLggmm_ppmm_new_mix = 0
+
+            gaussELLgmgm_smsm_new_mix = 0
+            gaussELLgmgm_smpm_new_mix = 0
+            gaussELLgmgm_pmsm_new_mix = 0
+            gaussELLgmgm_pmpm_new_mix = 0
+
+            gaussELLmmgm_mmsm_new_mix = 0
+            gaussELLmmgm_mmpm_new_mix = 0
+
+            gaussELLmmmm_mmmm_new_mix = 0
+
+
+            gaussELLgggg_ssss_new_sn = 0
+            gaussELLgggg_sssp_new_sn = 0
+            gaussELLgggg_sspp_new_sn = 0
+            gaussELLgggg_spsp_new_sn = 0
+            gaussELLgggg_ppsp_new_sn = 0
+            gaussELLgggg_pppp_new_sn = 0
+
+            gaussELLgggm_sssm_new_sn = 0
+            gaussELLgggm_sspm_new_sn = 0
+            gaussELLgggm_spsm_new_sn = 0
+            gaussELLgggm_sppm_new_sn = 0
+            gaussELLgggm_ppsm_new_sn = 0
+            gaussELLgggm_pppm_new_sn = 0
+
+            gaussELLggmm_ssmm_new_sn = 0
+            gaussELLggmm_spmm_new_sn = 0
+            gaussELLggmm_ppmm_new_sn = 0
+
+            gaussELLmmgm_mmsm_new_sn = 0
+            gaussELLmmgm_mmpm_new_sn = 0
+
+
+            gaussELLgmgm_smsm_new_sn = 0
+            gaussELLgmgm_smpm_new_sn = 0
+            gaussELLgmgm_pmsm_new_sn = 0
+            gaussELLgmgm_pmpm_new_sn = 0
+
+            gaussELLmmmm_mmmm_new_sn = 0
+
+            if self.gg:
+                gaussELLgggg_ssss_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sva,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_sssp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sva,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_sspp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sva,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_spsp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sva,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_ppsp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sva,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_pppp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sva,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                del gaussELLgggg_sva
+                gaussELLgggg_ssss_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_mix,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_sssp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_mix,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_sspp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_mix,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_spsp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_mix,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_ppsp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_mix,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_pppp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_mix,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                del gaussELLgggg_mix
+                gaussELLgggg_ssss_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sn,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_sssp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sn,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_sspp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sn,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_spsp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sn,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_ppsp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sn,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                gaussELLgggg_pppp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggg_sn,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'clust'
+                                                            )
+                del gaussELLgggg_sn
+
+            if self.gm and self.gg:
+                gaussELLgggm_sssm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_sva,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_sspm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_sva,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_spsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_sva,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_sppm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_sva,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_ppsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_sva,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_pppm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_sva,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                del gaussELLgggm_sva
+                gaussELLgggm_sssm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_mix,
+                                                            True,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_sspm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_mix,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_spsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_mix,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_sppm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_mix,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_ppsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_mix,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                gaussELLgggm_pppm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgggm_mix,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'ggl'
+                                                            )
+                del gaussELLgggm_mix
+            if self.mm and self.gg:
+                gaussELLggmm_ssmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLggmm_sva,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'lens'
+                                                            )
+                gaussELLggmm_spmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLggmm_sva,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'lens'
+                                                            )
+                gaussELLggmm_ppmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLggmm_sva,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'lens'
+                                                            )
+                del gaussELLggmm_sva
+                gaussELLggmm_ssmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLggmm_mix,
+                                                            True,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'lens'
+                                                            )
+                gaussELLggmm_spmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLggmm_mix,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'lens'
+                                                            )
+                gaussELLggmm_ppmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLggmm_mix,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'clust',
+                                                            'lens'
+                                                            )
+                del gaussELLggmm_mix
+            if self.gm:
+                gaussELLgmgm_smsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sva,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_smpm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sva,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_pmsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sva,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_pmpm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sva,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                del gaussELLgmgm_sva
+                gaussELLgmgm_smsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_mix,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_smpm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_mix,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_pmsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_mix,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_pmpm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_mix,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                del gaussELLgmgm_mix
+                gaussELLgmgm_smsm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sn,
+                                                            True,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_smpm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sn,
+                                                            True,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_pmsm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sn,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                gaussELLgmgm_pmpm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLgmgm_sn,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'ggl',
+                                                            'ggl'
+                                                            )
+                del gaussELLgmgm_sn
+            if self.mm and self.gm:
+                gaussELLmmgm_mmsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLmmgm_sva,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'lens',
+                                                            'ggl'
+                                                            )
+                gaussELLmmgm_mmpm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLmmgm_sva,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'lens',
+                                                            'ggl'
+                                                            )
+                del gaussELLmmgm_sva
+                gaussELLmmgm_mmsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLmmgm_mix,
+                                                            False,
+                                                            False,
+                                                            True,
+                                                            False,
+                                                            'lens',
+                                                            'ggl'
+                                                            )
+                gaussELLmmgm_mmpm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLmmgm_mix,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'lens',
+                                                            'ggl'
+                                                            )
+                del gaussELLmmgm_mix
+            if self.mm:
+                gaussELLmmmm_mmmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLmmmm_sva,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'lens',
+                                                            'lens'
+                                                            )
+                del gaussELLmmmm_sva
+                gaussELLmmmm_mmmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLmmmm_mix,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'lens',
+                                                            'lens'
+                                                            )
+                del gaussELLmmmm_mix
+                gaussELLmmmm_mmmm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
+                                                            gaussELLmmmm_sn,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            False,
+                                                            'lens',
+                                                            'lens'
+                                                            )
+                del gaussELLmmmm_sn
+            return gaussELLgggg_ssss_new_sva, gaussELLgggg_ssss_new_mix, gaussELLgggg_ssss_new_sn, \
+                   gaussELLgggg_sssp_new_sva, gaussELLgggg_sssp_new_mix, gaussELLgggg_sssp_new_sn, \
+                   gaussELLgggg_sspp_new_sva, gaussELLgggg_sspp_new_mix, gaussELLgggg_sspp_new_sn, \
+                   gaussELLgggg_spsp_new_sva, gaussELLgggg_spsp_new_mix, gaussELLgggg_spsp_new_sn, \
+                   gaussELLgggg_ppsp_new_sva, gaussELLgggg_ppsp_new_mix, gaussELLgggg_ppsp_new_sn, \
+                   gaussELLgggg_pppp_new_sva, gaussELLgggg_pppp_new_mix, gaussELLgggg_pppp_new_sn, \
+                   gaussELLgggm_sssm_new_sva, gaussELLgggm_sssm_new_mix, gaussELLgggm_sssm_new_sn, \
+                   gaussELLgggm_sspm_new_sva, gaussELLgggm_sspm_new_mix, gaussELLgggm_sspm_new_sn, \
+                   gaussELLgggm_spsm_new_sva, gaussELLgggm_spsm_new_mix, gaussELLgggm_spsm_new_sn, \
+                   gaussELLgggm_sppm_new_sva, gaussELLgggm_sppm_new_mix, gaussELLgggm_sppm_new_sn, \
+                   gaussELLgggm_ppsm_new_sva, gaussELLgggm_ppsm_new_mix, gaussELLgggm_ppsm_new_sn, \
+                   gaussELLgggm_pppm_new_sva, gaussELLgggm_pppm_new_mix, gaussELLgggm_pppm_new_sn, \
+                   gaussELLggmm_ssmm_new_sva, gaussELLggmm_ssmm_new_mix, gaussELLggmm_ssmm_new_sn, \
+                   gaussELLggmm_spmm_new_sva, gaussELLggmm_spmm_new_mix, gaussELLggmm_spmm_new_sn, \
+                   gaussELLggmm_ppmm_new_sva, gaussELLggmm_ppmm_new_mix, gaussELLggmm_ppmm_new_sn, \
+                   gaussELLgmgm_smsm_new_sva, gaussELLgmgm_smsm_new_mix, gaussELLgmgm_smsm_new_sn, \
+                   gaussELLgmgm_smpm_new_sva, gaussELLgmgm_smpm_new_mix, gaussELLgmgm_smpm_new_sn, \
+                   gaussELLgmgm_pmsm_new_sva, gaussELLgmgm_pmsm_new_mix, gaussELLgmgm_pmsm_new_sn, \
+                   gaussELLgmgm_pmpm_new_sva, gaussELLgmgm_pmpm_new_mix, gaussELLgmgm_pmpm_new_sn, \
+                   gaussELLmmgm_mmsm_new_sva, gaussELLmmgm_mmsm_new_mix, gaussELLmmgm_mmsm_new_sn,\
+                   gaussELLmmgm_mmpm_new_sva, gaussELLmmgm_mmpm_new_mix, gaussELLmmgm_mmpm_new_sn,\
+                   gaussELLmmmm_mmmm_new_sva, gaussELLmmmm_mmmm_new_mix, gaussELLmmmm_mmmm_new_sn
+        elif self.csmf:
+            return gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+                gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
+                gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn, \
+                cov_csmf_auto, cov_csmf_gg, cov_csmf_gm, cov_csmf_mm
         else:
-            if self.ellrange_spec is not None and calc_prefac:
-                gaussELLgggg_ssss_new_sva = 0
-                gaussELLgggg_sssp_new_sva = 0
-                gaussELLgggg_sspp_new_sva = 0
-                gaussELLgggg_spsp_new_sva = 0
-                gaussELLgggg_ppsp_new_sva = 0
-                gaussELLgggg_pppp_new_sva = 0
-
-                gaussELLgggm_sssm_new_sva = 0
-                gaussELLgggm_sspm_new_sva = 0
-                gaussELLgggm_spsm_new_sva = 0
-                gaussELLgggm_sppm_new_sva = 0
-                gaussELLgggm_ppsm_new_sva = 0
-                gaussELLgggm_pppm_new_sva = 0
-
-                gaussELLggmm_ssmm_new_sva = 0
-                gaussELLggmm_spmm_new_sva = 0
-                gaussELLggmm_ppmm_new_sva = 0
-
-                gaussELLgmgm_smsm_new_sva = 0
-                gaussELLgmgm_smpm_new_sva = 0
-                gaussELLgmgm_pmsm_new_sva = 0
-                gaussELLgmgm_pmpm_new_sva = 0
-
-                gaussELLmmgm_mmsm_new_sva = 0
-                gaussELLmmgm_mmpm_new_sva = 0
-
-                gaussELLmmmm_mmmm_new_sva = 0
-
-
-                gaussELLgggg_ssss_new_mix = 0
-                gaussELLgggg_sssp_new_mix = 0
-                gaussELLgggg_sspp_new_mix = 0
-                gaussELLgggg_spsp_new_mix = 0
-                gaussELLgggg_ppsp_new_mix = 0
-                gaussELLgggg_pppp_new_mix = 0
-
-                gaussELLgggm_sssm_new_mix = 0
-                gaussELLgggm_sspm_new_mix = 0
-                gaussELLgggm_spsm_new_mix = 0
-                gaussELLgggm_sppm_new_mix = 0
-                gaussELLgggm_ppsm_new_mix = 0
-                gaussELLgggm_pppm_new_mix = 0
-
-                gaussELLggmm_ssmm_new_mix = 0
-                gaussELLggmm_spmm_new_mix = 0
-                gaussELLggmm_ppmm_new_mix = 0
-
-                gaussELLgmgm_smsm_new_mix = 0
-                gaussELLgmgm_smpm_new_mix = 0
-                gaussELLgmgm_pmsm_new_mix = 0
-                gaussELLgmgm_pmpm_new_mix = 0
-
-                gaussELLmmgm_mmsm_new_mix = 0
-                gaussELLmmgm_mmpm_new_mix = 0
-
-                gaussELLmmmm_mmmm_new_mix = 0
-
-
-                gaussELLgggg_ssss_new_sn = 0
-                gaussELLgggg_sssp_new_sn = 0
-                gaussELLgggg_sspp_new_sn = 0
-                gaussELLgggg_spsp_new_sn = 0
-                gaussELLgggg_ppsp_new_sn = 0
-                gaussELLgggg_pppp_new_sn = 0
-
-                gaussELLgggm_sssm_new_sn = 0
-                gaussELLgggm_sspm_new_sn = 0
-                gaussELLgggm_spsm_new_sn = 0
-                gaussELLgggm_sppm_new_sn = 0
-                gaussELLgggm_ppsm_new_sn = 0
-                gaussELLgggm_pppm_new_sn = 0
-
-                gaussELLggmm_ssmm_new_sn = 0
-                gaussELLggmm_spmm_new_sn = 0
-                gaussELLggmm_ppmm_new_sn = 0
-
-                gaussELLmmgm_mmsm_new_sn = 0
-                gaussELLmmgm_mmpm_new_sn = 0
-
-
-                gaussELLgmgm_smsm_new_sn = 0
-                gaussELLgmgm_smpm_new_sn = 0
-                gaussELLgmgm_pmsm_new_sn = 0
-                gaussELLgmgm_pmpm_new_sn = 0
-
-                gaussELLmmmm_mmmm_new_sn = 0
-                
-                if self.gg:
-                    gaussELLgggg_ssss_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sva,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_sssp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sva,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_sspp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sva,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_spsp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sva,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_ppsp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sva,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_pppp_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sva,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    del gaussELLgggg_sva
-                    gaussELLgggg_ssss_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_mix,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_sssp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_mix,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_sspp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_mix,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_spsp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_mix,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_ppsp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_mix,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_pppp_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_mix,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    del gaussELLgggg_mix
-                    gaussELLgggg_ssss_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sn,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_sssp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sn,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_sspp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sn,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_spsp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sn,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_ppsp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sn,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    gaussELLgggg_pppp_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggg_sn,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'clust'
-                                                                )
-                    del gaussELLgggg_sn
-
-                if self.gm and self.gg:
-                    gaussELLgggm_sssm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_sva,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_sspm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_sva,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_spsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_sva,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_sppm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_sva,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_ppsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_sva,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_pppm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_sva,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    del gaussELLgggm_sva
-                    gaussELLgggm_sssm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_mix,
-                                                                True,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_sspm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_mix,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_spsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_mix,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_sppm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_mix,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_ppsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_mix,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    gaussELLgggm_pppm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgggm_mix,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'ggl'
-                                                                )
-                    del gaussELLgggm_mix
-                if self.mm and self.gg:
-                    gaussELLggmm_ssmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLggmm_sva,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'lens'
-                                                                )
-                    gaussELLggmm_spmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLggmm_sva,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'lens'
-                                                                )
-                    gaussELLggmm_ppmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLggmm_sva,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'lens'
-                                                                )
-                    del gaussELLggmm_sva
-                    gaussELLggmm_ssmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLggmm_mix,
-                                                                True,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'lens'
-                                                                )
-                    gaussELLggmm_spmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLggmm_mix,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'lens'
-                                                                )
-                    gaussELLggmm_ppmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLggmm_mix,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'clust',
-                                                                'lens'
-                                                                )
-                    del gaussELLggmm_mix
-                if self.gm:
-                    gaussELLgmgm_smsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sva,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_smpm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sva,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_pmsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sva,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_pmpm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sva,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    del gaussELLgmgm_sva
-                    gaussELLgmgm_smsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_mix,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_smpm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_mix,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_pmsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_mix,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_pmpm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_mix,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    del gaussELLgmgm_mix
-                    gaussELLgmgm_smsm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sn,
-                                                                True,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_smpm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sn,
-                                                                True,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_pmsm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sn,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    gaussELLgmgm_pmpm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLgmgm_sn,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'ggl',
-                                                                'ggl'
-                                                                )
-                    del gaussELLgmgm_sn
-                if self.mm and self.gm:
-                    gaussELLmmgm_mmsm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLmmgm_sva,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'lens',
-                                                                'ggl'
-                                                                )
-                    gaussELLmmgm_mmpm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLmmgm_sva,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'lens',
-                                                                'ggl'
-                                                                )
-                    del gaussELLmmgm_sva
-                    gaussELLmmgm_mmsm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLmmgm_mix,
-                                                                False,
-                                                                False,
-                                                                True,
-                                                                False,
-                                                                'lens',
-                                                                'ggl'
-                                                                )
-                    gaussELLmmgm_mmpm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLmmgm_mix,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'lens',
-                                                                'ggl'
-                                                                )
-                    del gaussELLmmgm_mix
-                if self.mm:
-                    gaussELLmmmm_mmmm_new_sva = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLmmmm_sva,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'lens',
-                                                                'lens'
-                                                                )
-                    del gaussELLmmmm_sva
-                    gaussELLmmmm_mmmm_new_mix = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLmmmm_mix,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'lens',
-                                                                'lens'
-                                                                )
-                    del gaussELLmmmm_mix
-                    gaussELLmmmm_mmmm_new_sn = self.__bin_Gaussian(covELLspacesettings,survey_params_dict,
-                                                                gaussELLmmmm_sn,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                False,
-                                                                'lens',
-                                                                'lens'
-                                                                )
-                    del gaussELLmmmm_sn
-                return gaussELLgggg_ssss_new_sva, gaussELLgggg_ssss_new_mix, gaussELLgggg_ssss_new_sn, \
-                       gaussELLgggg_sssp_new_sva, gaussELLgggg_sssp_new_mix, gaussELLgggg_sssp_new_sn, \
-                       gaussELLgggg_sspp_new_sva, gaussELLgggg_sspp_new_mix, gaussELLgggg_sspp_new_sn, \
-                       gaussELLgggg_spsp_new_sva, gaussELLgggg_spsp_new_mix, gaussELLgggg_spsp_new_sn, \
-                       gaussELLgggg_ppsp_new_sva, gaussELLgggg_ppsp_new_mix, gaussELLgggg_ppsp_new_sn, \
-                       gaussELLgggg_pppp_new_sva, gaussELLgggg_pppp_new_mix, gaussELLgggg_pppp_new_sn, \
-                       gaussELLgggm_sssm_new_sva, gaussELLgggm_sssm_new_mix, gaussELLgggm_sssm_new_sn, \
-                       gaussELLgggm_sspm_new_sva, gaussELLgggm_sspm_new_mix, gaussELLgggm_sspm_new_sn, \
-                       gaussELLgggm_spsm_new_sva, gaussELLgggm_spsm_new_mix, gaussELLgggm_spsm_new_sn, \
-                       gaussELLgggm_sppm_new_sva, gaussELLgggm_sppm_new_mix, gaussELLgggm_sppm_new_sn, \
-                       gaussELLgggm_ppsm_new_sva, gaussELLgggm_ppsm_new_mix, gaussELLgggm_ppsm_new_sn, \
-                       gaussELLgggm_pppm_new_sva, gaussELLgggm_pppm_new_mix, gaussELLgggm_pppm_new_sn, \
-                       gaussELLggmm_ssmm_new_sva, gaussELLggmm_ssmm_new_mix, gaussELLggmm_ssmm_new_sn, \
-                       gaussELLggmm_spmm_new_sva, gaussELLggmm_spmm_new_mix, gaussELLggmm_spmm_new_sn, \
-                       gaussELLggmm_ppmm_new_sva, gaussELLggmm_ppmm_new_mix, gaussELLggmm_ppmm_new_sn, \
-                       gaussELLgmgm_smsm_new_sva, gaussELLgmgm_smsm_new_mix, gaussELLgmgm_smsm_new_sn, \
-                       gaussELLgmgm_smpm_new_sva, gaussELLgmgm_smpm_new_mix, gaussELLgmgm_smpm_new_sn, \
-                       gaussELLgmgm_pmsm_new_sva, gaussELLgmgm_pmsm_new_mix, gaussELLgmgm_pmsm_new_sn, \
-                       gaussELLgmgm_pmpm_new_sva, gaussELLgmgm_pmpm_new_mix, gaussELLgmgm_pmpm_new_sn, \
-                       gaussELLmmgm_mmsm_new_sva, gaussELLmmgm_mmsm_new_mix, gaussELLmmgm_mmsm_new_sn,\
-                       gaussELLmmgm_mmpm_new_sva, gaussELLmmgm_mmpm_new_mix, gaussELLmmgm_mmpm_new_sn,\
-                       gaussELLmmmm_mmmm_new_sva, gaussELLmmmm_mmmm_new_mix, gaussELLmmmm_mmmm_new_sn
-            else:
-                if self.csmf:
-                    return gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
-                        gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
-                        gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
-                        gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
-                        gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
-                        gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn, \
-                        cov_csmf_auto, cov_csmf_gg, cov_csmf_gm, cov_csmf_mm
-                else:
-                    return gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
-                        gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
-                        gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
-                        gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
-                        gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
-                        gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn
+            return gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
+                gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
+                gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn, \
+                gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn, \
+                gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn, \
+                gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn
 
     def __covELL_split_gaussian(self,
                                 covELLspacesettings,
@@ -4873,7 +4850,7 @@ class CovELLSpace(PolySpectra):
                 prefac = prefac_noarea / max(survey_area[0], survey_area2[0])
         if prefac is not None:
             prefac = prefac[:, None, None, None, None, None, None] \
-                * np.ones(([len(self.ellrange)] + tomo_shape))
+                * np.ones([len(self.ellrange)] + tomo_shape)
         else:
             prefac = self.__calc_prefac6x2pt_covELL(prefac_noarea,
                                                     tomo_shape,
@@ -4886,7 +4863,7 @@ class CovELLSpace(PolySpectra):
                                   tomo_shape,
                                   survey_area,
                                   survey_area2):
-        prefac = np.zeros(([len(self.ellrange)] + tomo_shape))
+        prefac = np.zeros([len(self.ellrange)] + tomo_shape)
         prefac_noarea = prefac_noarea[:, None, None, None, None]
         t_sz = self.tomos_6x2pt_clust
         if survey_area2 is None:
@@ -4938,65 +4915,64 @@ class CovELLSpace(PolySpectra):
                 prefac[:, t_sz:, :, :t_sz, :] = prefac_sPpP
             else:
                 raise Exception("too stupid for 6x2pt, diagonal case")
+        # gggm combs from sssP to pppP (P fixed)
+        elif tomo_shape[0] == tomo_shape[1] and \
+           tomo_shape[0] == tomo_shape[2]:
+            # sssP
+            prefac_sssP = \
+                prefac_noarea / max(survey_area[0], survey_area2[0])
+            prefac[:, :t_sz, :t_sz, :t_sz, :] = prefac_sssP
+            # sspP
+            prefac_sspP = \
+                prefac_noarea / max(survey_area[0], survey_area2[1])
+            prefac[:, :t_sz, :t_sz, t_sz:, :] = prefac_sspP
+            # ppsP
+            prefac_ppsP = \
+                prefac_noarea / max(survey_area[1], survey_area2[0])
+            prefac[:, t_sz:, t_sz:, :t_sz, :] = prefac_ppsP
+            # pppP
+            prefac_pppP = \
+                prefac_noarea / max(survey_area[1], survey_area2[1])
+            prefac[:, t_sz:, t_sz:, t_sz:, :] = prefac_pppP
+            # spsP + spsP
+            prefac_spsP = \
+                prefac_noarea / max(survey_area[2], survey_area2[0])
+            prefac[:, :t_sz, t_sz:, :t_sz, :] = prefac_spsP
+            prefac[:, t_sz:, :t_sz, :t_sz, :] = prefac_spsP
+            # sppP + pspP
+            prefac_sppP = \
+                prefac_noarea / max(survey_area[2], survey_area2[1])
+            prefac[:, :t_sz, t_sz:, t_sz:, :] = prefac_sppP
+            prefac[:, t_sz:, :t_sz, t_sz:, :] = prefac_sppP
+        # ggmm combs from ssPP to ppPP (P fixed)
+        elif tomo_shape[0] == tomo_shape[1] and \
+                tomo_shape[2] == tomo_shape[3]:
+            # ssPP + PPss
+            prefac_ssPP = \
+                prefac_noarea / max(survey_area[0], survey_area2[0])
+            prefac[:, :t_sz, :t_sz, :, :] = prefac_ssPP
+            # ppPP + PPpp
+            prefac_ppPP = \
+                prefac_noarea / max(survey_area[1], survey_area2[0])
+            prefac[:, t_sz:, t_sz:, :, :] = prefac_ppPP
+            # spPP + psPP
+            prefac_spPP = \
+                prefac_noarea / max(survey_area[2], survey_area2[0])
+            prefac[:, :t_sz, t_sz:, :, :] = prefac_spPP
+            prefac[:, t_sz:, :t_sz, :, :] = prefac_spPP
+        # mmgm combs from PPsP to PPpP (P fixed)
+        elif tomo_shape[0] == tomo_shape[1] and \
+                tomo_shape[0] == tomo_shape[3]:
+            # PPsP
+            prefac_sPPP = \
+                prefac_noarea / max(survey_area[0], survey_area2[0])
+            prefac[:, :, :, :t_sz, :] = prefac_sPPP
+            # PPpP
+            prefac_pPPP = \
+                prefac_noarea / max(survey_area[0], survey_area2[1])
+            prefac[:, :, :, t_sz:, :] = prefac_pPPP
         else:
-            # gggm combs from sssP to pppP (P fixed)
-            if tomo_shape[0] == tomo_shape[1] and \
-               tomo_shape[0] == tomo_shape[2]:
-                # sssP
-                prefac_sssP = \
-                    prefac_noarea / max(survey_area[0], survey_area2[0])
-                prefac[:, :t_sz, :t_sz, :t_sz, :] = prefac_sssP
-                # sspP
-                prefac_sspP = \
-                    prefac_noarea / max(survey_area[0], survey_area2[1])
-                prefac[:, :t_sz, :t_sz, t_sz:, :] = prefac_sspP
-                # ppsP
-                prefac_ppsP = \
-                    prefac_noarea / max(survey_area[1], survey_area2[0])
-                prefac[:, t_sz:, t_sz:, :t_sz, :] = prefac_ppsP
-                # pppP
-                prefac_pppP = \
-                    prefac_noarea / max(survey_area[1], survey_area2[1])
-                prefac[:, t_sz:, t_sz:, t_sz:, :] = prefac_pppP
-                # spsP + spsP
-                prefac_spsP = \
-                    prefac_noarea / max(survey_area[2], survey_area2[0])
-                prefac[:, :t_sz, t_sz:, :t_sz, :] = prefac_spsP
-                prefac[:, t_sz:, :t_sz, :t_sz, :] = prefac_spsP
-                # sppP + pspP
-                prefac_sppP = \
-                    prefac_noarea / max(survey_area[2], survey_area2[1])
-                prefac[:, :t_sz, t_sz:, t_sz:, :] = prefac_sppP
-                prefac[:, t_sz:, :t_sz, t_sz:, :] = prefac_sppP
-            # ggmm combs from ssPP to ppPP (P fixed)
-            elif tomo_shape[0] == tomo_shape[1] and \
-                    tomo_shape[2] == tomo_shape[3]:
-                # ssPP + PPss
-                prefac_ssPP = \
-                    prefac_noarea / max(survey_area[0], survey_area2[0])
-                prefac[:, :t_sz, :t_sz, :, :] = prefac_ssPP
-                # ppPP + PPpp
-                prefac_ppPP = \
-                    prefac_noarea / max(survey_area[1], survey_area2[0])
-                prefac[:, t_sz:, t_sz:, :, :] = prefac_ppPP
-                # spPP + psPP
-                prefac_spPP = \
-                    prefac_noarea / max(survey_area[2], survey_area2[0])
-                prefac[:, :t_sz, t_sz:, :, :] = prefac_spPP
-                prefac[:, t_sz:, :t_sz, :, :] = prefac_spPP
-            # mmgm combs from PPsP to PPpP (P fixed)
-            elif tomo_shape[0] == tomo_shape[1] and \
-                    tomo_shape[0] == tomo_shape[3]:
-                # PPsP
-                prefac_sPPP = \
-                    prefac_noarea / max(survey_area[0], survey_area2[0])
-                prefac[:, :, :, :t_sz, :] = prefac_sPPP
-                # PPpP
-                prefac_pPPP = \
-                    prefac_noarea / max(survey_area[0], survey_area2[1])
-                prefac[:, :, :, t_sz:, :] = prefac_pPPP
-            else:
-                raise Exception("too stupid for 6x2pt, diagonal case")
+            raise Exception("too stupid for 6x2pt, diagonal case")
 
         return prefac
 
@@ -5100,13 +5076,11 @@ class CovELLSpace(PolySpectra):
         mmmm_z = []
 
         zet_list = []
-        if self.num_cores > 16:
-            self.num_cores = 16
+        self.num_cores = min(self.num_cores, 16)
         while zet < self.zet_max:
             zet = self.zet_min + \
                 covELLspacesettings['tri_delta_z']*idx_z
-            if zet > self.zet_max:
-                zet = self.zet_max
+            zet = min(zet, self.zet_max)
             if (idx_z == 0):
                 chi_list.append(self.los_integration_chi[0])
             else:
@@ -6025,10 +5999,8 @@ class CovELLSpace(PolySpectra):
                                 for l_tomo in range(self.n_tomo_lens):
                                     chi_low = self.chi_min_clust[k_tomo]
                                     chi_high = self.chi_max_clust[k_tomo]
-                                    if chi_low < self.los_integration_chi[0]:
-                                        chi_low = self.los_integration_chi[0]
-                                    if chi_high > self.los_integration_chi[-1]:
-                                        chi_high = self.los_integration_chi[-1]
+                                    chi_low = max(chi_low, self.los_integration_chi[0])
+                                    chi_high = min(chi_high, self.los_integration_chi[-1])
                                     if chi_low >= chi_high:
                                         continue
                                     weight = 1.0/self.los_integration_chi**6.0 * \
@@ -6139,7 +6111,7 @@ class CovELLSpace(PolySpectra):
                     flat_idx +=1
             power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
         
-        survey_variance_mmmm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+        survey_variance_mmmm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust'][0]**2/self.deg2torad2**2)
         survey_variance_mmmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
         result = np.zeros((len(self.log10csmf_mass_bins), len(self.log10csmf_mass_bins), self.n_tomo_csmf, self.n_tomo_csmf))
@@ -6152,7 +6124,7 @@ class CovELLSpace(PolySpectra):
                 for i_mass in range(len(self.log10csmf_mass_bins)):
                     for j_mass in range(i_mass, len(self.log10csmf_mass_bins)):
                         phi_tilde_sq = self.phi_tilde_spline[i_mass](los_integration_chi_update)*self.phi_tilde_spline[j_mass](los_integration_chi_update)
-                        result[i_mass, j_mass, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*10**self.log10csmf_mass_bins[j_mass]*np.log(10)*survey_params_dict['survey_area_clust']**2/self.deg2torad2**2*self.f_tomo[i_tomo]*self.f_tomo[j_tomo]/self.Vmax[i_mass, i_tomo]/self.Vmax[j_mass, j_tomo]*simpson(integrand*phi_tilde_sq, x = los_integration_chi_update)
+                        result[i_mass, j_mass, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*10**self.log10csmf_mass_bins[j_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]**2/self.deg2torad2**2*self.f_tomo[i_tomo]*self.f_tomo[j_tomo]/self.Vmax[i_mass, i_tomo]/self.Vmax[j_mass, j_tomo]*simpson(integrand*phi_tilde_sq, x = los_integration_chi_update)
                         result[i_mass, j_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
                         result[j_mass, i_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
                         result[j_mass, i_mass, i_tomo, j_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
@@ -6191,10 +6163,8 @@ class CovELLSpace(PolySpectra):
                                     self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
                                 if chi_low >= chi_high:
                                     continue
-                                if chi_low < self.los_integration_chi[0]:
-                                    chi_low = self.los_integration_chi[0]
-                                if chi_high > self.los_integration_chi[-1]:
-                                    chi_high = self.los_integration_chi[-1]
+                                chi_low = max(chi_low, self.los_integration_chi[0])
+                                chi_high = min(chi_high, self.los_integration_chi[-1])
                                 los_integration_chi_update = self.__get_updated_los_integration_chi(
                                     chi_low, chi_high, covELLspacesettings)
                                 los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
@@ -6223,10 +6193,8 @@ class CovELLSpace(PolySpectra):
                             for j_tomo in range(self.n_tomo_lens):
                                 chi_low = self.chi_min_clust[i_tomo]
                                 chi_high = self.chi_max_clust[i_tomo]
-                                if chi_low < self.los_integration_chi[0]:
-                                    chi_low = self.los_integration_chi[0]
-                                if chi_high > self.los_integration_chi[-1]:
-                                    chi_high = self.los_integration_chi[-1]
+                                chi_low = max(chi_low, self.los_integration_chi[0])
+                                chi_high = min(chi_high, self.los_integration_chi[-1])
                                 los_integration_chi_update = self.__get_updated_los_integration_chi(
                                     chi_low, chi_high, covELLspacesettings)
                                 los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
@@ -6309,7 +6277,7 @@ class CovELLSpace(PolySpectra):
                             x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                             flat_idx +=1
                     power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust']**2/self.deg2torad2**2)
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust'][0]**2/self.deg2torad2**2)
                 survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
                 for i_mass in range(len(self.log10csmf_mass_bins)):
                     for i_smf_tomo in range(self.n_tomo_csmf):
@@ -6321,10 +6289,8 @@ class CovELLSpace(PolySpectra):
                                     self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
                                 if chi_low >= chi_high:
                                     continue
-                                if chi_low < self.los_integration_chi[0]:
-                                    chi_low = self.los_integration_chi[0]
-                                if chi_high > self.los_integration_chi[-1]:
-                                    chi_high = self.los_integration_chi[-1]
+                                chi_low = max(chi_low, self.los_integration_chi[0])
+                                chi_high = min(chi_high, self.los_integration_chi[-1])
                                 los_integration_chi_update = self.__get_updated_los_integration_chi(
                                     chi_low, chi_high, covELLspacesettings)
                                 los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
@@ -6340,7 +6306,7 @@ class CovELLSpace(PolySpectra):
                                         flat_idx +=1
                                 for i_sample in range(self.sample_dim):
                                     spline_eval = self.spline_responsePgg[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gg = 0
 
@@ -6359,7 +6325,7 @@ class CovELLSpace(PolySpectra):
                             x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                             flat_idx +=1
                     power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_ggl']**2/self.deg2torad2**2)
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_ggl'][0]**2/self.deg2torad2**2)
                 survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
 
                 for i_mass in range(len(self.log10csmf_mass_bins)):
@@ -6370,10 +6336,8 @@ class CovELLSpace(PolySpectra):
                                 chi_high =self.chi_max_clust[i_tomo]
                                 if chi_low >= chi_high:
                                     continue
-                                if chi_low < self.los_integration_chi[0]:
-                                    chi_low = self.los_integration_chi[0]
-                                if chi_high > self.los_integration_chi[-1]:
-                                    chi_high = self.los_integration_chi[-1]
+                                chi_low = max(chi_low, self.los_integration_chi[0])
+                                chi_high = min(chi_high, self.los_integration_chi[-1])
                                 los_integration_chi_update = self.__get_updated_los_integration_chi(
                                     chi_low, chi_high, covELLspacesettings)
                                 los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
@@ -6389,7 +6353,7 @@ class CovELLSpace(PolySpectra):
                                         flat_idx +=1
                                 for i_sample in range(self.sample_dim):
                                     spline_eval = self.spline_responsePgm[i_sample]((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gm = 0
 
@@ -6408,7 +6372,7 @@ class CovELLSpace(PolySpectra):
                             x_values[1,flat_idx] = (ell[i_ell] + .5)/self.los_integration_chi[i_chi]
                             flat_idx +=1
                     power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens']**2/self.deg2torad2**2)
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens'][0]**2/self.deg2torad2**2)
                 survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
 
                 for i_mass in range(len(self.log10csmf_mass_bins)):
@@ -6429,7 +6393,7 @@ class CovELLSpace(PolySpectra):
                                         x_values[0,flat_idx] = ki
                                         flat_idx +=1
                                 spline_eval = np.exp(self.spline_responsePmm((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust']/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
         else:
             covELL_smf_cross_mm = 0        
         return covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm
@@ -6526,8 +6490,7 @@ class CovELLSpace(PolySpectra):
         while zet < self.zet_max:
             zet = self.zet_min + \
                 covELLspacesettings['tri_delta_z']*idx_z
-            if zet > self.zet_max:
-                zet = self.zet_max
+            zet = min(zet, self.zet_max)
             if (idx_z == 0):
                 chi_list.append(self.los_integration_chi[0])
             else:

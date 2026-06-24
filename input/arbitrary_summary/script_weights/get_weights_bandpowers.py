@@ -1,8 +1,9 @@
+import argparse
+import time
+
+import levin
 import numpy as np
 from scipy.special import jv
-import time
-import levin
-import argparse
 
 
 def main():
@@ -213,11 +214,10 @@ def main():
             x = log_theta_bins[i_theta]
             if x < xlo + delta_ln_theta/2.0:
                 T_of_theta[i_theta] = np.cos(np.pi/2.*((x - (xlo + delta_ln_theta/2.))/delta_ln_theta))**2.0
+            elif x >= xlo + delta_ln_theta/2.0 and x < xup - delta_ln_theta/2.0: 
+                T_of_theta[i_theta] = 1.0
             else:
-                if x >= xlo + delta_ln_theta/2.0 and x < xup - delta_ln_theta/2.0: 
-                    T_of_theta[i_theta] = 1.0
-                else:
-                    T_of_theta[i_theta] = np.cos(np.pi/2.*((x - (xup - delta_ln_theta/2.))/delta_ln_theta))**2.0
+                T_of_theta[i_theta] = np.cos(np.pi/2.*((x - (xup - delta_ln_theta/2.))/delta_ln_theta))**2.0
         return T_of_theta    
 
     def get_gpm(ell_bins,ell_ul_bins, thetabins, T_of_theta, Norm, type):

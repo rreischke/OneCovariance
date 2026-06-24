@@ -1,18 +1,7 @@
-import numpy as np
-from mpmath import mp
-import mpmath
-from scipy.interpolate import interp1d
-import multiprocessing as mpi
-from scipy import pi,sqrt,exp
-from scipy.special import p_roots
-from numpy.polynomial.legendre import legcompanion, legval, legder
-import numpy.linalg as la
-from scipy import integrate
-from scipy.special import eval_legendre
-import sys
-from argparse import ArgumentParser
 import os
+from argparse import ArgumentParser
 
+import numpy as np
 
 parser = ArgumentParser(description='Map XIpm to COSEBIs')
 parser.add_argument('--covariance', dest='covariance', type=str, required=True, help="File containing Xipm covariance")

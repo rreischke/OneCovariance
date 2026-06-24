@@ -1,11 +1,11 @@
+import ctypes as ct
 import sys
+
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-from scipy.signal import correlate
-import ctypes as ct
 from numpy.ctypeslib import ndpointer
-
+from scipy.signal import correlate
 
 try:
     from onecov.cov_discrete_utils import *

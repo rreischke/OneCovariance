@@ -1,6 +1,7 @@
+import argparse
+
 import numpy as np
 from scipy.special import jv
-import argparse
 
 
 def main():

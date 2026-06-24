@@ -1,10 +1,10 @@
-import numpy as np
 import configparser
-import glob
-from os import walk, path
+import os
+from os import path, walk
+
+import numpy as np
 from astropy.io import ascii, fits
 from scipy.interpolate import interp1d
-import os
 
 
 class Input:
@@ -531,7 +531,7 @@ class Input:
             if 'csmf_log10M_bins' in config['csmf settings']:
                 self.csmf_log10M_bins = np.array(config['csmf settings']['csmf_log10M_bins'].split(',')).astype(float)
             if 'csmf_log10M_bins_upper' in config['csmf settings']:
-                if not 'csmf_log10M_bins_lower' in config['csmf settings']:
+                if 'csmf_log10M_bins_lower' not in config['csmf settings']:
                     print("ConfigWarning: You have specified 'csmf_log10M_bins_upper' " +
                             "in section [csmf settings] in config file " + config_name + ". However, " +
                             "you did not specify csmf_log10M_bins_lower." +
@@ -784,13 +784,12 @@ class Input:
             if self.nglimber is None:
                 self.nglimber = True
             
-            else:
-                if self.pixel_Nside is None and self.pixelised_cell:
-                    raise Exception("ConfigError: C_ells are required to be pixelised " +
-                                "but 'pixelised_cell = True', however Nside is not set in " +
-                                "specified. Must be adjusted in config file " +
-                                config_name + ", specifiy e.g. [covELLspace settings]: 'pixel_Nside = " +
-                                "2048")
+            elif self.pixel_Nside is None and self.pixelised_cell:
+                raise Exception("ConfigError: C_ells are required to be pixelised " +
+                            "but 'pixelised_cell = True', however Nside is not set in " +
+                            "specified. Must be adjusted in config file " +
+                            config_name + ", specifiy e.g. [covELLspace settings]: 'pixel_Nside = " +
+                            "2048")
 
             if self.cosmicshear:
                 if self.ell_min_lensing is not None:
@@ -882,19 +881,13 @@ class Input:
                     print("ConfigWarning: The binning type for photometric x spectroscopic ell bins " +
                         "[covELLspace settings]: 'ell_photo_type' is set to 'log'.")
 
-                if self.ell_spec_min < self.ell_min:
-                    self.ell_min = self.ell_spec_min
-                if self.ell_spec_photo_min < self.ell_min:
-                    self.ell_min = self.ell_spec_photo_min
-                if self.ell_photo_min < self.ell_min:
-                    self.ell_min = self.ell_photo_min
+                self.ell_min = min(self.ell_min, self.ell_spec_min)
+                self.ell_min = min(self.ell_min, self.ell_spec_photo_min)
+                self.ell_min = min(self.ell_min, self.ell_photo_min)
                 
-                if self.ell_photo_max > self.ell_max:
-                    self.ell_max = self.ell_photo_max
-                if self.ell_spec_photo_max > self.ell_max:
-                    self.ell_max = self.ell_spec_photo_max
-                if self.ell_photo_max > self.ell_max:
-                    self.ell_max = self.ell_photo_max
+                self.ell_max = max(self.ell_max, self.ell_photo_max)
+                self.ell_max = max(self.ell_max, self.ell_spec_photo_max)
+                self.ell_max = max(self.ell_max, self.ell_photo_max)
 
             if self.delta_z is None:
                 self.delta_z = 0.02
@@ -929,17 +922,13 @@ class Input:
         if self.ell_type is None:
             self.ell_type = 'log'
         if self.cosmicshear and self.est_shear == 'C_ell' and (self.ell_min_lensing is not None and self.ell_bins_lensing is not None and self.ell_max_lensing is not None and self.ell_type_lensing is not None):
-            if self.ell_min > self.ell_min_lensing:
-                self.ell_min = self.ell_min_lensing
-            if self.ell_max < self.ell_max_lensing:
-                self.ell_max = self.ell_max_lensing
+            self.ell_min = min(self.ell_min, self.ell_min_lensing)
+            self.ell_max = max(self.ell_max, self.ell_max_lensing)
             self.ell_bins = 100
             self.ell_type = 'log'
         if ((self.ggl and self.est_ggl == 'C_ell') or (self.clustering and self.est_clust == 'C_ell')) and (self.ell_min_clustering is not None and self.ell_bins_clustering is not None and self.ell_max_clustering is not None and self.ell_type_clustering is not None):
-            if self.ell_min > self.ell_min_clustering:
-                self.ell_min = self.ell_min_clustering
-            if self.ell_max < self.ell_max_clustering:
-                self.ell_max = self.ell_max_clustering
+            self.ell_min = min(self.ell_min, self.ell_min_clustering)
+            self.ell_max = max(self.ell_max, self.ell_max_clustering)
             self.ell_bins = 100
             self.ell_type = 'log'
 
@@ -1108,10 +1097,9 @@ class Input:
                 else:
                     print("ConfigWarning: You want to save the triplets for the mixterm for", self.mix_term_do_mix_for, "but did not specify a path to save. Will not be saved")
                     self.mix_term_file_path_save_triplets = None
-        else:
-            if self.cosmicshear and self.est_shear == 'xi_pm':
-                self.xi_pp = True
-                self.xi_mm = True
+        elif self.cosmicshear and self.est_shear == 'xi_pm':
+            self.xi_pp = True
+            self.xi_mm = True
         
         if self.limber is None:
             self.limber = True
@@ -1369,17 +1357,16 @@ class Input:
             if 'dimensionless_cosebi' in config['covCOSEBI settings']:
                 self.dimensionless_cosebi = \
                     config['covCOSEBI settings'].getboolean('dimensionless_cosebi')
-        else:
-            if self.cosmicshear and self.est_shear == 'cosebi':
-                self.En_acc = 1e-4
-                print("The precision for the En calculation is not " +
-                      "specified in '[covCOSEBI settings]: 'En_accuracy'. It " +
-                      "is set to '1e-4'.")
-                self.Wn_style = 'log'
-                print("The COSEBIs will be based on logarithmic kernel " +
-                      "functions. Can be specified in " +
-                      "'[covCOSEBI settings]: 'Wn_style'. It is set to 'log'.")
-                self.Wn_acc = 1e-6
+        elif self.cosmicshear and self.est_shear == 'cosebi':
+            self.En_acc = 1e-4
+            print("The precision for the En calculation is not " +
+                  "specified in '[covCOSEBI settings]: 'En_accuracy'. It " +
+                  "is set to '1e-4'.")
+            self.Wn_style = 'log'
+            print("The COSEBIs will be based on logarithmic kernel " +
+                  "functions. Can be specified in " +
+                  "'[covCOSEBI settings]: 'Wn_style'. It is set to 'log'.")
+            self.Wn_acc = 1e-6
 
         if self.cosmicshear and self.est_shear == 'cosebi' and not self.do_arbitrary_obs:
             if self.En_modes is None:
@@ -2283,16 +2270,15 @@ class Input:
                                     config['bias']['log10mass_bins'] + "' to numpy " +
                                     "array. Must be adjusted in config file " +
                                     config_name + ".")
+            elif 'log10mass_bins_upper' and 'log10mass_bins_lower' in config['bias']:
+                self.logmass_bins_lower = \
+                    np.array(config['bias']['log10mass_bins_lower'].split(',')).astype(float)
+                self.logmass_bins_upper = \
+                    np.array(config['bias']['log10mass_bins_upper'].split(',')).astype(float)
+                self.sampledim = len(self.logmass_bins_upper)
+
             else:
-                if 'log10mass_bins_upper' and 'log10mass_bins_lower' in config['bias']:
-                    self.logmass_bins_lower = \
-                        np.array(config['bias']['log10mass_bins_lower'].split(',')).astype(float)
-                    self.logmass_bins_upper = \
-                        np.array(config['bias']['log10mass_bins_upper'].split(',')).astype(float)
-                    self.sampledim = len(self.logmass_bins_upper)
-                    
-                else:
-                    self.sampledim = 1
+                self.sampledim = 1
             if self.logmass_bins is not None and len(self.logmass_bins) == 1:
                 raise Exception("ConfigError: Only one value is given for " +
                                 "[bias]: 'log10mass_bins' but at least two values must "
@@ -3047,22 +3033,20 @@ class Input:
                     #                "clustering area are missing. Either provide a " +
                     #                "[survey specs]: 'mask_file_clust' or " +
                     #                "[survey specs]: 'alm_file_clust'.")
-            else:
-                if self.survey_area_clust is None:
-                    if self.mask_file_clust is not None:
-                        self.read_mask_clust = True
-                    else:
-                        raise Exception("ConfigError: The survey area for " +
-                                        "the clustering measurements is missing. Either " +
-                                        "provide a [survey specs]: 'mask_file_clust' or " +
-                                        "[survey specs]: 'survey_area_clust_in_deg2'.")
+            elif self.survey_area_clust is None:
+                if self.mask_file_clust is not None:
+                    self.read_mask_clust = True
                 else:
-                    if self.mask_file_clust is not None:
-                        fn = [path.join(self.mask_dir, mfile)
-                              for mfile in self.mask_file_clust]
-                        print("Omitting clustering mask file " +
-                              ', '.join(map(str, fn)) + " since [survey " +
-                              "specs]: 'survey_area_clust_in_deg2' is given.")
+                    raise Exception("ConfigError: The survey area for " +
+                                    "the clustering measurements is missing. Either " +
+                                    "provide a [survey specs]: 'mask_file_clust' or " +
+                                    "[survey specs]: 'survey_area_clust_in_deg2'.")
+            elif self.mask_file_clust is not None:
+                fn = [path.join(self.mask_dir, mfile)
+                      for mfile in self.mask_file_clust]
+                print("Omitting clustering mask file " +
+                      ', '.join(map(str, fn)) + " since [survey " +
+                      "specs]: 'survey_area_clust_in_deg2' is given.")
 
         self.read_mask_ggl = False
         self.read_alm_ggl = False
@@ -3091,23 +3075,21 @@ class Input:
                     #                "galaxy-galaxy lensing area are missing. Either " +
                     #                "provide a [survey specs]: 'mask_file_ggl' or " +
                     #                "[survey specs]: 'alm_file_ggl'.")
-            else:
-                if self.survey_area_ggl is None:
-                    if self.mask_file_ggl is not None:
-                        self.read_mask_ggl = True
-                    else:
-                        raise Exception("ConfigError: The survey area for " +
-                                        "the galaxy-galaxy lensing measurements is " +
-                                        "missing. Either provide a [survey specs]: " +
-                                        "'mask_file_ggl' or [survey specs]: " +
-                                        "'survey_area_ggl_in_deg2'.")
+            elif self.survey_area_ggl is None:
+                if self.mask_file_ggl is not None:
+                    self.read_mask_ggl = True
                 else:
-                    if self.mask_file_ggl is not None:
-                        fn = [path.join(self.mask_dir, mfile)
-                              for mfile in self.mask_file_ggl]
-                        print("Omitting galaxy-galaxy lensing mask file " +
-                              ', '.join(map(str, fn)) + " since [survey " +
-                              "specs]: 'survey_area_ggl_in_deg2' is given.")
+                    raise Exception("ConfigError: The survey area for " +
+                                    "the galaxy-galaxy lensing measurements is " +
+                                    "missing. Either provide a [survey specs]: " +
+                                    "'mask_file_ggl' or [survey specs]: " +
+                                    "'survey_area_ggl_in_deg2'.")
+            elif self.mask_file_ggl is not None:
+                fn = [path.join(self.mask_dir, mfile)
+                      for mfile in self.mask_file_ggl]
+                print("Omitting galaxy-galaxy lensing mask file " +
+                      ', '.join(map(str, fn)) + " since [survey " +
+                      "specs]: 'survey_area_ggl_in_deg2' is given.")
 
         self.read_mask_lens = False
         self.read_alm_lens = False
@@ -3134,24 +3116,22 @@ class Input:
                     #                "the lensing area are missing. Either provide a " +
                     #                "[survey specs]: 'mask_file_lensing' or " +
                     #                "[survey specs]: 'alm_file_lensing'.")
-            else:
-                if self.survey_area_lens is None:
-                    if self.mask_file_lens is not None:
-                        self.read_mask_lens = True
-                    else:
-                        raise Exception("ConfigError: The survey area for " +
-                                        "the lensing measurements is missing. Either " +
-                                        "provide a [survey specs]: 'mask_file_lensing' " +
-                                        "or [survey specs]: " +
-                                        "'survey_area_lensing_in_deg2'.")
+            elif self.survey_area_lens is None:
+                if self.mask_file_lens is not None:
+                    self.read_mask_lens = True
                 else:
-                    if self.mask_file_lens is not None:
-                        fn = [path.join(self.mask_dir, mfile)
-                              for mfile in self.mask_file_lens]
-                        print("Omitting lensing mask file " +
-                              ', '.join(map(str, fn)) + " since [survey " +
-                              "specs]: 'survey_area_lensing_in_deg2' is " +
-                              "given.")
+                    raise Exception("ConfigError: The survey area for " +
+                                    "the lensing measurements is missing. Either " +
+                                    "provide a [survey specs]: 'mask_file_lensing' " +
+                                    "or [survey specs]: " +
+                                    "'survey_area_lensing_in_deg2'.")
+            elif self.mask_file_lens is not None:
+                fn = [path.join(self.mask_dir, mfile)
+                      for mfile in self.mask_file_lens]
+                print("Omitting lensing mask file " +
+                      ', '.join(map(str, fn)) + " since [survey " +
+                      "specs]: 'survey_area_lensing_in_deg2' is " +
+                      "given.")
 
         # logical order of how it is called later on gg -> mm -> gm
         '''
@@ -3191,9 +3171,9 @@ class Input:
                        self.alm_file_clust is not None and \
                        self.alm_file_clust != self.alm_file_lens:
                         self.read_alm_clust_lens = True
-                    #elif self.mask_file_clust is not None and \
-                    #        self.mask_file_clust != self.mask_file_lens:
-                    #    self.read_mask_clust_lens = True
+                    elif self.mask_file_clust is not None and \
+                            self.mask_file_clust != self.mask_file_lens:
+                        self.read_mask_clust_lens = True
                     if not self.read_alm_clust_lens and \
                             self.alm_file_clust_lens is not None:
                         fn = [path.join(self.mask_dir, afile)
@@ -3208,9 +3188,9 @@ class Input:
                     if self.alm_file_clust_ggl is not None and \
                        self.alm_file_clust != self.alm_file_ggl:
                         self.read_alm_clust_ggl = True
-                    #elif self.mask_file_clust is not None and \
-                    #        self.mask_file_clust != self.mask_file_ggl:
-                    #    self.read_mask_clust_ggl = True
+                    elif self.mask_file_clust is not None and \
+                            self.mask_file_clust != self.mask_file_ggl:
+                        self.read_mask_clust_ggl = True
                     if not self.read_alm_clust_ggl and \
                             self.alm_file_clust_ggl is not None:
                         fn = [path.join(self.mask_dir, afile)
@@ -3338,14 +3318,13 @@ class Input:
             if 'small_k_damping_for1h' in config['halomodel evaluation']:
                 self.small_k_damping = \
                     config['halomodel evaluation']['small_k_damping_for1h']
-            else:
-                if config['powspec evaluation']['non_linear_model'] != \
-                        'mead2015':
-                    self.small_k_damping = 'damped'
-                    print("The suppression of power for the 1-halo term on " +
-                          "large scales / small wavenumbers [halomodel " +
-                          "evaluation]: 'small_k_damping_for1h' is set to " +
-                          "'damped'.")
+            elif config['powspec evaluation']['non_linear_model'] != \
+                    'mead2015':
+                self.small_k_damping = 'damped'
+                print("The suppression of power for the 1-halo term on " +
+                      "large scales / small wavenumbers [halomodel " +
+                      "evaluation]: 'small_k_damping_for1h' is set to " +
+                      "'damped'.")
         else:
             self.M_bins = 500
             print("The number of mass bins [halomodel evaluation]: 'M_bins' " +
@@ -3542,8 +3521,7 @@ class Input:
                                     "unexpected behaviour.")
             else:
                 self.tri_logk_min = -4
-                if self.tri_logk_min < self.log10k_min:
-                    self.tri_logk_min = self.log10k_min
+                self.tri_logk_min = max(self.tri_logk_min, self.log10k_min)
                 print("The minimum logarithmic10 wavenumber [trispec " +
                       "evaluation]: 'log10k_min' is set to " +
                       str(self.tri_logk_min) + ".")
@@ -3560,8 +3538,7 @@ class Input:
                                     "to unexpected behaviour.")
             else:
                 self.tri_logk_max = 2
-                if self.tri_logk_max > self.log10k_max:
-                    self.tri_logk_max = self.log10k_max
+                self.tri_logk_max = min(self.tri_logk_max, self.log10k_max)
                 print("The maximum logarithmic10 wavenumber [trispec " +
                       "evaluation]: 'log10k_max' is set to " +
                       str(self.tri_logk_max) + ".")
@@ -3593,14 +3570,12 @@ class Input:
                   "'log10k_bins' is set to " +
                   str(self.tri_logk_bins) + ".")
             self.tri_logk_min = -4
-            if self.tri_logk_min < self.log10k_min:
-                self.tri_logk_min = self.log10k_min
+            self.tri_logk_min = max(self.tri_logk_min, self.log10k_min)
             print("The minimum logarithmic10 wavenumber [trispec " +
                   "evaluation]: 'log10k_min' is set to " +
                   str(self.tri_logk_min) + ".")
             self.tri_logk_max = 2
-            if self.tri_logk_max > self.log10k_max:
-                self.tri_logk_max = self.log10k_max
+            self.tri_logk_max = min(self.tri_logk_max, self.log10k_max)
             print("The maximum logarithmic10 wavenumber [trispec " +
                   "evaluation]: 'log10k_max' is set to " +
                   str(self.tri_logk_max) + ".")
@@ -4890,12 +4865,11 @@ class FileInput:
                                 "distributions for lensing have been specified. Must " +
                                 "be adjusted in config file " + config_name + ", " +
                                 "[redshift]: 'zlens_file = ...' (separated by comma/s).")
-        else:
-            if '.fits' in self.zet_lens_file and self.zet_lens_ext is None:
-                raise Exception("ConfigError: A fits zlens_file is " +
-                                "specified for the redshift distribution which requires " +
-                                "the name of the extension where to find the n(z). " +
-                                "Please adjust '[redshift]: zlens_extension = ' to go on.")
+        elif '.fits' in self.zet_lens_file and self.zet_lens_ext is None:
+            raise Exception("ConfigError: A fits zlens_file is " +
+                            "specified for the redshift distribution which requires " +
+                            "the name of the extension where to find the n(z). " +
+                            "Please adjust '[redshift]: zlens_extension = ' to go on.")
         if self.zet_csmf_file is None:
             if self.cstellar_mf:
                 raise Exception("ConfigError: No file(s) with redshift " +
@@ -7302,114 +7276,113 @@ class FileInput:
 
         if not self.do_arbitrary_radial_weight:
             return False
-        else:
-            if 'tabulated inputs files' in config:
-                if 'arb_radial_weight_directory' in config['tabulated inputs files']:
-                    self.arbitrary_radial_weight_dir = \
-                        config['tabulated inputs files']['arb_radial_weight_directory']
-                elif 'input_directory' in config['tabulated inputs files']:
-                    self.arbitrary_radial_weight_dir = \
-                        config['tabulated inputs files']['input_directory']
+        elif 'tabulated inputs files' in config:
+            if 'arb_radial_weight_directory' in config['tabulated inputs files']:
+                self.arbitrary_radial_weight_dir = \
+                    config['tabulated inputs files']['arb_radial_weight_directory']
+            elif 'input_directory' in config['tabulated inputs files']:
+                self.arbitrary_radial_weight_dir = \
+                    config['tabulated inputs files']['input_directory']
+            else:
+                self.arbitrary_radial_weight_dir = ''
+            if self.clustering:
+                if 'arb_radial_filter_gg_file' in config['tabulated inputs files']:
+                    self.arb_radial_weight_gg_file =(config['tabulated inputs files']
+                                                        ['arb_radial_filter_gg_file'].replace(" ", "")).split(',')
+                    self.arb_radial_weight_gg_file_save = np.copy(self.arb_radial_weight_gg_file)
                 else:
-                    self.arbitrary_radial_weight_dir = ''
-                if self.clustering:
-                    if 'arb_radial_filter_gg_file' in config['tabulated inputs files']:
-                        self.arb_radial_weight_gg_file =(config['tabulated inputs files']
-                                                            ['arb_radial_filter_gg_file'].replace(" ", "")).split(',')
-                        self.arb_radial_weight_gg_file_save = np.copy(self.arb_radial_weight_gg_file)
-                    else:
-                        raise Exception("ConfigError: To use the arbitrary radial weights for clustering, " +
-                                        "files for the corresponding weight must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_radial_filter_gg_file")
+                    raise Exception("ConfigError: To use the arbitrary radial weights for clustering, " +
+                                    "files for the corresponding weight must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_radial_filter_gg_file")
 
-                if self.cosmicshear:
-                    if 'arb_radial_filter_mm_file' in config['tabulated inputs files']:
-                        self.arb_radial_weight_mm_file =(config['tabulated inputs files']
-                                                            ['arb_radial_filter_mm_file'].replace(" ", "")).split(',')
-                        self.arb_radial_weight_mm_file_save = np.copy(self.arb_radial_weight_mm_file)
-                    else:
-                        raise Exception("ConfigError: To use the arbitrary radial weights for cosmic shear, " +
-                                        "files for the corresponding weight must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_radial_filter_mm_file")
-
-                if self.clustering:
-                    aux_arb_file = []
-                    start_index = 0
-                    end_index = 0
-                    self.arb_radial_weight_gg_file = self.arb_radial_weight_gg_file[0]
-                    if '?' in self.arb_radial_weight_gg_file:
-                        last_slash_index = self.arb_radial_weight_gg_file.rfind('/')
-                        _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_gg_file[:last_slash_index + 1]))
-                        file_id = self.arb_radial_weight_gg_file[:self.arb_radial_weight_gg_file.find('?')]
-                        aux_dir = self.arb_radial_weight_gg_file[:last_slash_index + 1]
-                        self.arb_radial_weight_number_gg = len(sorted([fstr for fstr in filenames
-                                                                    if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr]))
-                        if self.add_to_galaxy:
-                            self.n_tomo_clust += self.arb_radial_weight_number_gg
-                        else:
-                            self.n_tomo_clust = self.arb_radial_weight_number_gg
-                        for i_files in range(self.arb_radial_weight_number_gg):
-                            aux_arb_file.append(None)
-                            end_index += 1
-                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                    if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr])
-                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                        for i_files in range(self.arb_radial_weight_number_gg):
-                            start_index += 1
-                        self.arb_radial_weight_gg_file = aux_arb_file
-                        self.wz_gg = []
-                        if len(self.arb_radial_weight_gg_file) == 0:
-                            raise Exception("ConfigError: galaxy clustering requested but the radial weight files, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_radial_weight_gg_file:
-                            z, wz = self.__read_in_radial_weight_files(wfile)
-                            self.wz_gg.append(wz)
-                        self.z_gg = z
-
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary radial weights for clustering in the desired format")
-           
+            if self.cosmicshear:
+                if 'arb_radial_filter_mm_file' in config['tabulated inputs files']:
+                    self.arb_radial_weight_mm_file =(config['tabulated inputs files']
+                                                        ['arb_radial_filter_mm_file'].replace(" ", "")).split(',')
+                    self.arb_radial_weight_mm_file_save = np.copy(self.arb_radial_weight_mm_file)
                 else:
-                    self.wz_gg, self.z_gg = None, None
+                    raise Exception("ConfigError: To use the arbitrary radial weights for cosmic shear, " +
+                                    "files for the corresponding weight must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_radial_filter_mm_file")
 
-                if self.cosmicshear:
-                    aux_arb_file = []
-                    start_index = 0
-                    end_index = 0
-                    self.arb_radial_weight_mm_file = self.arb_radial_weight_mm_file[0]
-                    if '?' in self.arb_radial_weight_mm_file:
-                        last_slash_index = self.arb_radial_weight_mm_file.rfind('/')
-                        _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_mm_file[:last_slash_index + 1]))
-                        file_id = self.arb_radial_weight_mm_file[:self.arb_radial_weight_mm_file.find('?')]
-                        aux_dir = self.arb_radial_weight_mm_file[:last_slash_index + 1]
-                        self.arb_radial_weight_number_mm = len(sorted([fstr for fstr in filenames
-                                                                    if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr]))
-                        if self.add_to_matter:
-                            self.n_tomo_lens += self.arb_radial_weight_number_mm
-                        else:
-                            self.n_tomo_lens = self.arb_radial_weight_number_mm
-                        for i_files in range(self.arb_radial_weight_number_mm):
-                            aux_arb_file.append(None)
-                            end_index += 1
-                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                    if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr])
-                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                        for i_files in range(self.arb_radial_weight_number_mm):
-                            start_index += 1
-                        self.arb_radial_weight_mm_file = aux_arb_file
-                        self.wz_mm = []
-                        if len(self.arb_radial_weight_mm_file) == 0:
-                            raise Exception("ConfigError: cosmic shear requested but the radial weight files, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_radial_weight_mm_file:
-                            z, wz = self.__read_in_radial_weight_files(wfile)
-                            self.wz_mm.append(wz)
-                        self.z_mm = z
+            if self.clustering:
+                aux_arb_file = []
+                start_index = 0
+                end_index = 0
+                self.arb_radial_weight_gg_file = self.arb_radial_weight_gg_file[0]
+                if '?' in self.arb_radial_weight_gg_file:
+                    last_slash_index = self.arb_radial_weight_gg_file.rfind('/')
+                    _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_gg_file[:last_slash_index + 1]))
+                    file_id = self.arb_radial_weight_gg_file[:self.arb_radial_weight_gg_file.find('?')]
+                    aux_dir = self.arb_radial_weight_gg_file[:last_slash_index + 1]
+                    self.arb_radial_weight_number_gg = len(sorted([fstr for fstr in filenames
+                                                                if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr]))
+                    if self.add_to_galaxy:
+                        self.n_tomo_clust += self.arb_radial_weight_number_gg
                     else:
-                        raise Exception("ConfigError: Please pass the arbitrary radial weights for cosmic shear in the desired format")
-           
+                        self.n_tomo_clust = self.arb_radial_weight_number_gg
+                    for i_files in range(self.arb_radial_weight_number_gg):
+                        aux_arb_file.append(None)
+                        end_index += 1
+                    aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr])
+                    for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                        aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                    for i_files in range(self.arb_radial_weight_number_gg):
+                        start_index += 1
+                    self.arb_radial_weight_gg_file = aux_arb_file
+                    self.wz_gg = []
+                    if len(self.arb_radial_weight_gg_file) == 0:
+                        raise Exception("ConfigError: galaxy clustering requested but the radial weight files, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_radial_weight_gg_file:
+                        z, wz = self.__read_in_radial_weight_files(wfile)
+                        self.wz_gg.append(wz)
+                    self.z_gg = z
+
                 else:
-                    self.wz_mm, self.z_mm = None, None
+                    raise Exception("ConfigError: Please pass the arbitrary radial weights for clustering in the desired format")
+
+            else:
+                self.wz_gg, self.z_gg = None, None
+
+            if self.cosmicshear:
+                aux_arb_file = []
+                start_index = 0
+                end_index = 0
+                self.arb_radial_weight_mm_file = self.arb_radial_weight_mm_file[0]
+                if '?' in self.arb_radial_weight_mm_file:
+                    last_slash_index = self.arb_radial_weight_mm_file.rfind('/')
+                    _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_mm_file[:last_slash_index + 1]))
+                    file_id = self.arb_radial_weight_mm_file[:self.arb_radial_weight_mm_file.find('?')]
+                    aux_dir = self.arb_radial_weight_mm_file[:last_slash_index + 1]
+                    self.arb_radial_weight_number_mm = len(sorted([fstr for fstr in filenames
+                                                                if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr]))
+                    if self.add_to_matter:
+                        self.n_tomo_lens += self.arb_radial_weight_number_mm
+                    else:
+                        self.n_tomo_lens = self.arb_radial_weight_number_mm
+                    for i_files in range(self.arb_radial_weight_number_mm):
+                        aux_arb_file.append(None)
+                        end_index += 1
+                    aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr])
+                    for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                        aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                    for i_files in range(self.arb_radial_weight_number_mm):
+                        start_index += 1
+                    self.arb_radial_weight_mm_file = aux_arb_file
+                    self.wz_mm = []
+                    if len(self.arb_radial_weight_mm_file) == 0:
+                        raise Exception("ConfigError: cosmic shear requested but the radial weight files, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_radial_weight_mm_file:
+                        z, wz = self.__read_in_radial_weight_files(wfile)
+                        self.wz_mm.append(wz)
+                    self.z_mm = z
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary radial weights for cosmic shear in the desired format")
+
+            else:
+                self.wz_mm, self.z_mm = None, None
 
     def __get_arbitrary_filter_tabs(self,
                                     config):
@@ -7428,423 +7401,422 @@ class FileInput:
         """
         if not self.do_arbitrary_obs:
             return False
-        else:
-            if 'tabulated inputs files' in config:
-                if 'arb_summary_directory' in config['tabulated inputs files']:
-                    self.arbitrary_summary_dir = \
-                        config['tabulated inputs files']['arb_summary_directory']
-                elif 'input_directory' in config['tabulated inputs files']:
-                    self.arbitrary_summary_dir = \
-                        config['tabulated inputs files']['input_directory']
+        elif 'tabulated inputs files' in config:
+            if 'arb_summary_directory' in config['tabulated inputs files']:
+                self.arbitrary_summary_dir = \
+                    config['tabulated inputs files']['arb_summary_directory']
+            elif 'input_directory' in config['tabulated inputs files']:
+                self.arbitrary_summary_dir = \
+                    config['tabulated inputs files']['input_directory']
+            else:
+                self.arbitrary_summary_dir = ''
+            if self.clustering:
+                if 'arb_fourier_filter_gg_file' in config['tabulated inputs files']:
+                    self.arb_fourier_filter_gg_file =(config['tabulated inputs files']
+                                                        ['arb_fourier_filter_gg_file'].replace(" ", "")).split(',')
+                    self.arb_fourier_filter_gg_file_save = np.copy(self.arb_fourier_filter_gg_file)
+                    self.arb_number_summary_gg = len(self.arb_fourier_filter_gg_file)
+                    if len(self.arb_fourier_filter_gg_file) > 2:
+                        raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for clustering " +
+                                    "Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file")
                 else:
-                    self.arbitrary_summary_dir = ''
-                if self.clustering:
-                    if 'arb_fourier_filter_gg_file' in config['tabulated inputs files']:
-                        self.arb_fourier_filter_gg_file =(config['tabulated inputs files']
-                                                            ['arb_fourier_filter_gg_file'].replace(" ", "")).split(',')
-                        self.arb_fourier_filter_gg_file_save = np.copy(self.arb_fourier_filter_gg_file)
-                        self.arb_number_summary_gg = len(self.arb_fourier_filter_gg_file)
-                        if len(self.arb_fourier_filter_gg_file) > 2:
-                            raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for clustering " +
-                                        "Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file")
-                    else:
-                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for clustering, " +
-                                        "files for the corresponding fourier filter must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file")
-                    if 'arb_real_filter_gg_file' in config['tabulated inputs files']:
-                        self.arb_real_filter_gg_file =(config['tabulated inputs files']
-                                                            ['arb_real_filter_gg_file'].replace(" ", "")).split(',')
-                        self.arb_real_filter_gg_file_save = np.copy(self.arb_real_filter_gg_file)
-                        if self.arb_number_summary_gg != len(self.arb_real_filter_gg_file):
-                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of clustering " +
-                                        "Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file and arb_real_filter_gg_file.")
-                    else:
-                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for clustering, " +
-                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_real_filter_gg_file") 
-                if self.ggl:
-                    if 'arb_fourier_filter_gm_file' in config['tabulated inputs files']:
-                        self.arb_fourier_filter_gm_file =(config['tabulated inputs files']
-                                                            ['arb_fourier_filter_gm_file'].replace(" ", "")).split(',')
-                        self.arb_fourier_filter_gm_file_save = np.copy(self.arb_fourier_filter_gm_file)
-                        self.arb_number_summary_gm = len(self.arb_fourier_filter_gm_file)
-                        if len(self.arb_fourier_filter_gm_file) > 2:
-                            raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
-                                        "Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file")
-                    else:
-                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for GGL, " +
-                                        "files for the corresponding fourier filter must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file")
-                    if 'arb_real_filter_gm_file' in config['tabulated inputs files']:
-                        self.arb_real_filter_gm_file =(config['tabulated inputs files']
-                                                            ['arb_real_filter_gm_file'].replace(" ", "")).split(',')
-                        self.arb_real_filter_gm_file_save = np.copy(self.arb_real_filter_gm_file)
-                        if self.arb_number_summary_gm != len(self.arb_real_filter_gm_file):
-                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of GGL " +
-                                        "Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file and arb_real_filter_gm_file.")
-                    else:
-                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for GGL, " +
-                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_real_filter_gm_file")
-                if self.cosmicshear:
-                    if 'arb_fourier_filter_mmE_file' in config['tabulated inputs files']:
-                        self.arb_fourier_filter_mmE_file =(config['tabulated inputs files']
-                                                            ['arb_fourier_filter_mmE_file'].replace(" ", "")).split(',')
-                        self.arb_fourier_filter_mmE_file_save = np.copy(self.arb_fourier_filter_mmE_file)
-                        self.arb_number_summary_mm = len(self.arb_fourier_filter_mmE_file)
-                        if len(self.arb_fourier_filter_mmE_file) > 2:
-                            raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
+                    raise Exception("ConfigError: To calculate the arbitrary summary statistics for clustering, " +
+                                    "files for the corresponding fourier filter must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file")
+                if 'arb_real_filter_gg_file' in config['tabulated inputs files']:
+                    self.arb_real_filter_gg_file =(config['tabulated inputs files']
+                                                        ['arb_real_filter_gg_file'].replace(" ", "")).split(',')
+                    self.arb_real_filter_gg_file_save = np.copy(self.arb_real_filter_gg_file)
+                    if self.arb_number_summary_gg != len(self.arb_real_filter_gg_file):
+                        raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of clustering " +
+                                    "Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_gg_file and arb_real_filter_gg_file.")
+                else:
+                    raise Exception("ConfigError: To calculate the arbitrary summary statistics for clustering, " +
+                                    "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_real_filter_gg_file") 
+            if self.ggl:
+                if 'arb_fourier_filter_gm_file' in config['tabulated inputs files']:
+                    self.arb_fourier_filter_gm_file =(config['tabulated inputs files']
+                                                        ['arb_fourier_filter_gm_file'].replace(" ", "")).split(',')
+                    self.arb_fourier_filter_gm_file_save = np.copy(self.arb_fourier_filter_gm_file)
+                    self.arb_number_summary_gm = len(self.arb_fourier_filter_gm_file)
+                    if len(self.arb_fourier_filter_gm_file) > 2:
+                        raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
+                                    "Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file")
+                else:
+                    raise Exception("ConfigError: To calculate the arbitrary summary statistics for GGL, " +
+                                    "files for the corresponding fourier filter must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file")
+                if 'arb_real_filter_gm_file' in config['tabulated inputs files']:
+                    self.arb_real_filter_gm_file =(config['tabulated inputs files']
+                                                        ['arb_real_filter_gm_file'].replace(" ", "")).split(',')
+                    self.arb_real_filter_gm_file_save = np.copy(self.arb_real_filter_gm_file)
+                    if self.arb_number_summary_gm != len(self.arb_real_filter_gm_file):
+                        raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of GGL " +
+                                    "Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_gm_file and arb_real_filter_gm_file.")
+                else:
+                    raise Exception("ConfigError: To calculate the arbitrary summary statistics for GGL, " +
+                                    "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_real_filter_gm_file")
+            if self.cosmicshear:
+                if 'arb_fourier_filter_mmE_file' in config['tabulated inputs files']:
+                    self.arb_fourier_filter_mmE_file =(config['tabulated inputs files']
+                                                        ['arb_fourier_filter_mmE_file'].replace(" ", "")).split(',')
+                    self.arb_fourier_filter_mmE_file_save = np.copy(self.arb_fourier_filter_mmE_file)
+                    self.arb_number_summary_mm = len(self.arb_fourier_filter_mmE_file)
+                    if len(self.arb_fourier_filter_mmE_file) > 2:
+                        raise Exception("ConfigError: You are passing more than two arbitrary summary statistics for GGL " +
+                                    "Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and/or arb_fourier_filter_mmB_file")
+                else:
+                    raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
+                                    "files for the corresponding fourier filter must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file")
+                if 'arb_fourier_filter_mmB_file' in config['tabulated inputs files']:
+                    self.arb_fourier_filter_mmB_file =(config['tabulated inputs files']
+                                                        ['arb_fourier_filter_mmB_file'].replace(" ", "")).split(',')
+                    self.arb_fourier_filter_mmB_file_save = np.copy(self.arb_fourier_filter_mmB_file)
+                    self.arb_fourier_filter_no_B = [False, False]
+                    for i in range(self.arb_number_summary_mm):
+                        if self.arb_fourier_filter_mmB_file[i] == self.arb_fourier_filter_mmE_file[i]:
+                            self.arb_fourier_filter_no_B[i] = True
+                    if self.arb_number_summary_mm != len(self.arb_fourier_filter_mmB_file):
+                        raise Exception("ConfigError: You are passing more B mode filters than E mode filters to the arbitrary summary statistics for lensing " +
                                         "Please adjust in" +
                                         "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and/or arb_fourier_filter_mmB_file")
-                    else:
-                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
-                                        "files for the corresponding fourier filter must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file")
-                    if 'arb_fourier_filter_mmB_file' in config['tabulated inputs files']:
-                        self.arb_fourier_filter_mmB_file =(config['tabulated inputs files']
-                                                            ['arb_fourier_filter_mmB_file'].replace(" ", "")).split(',')
-                        self.arb_fourier_filter_mmB_file_save = np.copy(self.arb_fourier_filter_mmB_file)
-                        self.arb_fourier_filter_no_B = [False, False]
-                        for i in range(self.arb_number_summary_mm):
-                            if self.arb_fourier_filter_mmB_file[i] == self.arb_fourier_filter_mmE_file[i]:
-                                self.arb_fourier_filter_no_B[i] = True
-                        if self.arb_number_summary_mm != len(self.arb_fourier_filter_mmB_file):
-                            raise Exception("ConfigError: You are passing more B mode filters than E mode filters to the arbitrary summary statistics for lensing " +
-                                            "Please adjust in" +
-                                            "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and/or arb_fourier_filter_mmB_file")
-                    else:
-                        self.arb_fourier_filter_mmB_file = self.arb_fourier_filter_mmE_file
-                        print("ConfigWarning: No B-mode Fourier filter file has been passed for lensing, setting this partto zero")
-                    
-                    if 'arb_real_filter_mm_p_file' in config['tabulated inputs files']:
-                        self.arb_real_filter_mm_p_file =(config['tabulated inputs files']
-                                                            ['arb_real_filter_mm_p_file'].replace(" ", "")).split(',')
-                        self.arb_real_filter_mm_p_file_save = np.copy(self.arb_real_filter_mm_p_file)
-                        if self.arb_number_summary_mm != len(self.arb_real_filter_mm_p_file):
-                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
-                                        "Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and arb_real_filter_mm_p_file.")
-                    else:
-                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
-                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_real_filter_mm_p_file")
-                    if 'arb_real_filter_mm_m_file' in config['tabulated inputs files']:
-                        self.arb_real_filter_mm_m_file =(config['tabulated inputs files']
-                                                            ['arb_real_filter_mm_m_file'].replace(" ", "")).split(',')
-                        self.arb_real_filter_mm_m_file_save = np.copy(self.arb_real_filter_mm_m_file)
-                        if self.arb_number_summary_mm != len(self.arb_real_filter_mm_m_file):
-                            raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
-                                        "Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and arb_real_filter_mm_m_file.")
-                    else:
-                        raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
-                                        "files for the corresponding Real space filter must be provided. Please adjust in" +
-                                        "the config file under [tabulated inputs files] and arb_real_filter_mm_m_file") 
-                if self.clustering:
-                    self.gg_summary_name = []
-                    if '?' in self.arb_fourier_filter_gg_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_gg):
-                            last_slash_index = self.arb_fourier_filter_gg_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_gg_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_fourier_filter_gg_file[i][:self.arb_fourier_filter_gg_file[i].find('?')]
-                            aux_dir = self.arb_fourier_filter_gg_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_gg_file[i][:last_slash_index + 1] + fstr]))
-                            if i == 0:
-                                self.arb_number_first_summary_gg = number_files
-                            self.gg_summary_name.append(file_id)
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_gg_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_fourier_filter_gg_file = aux_arb_file
-                        self.WL_gg, self.WL_ell_gg = [], []
-                        if len(self.arb_fourier_filter_gg_file) == 0:
-                            raise Exception("ConfigError: galaxy clustering requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_fourier_filter_gg_file:
-                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
-                            self.WL_ell_gg.append(wn_ell)
-                            self.WL_gg.append(wn)
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for clustering in the desired format")
                 else:
-                    self.WL_gg, self.WL_ell_gg = None, None
-                if self.clustering:
-                    if '?' in self.arb_real_filter_gg_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_gg):
-                            last_slash_index = self.arb_real_filter_gg_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_gg_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_real_filter_gg_file[i][:self.arb_real_filter_gg_file[i].find('?')]
-                            aux_dir = self.arb_real_filter_gg_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_gg_file[i][:last_slash_index + 1] + fstr]))
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
+                    self.arb_fourier_filter_mmB_file = self.arb_fourier_filter_mmE_file
+                    print("ConfigWarning: No B-mode Fourier filter file has been passed for lensing, setting this partto zero")
 
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_gg_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_real_filter_gg_file = aux_arb_file
-                        self.RL_gg, self.RL_theta_gg = [], []
-                        if len(self.arb_real_filter_gg_file) == 0:
-                            raise Exception("ConfigError: galaxy clustering requested but the Real Filter files for the w-mode have not been found, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_real_filter_gg_file:
-                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
-                            self.RL_theta_gg.append(wn_ell)
-                            self.RL_gg.append(wn)
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary real space filters for clustering in the desired format")
+                if 'arb_real_filter_mm_p_file' in config['tabulated inputs files']:
+                    self.arb_real_filter_mm_p_file =(config['tabulated inputs files']
+                                                        ['arb_real_filter_mm_p_file'].replace(" ", "")).split(',')
+                    self.arb_real_filter_mm_p_file_save = np.copy(self.arb_real_filter_mm_p_file)
+                    if self.arb_number_summary_mm != len(self.arb_real_filter_mm_p_file):
+                        raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
+                                    "Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and arb_real_filter_mm_p_file.")
                 else:
-                    self.RL_gg, self.RL_theta_gg = None, None
-                if self.ggl:
-                    self.gm_summary_name = []
-                    if '?' in self.arb_fourier_filter_gm_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_gm):
-                            last_slash_index = self.arb_fourier_filter_gm_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_gm_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_fourier_filter_gm_file[i][:self.arb_fourier_filter_gm_file[i].find('?')]
-                            aux_dir = self.arb_fourier_filter_gm_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_gm_file[i][:last_slash_index + 1] + fstr]))
-                            self.gm_summary_name.append(file_id)
-                            if i == 0:
-                                self.arb_number_first_summary_gm = number_files
-                            
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
-
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_gm_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_fourier_filter_gm_file = aux_arb_file
-                        self.WL_gm, self.WL_ell_gm = [], []
-                        if len(self.arb_fourier_filter_gm_file) == 0:
-                            raise Exception("ConfigError: GGL requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_fourier_filter_gm_file:
-                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
-                            self.WL_ell_gm.append(wn_ell)
-                            self.WL_gm.append(wn)
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for GGL in the desired format")
+                    raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
+                                    "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_real_filter_mm_p_file")
+                if 'arb_real_filter_mm_m_file' in config['tabulated inputs files']:
+                    self.arb_real_filter_mm_m_file =(config['tabulated inputs files']
+                                                        ['arb_real_filter_mm_m_file'].replace(" ", "")).split(',')
+                    self.arb_real_filter_mm_m_file_save = np.copy(self.arb_real_filter_mm_m_file)
+                    if self.arb_number_summary_mm != len(self.arb_real_filter_mm_m_file):
+                        raise Exception("ConfigError: You are passing more real space filters than Fourier filters for arbitrary summary statistics of lensing " +
+                                    "Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and arb_real_filter_mm_m_file.")
                 else:
-                    self.WL_gm, self.WL_ell_gm = None, None
-                if self.ggl:
-                    if '?' in self.arb_real_filter_gm_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_gm):
-                            last_slash_index = self.arb_real_filter_gm_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_gm_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_real_filter_gm_file[i][:self.arb_real_filter_gm_file[i].find('?')]
-                            aux_dir = self.arb_real_filter_gm_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_gm_file[i][:last_slash_index + 1] + fstr]))
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
-
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_gm_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_real_filter_gm_file = aux_arb_file
-                        self.RL_gm, self.RL_theta_gm = [], []
-                        if len(self.arb_real_filter_gm_file) == 0:
-                            raise Exception("ConfigError: GGL requested but the Real Filter files for the gt-mode have not been found, please check the path in " + str(self.config_name))   
-                        for wfile in self.arb_real_filter_gm_file:
-                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
-                            self.RL_theta_gm.append(wn_ell)
-                            self.RL_gm.append(wn)
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary real space filters for GGL in the desired format")
+                    raise Exception("ConfigError: To calculate the arbitrary summary statistics for lensing, " +
+                                    "files for the corresponding Real space filter must be provided. Please adjust in" +
+                                    "the config file under [tabulated inputs files] and arb_real_filter_mm_m_file") 
+            if self.clustering:
+                self.gg_summary_name = []
+                if '?' in self.arb_fourier_filter_gg_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_gg):
+                        last_slash_index = self.arb_fourier_filter_gg_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_gg_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_fourier_filter_gg_file[i][:self.arb_fourier_filter_gg_file[i].find('?')]
+                        aux_dir = self.arb_fourier_filter_gg_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_gg_file[i][:last_slash_index + 1] + fstr]))
+                        if i == 0:
+                            self.arb_number_first_summary_gg = number_files
+                        self.gg_summary_name.append(file_id)
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_gg_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_fourier_filter_gg_file = aux_arb_file
+                    self.WL_gg, self.WL_ell_gg = [], []
+                    if len(self.arb_fourier_filter_gg_file) == 0:
+                        raise Exception("ConfigError: galaxy clustering requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_fourier_filter_gg_file:
+                        wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                        self.WL_ell_gg.append(wn_ell)
+                        self.WL_gg.append(wn)
                 else:
-                    self.RL_gm, self.RL_theta_gm = None, None
-                if self.cosmicshear:
-                    self.mmE_summary_name = []
-                    self.mmB_summary_name = []
-                    if '?' in self.arb_fourier_filter_mmE_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_mm):
-                            last_slash_index = self.arb_fourier_filter_mmE_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_fourier_filter_mmE_file[i][:self.arb_fourier_filter_mmE_file[i].find('?')]
-                            aux_dir = self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1] + fstr]))          
-                            self.mmE_summary_name.append(file_id)
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
-
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_fourier_filter_mmE_file = aux_arb_file
-                        self.WL_mmE, self.WL_ell_mmE = [], []
-                        if len(self.arb_fourier_filter_mmE_file) == 0:
-                            raise Exception("ConfigError: Cosmic Shear requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_fourier_filter_mmE_file:
-                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
-                            self.WL_ell_mmE.append(wn_ell)
-                            self.WL_mmE.append(wn)
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for lensing in the desired format")
-                else:
-                    self.WL_mmE, self.WL_ell_mmE = None, None
-                if self.cosmicshear:
-                    if '?' in self.arb_fourier_filter_mmB_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_mm):
-                            last_slash_index = self.arb_fourier_filter_mmB_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_fourier_filter_mmB_file[i][:self.arb_fourier_filter_mmB_file[i].find('?')]
-                            aux_dir = self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1] + fstr]))
-                            if i == 0:
-                                self.arb_number_first_summary_mm = number_files
-                            self.mmB_summary_name.append(file_id)
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
-
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_fourier_filter_mmB_file = aux_arb_file
-                        self.WL_mmB, self.WL_ell_mmB = [], []
-                        i_counter = 0
-                        if len(self.arb_fourier_filter_mmB_file) == 0:
-                            raise Exception("ConfigError: Cosmic Shear requested but the Fourier Filter files for the B-mode have not been found, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_fourier_filter_mmB_file:
-                            if i_counter < self.arb_number_first_summary_mm:
-                                i = 0
-                            else:
-                                i = 1
-                            wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
-                            self.WL_ell_mmB.append(wn_ell)
-                            if self.arb_fourier_filter_no_B[i]:
-                                self.WL_mmB.append(np.zeros_like(wn))
-                            else:
-                                self.WL_mmB.append(wn)
-                            i_counter += 1
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary Fourier filters for lensing in the desired format")
-                else:
-                    self.WL_mmB, self.WL_ell_mmB = None, None
-                if self.cosmicshear:
-                    if '?' in self.arb_real_filter_mm_p_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_mm):
-                            last_slash_index = self.arb_real_filter_mm_p_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_mm_p_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_real_filter_mm_p_file[i][:self.arb_real_filter_mm_p_file[i].find('?')]
-                            aux_dir = self.arb_real_filter_mm_p_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_mm_p_file[i][:last_slash_index + 1] + fstr]))
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
-
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_mm_p_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_real_filter_mm_p_file = aux_arb_file
-                        self.RL_mm_p, self.RL_theta_mm_p = [], []
-                        if len(self.arb_real_filter_mm_p_file) == 0:
-                            raise Exception("ConfigError: Cosmic Shear requested but the Real Filter files for the +-mode have not been found, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_real_filter_mm_p_file:
-                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
-                            self.RL_theta_mm_p.append(wn_ell)
-                            self.RL_mm_p.append(wn)
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary real space filters for lensing in the desired format")
-                else:
-                    self.RL_mm_p, self.RL_theta_mm_p = None, None
-                if self.cosmicshear:
-                    if '?' in self.arb_real_filter_mm_m_file[0]:
-                        aux_arb_file = []
-                        start_index = 0
-                        end_index = 0
-                        for i in range(self.arb_number_summary_mm):
-                            last_slash_index = self.arb_real_filter_mm_m_file[i].rfind('/')
-                            _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_mm_m_file[i][:last_slash_index + 1]))
-                            file_id = self.arb_real_filter_mm_m_file[i][:self.arb_real_filter_mm_m_file[i].find('?')]
-                            aux_dir = self.arb_real_filter_mm_m_file[i][:last_slash_index + 1]
-                            number_files = len(sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_mm_m_file[i][:last_slash_index + 1] + fstr]))
-                            for i_files in range(number_files):
-                                aux_arb_file.append(None)
-                                end_index += 1
-
-                            aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                        if file_id in self.arb_real_filter_mm_m_file[i][:last_slash_index + 1] + fstr])
-                            for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                                aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-
-                            for i_files in range(number_files):
-                                start_index += 1
-                        self.arb_real_filter_mm_m_file = aux_arb_file
-                        self.RL_mm_m, self.RL_theta_mm_m = [], []
-                        if len(self.arb_real_filter_mm_m_file) == 0:
-                            raise Exception("ConfigError: Cosmic Shear requested but the Real Filter files for the --mode have not been found, please check the path in " + str(self.config_name))
-                        for wfile in self.arb_real_filter_mm_m_file:
-                            wn_ell, wn = self.__read_in_real_filter_files(wfile)
-                            self.RL_theta_mm_m.append(wn_ell)
-                            self.RL_mm_m.append(wn)
-                    else:
-                        raise Exception("ConfigError: Please pass the arbitrary real space filters for lensing in the desired format")
-                else:
-                    self.RL_mm_m, self.RL_theta_mm_m = None, None
+                    raise Exception("ConfigError: Please pass the arbitrary Fourier filters for clustering in the desired format")
             else:
-                raise Exception("ConfigError: To calculate the arbitrary summary statistics " +
-                                "covariance for the Filter functions in fourier and real space must be provided in " +
-                                "external table. Must be included in [tabulated inputs " +
-                                "files] as 'arb_fourier_filter_gg_file' etc. to go on.")
+                self.WL_gg, self.WL_ell_gg = None, None
+            if self.clustering:
+                if '?' in self.arb_real_filter_gg_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_gg):
+                        last_slash_index = self.arb_real_filter_gg_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_gg_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_real_filter_gg_file[i][:self.arb_real_filter_gg_file[i].find('?')]
+                        aux_dir = self.arb_real_filter_gg_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_gg_file[i][:last_slash_index + 1] + fstr]))
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_gg_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_real_filter_gg_file = aux_arb_file
+                    self.RL_gg, self.RL_theta_gg = [], []
+                    if len(self.arb_real_filter_gg_file) == 0:
+                        raise Exception("ConfigError: galaxy clustering requested but the Real Filter files for the w-mode have not been found, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_real_filter_gg_file:
+                        wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                        self.RL_theta_gg.append(wn_ell)
+                        self.RL_gg.append(wn)
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary real space filters for clustering in the desired format")
+            else:
+                self.RL_gg, self.RL_theta_gg = None, None
+            if self.ggl:
+                self.gm_summary_name = []
+                if '?' in self.arb_fourier_filter_gm_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_gm):
+                        last_slash_index = self.arb_fourier_filter_gm_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_gm_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_fourier_filter_gm_file[i][:self.arb_fourier_filter_gm_file[i].find('?')]
+                        aux_dir = self.arb_fourier_filter_gm_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_gm_file[i][:last_slash_index + 1] + fstr]))
+                        self.gm_summary_name.append(file_id)
+                        if i == 0:
+                            self.arb_number_first_summary_gm = number_files
+
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_gm_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_fourier_filter_gm_file = aux_arb_file
+                    self.WL_gm, self.WL_ell_gm = [], []
+                    if len(self.arb_fourier_filter_gm_file) == 0:
+                        raise Exception("ConfigError: GGL requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_fourier_filter_gm_file:
+                        wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                        self.WL_ell_gm.append(wn_ell)
+                        self.WL_gm.append(wn)
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary Fourier filters for GGL in the desired format")
+            else:
+                self.WL_gm, self.WL_ell_gm = None, None
+            if self.ggl:
+                if '?' in self.arb_real_filter_gm_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_gm):
+                        last_slash_index = self.arb_real_filter_gm_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_gm_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_real_filter_gm_file[i][:self.arb_real_filter_gm_file[i].find('?')]
+                        aux_dir = self.arb_real_filter_gm_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_gm_file[i][:last_slash_index + 1] + fstr]))
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_gm_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_real_filter_gm_file = aux_arb_file
+                    self.RL_gm, self.RL_theta_gm = [], []
+                    if len(self.arb_real_filter_gm_file) == 0:
+                        raise Exception("ConfigError: GGL requested but the Real Filter files for the gt-mode have not been found, please check the path in " + str(self.config_name))   
+                    for wfile in self.arb_real_filter_gm_file:
+                        wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                        self.RL_theta_gm.append(wn_ell)
+                        self.RL_gm.append(wn)
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary real space filters for GGL in the desired format")
+            else:
+                self.RL_gm, self.RL_theta_gm = None, None
+            if self.cosmicshear:
+                self.mmE_summary_name = []
+                self.mmB_summary_name = []
+                if '?' in self.arb_fourier_filter_mmE_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_mm):
+                        last_slash_index = self.arb_fourier_filter_mmE_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_fourier_filter_mmE_file[i][:self.arb_fourier_filter_mmE_file[i].find('?')]
+                        aux_dir = self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1] + fstr]))          
+                        self.mmE_summary_name.append(file_id)
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_mmE_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_fourier_filter_mmE_file = aux_arb_file
+                    self.WL_mmE, self.WL_ell_mmE = [], []
+                    if len(self.arb_fourier_filter_mmE_file) == 0:
+                        raise Exception("ConfigError: Cosmic Shear requested but the Fourier Filter files for the E-mode have not been found, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_fourier_filter_mmE_file:
+                        wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                        self.WL_ell_mmE.append(wn_ell)
+                        self.WL_mmE.append(wn)
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary Fourier filters for lensing in the desired format")
+            else:
+                self.WL_mmE, self.WL_ell_mmE = None, None
+            if self.cosmicshear:
+                if '?' in self.arb_fourier_filter_mmB_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_mm):
+                        last_slash_index = self.arb_fourier_filter_mmB_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_fourier_filter_mmB_file[i][:self.arb_fourier_filter_mmB_file[i].find('?')]
+                        aux_dir = self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1] + fstr]))
+                        if i == 0:
+                            self.arb_number_first_summary_mm = number_files
+                        self.mmB_summary_name.append(file_id)
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_fourier_filter_mmB_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_fourier_filter_mmB_file = aux_arb_file
+                    self.WL_mmB, self.WL_ell_mmB = [], []
+                    i_counter = 0
+                    if len(self.arb_fourier_filter_mmB_file) == 0:
+                        raise Exception("ConfigError: Cosmic Shear requested but the Fourier Filter files for the B-mode have not been found, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_fourier_filter_mmB_file:
+                        if i_counter < self.arb_number_first_summary_mm:
+                            i = 0
+                        else:
+                            i = 1
+                        wn_ell, wn = self.__read_in_fourier_filter_files(wfile)
+                        self.WL_ell_mmB.append(wn_ell)
+                        if self.arb_fourier_filter_no_B[i]:
+                            self.WL_mmB.append(np.zeros_like(wn))
+                        else:
+                            self.WL_mmB.append(wn)
+                        i_counter += 1
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary Fourier filters for lensing in the desired format")
+            else:
+                self.WL_mmB, self.WL_ell_mmB = None, None
+            if self.cosmicshear:
+                if '?' in self.arb_real_filter_mm_p_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_mm):
+                        last_slash_index = self.arb_real_filter_mm_p_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_mm_p_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_real_filter_mm_p_file[i][:self.arb_real_filter_mm_p_file[i].find('?')]
+                        aux_dir = self.arb_real_filter_mm_p_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_mm_p_file[i][:last_slash_index + 1] + fstr]))
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_mm_p_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_real_filter_mm_p_file = aux_arb_file
+                    self.RL_mm_p, self.RL_theta_mm_p = [], []
+                    if len(self.arb_real_filter_mm_p_file) == 0:
+                        raise Exception("ConfigError: Cosmic Shear requested but the Real Filter files for the +-mode have not been found, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_real_filter_mm_p_file:
+                        wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                        self.RL_theta_mm_p.append(wn_ell)
+                        self.RL_mm_p.append(wn)
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary real space filters for lensing in the desired format")
+            else:
+                self.RL_mm_p, self.RL_theta_mm_p = None, None
+            if self.cosmicshear:
+                if '?' in self.arb_real_filter_mm_m_file[0]:
+                    aux_arb_file = []
+                    start_index = 0
+                    end_index = 0
+                    for i in range(self.arb_number_summary_mm):
+                        last_slash_index = self.arb_real_filter_mm_m_file[i].rfind('/')
+                        _, _, filenames = next(walk(self.arbitrary_summary_dir + self.arb_real_filter_mm_m_file[i][:last_slash_index + 1]))
+                        file_id = self.arb_real_filter_mm_m_file[i][:self.arb_real_filter_mm_m_file[i].find('?')]
+                        aux_dir = self.arb_real_filter_mm_m_file[i][:last_slash_index + 1]
+                        number_files = len(sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_mm_m_file[i][:last_slash_index + 1] + fstr]))
+                        for i_files in range(number_files):
+                            aux_arb_file.append(None)
+                            end_index += 1
+
+                        aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
+                                                                    if file_id in self.arb_real_filter_mm_m_file[i][:last_slash_index + 1] + fstr])
+                        for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
+                            aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
+
+                        for i_files in range(number_files):
+                            start_index += 1
+                    self.arb_real_filter_mm_m_file = aux_arb_file
+                    self.RL_mm_m, self.RL_theta_mm_m = [], []
+                    if len(self.arb_real_filter_mm_m_file) == 0:
+                        raise Exception("ConfigError: Cosmic Shear requested but the Real Filter files for the --mode have not been found, please check the path in " + str(self.config_name))
+                    for wfile in self.arb_real_filter_mm_m_file:
+                        wn_ell, wn = self.__read_in_real_filter_files(wfile)
+                        self.RL_theta_mm_m.append(wn_ell)
+                        self.RL_mm_m.append(wn)
+                else:
+                    raise Exception("ConfigError: Please pass the arbitrary real space filters for lensing in the desired format")
+            else:
+                self.RL_mm_m, self.RL_theta_mm_m = None, None
+        else:
+            raise Exception("ConfigError: To calculate the arbitrary summary statistics " +
+                            "covariance for the Filter functions in fourier and real space must be provided in " +
+                            "external table. Must be included in [tabulated inputs " +
+                            "files] as 'arb_fourier_filter_gg_file' etc. to go on.")
 
 
 

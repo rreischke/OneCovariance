@@ -1,17 +1,14 @@
-import numpy as np
-import os
 import gc
+import os
 
-
-from astropy.units.cgs import K
 # from astropy.io import fits
-
 #plot stuff
 import matplotlib.pyplot as plt
-from matplotlib import rc, rcParams
+import numpy as np
+from matplotlib import rcParams
+
 # rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 plt.rc('font', family='sans-serif')
-#
 rcParams['figure.figsize'] = (8., 6.)
 rcParams['axes.linewidth'] = 2
 rcParams['axes.labelsize'] = 20
@@ -29,7 +26,7 @@ rcParams['ytick.minor.size'] = 4
 rcParams['ytick.major.width'] = 1.5
 rcParams['ytick.labelsize'] = 16
 
-class Output(): 
+class Output: 
     """
     Class writing the output of the OneCovariance code. Methods of this class collect
     all the necessary blocks of the covariance matrix.
@@ -1270,13 +1267,12 @@ class Output():
             else:
                 tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
                 ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e'
+        elif n_tomo_clust is None and n_tomo_lens is None:
+            tomo_str = ''
+            ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
         else:
-            if n_tomo_clust is None and n_tomo_lens is None:
-                tomo_str = ''
-                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
-            else:
-                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
-                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+            tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+            ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
 
         olist = []
         splitidx = 0
@@ -2131,13 +2127,12 @@ class Output():
             else:
                 tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
                 ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e'
+        elif n_tomo_clust is None and n_tomo_lens is None:
+            tomo_str = ''
+            ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
         else:
-            if n_tomo_clust is None and n_tomo_lens is None:
-                tomo_str = ''
-                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
-            else:
-                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
-                ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+            tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+            ostr_format = '%s\t%.2e\t%.2e\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
 
         idxlist = self.__get_idxlist(proj_quant, sampledim)
         olist = []
@@ -3138,13 +3133,12 @@ class Output():
             else:
                 tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
                 ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e'
+        elif n_tomo_clust is None and n_tomo_lens is None:
+            tomo_str = ''
+            ostr_format = '%s\t%i\t%i\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
         else:
-            if n_tomo_clust is None and n_tomo_lens is None:
-                tomo_str = ''
-                ostr_format = '%s\t%i\t%i\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
-            else:
-                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
-                ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+            tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+            ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
 
         olist = []
         splitidx = 0
@@ -3674,13 +3668,12 @@ class Output():
             else:
                 tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
                 ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e'
+        elif n_tomo_clust is None and n_tomo_lens is None:
+            tomo_str = ''
+            ostr_format = '%s\t%i\t%i\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
         else:
-            if n_tomo_clust is None and n_tomo_lens is None:
-                tomo_str = ''
-                ostr_format = '%s\t%i\t%i\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
-            else:
-                tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
-                ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
+            tomo_str = 'tomoi\ttomoj\ttomok\ttomol\t'
+            ostr_format = '%s\t%i\t%i\t%i\t%i\t%i\t\t%i\t\t%i\t\t%i\t\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e'
 
         olist = []
         splitidx = 0
@@ -5827,7 +5820,7 @@ class Output():
             if mm:
                 hdr_str += 'cosmic shear with ' + str(n_tomo_lens) + ' tomographic bins (only the unique bin combinations) and ' + str(len(self.projected_lens)) + ' spatial bins.\n'
             if self.has_csmf:
-                hdr_str += 'stellar mass function with ' + str((self.N_stellar_mass_bins)) + ' stellar mass bins.\n'
+                hdr_str += 'stellar mass function with ' + str(self.N_stellar_mass_bins) + ' stellar mass bins.\n'
 
             hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
             if gg:
@@ -7079,7 +7072,7 @@ class Output():
             if two_mm:
                 hdr_str += str(spatial_second_probe_mm) + " for the second probe and "
         if self.has_csmf:
-            hdr_str += 'stellar mass function with ' + str((self.N_stellar_mass_bins)) + ' stellar mass bins.\n'
+            hdr_str += 'stellar mass function with ' + str(self.N_stellar_mass_bins) + ' stellar mass bins.\n'
 
         hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
         if gg:
@@ -7251,8 +7244,7 @@ class Output():
             for idx in range(len(gauss)):
                 try:
                     sampledim = (gauss[idx].shape)[2]
-                    if(sampledim < sampledim_save):
-                        sampledim = sampledim_save
+                    sampledim = max(sampledim, sampledim_save)
                     sampledim_save = (gauss[idx].shape)[2]
                     break
                 except (AttributeError,TypeError):
@@ -7262,8 +7254,7 @@ class Output():
             for idx in range(len(nongauss)):
                 try:
                     sampledim = (nongauss[idx].shape)[2]
-                    if(sampledim < sampledim_save):
-                        sampledim = sampledim_save
+                    sampledim = max(sampledim, sampledim_save)
                     sampledim_save = (nongauss[idx].shape)[2]
                     break
                 except (AttributeError,TypeError):
@@ -7273,8 +7264,7 @@ class Output():
             for idx in range(len(ssc)):
                 try:
                     sampledim = (ssc[idx].shape)[2]
-                    if(sampledim < sampledim_save):
-                        sampledim = sampledim_save
+                    sampledim = max(sampledim, sampledim_save)
                     sampledim_save = (ssc[idx].shape)[2]
                     break
                 except (AttributeError,TypeError):

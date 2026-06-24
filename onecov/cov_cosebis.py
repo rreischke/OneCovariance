@@ -1,15 +1,13 @@
 import time
-import numpy as np
-from scipy.signal import argrelextrema
-from scipy.interpolate import UnivariateSpline, interp1d
-from scipy.integrate import simpson
-
-from mpmath import mp
-import mpmath
-from scipy.special import p_roots
-from scipy.special import eval_legendre
 
 import levin
+import mpmath
+import numpy as np
+from mpmath import mp
+from scipy.integrate import simpson
+from scipy.interpolate import UnivariateSpline, interp1d
+from scipy.signal import argrelextrema
+from scipy.special import eval_legendre
 
 try:
     from onecov.cov_ell_space import CovELLSpace
@@ -595,12 +593,11 @@ class CovCOSEBI(CovELLSpace):
                     "Should be from " + str(covCOSEBIsettings['theta_min']) + " to " + 
                     str(covCOSEBIsettings['theta_max']) + ", but is only given in " +
                     str(cosebi_tabs['Tn_pm_theta'][0]) + " to " + str(cosebi_tabs['Tn_pm_theta'][-1]) + ".")
-        else:
-            if obs_dict['observables']['ggl'] or obs_dict['observables']['cosmic_shear']:
-                raise Exception("ConfigError: To calculate the COSEBI " +
-                            "covariance the Tn_pm kernels must be provided as an " +
-                            "external table. Must be included in [tabulated inputs " +
-                            "files] as 'Tn_plus_file' and 'Tn_minus_file' to go on.")
+        elif obs_dict['observables']['ggl'] or obs_dict['observables']['cosmic_shear']:
+            raise Exception("ConfigError: To calculate the COSEBI " +
+                        "covariance the Tn_pm kernels must be provided as an " +
+                        "external table. Must be included in [tabulated inputs " +
+                        "files] as 'Tn_plus_file' and 'Tn_minus_file' to go on.")
             
         if cosebi_tabs['Qn'] is not None:
             for i_mode in range(len(cosebi_tabs['Qn'][:,0])):
@@ -612,12 +609,11 @@ class CovCOSEBI(CovELLSpace):
                     "Should be from " + str(covCOSEBIsettings['theta_min']) + " to " + 
                     str(covCOSEBIsettings['theta_max']) + ", but is only given in " +
                     str(cosebi_tabs['Qn_theta'][0]) + " to " + str(cosebi_tabs['Qn_theta'][-1]) + ".")
-        else:
-            if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:   
-                raise Exception("ConfigError: To calculate the COSEBI " +
-                            "covariance the Qn kernels must be provided as an " +
-                            "external table. Must be included in [tabulated inputs " +
-                            "files] as 'Qn_file' to go on.")
+        elif obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']:   
+            raise Exception("ConfigError: To calculate the COSEBI " +
+                        "covariance the Qn kernels must be provided as an " +
+                        "external table. Must be included in [tabulated inputs " +
+                        "files] as 'Qn_file' to go on.")
         
         if cosebi_tabs['Un'] is not None:
             for i_mode in range(len(cosebi_tabs['Un'][:,0])):
@@ -629,12 +625,11 @@ class CovCOSEBI(CovELLSpace):
                     "Should be from " + str(covCOSEBIsettings['theta_min']) + " to " + 
                     str(covCOSEBIsettings['theta_max']) + ", but is only given in " +
                     str(cosebi_tabs['Un_theta'][0]) + " to " + str(cosebi_tabs['Un_theta'][-1]) + ".")
-        else:
-            if obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']: 
-                raise Exception("ConfigError: To calculate the COSEBI " +
-                            "covariance the Un kernels must be provided as an " +
-                            "external table. Must be included in [tabulated inputs " +
-                            "files] as 'Un_file' to go on.")
+        elif obs_dict['observables']['ggl'] or obs_dict['observables']['clustering']: 
+            raise Exception("ConfigError: To calculate the COSEBI " +
+                        "covariance the Un kernels must be provided as an " +
+                        "external table. Must be included in [tabulated inputs " +
+                        "files] as 'Un_file' to go on.")
 
     def calc_E_mode(self):
         """
@@ -1047,33 +1042,32 @@ class CovCOSEBI(CovELLSpace):
                     gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
                     gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn, \
                     csmf_COSEBI_auto, csmf_COSEBI_gg, csmf_COSEBI_gm, csmf_COSEBI_mmE, csmf_COSEBI_mmB
+        elif not self.cov_dict['split_gauss']:
+            gaussCOSEBIgggg = gaussCOSEBIgggg_sva + gaussCOSEBIgggg_mix
+            gaussCOSEBIgggm = gaussCOSEBIgggm_sva + gaussCOSEBIgggm_mix
+            gaussCOSEBIEggmm = gaussCOSEBIEggmm_sva + gaussCOSEBIEggmm_mix
+            gaussCOSEBIBggmm = gaussCOSEBIBggmm_sva + gaussCOSEBIBggmm_mix
+            gaussCOSEBIgmgm = gaussCOSEBIgmgm_sva + gaussCOSEBIgmgm_mix
+            gaussCOSEBIEmmgm = gaussCOSEBIEmmgm_sva + gaussCOSEBIEmmgm_mix
+            gaussCOSEBIBmmgm = gaussCOSEBIBmmgm_sva + gaussCOSEBIBmmgm_mix
+            gaussCOSEBIEEmmmm = gaussCOSEBIEEmmmm_sva + gaussCOSEBIEEmmmm_mix
+            gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix
+            gaussCOSEBIBBmmmm = gaussCOSEBIBBmmmm_sva + gaussCOSEBIBBmmmm_mix
+            return gaussCOSEBIgggg, gaussCOSEBIgggm, gaussCOSEBIEggmm, \
+                gaussCOSEBIBggmm, gaussCOSEBIgmgm, gaussCOSEBIEmmgm, \
+                gaussCOSEBIBmmgm, gaussCOSEBIEEmmmm, gaussCOSEBIEBmmmm, gaussCOSEBIBBmmmm,\
+                gaussCOSEBIgggg_sn, gaussCOSEBIgmgm_sn, gaussCOSEBIEEmmmm_sn, gaussCOSEBIBBmmmm_sn
         else:
-            if not self.cov_dict['split_gauss']:
-                gaussCOSEBIgggg = gaussCOSEBIgggg_sva + gaussCOSEBIgggg_mix
-                gaussCOSEBIgggm = gaussCOSEBIgggm_sva + gaussCOSEBIgggm_mix
-                gaussCOSEBIEggmm = gaussCOSEBIEggmm_sva + gaussCOSEBIEggmm_mix
-                gaussCOSEBIBggmm = gaussCOSEBIBggmm_sva + gaussCOSEBIBggmm_mix
-                gaussCOSEBIgmgm = gaussCOSEBIgmgm_sva + gaussCOSEBIgmgm_mix
-                gaussCOSEBIEmmgm = gaussCOSEBIEmmgm_sva + gaussCOSEBIEmmgm_mix
-                gaussCOSEBIBmmgm = gaussCOSEBIBmmgm_sva + gaussCOSEBIBmmgm_mix
-                gaussCOSEBIEEmmmm = gaussCOSEBIEEmmmm_sva + gaussCOSEBIEEmmmm_mix
-                gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix
-                gaussCOSEBIBBmmmm = gaussCOSEBIBBmmmm_sva + gaussCOSEBIBBmmmm_mix
-                return gaussCOSEBIgggg, gaussCOSEBIgggm, gaussCOSEBIEggmm, \
-                    gaussCOSEBIBggmm, gaussCOSEBIgmgm, gaussCOSEBIEmmgm, \
-                    gaussCOSEBIBmmgm, gaussCOSEBIEEmmmm, gaussCOSEBIEBmmmm, gaussCOSEBIBBmmmm,\
-                    gaussCOSEBIgggg_sn, gaussCOSEBIgmgm_sn, gaussCOSEBIEEmmmm_sn, gaussCOSEBIBBmmmm_sn
-            else:
-                return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
-                    gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
-                    gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
-                    gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
-                    gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
-                    gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
-                    gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
-                    gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
-                    gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
-                    gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn
+            return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
+                gaussCOSEBIgggm_sva, gaussCOSEBIgggm_mix, gaussCOSEBIgggm_sn, \
+                gaussCOSEBIEggmm_sva, gaussCOSEBIEggmm_mix, gaussCOSEBIEggmm_sn, \
+                gaussCOSEBIBggmm_sva, gaussCOSEBIBggmm_mix, gaussCOSEBIBggmm_sn, \
+                gaussCOSEBIgmgm_sva, gaussCOSEBIgmgm_mix, gaussCOSEBIgmgm_sn, \
+                gaussCOSEBIEmmgm_sva, gaussCOSEBIEmmgm_mix, gaussCOSEBIEmmgm_sn, \
+                gaussCOSEBIBmmgm_sva, gaussCOSEBIBmmgm_mix, gaussCOSEBIBmmgm_sn, \
+                gaussCOSEBIEEmmmm_sva, gaussCOSEBIEEmmmm_mix, gaussCOSEBIEEmmmm_sn, \
+                gaussCOSEBIEBmmmm_sva, gaussCOSEBIEBmmmm_mix, gaussCOSEBIEBmmmm_sn, \
+                gaussCOSEBIBBmmmm_sva, gaussCOSEBIBBmmmm_mix, gaussCOSEBIBBmmmm_sn
 
     def __covCOSEBI_split_gaussian(self,
                                    obs_dict,
@@ -1819,13 +1813,12 @@ class CovCOSEBI(CovELLSpace):
             if self.mm:
                 nongaussELLmmmm = nongaussELLmmmm/(survey_params_dict['survey_area_lens'] / self.deg2torad2) + nongaussELLmmmm1
             connected = False
+        elif (connected):
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
+                covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
         else:
-            if (connected):
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_non_gaussian(
-                    covELLspacesettings, output_dict, bias_dict, hod_dict, prec, tri_tab)
-            else:
-                nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
-                    bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
+            nongaussELLgggg, nongaussELLgggm, nongaussELLggmm, nongaussELLgmgm, nongaussELLmmgm, nongaussELLmmmm = self.covELL_ssc(
+                bias_dict, hod_dict, prec, survey_params_dict, covELLspacesettings)
         
 
         if self.gg:

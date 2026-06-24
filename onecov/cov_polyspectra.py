@@ -1,12 +1,14 @@
-import warnings
 import itertools
-import numpy as np
-from scipy.integrate import quad, IntegrationWarning, simpson
-from scipy.interpolate import UnivariateSpline, RectBivariateSpline
-from scipy.interpolate import RegularGridInterpolator
-
 import multiprocessing as mp
+import warnings
 
+import numpy as np
+from scipy.integrate import IntegrationWarning, quad, simpson
+from scipy.interpolate import (
+    RectBivariateSpline,
+    RegularGridInterpolator,
+    UnivariateSpline,
+)
 
 try:
     from onecov.cov_halo_model import HaloModel
@@ -594,23 +596,22 @@ class PolySpectra(HaloModel):
                 if self.unbiased_clustering and hm_prec['transfer_model'] != 'CAMB':
                     Pgm = self.mass_func.nonlinear_power[:, None] \
                         * np.ones(self.sample_dim)
+                elif self.unbiased_clustering:
+                    Pgm = self.__P_xy_1h(
+                        bias_dict, hod_dict, hm_prec, 'm', 'm') \
+                        * self.small_k_damping(
+                            hm_prec['small_k_damping'],
+                            self.mass_func.k)[:, None] \
+                        + self.mass_func.power[:, None]
                 else:
-                    if self.unbiased_clustering:
-                        Pgm = self.__P_xy_1h(
-                            bias_dict, hod_dict, hm_prec, 'm', 'm') \
-                            * self.small_k_damping(
-                                hm_prec['small_k_damping'],
-                                self.mass_func.k)[:, None] \
-                            + self.mass_func.power[:, None]
-                    else:
-                        Pgm = \
-                            np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'sat'), axis1 = 1, axis2 = 2) \
-                            + np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'cen'), axis1 = 1, axis2 = 2) \
-                            * self.small_k_damping(
-                                hm_prec['small_k_damping'],
-                                self.mass_func.k)[:, None] \
-                            + self.mass_func.power[:, None] \
-                            * self.effective_bias[None, :] * bias_dict['bias_2h']
+                    Pgm = \
+                        np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'sat'), axis1 = 1, axis2 = 2) \
+                        + np.diagonal(self.__P_xy_1h(bias_dict, hod_dict, hm_prec, 'm', 'cen'), axis1 = 1, axis2 = 2) \
+                        * self.small_k_damping(
+                            hm_prec['small_k_damping'],
+                            self.mass_func.k)[:, None] \
+                        + self.mass_func.power[:, None] \
+                        * self.effective_bias[None, :] * bias_dict['bias_2h']
             else:
                 Pgm = np.zeros((len(self.mass_func.k), self.sample_dim))
                 for mbin in range(self.sample_dim):
@@ -671,28 +672,27 @@ class PolySpectra(HaloModel):
             if self.Pxy_tab['gg'] is None:
                 if self.unbiased_clustering and self.sample_dim < 2 and hm_prec['transfer_model'] != 'CAMB':
                     Pgg = self.mass_func.nonlinear_power[:, None, None]
+                elif self.unbiased_clustering:
+                    Pgg = (self.__P_xy_1h(
+                        bias_dict, hod_dict, hm_prec, 'm', 'm') \
+                        * self.small_k_damping(
+                            hm_prec['small_k_damping'],
+                            self.mass_func.k)[:, None] \
+                        + self.mass_func.power[:, None])[:,:,None]
                 else:
-                    if self.unbiased_clustering:
-                        Pgg = (self.__P_xy_1h(
-                            bias_dict, hod_dict, hm_prec, 'm', 'm') \
-                            * self.small_k_damping(
-                                hm_prec['small_k_damping'],
-                                self.mass_func.k)[:, None] \
-                            + self.mass_func.power[:, None])[:,:,None]
-                    else:
-                        Pgg = (2 *
-                            self.__P_xy_1h(bias_dict, hod_dict,
-                                            hm_prec, 'sat', 'cen')
-                            + self.__P_xy_1h(bias_dict, hod_dict,
-                                                hm_prec, 'sat', 'sat')
-                            #+ self.__P_xy_1h(bias_dict, hod_dict,
-                            #                hm_prec, 'cen', 'cen')
-                            ) \
-                            * self.small_k_damping(
-                                hm_prec['small_k_damping'],
-                                self.mass_func.k)[:, None, None] \
-                            + self.mass_func.power[:, None, None] \
-                            * (bias_dict['bias_2h'])**2.0* (self.effective_bias[None,:,None])*( self.effective_bias[None,None,:])
+                    Pgg = (2 *
+                        self.__P_xy_1h(bias_dict, hod_dict,
+                                        hm_prec, 'sat', 'cen')
+                        + self.__P_xy_1h(bias_dict, hod_dict,
+                                            hm_prec, 'sat', 'sat')
+                        #+ self.__P_xy_1h(bias_dict, hod_dict,
+                        #                hm_prec, 'cen', 'cen')
+                        ) \
+                        * self.small_k_damping(
+                            hm_prec['small_k_damping'],
+                            self.mass_func.k)[:, None, None] \
+                        + self.mass_func.power[:, None, None] \
+                        * (bias_dict['bias_2h'])**2.0* (self.effective_bias[None,:,None])*( self.effective_bias[None,None,:])
 
             else:
                 Pgg = np.zeros((len(self.mass_func.k), self.sample_dim))

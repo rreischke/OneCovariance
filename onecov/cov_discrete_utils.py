@@ -1,8 +1,9 @@
+import os
+import site
+
+import healpy as hp
 import numpy as np
 from astropy.table import Table
-import healpy as hp
-import site
-import os
 
 
 def toorigin(ras, decs, gammas1, gammas2, rotangle=None, inv=False, radec_units="deg"):
@@ -89,6 +90,7 @@ def gen_flatz(nbinsz):
 ############################
 def download_cygnus(los, base_save):
     import ssl
+
     import wget
     ssl._create_default_https_context = ssl._create_unverified_context
     base = "https://www.star.ucl.ac.uk/maxivonw/cygnus/"
