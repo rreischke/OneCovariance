@@ -1492,22 +1492,22 @@ class PolySpectra(HaloModel):
  
         if self.gm and tri_gmgm:
             integrand = np.sqrt(
-                (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
-                    + hurly_s[None, :, None, :, :]**2)
-                * hurly_m[None, :, None, :, :]**2
+                (2 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]
+                    + hurly_s[:, None, :, None, :]**2)
+                * hurly_m[:, None, :, None, :]**2
                 * (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
                     + hurly_s[None, :, None, :, :]**2)
                 * hurly_m[None, :, None, :, :]**2) \
-                * self.mass_func.dndm[None, None, None, None, :] 
+                * self.mass_func.dndm[None, None, None, None, :]
             trispec1h_gmgm = simpson(integrand, x = self.mass_func.m)
-       
+
         if self.mm and self.gm and self.cross_terms and tri_mmgm:
             integrand = np.sqrt(
-                hurly_m[None, :, None, :, :]**4
+                hurly_m[:, None, :, None, :]**4
                 * (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
                     + hurly_s[None, :, None, :, :]**2)
                 * hurly_m[None, :, None, :, :]**2) \
-                * self.mass_func.dndm[None, None, None, None, :] 
+                * self.mass_func.dndm[None, None, None, None, :]
             trispec1h_mmgm = simpson(integrand, x = self.mass_func.m)
 
         if self.mm and tri_mmmm:

@@ -394,7 +394,7 @@ class CovBandPowers(CovTHETASpace):
         Parameter
         ---------
         ells : array
-            Fourier multipole (\ell) where the Weights should be evaluated at.
+            Fourier multipole (\\ell) where the Weights should be evaluated at.
         ell_up : float
             Upper limit of the bandpower interval
         ell_lo : float
