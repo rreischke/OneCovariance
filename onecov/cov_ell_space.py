@@ -184,6 +184,203 @@ class CovELLSpace(PolySpectra):
 
     """
 
+    @staticmethod
+    def _unique_columns(integrand):
+        """
+        Finds the bitwise identical columns of the integrand (shape
+        (len(ellrange), number of integrals)), which only have to be
+        integrated once. Returns the indices of the unique columns and the
+        index of the unique column for every column.
+        """
+        columns = np.ascontiguousarray(np.transpose(integrand))
+        keys = columns.view(np.dtype((np.void, columns.itemsize*columns.shape[1]))).ravel()
+        _, unique_idx, inverse = np.unique(keys, return_index=True, return_inverse=True)
+        return unique_idx.tolist(), inverse
+
+    @staticmethod
+    def _ell_limits_double(ell_limits, m_mode, n_mode):
+        """
+        Integration limits for an integrand with the product of the weights
+        m_mode and n_mode: the limits of the more oscillatory weight, i.e.
+        the longer list.
+        """
+        if len(ell_limits[m_mode]) < len(ell_limits[n_mode]):
+            return ell_limits[n_mode]
+        return ell_limits[m_mode]
+
+    def _gauss_todo(self,
+                    sva_flat,
+                    mix_flat,
+                    sva_jobs,
+                    mix_jobs):
+        """
+        Pairs the Gaussian ell-space covariance terms with their projection
+        jobs: sva and mix separately if the Gaussian term is split, their sum
+        with the sva_jobs otherwise. mix_flat can be None if there is no
+        mixed term.
+        """
+        if mix_flat is None:
+            return [(sva_flat, sva_jobs)]
+        if self.cov_dict['split_gauss']:
+            return [(sva_flat, sva_jobs), (mix_flat, mix_jobs)]
+        return [(sva_flat + mix_flat, sva_jobs)]
+
+    @staticmethod
+    def _weight_aliases(weights):
+        """
+        For every weight (row of weights) returns the index of the first
+        bitwise identical weight, or -1 if the weight vanishes identically
+        (e.g. B-mode filters without B-modes in the C_ell). Projections with
+        identical weights only have to be calculated once and projections
+        with a vanishing weight are zero.
+        """
+        weights = np.ascontiguousarray(weights, dtype=np.float64)
+        keys = weights.view(np.dtype((np.void, weights.itemsize*weights.shape[1]))).ravel()
+        _, first, inverse = np.unique(keys, return_index=True, return_inverse=True)
+        alias = first[inverse]
+        alias[~np.any(weights != 0, axis=1)] = -1
+        return alias.tolist()
+
+    def _weight_key(self, mode):
+        """
+        Representative of the weight 'mode' according to self.weight_alias
+        (set by the classes via _weight_aliases), the mode itself otherwise.
+        """
+        alias = getattr(self, 'weight_alias', None)
+        return mode if alias is None else alias[mode]
+
+    def _project_gauss_jobs(self,
+                            levin_int,
+                            todo,
+                            original_shape,
+                            name):
+        """
+        Projects Gaussian (diagonal in ell) ell-space covariances with two
+        weights, target_array[target_index] =
+            prefac * int dell ell W_m(ell) W_n(ell) Cov(ell, ell).
+
+        Parameters
+        ----------
+        levin_int : levin.Levin
+            integrator with the weights initialised via init_w_ell
+        todo : list
+            of (ell_cov_flat, jobs) with ell_cov_flat of shape
+            (len(ellrange), len(ellrange), number of integrals) and jobs
+            (ell_limits, m_mode, n_mode, target_array, target_index, prefac[,
+            mirror_index]). If mirror_index is given, the result is also
+            stored there (blocks symmetric in m_mode and n_mode).
+
+        Note
+        ----
+        The integrator is initialised once per ell-space covariance and all
+        its jobs are carried out in one call; only the unique integrand
+        columns and each distinct pair of weights are integrated, jobs with
+        a vanishing weight are zero.
+        """
+        t0 = time.time()
+        for ell_cov_flat, jobs in todo:
+            live = {}
+            for job in jobs:
+                key = (self._weight_key(job[1]), self._weight_key(job[2]))
+                if min(key) < 0:
+                    job[3][job[4]] = 0
+                    if len(job) > 6:
+                        job[3][job[6]] = 0
+                else:
+                    live.setdefault(key, []).append(job)
+            if len(live) == 0:
+                continue
+            integrand = np.moveaxis(np.diagonal(ell_cov_flat)*self.ellrange,0,-1)
+            levin_int.init_integral(self.ellrange, integrand, True, True)
+            unique_idx, inverse = self._unique_columns(integrand)
+            representatives = [key_jobs[0] for key_jobs in live.values()]
+            results = levin_int.cquad_integrate_double_well_subset(
+                [job[0] for job in representatives], [job[1] for job in representatives],
+                [job[2] for job in representatives], unique_idx)
+            for key_jobs, result in zip(live.values(), results):
+                result = np.reshape(np.array(result)[inverse], original_shape)
+                for job in key_jobs:
+                    job[3][job[4]] = job[5] * result
+                    if len(job) > 6:
+                        job[3][job[6]] = job[3][job[4]]
+        print('\rProjection of the Gaussian term for the ' + name + ' done in ' +
+              str(round((time.time()-t0)/60, 1)) + 'min', end="")
+
+    def _project_4pt_jobs(self,
+                          levin_int,
+                          ell_limits,
+                          ell_cov,
+                          jobs,
+                          original_shape,
+                          name,
+                          outer_logy=True):
+        """
+        Projects a four-point (non-Gaussian or super-sample) ell-space
+        covariance T(ell1, ell2),
+        target_array[target_index] = prefac * int dell1 ell1 W_outer(ell1)
+                                     int dell2 ell2 W_inner(ell2) T(ell1, ell2)
+        and divided by divisor if it is not None.
+
+        Parameters
+        ----------
+        levin_int : levin.Levin
+            integrator with the weights initialised via init_w_ell
+        ell_limits : list
+            integration limits for each weight
+        ell_cov : array
+            with shape (len(ellrange), len(ellrange), ...)
+        jobs : list
+            of jobs (outer_mode, inner_mode, target_array, target_index,
+            prefac, divisor)
+        outer_logy : bool
+            whether the outer integrand is interpolated in log space
+
+        Note
+        ----
+        The inner integral does not depend on the outer mode, it is
+        calculated once per (distinct) inner weight for all ell1 and used for
+        all jobs with this inner weight. Only the unique integrand columns
+        and distinct weights are integrated, jobs with a vanishing weight are
+        zero.
+        """
+        t0 = time.time()
+        live = []
+        for job in jobs:
+            if min(self._weight_key(job[0]), self._weight_key(job[1])) < 0:
+                job[2][job[3]] = 0
+            else:
+                live.append(job)
+        if len(live) == 0:
+            return
+        ell_cov_flat = np.reshape(ell_cov, (len(self.ellrange), len(self.ellrange), -1))
+        inner_modes = sorted(set(self._weight_key(job[1]) for job in live))
+        inner = {n_mode: np.zeros((len(self.ellrange), ell_cov_flat.shape[2])) for n_mode in inner_modes}
+        for i_ell in range(len(self.ellrange)):
+            integrand = ell_cov_flat[i_ell, :, :]*self.ellrange[:, None]
+            levin_int.init_integral(self.ellrange, integrand, True, True)
+            unique_idx, inverse = self._unique_columns(integrand)
+            results = levin_int.cquad_integrate_single_well_subset(
+                [ell_limits[n_mode][:] for n_mode in inner_modes], inner_modes, unique_idx)
+            for n_mode, result in zip(inner_modes, results):
+                inner[n_mode][i_ell, :] = np.array(result)[inverse]
+            print('\rProjection of the four-point term for the ' + name + ' at ' +
+                  str(round((i_ell + 1)/len(self.ellrange)*100, 1)) + '% in ' +
+                  str(round((time.time()-t0)/60, 1)) + 'min', end="")
+        for n_mode in inner_modes:
+            outer_jobs = [job for job in live if self._weight_key(job[1]) == n_mode]
+            outer_modes = sorted(set(self._weight_key(job[0]) for job in outer_jobs))
+            integrand = inner[n_mode]*self.ellrange[:, None]
+            levin_int.init_integral(self.ellrange, integrand, True, outer_logy)
+            unique_idx, inverse = self._unique_columns(integrand)
+            results = levin_int.cquad_integrate_single_well_subset(
+                [ell_limits[m_mode][:] for m_mode in outer_modes], outer_modes, unique_idx)
+            result_of = {m_mode: np.reshape(np.array(result)[inverse], original_shape)
+                         for m_mode, result in zip(outer_modes, results)}
+            for job in outer_jobs:
+                job[2][job[3]] = job[4]*result_of[self._weight_key(job[0])]
+                if job[5] is not None:
+                    job[2][job[3]] /= job[5]
+
     def __init__(self,
                  cov_dict,
                  obs_dict,

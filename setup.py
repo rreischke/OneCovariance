@@ -13,12 +13,15 @@ if (sys.platform[:6] == "darwin"
                 or "clang" in os.environ.get("CC", ""))):
     compiler_args = ["-Xpreprocessor"]
     linker_args = ["-mlinker-version=305", "-Xpreprocessor"]
+    # "-Xpreprocessor -fopenmp" does not link the OpenMP runtime, link libomp explicitly
+    omp_link_args = ["-lomp"]
 else:
     compiler_args = ["-shared"]
     linker_args = ["-shared"]
+    omp_link_args = []
 
 compiler_args_levin =  compiler_args + ["-fopenmp", "-O3"]
-linker_args_levin   =  linker_args   + ["-fopenmp", "-O3"]
+linker_args_levin   =  linker_args   + ["-fopenmp", "-O3"] + omp_link_args
 
 compiler = "g++"
 compiler_args_discretecov =  compiler_args + ["-fopenmp", "-O3"]

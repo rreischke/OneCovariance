@@ -175,6 +175,9 @@ void Levin::init_w_ell(const std::vector<double>& ell, const std::vector<std::ve
         xmax_weight = ell.back();
         xmin_weight = ell.at(0);
     }
+    w_ell_size = ell.size();
+    w_ell_log_min = log(ell.at(0));
+    w_ell_inv_dlog = (w_ell_size - 1) / (log(ell.back()) - log(ell.at(0)));
 }
 
 void Levin::init_integral(const std::vector<double>& x_in, const std::vector<std::vector<double>>& integrand, bool logx1, bool logy1)
@@ -184,15 +187,6 @@ void Levin::init_integral(const std::vector<double>& x_in, const std::vector<std
     uint number_integrals_save = number_integrals;
     number_integrals = integrand.at(0).size();
     logx = logx1;
-    if (!already_called)
-    {
-        for (uint i = 0; i < number_integrals; i++)
-        {
-            logy.push_back(logy1);
-            slope.push_back(0);
-            slope0.push_back(0);
-        }
-    }
     if (number_integrals_save != number_integrals)
     {
         for (uint i = 0; i < number_integrals_save; i++)
@@ -238,9 +232,11 @@ void Levin::init_integral(const std::vector<double>& x_in, const std::vector<std
         }
     }
 
-    if (logy.at(0))
+    // interpolate in log space if requested and possible for the current integrand
+    for (uint a = 0; a < number_integrals; a++)
     {
-        for (uint a = 0; a < number_integrals; a++)
+        logy.at(a) = logy1;
+        if (logy1)
         {
             for (uint i = 0; i < number_x_values; i++)
             {
@@ -1467,21 +1463,68 @@ std::vector<double> Levin::cquad_integrate_single_well(std::vector<double> limit
 #pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint i = 0; i < number_integrals; i++)
     {
-        uint tid = omp_get_thread_num();
-        int_index_integral[tid] = i;
-        int_m_mode[tid] = m_mode;
-        result.at(i) = 0.0;
-        for (uint j = 0; j < limits.size() - 1; j++)
-        {
-            double result_aux = gslIntegratecquad(cquad_integrand_single_well, limits.at(j), limits.at(j + 1));
-            result.at(i) += result_aux;
-            if (abs(result_aux / result.at(i)) < converged && limits.at(j) > 1e3)
-            {
-                break;
-            }
-        }
+        result.at(i) = single_well_column(i, limits, m_mode);
     }
     delete[] int_index_integral;
+    return result;
+}
+
+double Levin::cquad_integrand_single_well_params(double x, void *p)
+{
+    SingleWellParams *par = static_cast<SingleWellParams *>(p);
+    Levin *lp = par->lp;
+    if (lp->xmax_weight > x && lp->xmin_weight < x)
+    {
+        // start the interval search of the weight at the guessed index instead of bisecting all of ell
+        par->acc_m->cache = lp->w_ell_index_guess(x);
+        return lp->call_integrand(x, par->i) * gsl_spline_eval(par->spline_m, x, par->acc_m);
+    }
+    else
+    {
+        return 0.;
+    }
+}
+
+double Levin::single_well_column(uint i, const std::vector<double>& limits, uint m_mode)
+{
+    uint tid = omp_get_thread_num();
+    SingleWellParams par;
+    par.lp = this;
+    par.i = i;
+    par.spline_m = spline_w_ell.at(tid).at(m_mode);
+    par.acc_m = acc_w_ell.at(tid).at(m_mode);
+    gsl_function gf;
+    gf.function = cquad_integrand_single_well_params;
+    gf.params = &par;
+    double result = 0.0;
+    for (uint j = 0; j < limits.size() - 1; j++)
+    {
+        // same call as in gslIntegratecquad
+        double e, result_aux;
+        gsl_integration_cquad(&gf, limits.at(j), limits.at(j + 1), 0.0, relative_tol, cquad_workspaces[tid], &result_aux, &e, NULL);
+        result += result_aux;
+        if (abs(result_aux / result) < converged && limits.at(j) > 1e3)
+        {
+            break;
+        }
+    }
+    return result;
+}
+
+std::vector<std::vector<double>> Levin::cquad_integrate_single_well_subset(const std::vector<std::vector<double>>& limits, const std::vector<uint>& m_modes, const std::vector<uint>& indices)
+{
+    uint n_jobs = m_modes.size();
+    uint n_indices = indices.size();
+    std::vector<std::vector<double>> result(n_jobs, std::vector<double>(n_indices, 0.0));
+    // parallelise over columns only: the spline accelerator of a column must not be shared between threads
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
+    for (uint k = 0; k < n_indices; k++)
+    {
+        for (uint job = 0; job < n_jobs; job++)
+        {
+            result[job][k] = single_well_column(indices[k], limits[job], m_modes[job]);
+        }
+    }
     return result;
 }
 
@@ -1506,22 +1549,72 @@ std::vector<double> Levin::cquad_integrate_double_well(std::vector<double> limit
 #pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint i = 0; i < number_integrals; i++)
     {
-        uint tid = omp_get_thread_num();
-        int_index_integral[tid] = i;
-        int_m_mode[tid] = m_mode;
-        int_n_mode[tid] = n_mode;
-
-        for (uint j = 0; j < limits.size() - 1; j++)
-        {
-            double result_aux = gslIntegratecquad(cquad_integrand_double_well, limits.at(j), limits.at(j + 1));
-            result.at(i) += result_aux;
-            if (abs(result_aux / result.at(i)) < converged && limits.at(j) > 5e3)
-            {
-                break;
-            }
-        }
+        result.at(i) = double_well_column(i, limits, m_mode, n_mode);
     }
     delete[] int_index_integral;
+    return result;
+}
+
+double Levin::cquad_integrand_double_well_params(double x, void *p)
+{
+    DoubleWellParams *par = static_cast<DoubleWellParams *>(p);
+    Levin *lp = par->lp;
+    if (lp->xmax_weight > x && lp->xmin_weight < x)
+    {
+        // start the interval search of the weights at the guessed index instead of bisecting all of ell
+        size_t guess = lp->w_ell_index_guess(x);
+        par->acc_m->cache = guess;
+        par->acc_n->cache = guess;
+        return lp->call_integrand(x, par->i) * gsl_spline_eval(par->spline_m, x, par->acc_m) * gsl_spline_eval(par->spline_n, x, par->acc_n);
+    }
+    else
+    {
+        return 0.0;
+    }
+}
+
+double Levin::double_well_column(uint i, const std::vector<double>& limits, uint m_mode, uint n_mode)
+{
+    uint tid = omp_get_thread_num();
+    DoubleWellParams par;
+    par.lp = this;
+    par.i = i;
+    par.spline_m = spline_w_ell.at(tid).at(m_mode);
+    par.spline_n = spline_w_ell.at(tid).at(n_mode);
+    par.acc_m = acc_w_ell.at(tid).at(m_mode);
+    par.acc_n = acc_w_ell.at(tid).at(n_mode);
+    gsl_function gf;
+    gf.function = cquad_integrand_double_well_params;
+    gf.params = &par;
+    double result = 0.0;
+    for (uint j = 0; j < limits.size() - 1; j++)
+    {
+        // same call as in gslIntegratecquad
+        double e, result_aux;
+        gsl_integration_cquad(&gf, limits.at(j), limits.at(j + 1), 0.0, relative_tol, cquad_workspaces[tid], &result_aux, &e, NULL);
+        result += result_aux;
+        if (abs(result_aux / result) < converged && limits.at(j) > 5e3)
+        {
+            break;
+        }
+    }
+    return result;
+}
+
+std::vector<std::vector<double>> Levin::cquad_integrate_double_well_subset(const std::vector<std::vector<double>>& limits, const std::vector<uint>& m_modes, const std::vector<uint>& n_modes, const std::vector<uint>& indices)
+{
+    uint n_jobs = m_modes.size();
+    uint n_indices = indices.size();
+    std::vector<std::vector<double>> result(n_jobs, std::vector<double>(n_indices, 0.0));
+    // parallelise over columns only: the spline accelerator of a column must not be shared between threads
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
+    for (uint k = 0; k < n_indices; k++)
+    {
+        for (uint job = 0; job < n_jobs; job++)
+        {
+            result[job][k] = double_well_column(indices[k], limits[job], m_modes[job], n_modes[job]);
+        }
+    }
     return result;
 }
 

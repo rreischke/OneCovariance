@@ -179,12 +179,14 @@ class CovCOSEBI(CovELLSpace):
             self.ell_limits = []
             for mode in range(self.total_modes):
                 limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::30]
-                #limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
-                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.wn_ells[1]) & (limits_at_mode < self.wn_ells[-2])]) + 2)
-                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.wn_ells[1]) & (limits_at_mode < self.wn_ells[-2])]
-                limits_at_mode_append[0] = self.wn_ells[0]
+                # start integrating at the smallest multipole of the ell-space covariance
+                ell_start = max(self.ellrange[0], self.wn_ells[0])
+                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.wn_ells[-2])]) + 2)
+                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.wn_ells[-2])]
+                limits_at_mode_append[0] = ell_start
                 limits_at_mode_append[-1] = self.wn_ells[-1]
                 self.ell_limits.append(limits_at_mode_append)
+            self.weight_alias = self._weight_aliases(np.array(self.wn_kernels))
             self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc'] / np.sqrt(len(self.ell_limits[0][:])), 20, self.num_cores)
             self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
         if self.gg or self.gm:
@@ -1190,20 +1192,18 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
+            sva_jobs, mix_jobs = [], []
             for m_mode in range(self.En_g_modes):
                 for n_mode in range(self.En_g_modes):
                     if not self.cov_dict['sn_only']:
-                        local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
-                        if len(self.ell_limits[m_mode + self.En_modes][:]) < len(self.ell_limits[n_mode + self.En_modes][:]):
-                            local_ell_limit = self.ell_limits[n_mode + self.En_modes][:]
                         if self.cov_dict['split_gauss']:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIgggg_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIgggg_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
+                            if n_mode >= m_mode:
+                                sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgggg_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_clust'] / self.deg2torad2), (n_mode, m_mode)))
+                            if n_mode >= m_mode:
+                                mix_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgggg_mix, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_clust'] / self.deg2torad2), (n_mode, m_mode)))
                         else:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIgggg_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_clust']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)          
+                            if n_mode >= m_mode:
+                                sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgggg_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_clust'] / self.deg2torad2), (n_mode, m_mode)))
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Un[m_mode](self.theta_gg)*self.Un[n_mode](self.theta_gg)*self.arcmin2torad2**2
@@ -1223,6 +1223,7 @@ class CovCOSEBI(CovELLSpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
 
+            self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             print(" ")
         else:
             gaussCOSEBIgggg_sva = 0
@@ -1243,21 +1244,16 @@ class CovCOSEBI(CovELLSpace):
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
             if not self.cov_dict['sn_only']:
+                sva_jobs, mix_jobs = [], []
                 for m_mode in range(self.En_g_modes):
                     for n_mode in range(self.En_g_modes):
-                        local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
-                        if len(self.ell_limits[m_mode + self.En_modes][:]) < len(self.ell_limits[n_mode + self.En_modes][:]):
-                            local_ell_limit = self.ell_limits[n_mode + self.En_modes][:]
                         if self.cov_dict['split_gauss']:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
                             survey_area = max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])   
-                            gaussCOSEBIgggm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_area/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIgggm_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_area/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
+                            sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgggm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_area / self.deg2torad2)))
+                            mix_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgggm_mix, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_area / self.deg2torad2)))
                         else:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
                             survey_area = max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])   
-                            gaussCOSEBIgggm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_area/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
+                            sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgggm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_area / self.deg2torad2)))
                         
                         eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
@@ -1268,6 +1264,7 @@ class CovCOSEBI(CovELLSpace):
                                 'min  ETA '
                                 'in ' + str(round(eta, 1)) + 'min', end="")
                         tcomb += 1
+                self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             print(" ")
         else:
             gaussCOSEBIgggm_sva = 0
@@ -1289,14 +1286,11 @@ class CovCOSEBI(CovELLSpace):
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes*self.En_modes
             if not self.cov_dict['sn_only']:
+                sva_jobs, mix_jobs = [], []
                 for m_mode in range(self.En_g_modes):
                     for n_mode in range(self.En_modes):
-                        local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
-                        if len(self.ell_limits[m_mode + self.En_modes][:]) < len(self.ell_limits[n_mode][:]):
-                            local_ell_limit = self.ell_limits[n_mode][:]
-                        self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
                         survey_area = max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens'])
-                        gaussCOSEBIEggmm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_area/self.deg2torad2) *  np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode)),original_shape)
+                        sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode), m_mode + self.En_modes, n_mode, gaussCOSEBIEggmm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_area / self.deg2torad2)))
                         eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
                         print('\rCOSEBI E-mode covariance calculation for the '
@@ -1306,6 +1300,7 @@ class CovCOSEBI(CovELLSpace):
                                 'min  ETA '
                                 'in ' + str(round(eta, 1)) + 'min', end="")
                         tcomb += 1
+                self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, None, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             print(" ")
         else:
             gaussCOSEBIEggmm_sva = 0
@@ -1327,20 +1322,18 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
+            sva_jobs, mix_jobs = [], []
             for m_mode in range(self.En_g_modes):
                 for n_mode in range(self.En_g_modes):
                     if not self.cov_dict['sn_only']:
-                        local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
-                        if len(self.ell_limits[m_mode + self.En_modes][:]) < len(self.ell_limits[n_mode + self.En_modes][:]):
-                            local_ell_limit = self.ell_limits[n_mode + self.En_modes][:]
                         if self.cov_dict['split_gauss']:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIgmgm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIgmgm_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
+                            if n_mode >= m_mode:
+                                sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgmgm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_ggl'] / self.deg2torad2), (n_mode, m_mode)))
+                            if n_mode >= m_mode:
+                                mix_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgmgm_mix, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_ggl'] / self.deg2torad2), (n_mode, m_mode)))
                         else:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIgmgm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_ggl']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode + self.En_modes, n_mode + self.En_modes)),original_shape)
+                            if n_mode >= m_mode:
+                                sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.En_modes, n_mode + self.En_modes), m_mode + self.En_modes, n_mode + self.En_modes, gaussCOSEBIgmgm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_ggl'] / self.deg2torad2), (n_mode, m_mode)))
 
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
@@ -1359,6 +1352,7 @@ class CovCOSEBI(CovELLSpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
+            self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_gm[:, None, :, None, :, :, None, None]*self.E_mode_gm[None, :, None, :, None, None, :, :])
             gaussCOSEBIgmgm_sva[:, :, :, :, :, :, :, :] = gaussCOSEBIgmgm_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             print("")
@@ -1384,21 +1378,16 @@ class CovCOSEBI(CovELLSpace):
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes*self.En_modes
             if not self.cov_dict['sn_only']:
+                sva_jobs, mix_jobs = [], []
                 for m_mode in range(self.En_modes):
                     for n_mode in range(self.En_g_modes):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode + self.En_modes][:]):
-                            local_ell_limit = self.ell_limits[n_mode + self.En_modes][:]
                         if self.cov_dict['split_gauss']:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
                             survey_area = max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens'])
-                            gaussCOSEBIEmmgm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_area/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.En_modes)),original_shape)
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIEmmgm_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_area/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.En_modes)),original_shape)
+                            sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode + self.En_modes), m_mode, n_mode + self.En_modes, gaussCOSEBIEmmgm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_area / self.deg2torad2)))
+                            mix_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode + self.En_modes), m_mode, n_mode + self.En_modes, gaussCOSEBIEmmgm_mix, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_area / self.deg2torad2)))
                         else:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
                             survey_area = max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens'])
-                            gaussCOSEBIEmmgm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_area/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode + self.En_modes)),original_shape)
+                            sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode + self.En_modes), m_mode, n_mode + self.En_modes, gaussCOSEBIEmmgm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_area / self.deg2torad2)))
 
                         eta = (time.time()-t0) / \
                             60 * (tcombs/tcomb-1)
@@ -1409,6 +1398,7 @@ class CovCOSEBI(CovELLSpace):
                                 'min  ETA '
                                 'in ' + str(round(eta, 1)) + 'min', end="")
                         tcomb += 1
+                self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_mm[:, None, :, None, :, :, None, None]*self.E_mode_gm[None, :, None, :, None, None, :, :])
             gaussCOSEBIEmmgm_sva[:, :, 0, :, :, :, :, :] = gaussCOSEBIEmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             print("")
@@ -1441,20 +1431,18 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_modes**2
+            sva_jobs, mix_jobs = [], []
             for m_mode in range(self.En_modes):
                 for n_mode in range(self.En_modes):
                     if not self.cov_dict['sn_only']:
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        if len(self.ell_limits[m_mode][:]) < len(self.ell_limits[n_mode][:]):
-                            local_ell_limit = self.ell_limits[n_mode][:]
                         if self.cov_dict['split_gauss']:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIEEmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIEEmmmm_mix[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            if n_mode >= m_mode:
+                                sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode), m_mode, n_mode, gaussCOSEBIEEmmmm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_lens'] / self.deg2torad2), (n_mode, m_mode)))
+                            if n_mode >= m_mode:
+                                mix_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode), m_mode, n_mode, gaussCOSEBIEEmmmm_mix, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_lens'] / self.deg2torad2), (n_mode, m_mode)))
                         else:
-                            self.levin_int.init_integral(self.ellrange, np.moveaxis(np.diagonal(gaussELL_sva_flat + gaussELL_mix_flat)*self.ellrange,0,-1), True, True)
-                            gaussCOSEBIEEmmmm_sva[m_mode, n_mode, :, :, :, :, :, :] = 1./2./np.pi/(survey_params_dict['survey_area_lens']/self.deg2torad2) * np.reshape(np.array(self.levin_int.cquad_integrate_double_well(local_ell_limit, m_mode, n_mode)),original_shape)
+                            if n_mode >= m_mode:
+                                sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode), m_mode, n_mode, gaussCOSEBIEEmmmm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_lens'] / self.deg2torad2), (n_mode, m_mode)))
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     Tpm_product = self.Tn_p[m_mode](self.theta_mm)*self.Tn_p[n_mode](self.theta_mm) + self.Tn_m[m_mode](self.theta_mm)*self.Tn_m[n_mode](self.theta_mm)
@@ -1473,6 +1461,7 @@ class CovCOSEBI(CovELLSpace):
                             'min  ETA '
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
+            self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_mm[:, None, :, None, :, :, None, None]*self.E_mode_mm[None, :, None, :, None, None, :, :])
             gaussCOSEBIEEmmmm_sva[:, :, 0, 0, :, :, :, :] = gaussCOSEBIEEmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             print("")
@@ -1830,26 +1819,11 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
+            jobs = []
             for m_mode in range(self.En_g_modes):
                 for n_mode in range(self.En_g_modes):
-                    inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    for i_ell in range(len(self.ellrange)):
-                        self.levin_int.init_integral(self.ellrange, nongaussELL_flat[i_ell, :, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + self.En_modes][:], n_mode + self.En_modes))
-                    self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    nongaussCOSEBIEgggg[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode + self.En_modes][:], m_mode + self.En_modes)),original_shape)
-                    if connected:
-                        nongaussCOSEBIEgggg[n_mode, m_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_clust'] / self.deg2torad2)
-                    eta = (time.time()-t0) / \
-                            60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode covariance calculation for the '
-                            'nonGaussian gggg term '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-            
+                    jobs.append((m_mode + self.En_modes, n_mode + self.En_modes, nongaussCOSEBIEgggg, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (survey_params_dict['survey_area_clust'] / self.deg2torad2) if connected else None))
+            self._project_4pt_jobs(self.levin_int, self.ell_limits, nongaussELL_flat, jobs, original_shape, 'COSEBI covariance  term', outer_logy=True)
             print("")
         else:
             nongaussCOSEBIEgggg = 0
@@ -1864,26 +1838,11 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
+            jobs = []
             for m_mode in range(self.En_g_modes):
                 for n_mode in range(self.En_g_modes):
-                    inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    for i_ell in range(len(self.ellrange)):
-                        self.levin_int.init_integral(self.ellrange, nongaussELL_flat[i_ell, :, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + self.En_modes][:], n_mode + self.En_modes))
-                    self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    nongaussCOSEBIEgggm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode + self.En_modes][:], m_mode + self.En_modes)),original_shape)
-                    if connected:
-                        nongaussCOSEBIEgggm[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl']) / self.deg2torad2)
-                    eta = (time.time()-t0) / \
-                            60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode covariance calculation for the '
-                            'nonGaussian gggm term '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-            
+                    jobs.append((m_mode + self.En_modes, n_mode + self.En_modes, nongaussCOSEBIEgggm, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl']) / self.deg2torad2) if connected else None))
+            self._project_4pt_jobs(self.levin_int, self.ell_limits, nongaussELL_flat, jobs, original_shape, 'COSEBI covariance  term', outer_logy=True)
             print("")
         else:
             nongaussCOSEBIEgggm = 0
@@ -1899,26 +1858,11 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_modes*self.En_g_modes
+            jobs = []
             for m_mode in range(self.En_g_modes):
                 for n_mode in range(self.En_modes):
-                    inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    for i_ell in range(len(self.ellrange)):
-                        self.levin_int.init_integral(self.ellrange, nongaussELL_flat[i_ell, :, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + self.En_modes][:], n_mode + self.En_modes))
-                    self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    nongaussCOSEBIEggmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
-                    if connected:
-                        nongaussCOSEBIEggmm[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
-                    eta = (time.time()-t0) / \
-                            60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode covariance calculation for the '
-                            'nonGaussian ggmm term '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-            
+                    jobs.append((m_mode, n_mode + self.En_modes, nongaussCOSEBIEggmm, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2) if connected else None))
+            self._project_4pt_jobs(self.levin_int, self.ell_limits, nongaussELL_flat, jobs, original_shape, 'COSEBI covariance  term', outer_logy=True)
             print("")
         else:
             nongaussCOSEBIEggmm = 0
@@ -1932,26 +1876,11 @@ class CovCOSEBI(CovELLSpace):
             nongaussELL_flat = np.reshape(nongaussELLgmgm, (len(self.ellrange), len(self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
+            jobs = []
             for m_mode in range(self.En_g_modes):
                 for n_mode in range(self.En_g_modes):
-                    inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    for i_ell in range(len(self.ellrange)):
-                        self.levin_int.init_integral(self.ellrange, nongaussELL_flat[i_ell, :, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + self.En_modes][:], n_mode + self.En_modes))
-                    self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    nongaussCOSEBIEgmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode + self.En_modes][:], m_mode + self.En_modes)),original_shape)
-                    if connected: 
-                        nongaussCOSEBIEgmgm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_ggl']) / self.deg2torad2
-                    eta = (time.time()-t0) / \
-                            60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode covariance calculation for the '
-                            'nonGaussian gmgm term '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-            
+                    jobs.append((m_mode + self.En_modes, n_mode + self.En_modes, nongaussCOSEBIEgmgm, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (survey_params_dict['survey_area_ggl']) / self.deg2torad2 if connected else None))
+            self._project_4pt_jobs(self.levin_int, self.ell_limits, nongaussELL_flat, jobs, original_shape, 'COSEBI covariance  term', outer_logy=True)
             print("")
         else:
             nongaussCOSEBIEgmgm = 0
@@ -1967,26 +1896,11 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes*self.En_modes
+            jobs = []
             for m_mode in range(self.En_modes):
                 for n_mode in range(self.En_g_modes):
-                    inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    for i_ell in range(len(self.ellrange)):
-                        self.levin_int.init_integral(self.ellrange, nongaussELL_flat[i_ell, :, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode + self.En_modes][:], n_mode + self.En_modes))
-                    self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, False)
-                    nongaussCOSEBIEmmgm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
-                    if connected:
-                        nongaussCOSEBIEmmgm[m_mode, n_mode, :, :, :, :, :, :] /= (max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2)
-                    eta = (time.time()-t0) / \
-                            60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode covariance calculation for the '
-                            'nonGaussian mmgm term '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-            
+                    jobs.append((m_mode, n_mode + self.En_modes, nongaussCOSEBIEmmgm, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2) if connected else None))
+            self._project_4pt_jobs(self.levin_int, self.ell_limits, nongaussELL_flat, jobs, original_shape, 'COSEBI covariance  term', outer_logy=False)
             print("")
         else:
             nongaussCOSEBIEmmgm = 0
@@ -2005,26 +1919,11 @@ class CovCOSEBI(CovELLSpace):
                 self.ellrange), flat_length))
             t0, tcomb = time.time(), 1
             tcombs = self.En_modes**2
+            jobs = []
             for m_mode in range(self.En_modes):
                 for n_mode in range(self.En_modes):
-                    inner_integral = np.zeros((len(self.ellrange), flat_length))
-                    for i_ell in range(len(self.ellrange)):
-                        self.levin_int.init_integral(self.ellrange, nongaussELL_flat[i_ell, :, :]*self.ellrange[:, None], True, True)
-                        inner_integral[i_ell, :] = np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[n_mode][:], n_mode))
-                    self.levin_int.init_integral(self.ellrange, inner_integral*self.ellrange[:, None], True, True)
-                    nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :] = 1.0/(4.0*np.pi**2)*np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[m_mode][:], m_mode)),original_shape)
-                    if connected:
-                        nongaussCOSEBIEEmmmm[m_mode, n_mode, :, :, :, :, :, :] /= (survey_params_dict['survey_area_lens'] / self.deg2torad2)
-                    eta = (time.time()-t0) / \
-                            60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode covariance calculation for the '
-                            'nonGaussian mmmm term '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-            
+                    jobs.append((m_mode, n_mode, nongaussCOSEBIEEmmmm, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (survey_params_dict['survey_area_lens'] / self.deg2torad2) if connected else None))
+            self._project_4pt_jobs(self.levin_int, self.ell_limits, nongaussELL_flat, jobs, original_shape, 'COSEBI covariance  term', outer_logy=True)
             print("")
             
         else:

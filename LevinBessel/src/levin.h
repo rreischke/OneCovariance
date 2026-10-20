@@ -88,6 +88,22 @@ private:
   std::vector<gsl_interp_accel *> acc_non_cov_Gauss_k1;
   std::vector<gsl_interp_accel *> acc_non_cov_Gauss_k2;
   std::vector<double> ell_w_ell;
+  double w_ell_log_min, w_ell_inv_dlog;
+  size_t w_ell_size;
+
+  /**
+   * Guess for the interval of the w_ell splines containing x, exact for log-spaced ell.
+   * Only used as a starting point for GSL's interval search, which checks and corrects it.
+   */
+  size_t w_ell_index_guess(double x) const
+  {
+    double guess = (log(x) - w_ell_log_min) * w_ell_inv_dlog;
+    if (!(guess > 0.0))
+    {
+      return 0;
+    }
+    return std::min(static_cast<size_t>(guess), w_ell_size - 2);
+  }
 
   double converged;
   uint *int_index_integral;
@@ -101,6 +117,44 @@ private:
   uint *int_m_mode, *int_n_mode;
   
   double gslIntegratecquad(double (*fc)(double, void *), double a, double b);
+
+  /**
+   * Everything the integrand of cquad_integrate_double_well needs, passed directly to
+   * gsl_integration_cquad to avoid per-evaluation thread look-ups.
+   */
+  struct DoubleWellParams
+  {
+    Levin *lp;
+    uint i;
+    gsl_spline *spline_m, *spline_n;
+    gsl_interp_accel *acc_m, *acc_n;
+  };
+
+  static double cquad_integrand_double_well_params(double x, void *p);
+
+  /**
+   * Same as DoubleWellParams for cquad_integrate_single_well.
+   */
+  struct SingleWellParams
+  {
+    Levin *lp;
+    uint i;
+    gsl_spline *spline_m;
+    gsl_interp_accel *acc_m;
+  };
+
+  static double cquad_integrand_single_well_params(double x, void *p);
+
+  /**
+   * Integrates column i of the integrand times the weight m_mode over the intervals given by limits.
+   */
+  double single_well_column(uint i, const std::vector<double>& limits, uint m_mode);
+
+  /**
+   * Integrates column i of the integrand times the weights m_mode and n_mode over the
+   * intervals given by limits.
+   */
+  double double_well_column(uint i, const std::vector<double>& limits, uint m_mode, uint n_mode);
 
 public:
   /**
@@ -278,9 +332,23 @@ public:
 
   std::vector<double> cquad_integrate_single_well(std::vector<double> limits, uint m_mode);
 
+  /**
+   * Same as cquad_integrate_single_well, but only for the integrand columns listed in indices and for
+   * several (limits, m_mode) jobs at once. Returns a list (one entry per job) of the results for each
+   * column in indices.
+   */
+  std::vector<std::vector<double>> cquad_integrate_single_well_subset(const std::vector<std::vector<double>>& limits, const std::vector<uint>& m_modes, const std::vector<uint>& indices);
+
   static double cquad_integrand_double_well(double x, void *p);
 
   std::vector<double> cquad_integrate_double_well(std::vector<double> limits, uint m_mode, uint n_mode);
+
+  /**
+   * Same as cquad_integrate_double_well, but only for the integrand columns listed in indices and for
+   * several (limits, m_mode, n_mode) jobs at once. Returns a list (one entry per job) of the results
+   * for each column in indices.
+   */
+  std::vector<std::vector<double>> cquad_integrate_double_well_subset(const std::vector<std::vector<double>>& limits, const std::vector<uint>& m_modes, const std::vector<uint>& n_modes, const std::vector<uint>& indices);
   
   static double integrand(double x, void *p);
 };

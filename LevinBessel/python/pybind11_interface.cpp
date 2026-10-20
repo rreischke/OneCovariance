@@ -53,7 +53,13 @@ PYBIND11_MODULE(levin, m)
          .def("cquad_integrate_single_well", &Levin::cquad_integrate_single_well,
               "limits"_a, "m_mode"_a,
               py::call_guard<py::gil_scoped_release>())
+         .def("cquad_integrate_single_well_subset", &Levin::cquad_integrate_single_well_subset,
+              "limits"_a, "m_modes"_a, "indices"_a,
+              py::call_guard<py::gil_scoped_release>())
          .def("cquad_integrate_double_well", &Levin::cquad_integrate_double_well,
               "limits"_a, "m_mode"_a, "n_mode"_a,
+              py::call_guard<py::gil_scoped_release>())
+         .def("cquad_integrate_double_well_subset", &Levin::cquad_integrate_double_well_subset,
+              "limits"_a, "m_modes"_a, "n_modes"_a, "indices"_a,
               py::call_guard<py::gil_scoped_release>());
 }

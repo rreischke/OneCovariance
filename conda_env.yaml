@@ -7,3 +7,6 @@ dependencies:
   - gfortran
   - gsl
   - pybind11
+  # from conda-forge, so that healpy and levin share one OpenMP runtime
+  # (the pip wheel bundles its own libomp, which crashes the SSC calculation on macOS)
+  - healpy
