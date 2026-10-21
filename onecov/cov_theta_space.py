@@ -458,7 +458,7 @@ class CovTHETASpace(CovELLSpace):
         series = np.zeros_like(x_series)
         for k in range(15):
             series += (-1)**k * x_series**(2*k + n + 2) \
-                / (2**(2*k + n) * factorial(k) * factorial(k + n) * (2*k + n + 2))
+                / float(2**(2*k + n) * factorial(k) * factorial(k + n) * (2*k + n + 2))
         return np.where(x < 2, series, closed)
 
     def __get_weights(self):
