@@ -5,8 +5,10 @@ import numpy as np
 from scipy.signal import argrelextrema
 
 try:
+    from onecov.cov_setup import cached_computation
     from onecov.cov_theta_space import CovTHETASpace
 except:
+    from cov_setup import cached_computation
     from cov_theta_space import CovTHETASpace
 
 class CovBandPowers(CovTHETASpace):
@@ -213,6 +215,8 @@ class CovBandPowers(CovTHETASpace):
         if not self.cov_dict['sn_only']:
             self.__get_WXY()
             self.levin_int.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
+            self._register_projection_weights(self.levin_int, self.ell_fourier_integral, self.WXY_stack,
+                                              obs_dict['bandpowers']['bandpower_accuracy'])
             self.ell_limits = []
             for mode in range(len(self.WXY_stack[:,0])):
                 limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode, :], np.less)[0][:]])
@@ -390,6 +394,13 @@ class CovBandPowers(CovTHETASpace):
                     self.T_of_theta_lensing[i_theta] = np.cos(np.pi/2.*((x - (xup - self.delta_ln_theta_lensing/2.))/self.delta_ln_theta_lensing))**2.0
 
     def __get_bandpower_weights(self, ells, ell_ul_bins, theta_range, T_of_theta, weights, label):
+        # independent of cosmology: reused from the cache if the inputs are the same
+        return cached_computation(
+            self.cache_dir, 'bandpower_weights',
+            ['v1', ells, ell_ul_bins, theta_range, T_of_theta, sorted(weights)],
+            lambda: self.__calc_bandpower_weights(ells, ell_ul_bins, theta_range, T_of_theta, weights, label))
+
+    def __calc_bandpower_weights(self, ells, ell_ul_bins, theta_range, T_of_theta, weights, label):
         """
         Calculates the Fourier weights of all bandpowers with bin edges
         ell_ul_bins.

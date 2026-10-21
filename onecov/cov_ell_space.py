@@ -7,7 +7,7 @@ import levin
 import numpy as np
 from camb import model
 from scipy.integrate import simpson
-from scipy.interpolate import RegularGridInterpolator, UnivariateSpline, interp1d
+from scipy.interpolate import Akima1DInterpolator, RegularGridInterpolator, UnivariateSpline, interp1d
 
 DEG2TORAD2 = (180 / np.pi) ** 2
 ARCMIN2TORAD2 = (60 * 60) * DEG2TORAD2
@@ -191,6 +191,296 @@ class CovELLSpace(PolySpectra):
     """
 
     @staticmethod
+    def _simpson_weights_nonuniform(x):
+        """
+        Weights w with sum(w*y) == scipy.integrate.simpson(y, x=x) for any y.
+        """
+        n = len(x)
+        w = np.zeros(n)
+        h = np.diff(x)
+        m = n if n % 2 == 1 else n - 1
+        h0, h1 = h[0:m - 1:2], h[1:m - 1:2]
+        hs, hr = h0 + h1, h1/h0
+        np.add.at(w, np.arange(0, m - 2, 2), hs/6*(2 - hr))
+        np.add.at(w, np.arange(1, m - 1, 2), hs/6*hs*hs/(h0*h1))
+        np.add.at(w, np.arange(2, m, 2), hs/6*(2 - 1/hr))
+        if n % 2 == 0:
+            h0, h1 = h[-2], h[-1]
+            w[-1] += (2*h1**2 + 3*h0*h1)/(6*(h0 + h1))
+            w[-2] += (h1**2 + 3*h0*h1)/(6*h0)
+            w[-3] -= h1**3/(6*h0*(h0 + h1))
+        return w
+
+    @staticmethod
+    def _steffen(x, y, x_eval, derivative=False, side='right'):
+        """
+        Steffen spline (as gsl_interp_steffen) through (x, y[:, column]),
+        evaluated (and its derivative if requested) at the sorted x_eval
+        within [x[0], x[-1]]. At the nodes the cubic piece to the given side
+        is used (the spline is continuous, its derivative continuous inside).
+        """
+        h = np.diff(x)
+        s = np.diff(y, axis=0)/h[:, None]
+        yp = np.empty_like(y)
+        yp[0], yp[-1] = s[0], s[-1]
+        p = (s[:-1]*h[1:, None] + s[1:]*h[:-1, None])/(h[:-1, None] + h[1:, None])
+        yp[1:-1] = (np.sign(s[:-1]) + np.sign(s[1:]))*np.minimum(np.minimum(np.abs(s[:-1]), np.abs(s[1:])), 0.5*np.abs(p))
+        a = (yp[:-1] + yp[1:] - 2*s)/h[:, None]**2
+        b = (3*s - 2*yp[:-1] - yp[1:])/h[:, None]
+        # coefficients per interval, expanded to the (sorted) evaluation points
+        i = np.clip(np.searchsorted(x, x_eval, side=side) - 1, 0, len(x) - 2)
+        counts = np.bincount(i, minlength=len(h))
+        t = (x_eval - x[i])[:, None]
+        a_e, b_e, c_e = np.repeat(a, counts, axis=0), np.repeat(b, counts, axis=0), np.repeat(yp[:-1], counts, axis=0)
+        out = a_e*t
+        out += b_e
+        out *= t
+        out += c_e
+        out *= t
+        out += np.repeat(y[:-1], counts, axis=0)
+        if not derivative:
+            return out
+        dout = 3*a_e*t
+        dout += 2*b_e
+        dout *= t
+        dout += c_e
+        return out, dout
+
+    def _integrand_at(self, x_tab, y_tab, x_eval, logy=True, derivative=False, side='right'):
+        """
+        The integrands y_tab[:, column] tabulated at x_tab evaluated at x_eval
+        as in Levin.init_integral: Steffen spline in ln x of ln y (of y if a
+        column is not positive), extrapolated linearly in ln x beyond the
+        table (with a non-positive slope at the upper end). With derivative,
+        also returns the derivative with respect to ln x, from the given side
+        (it jumps where the extrapolation starts).
+        """
+        lx, le = np.log(x_tab), np.log(x_eval)
+        positive = np.all(y_tab > 0, axis=0) if logy else np.zeros(y_tab.shape[1], dtype=bool)
+        Y = np.where(positive, np.log(np.where(y_tab > 0, y_tab, 1.0)), y_tab)
+        out = np.empty((len(le), y_tab.shape[1]))
+        dout = np.empty_like(out)
+        if side == 'right':
+            inside, above, below = (le >= lx[0]) & (le < lx[-1]), le >= lx[-1], le < lx[0]
+        else:
+            inside, above, below = (le > lx[0]) & (le <= lx[-1]), le > lx[-1], le <= lx[0]
+        out[inside], dout[inside] = self._steffen(lx, Y, le[inside], derivative=True, side=side)
+        slope = np.minimum((Y[-1] - Y[-2])/(lx[-1] - lx[-2]), 0.0)
+        out[above] = Y[-1] + slope*(le[above] - lx[-1])[:, None]
+        dout[above] = slope
+        slope0 = (Y[1] - Y[0])/(lx[1] - lx[0])
+        out[below] = Y[0] + slope0*(le[below] - lx[0])[:, None]
+        dout[below] = slope0
+        values = np.where(positive, np.exp(out), out)
+        if not derivative:
+            return values
+        return values, np.where(positive, values*dout, dout)
+
+    def _register_projection_weights(self, levin_int, ell, weights, accuracy):
+        """
+        Registers the weights handed to levin_int.init_w_ell (shape (modes,
+        len(ell))) for the quadrature projections (projection_method =
+        quadrature). The accuracy of Simpson's rule on the grid of the weights
+        is estimated by comparing with every second node; if it is worse than
+        a tenth of the requested accuracy, the weights are refined with Akima
+        interpolation (as used by levin) until it is (and below 1e-5 in any
+        case). If that does not succeed, the projections with this integrator
+        use cquad.
+        """
+        registry = self.__dict__.setdefault('_projection_weights_of', {})
+        if getattr(self, 'projection_method', 'quadrature') != 'quadrature':
+            return
+        ell = np.array(ell, dtype=float)
+        weights = np.array(weights, dtype=float)
+        # never coarser than 1e-5: the quadrature is cheap
+        tol = max(min(0.1*accuracy, 1e-5), 1e-10)
+        for _ in range(6):
+            error = self._weight_quadrature_error(ell, weights)
+            if error <= tol:
+                registry[id(levin_int)] = (ell, weights, levin_int, tol)
+                return
+            ell_mid = np.sqrt(ell[:-1]*ell[1:])
+            weights = np.concatenate((weights, Akima1DInterpolator(ell, weights, axis=1)(ell_mid)), axis=1)
+            ell = np.concatenate((ell, ell_mid))
+            order = np.argsort(ell)
+            ell, weights = ell[order], weights[:, order]
+        print("ProjectionWarning: the weight functions are not resolved well enough for the "
+              "quadrature projection (estimated error " + str(error) + "), using cquad instead.")
+
+    def _weight_quadrature_error(self, ell, weights):
+        """
+        Estimated relative error of Simpson's rule for int dell W(ell)^2/ell
+        on the grid ell (from the comparison with every second node).
+        """
+        idx = np.arange(0, len(ell), 2)
+        if idx[-1] != len(ell) - 1:
+            idx = np.append(idx, len(ell) - 1)
+        f = weights**2/ell
+        full = f @ self._simpson_weights_nonuniform(ell)
+        half = f[:, idx] @ self._simpson_weights_nonuniform(ell[idx])
+        ok = full > 0
+        if not np.any(ok):
+            return 0.0
+        return float(np.max(np.abs(full[ok] - half[ok])/15/full[ok]))
+
+    def _use_quadrature_projection(self, levin_int):
+        registered = getattr(self, '_projection_weights_of', {}).get(id(levin_int))
+        return (getattr(self, 'projection_method', 'quadrature') == 'quadrature'
+                and registered is not None and registered[2] is levin_int)
+
+    def _weights_on_nodes(self, levin_int, mode_list, lo, hi):
+        """
+        Nodes of the weight grid within [lo, hi] (including the end points)
+        and the weights of mode_list there (Akima interpolated at the ends).
+        """
+        ell_w, W = self._projection_weights_of[id(levin_int)][:2]
+        sel = (ell_w > lo) & (ell_w < hi)
+        x = np.concatenate(([lo], ell_w[sel], [hi]))
+        ends = Akima1DInterpolator(ell_w, W[mode_list], axis=1)([lo, hi])
+        return x, np.concatenate((ends[:, :1], W[mode_list][:, sel], ends[:, 1:]), axis=1)
+
+    def _project_gauss_quadrature(self, levin_int, integrand, keys, lo, hi):
+        """
+        int_lo^hi dell W_m(ell) W_n(ell) integrand(ell) for all (m, n) in
+        keys and all columns of the integrand (tabulated on self.ellrange),
+        with Simpson's rule on the nodes of the weights.
+        """
+        modes = sorted(set(m for key in keys for m in key))
+        position = {mode: i for i, mode in enumerate(modes)}
+        x, Wx = self._weights_on_nodes(levin_int, modes, lo, hi)
+        F = self._integrand_at(self.ellrange, integrand, x)
+        w = self._simpson_weights_nonuniform(x)
+        R = np.array([Wx[position[m]]*Wx[position[n]]*w for m, n in keys])
+        return R @ F
+
+    def _sampling_grid(self, lo, hi, integrand, logy, tol):
+        """
+        Grid on [lo, hi] for the piecewise cubic Hermite representation (in
+        ln ell, with exact values and derivatives) of the integrands as
+        interpolated in _integrand_at. It contains the nodes of
+        self.ellrange, where the Steffen spline is only once differentiable,
+        and the start of the extrapolation, so that every interval lies within
+        one cubic piece: exact for integrands interpolated in y, and refined
+        until the representation is accurate to tol (relative to the maximum
+        of each column) for those interpolated in ln y. None if that needs
+        more than 2^18 points.
+        """
+        nodes = self.ellrange[(self.ellrange > lo) & (self.ellrange < hi)]
+        dlog = np.log(self.ellrange[-1]/self.ellrange[0])/max(len(self.ellrange) - 1, 1)
+        base = [np.array([lo]), nodes]
+        if hi > self.ellrange[-1]:
+            start = max(lo, self.ellrange[-1])
+            n_tail = int(np.ceil(np.log(hi/start)/dlog))
+            base.append(np.geomspace(start, hi, n_tail + 1)[1:-1])
+        base = np.unique(np.concatenate(base + [np.array([hi])]))
+        lnbase = np.log(base)
+        for refine in (1, 2, 4, 8, 16, 32, 64, 128, 256):
+            if len(base)*refine > 2**18:
+                break
+            fractions = np.arange(refine)/refine
+            lngrid = np.append((lnbase[:-1, None] + np.diff(lnbase)[:, None]*fractions[None, :]).ravel(), lnbase[-1])
+            grid = np.exp(lngrid)
+            grid[0], grid[-1] = lo, hi
+            values, d_right = self._integrand_at(self.ellrange, integrand, grid, logy, derivative=True, side='right')
+            d_left = self._integrand_at(self.ellrange, integrand, grid, logy, derivative=True, side='left')[1]
+            mid = np.sqrt(grid[:-1]*grid[1:])
+            h = np.diff(np.log(grid))[:, None]
+            hermite = 0.5*(values[:-1] + values[1:]) + h/8*(d_right[:-1] - d_left[1:])
+            exact = self._integrand_at(self.ellrange, integrand, mid, logy)
+            scale = np.max(np.abs(values), axis=0)
+            scale[scale == 0] = 1.0
+            if np.max(np.abs(hermite - exact)/scale) <= tol:
+                return grid
+        return None
+
+    def _quadrature_vectors(self, levin_int, grid, modes, ell_limits):
+        """
+        For every mode the vectors (K, D_r, D_l) with
+        K @ f + D_r @ df_r + D_l @ df_l = int dell W(ell) p(ell)
+        over the integration range of the mode, where p is the piecewise
+        cubic Hermite interpolant (in u = ln ell) of the values f and the
+        derivatives d f/d u on grid, taken from the right (df_r, at the start
+        of each interval) and from the left (df_l, at its end). The integral
+        is done with Simpson's rule on the nodes of the weights.
+        """
+        u_grid = np.log(grid)
+        result = {}
+        for mode in modes:
+            lo, hi = ell_limits[mode][0], ell_limits[mode][-1]
+            x, Wx = self._weights_on_nodes(levin_int, [mode], lo, hi)
+            u = np.clip(np.log(x), u_grid[0], u_grid[-1])
+            k = np.clip(np.searchsorted(u_grid, u, side='right') - 1, 0, len(u_grid) - 2)
+            h = u_grid[k + 1] - u_grid[k]
+            t = (u - u_grid[k])/h
+            ww = self._simpson_weights_nonuniform(x)*Wx[0]
+            K = np.bincount(k, ww*(2*t**3 - 3*t**2 + 1), minlength=len(grid)) \
+                + np.bincount(k + 1, ww*(-2*t**3 + 3*t**2), minlength=len(grid))
+            D_r = np.bincount(k, ww*h*(t**3 - 2*t**2 + t), minlength=len(grid))
+            D_l = np.bincount(k + 1, ww*h*(t**3 - t**2), minlength=len(grid))
+            result[mode] = (K, D_r, D_l)
+        return result
+
+    def _project_4pt_quadrature(self, levin_int, ell_limits, ell_cov, live, original_shape, outer_logy):
+        """
+        Four-point projection of _project_4pt_jobs with fixed quadratures:
+        inner integrals over ell_2 for all ell_1 and all columns, then the
+        outer integrals over ell_1, both as matrix products with the vectors
+        of _quadrature_vectors. Returns False (nothing done) if the sampling
+        of the integrands can not be made accurate enough.
+        """
+        tol = self._projection_weights_of[id(levin_int)][3]
+        n_ell = len(self.ellrange)
+        flat = np.reshape(ell_cov, (n_ell, n_ell, -1))
+        unique_idx, inverse = self._unique_columns(np.reshape(flat, (n_ell*n_ell, -1)))
+        cov = flat[:, :, unique_idx]
+        n_col = cov.shape[2]
+        inner_modes = sorted(set(self._weight_key(job[1]) for job in live))
+        outer_modes = sorted(set(self._weight_key(job[0]) for job in live))
+        lo = min(ell_limits[m][0] for m in inner_modes + outer_modes)
+        hi = max(ell_limits[m][-1] for m in inner_modes + outer_modes)
+        # inner integrals, sampling checked on a few rows
+        rows = np.unique(np.linspace(0, n_ell - 1, 8).astype(int))
+        check = np.moveaxis(cov[rows]*self.ellrange[None, :, None], 1, 0).reshape(n_ell, -1)
+        grid = self._sampling_grid(lo, hi, check, True, tol)
+        if grid is None:
+            return False
+        K = self._quadrature_vectors(levin_int, grid, inner_modes, ell_limits)
+        K_inner = np.array([K[m][0] for m in inner_modes])
+        Dr_inner = np.array([K[m][1] for m in inner_modes])
+        Dl_inner = np.array([K[m][2] for m in inner_modes])
+        inner = np.zeros((len(inner_modes), n_ell, n_col))
+        chunk = max(1, int(1e7/(len(grid)*n_col)))
+        for start in range(0, n_ell, chunk):
+            block = cov[start:start + chunk]*self.ellrange[None, :, None]
+            n_rows = block.shape[0]
+            block = np.moveaxis(block, 1, 0).reshape(n_ell, -1)
+            values, d_right = self._integrand_at(self.ellrange, block, grid, True, derivative=True, side='right')
+            d_left = self._integrand_at(self.ellrange, block, grid, True, derivative=True, side='left')[1]
+            inner[:, start:start + n_rows, :] = (K_inner @ values + Dr_inner @ d_right
+                                                 + Dl_inner @ d_left).reshape(len(inner_modes), n_rows, n_col)
+        # outer integrals
+        results = {}
+        for i_n, n_mode in enumerate(inner_modes):
+            integrand = inner[i_n]*self.ellrange[:, None]
+            modes = sorted(set(self._weight_key(job[0]) for job in live if self._weight_key(job[1]) == n_mode))
+            grid_out = self._sampling_grid(lo, hi, integrand, outer_logy, tol)
+            if grid_out is None:
+                return False
+            K = self._quadrature_vectors(levin_int, grid_out, modes, ell_limits)
+            values, d_right = self._integrand_at(self.ellrange, integrand, grid_out, outer_logy, derivative=True,
+                                                 side='right')
+            d_left = self._integrand_at(self.ellrange, integrand, grid_out, outer_logy, derivative=True, side='left')[1]
+            for m_mode in modes:
+                K_m, Dr_m, Dl_m = K[m_mode]
+                results[(m_mode, n_mode)] = np.reshape((K_m @ values + Dr_m @ d_right + Dl_m @ d_left)[inverse],
+                                                       original_shape)
+        for job in live:
+            job[2][job[3]] = job[4]*results[(self._weight_key(job[0]), self._weight_key(job[1]))]
+            if job[5] is not None:
+                job[2][job[3]] /= job[5]
+        return True
+
+    @staticmethod
     def _n_areas(areas):
         """
         Number of survey areas given for a probe (zero if the probe has no
@@ -332,6 +622,22 @@ class CovELLSpace(PolySpectra):
             if len(live) == 0:
                 continue
             integrand = np.moveaxis(np.diagonal(ell_cov_flat)*self.ellrange,0,-1)
+            if self._use_quadrature_projection(levin_int):
+                by_range = {}
+                for key, key_jobs in live.items():
+                    limits = key_jobs[0][0]
+                    by_range.setdefault((limits[0], limits[-1]), []).append(key)
+                # identical columns (symmetries of the covariance) only once
+                unique_idx, inverse = self._unique_columns(integrand)
+                for (lo, hi), keys in by_range.items():
+                    results = self._project_gauss_quadrature(levin_int, integrand[:, unique_idx], keys, lo, hi)
+                    for key, result in zip(keys, results):
+                        result = np.reshape(result[inverse], original_shape)
+                        for job in live[key]:
+                            job[3][job[4]] = job[5] * result
+                            if len(job) > 6:
+                                job[3][job[6]] = job[3][job[4]]
+                continue
             levin_int.init_integral(self.ellrange, integrand, True, True)
             unique_idx, inverse = self._unique_columns(integrand)
             representatives = [key_jobs[0] for key_jobs in live.values()]
@@ -393,6 +699,13 @@ class CovELLSpace(PolySpectra):
                 live.append(job)
         if len(live) == 0:
             return
+        if self._use_quadrature_projection(levin_int):
+            if self._project_4pt_quadrature(levin_int, ell_limits, ell_cov, live, original_shape, outer_logy):
+                print('\rProjection of the four-point term for the ' + name + ' done in ' +
+                      str(round((time.time()-t0)/60, 1)) + 'min', end="")
+                return
+            print("ProjectionWarning: the integrands of the four-point projection for the " + name +
+                  " are not sampled accurately enough for the quadrature, using cquad instead.")
         ell_cov_flat = np.reshape(ell_cov, (len(self.ellrange), len(self.ellrange), -1))
         inner_modes = sorted(set(self._weight_key(job[1]) for job in live))
         inner = {n_mode: np.zeros((len(self.ellrange), ell_cov_flat.shape[2])) for n_mode in inner_modes}
@@ -511,6 +824,7 @@ class CovELLSpace(PolySpectra):
                 if self.ellrange_spec_ul is None and self.ellrange_photo_ul is None:
                     raise Exception("ConfigError: You require the C_ell covariance for lensing and clustering or ggl. However, you only specified the ellrange for lensing and not for clustering/GGL or vice versa. Please fix this in the config file under covELLspace settings.")     
         self.integration_intervals = obs_dict['THETAspace']['integration_intervals']
+        self.projection_method = obs_dict['ELLspace'].get('projection_method') or 'quadrature'
         self.deg2torad2 = DEG2TORAD2
         self.arcmin2torad2 = ARCMIN2TORAD2
         # Handle redshift-dependent bias if enabled

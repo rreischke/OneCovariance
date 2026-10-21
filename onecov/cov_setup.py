@@ -1,9 +1,84 @@
+import hashlib
+from os import getpid, makedirs, path, replace
+
 import astropy.cosmology
 import numpy as np
 from astropy import units as u
 from scipy.interpolate import interp1d
 from scipy.signal import argrelextrema
 
+
+
+def _hash_inputs(digest, value):
+    """Feeds numbers, strings, arrays and (nested) lists/tuples/dicts into a hash."""
+    if isinstance(value, dict):
+        for key in sorted(value):
+            _hash_inputs(digest, key)
+            _hash_inputs(digest, value[key])
+    elif isinstance(value, (list, tuple)):
+        digest.update(b'(%d' % len(value))
+        for item in value:
+            _hash_inputs(digest, item)
+        digest.update(b')')
+    elif isinstance(value, np.ndarray) or isinstance(value, np.generic):
+        value = np.ascontiguousarray(value)
+        digest.update(f'{value.dtype.str}{value.shape}'.encode())
+        digest.update(value.tobytes())
+    else:
+        digest.update(repr(value).encode())
+
+
+_levin_hash = []
+
+
+def _levin_build_hash():
+    """SHA-256 of the compiled levin extension (computed once per run)."""
+    if not _levin_hash:
+        try:
+            import levin
+            with open(levin.__file__, 'rb') as binary:
+                _levin_hash.append(hashlib.sha256(binary.read()).hexdigest())
+        except (ImportError, OSError, AttributeError):
+            _levin_hash.append('unknown')
+    return _levin_hash[0]
+
+
+def cached_computation(cache_dir, name, inputs, compute):
+    """
+    Returns compute(), an array or a dictionary of arrays. If cache_dir is
+    not None, the result is stored there under a hash of name and inputs
+    (which must determine the result completely) and read back by later
+    runs with the same inputs. Failing to read or write the cache only
+    causes the result to be computed.
+    """
+    if cache_dir is None:
+        return compute()
+    digest = hashlib.sha256(name.encode())
+    # results depend on the compiled integration routines as well: a rebuilt
+    # levin extension does not reuse results of the previous build
+    digest.update(_levin_build_hash().encode())
+    _hash_inputs(digest, inputs)
+    fname = path.join(cache_dir, name + '_' + digest.hexdigest()[:24] + '.npz')
+    if path.exists(fname):
+        try:
+            with np.load(fname) as cached:
+                if 'result' in cached.files:
+                    return cached['result']
+                return {key[5:]: cached[key] for key in cached.files}
+        except Exception as error:
+            print("CacheWarning: could not read " + fname + " (" + str(error) + "), recalculating.")
+    result = compute()
+    try:
+        makedirs(cache_dir, exist_ok=True)
+        tmp = fname + '.' + str(getpid()) + '.tmp.npz'
+        if isinstance(result, dict):
+            np.savez(tmp, **{'dict_' + key: np.asarray(val) for key, val in result.items()})
+        else:
+            np.savez(tmp, result=np.asarray(result))
+        replace(tmp, fname)
+    except OSError as error:
+        print("CacheWarning: could not write " + fname + " (" + str(error) + ").")
+    return result
 
 class Setup:
     """
@@ -1039,14 +1114,14 @@ class Setup:
             if theta_ul_bins[0] < npair_tab['theta_gg'][0] or theta_ul_bins[-1] > npair_tab['theta_gg'][-1]:
                 print("Warning: The provided file for the pair counts for the shot noise has a smaller angular range than required. " 
                     "In particular we require theta between: " + str(theta_ul_bins[0]) + " and " + str(theta_ul_bins[-1]) + ", but " 
-                    "the pair counts file only provides it from " + str(npair_tab['theta_gm'][0]) + " to " + str(npair_tab['theta_gm'][-1]) +
+                    "the pair counts file only provides it from " + str(npair_tab['theta_gg'][0]) + " to " + str(npair_tab['theta_gg'][-1]) +
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
             dnpair_gg_aux = np.ones((len(theta_ul_bins), len(dnpair_gg[0, 0, :, 0]), len(dnpair_gg[0, :, 0, 0]), len(dnpair_gg[0, 0, 0, :])))
-            for i_sample in range(i_tomo, len(dnpair_gg[0, 0, 0, :])):                
+            for i_sample in range(len(dnpair_gg[0, 0, 0, :])):
                 for i_tomo in range(len(dnpair_gg[0, :, 0, 0])):
                     for j_tomo in range(i_tomo, len(dnpair_gg[0, 0, :, 0])):
-                        spline = interp1d(theta_gm, dnpair_gg[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
+                        spline = interp1d(theta_gg, dnpair_gg[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
                         dnpair_gg_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
                         dnpair_gg_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0], i_tomo, j_tomo,i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
                                                                                                                 * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
@@ -1054,6 +1129,7 @@ class Setup:
                         dnpair_gg_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
                                                                                                                 * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
                                                                                                             * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
+                        dnpair_gg_aux[:, j_tomo, i_tomo, i_sample] = dnpair_gg_aux[:, i_tomo, j_tomo, i_sample]
             dnpair_gg = dnpair_gg_aux
             theta_gg = theta_ul_bins
             dnpair_gg = dnpair_gg.transpose(0, 3, 1, 2)
@@ -1080,7 +1156,7 @@ class Setup:
                     ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
                     "extending over the requested angular range.")
             dnpair_gm_aux = np.ones((len(theta_ul_bins), len(dnpair_gm[0, :, 0, 0]), len(dnpair_gm[0, 0, :, 0]), len(dnpair_gm[0, 0, 0, :])))
-            for i_sample in range(i_tomo, len(dnpair_gm[0, 0, 0, :])):                
+            for i_sample in range(len(dnpair_gm[0, 0, 0, :])):
                 for i_tomo in range(len(dnpair_gm[0, :, 0, 0])):
                     for j_tomo in range(len(dnpair_gm[0, 0, :, 0])):
                         spline = interp1d(theta_gm, dnpair_gm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
@@ -1129,6 +1205,7 @@ class Setup:
                         dnpair_mm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
                                                                                                                 * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
                                                                                                                 * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
+                        dnpair_mm_aux[:, j_tomo, i_tomo, i_sample] = dnpair_mm_aux[:, i_tomo, j_tomo, i_sample]
             dnpair_mm = dnpair_mm_aux
             theta_mm = theta_ul_bins
             dnpair_mm =dnpair_mm.transpose(0, 3, 1, 2)
@@ -1160,8 +1237,8 @@ class Setup:
 
         if gg and npair_tab['npair_gg'] is not None:
             if len(npair_tab['theta_gg']) == len(theta_ul_bins)-1 and \
-               (npair_tab['theta_gg'] == theta_lin or
-                    npair_tab['theta_gg'] == theta_log):
+               (np.allclose(npair_tab['theta_gg'], theta_lin) or
+                    np.allclose(npair_tab['theta_gg'], theta_log)):
                 npair_gg = npair_tab['npair_gg']
             else:
                 print("Warning: The number of pairs for clustering is not " +
@@ -1189,8 +1266,8 @@ class Setup:
 
         if gm and npair_tab['npair_gm'] is not None:
             if len(npair_tab['theta_gm']) == len(theta_ul_bins)-1 and \
-               (npair_tab['theta_gm'] == theta_lin or
-                    npair_tab['theta_gm'] == theta_log):
+               (np.allclose(npair_tab['theta_gm'], theta_lin) or
+                    np.allclose(npair_tab['theta_gm'], theta_log)):
                 npair_gm = npair_tab['npair_gm']
             else:
                 print("Warning: The number of pairs for galaxy-galaxy " +

@@ -11,8 +11,10 @@ from scipy.special import eval_legendre
 
 try:
     from onecov.cov_ell_space import CovELLSpace
+    from onecov.cov_setup import cached_computation
 except:
     from cov_ell_space import CovELLSpace
+    from cov_setup import cached_computation
 
 
 class CovCOSEBI(CovELLSpace):
@@ -189,6 +191,8 @@ class CovCOSEBI(CovELLSpace):
             self.weight_alias = self._weight_aliases(np.array(self.wn_kernels))
             self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc'] / np.sqrt(len(self.ell_limits[0][:])), 20, self.num_cores)
             self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
+            self._register_projection_weights(self.levin_int, self.wn_ells, np.array(self.wn_kernels),
+                                              obs_dict['COSEBIs']['En_acc'])
         if self.gg or self.gm:
             save_n_eff_clust = survey_params_dict['n_eff_clust']
         if self.mm or self.gm:
@@ -278,6 +282,11 @@ class CovCOSEBI(CovELLSpace):
         return rtminus
 
     def __get_W_ell(self, theta, tp, ell):
+        # independent of cosmology: reused from the cache if the inputs are the same
+        return cached_computation(self.cache_dir, 'cosebi_W_ell', ['v1', theta, tp, ell],
+                                  lambda: self.__calc_W_ell(theta, tp, ell))
+
+    def __calc_W_ell(self, theta, tp, ell):
         lev_w = levin.Levin(0, 16, 32, 1e-8, 200, self.num_cores)
         # Levin's method is accurate (and faster than cquad) for k*theta_max > 100
         lev_w.set_kb_levin_min(100)
@@ -300,6 +309,11 @@ class CovCOSEBI(CovELLSpace):
         return 2/theta**2*cumulative_simpson(theta[None, :]*Un, x=theta, axis=1, initial=0) - Un
 
     def __get_Wpsi_ell(self, n, Un, theta, ell):
+        # independent of cosmology: reused from the cache if the inputs are the same
+        return cached_computation(self.cache_dir, 'cosebi_Wpsi_ell', ['v1', Un, theta, ell],
+                                  lambda: self.__calc_Wpsi_ell(n, Un, theta, ell))
+
+    def __calc_Wpsi_ell(self, n, Un, theta, ell):
         lev = levin.Levin(0, 16, 32, 1e-8, 200, self.num_cores)
         # Levin's method is accurate (and faster than cquad) for k*theta_max > 100
         lev.set_kb_levin_min(100)

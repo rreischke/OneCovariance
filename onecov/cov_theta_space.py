@@ -227,6 +227,8 @@ class CovTHETASpace(CovELLSpace):
                     self.ell_limits.append(limits_at_mode_append)
                 self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
                 self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
+                self._register_projection_weights(self.levin_int_fourier, self.ell_fourier_integral, self.WXY_stack,
+                                                  obs_dict['THETAspace']['theta_acc'])
                 self.__get_signal(obs_dict)
         
     def __set_theta_bins(self,
@@ -458,7 +460,7 @@ class CovTHETASpace(CovELLSpace):
         series = np.zeros_like(x_series)
         for k in range(15):
             series += (-1)**k * x_series**(2*k + n + 2) \
-                / (2**(2*k + n) * factorial(k) * factorial(k + n) * (2*k + n + 2))
+                / float(2**(2*k + n) * factorial(k) * factorial(k + n) * (2*k + n + 2))
         return np.where(x < 2, series, closed)
 
     def __get_weights(self):

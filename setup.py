@@ -52,13 +52,15 @@ setup(
     install_requires=[
         'future',
         'pyyaml',
-        'numpy',
+        'numpy>=1.22',
         'astropy',
         'healpy',
         'pip>=20.0',
         'gsl',
-        'scipy>=1.11.0',
+        'scipy>=1.12.0',  # scipy.integrate.cumulative_simpson
         'wget',
         'matplotlib',
-        'hmf']
+        'hmf',
+        'camb',
+        'mpmath']
 )

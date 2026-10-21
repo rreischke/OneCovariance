@@ -255,6 +255,7 @@ class PolySpectra(HaloModel):
         self.tri_lowlim = prec['trispec']['lower_calc_limit']
         self.num_cores = prec['misc']['num_cores'] \
             if prec['misc']['num_cores'] > 0 else mp.cpu_count()
+        self.cache_dir = prec['misc'].get('cache_directory')
         if self.unbiased_clustering:
             self.lensing = obs_dict['observables']['cosmic_shear']
             self.mm = obs_dict['observables']['cosmic_shear']
@@ -386,11 +387,10 @@ class PolySpectra(HaloModel):
         if type_x == 'm' and type_y == 'm':
             # update mass range of the halo mass function
             M_min_save = hm_prec["log10M_min"]
-            step_save = self.mass_func.dlog10m
             Mmin = 2.0
             hm_prec["log10M_min"] = Mmin
             step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
-            self.mass_func.update(Mmin=Mmin, dlog10m=step)
+            self._use_extended_mass_range(Mmin, step)
             hm_prec['M_bins'] = len(self.mass_func.m)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
@@ -400,7 +400,7 @@ class PolySpectra(HaloModel):
 
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
-            self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
+            self._use_main_mass_range()
             hm_prec['M_bins'] = len(self.mass_func.m)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
@@ -1483,12 +1483,11 @@ class PolySpectra(HaloModel):
         if self.mm and tri_mmmm:
             # update mass range of the halo mass function
             M_min_save = hm_prec["log10M_min"]
-            step_save = self.mass_func.dlog10m
             Mmin = 2.0
             hm_prec["log10M_min"] = Mmin
             step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.mass_func.update(Mmin=Mmin, dlog10m=step)
+            self._use_extended_mass_range(Mmin, step)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
             hurly_m = self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')(self.logks_tri)
@@ -1496,7 +1495,7 @@ class PolySpectra(HaloModel):
             trispec1h_mmmm = ((hurly_m2*(self.mass_func.dndm*self._mass_weights())) @ hurly_m2.T)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
-            self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
+            self._use_main_mass_range()
             hm_prec['M_bins'] = len(self.mass_func.m)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
         return trispec1h_gggg * damp_1h, trispec1h_gggm * damp_1h, \

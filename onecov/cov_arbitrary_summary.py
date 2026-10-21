@@ -192,6 +192,8 @@ class CovARBsummary(CovELLSpace):
         self.weight_alias = self._weight_aliases(self.WXY_stack)
         self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.ell_limits, key=len))), 50, self.num_cores)
         self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
+        self._register_projection_weights(self.levin_int_fourier, self.ell_fourier_integral, self.WXY_stack,
+                                          obs_dict['arbitrary_summary']['arbitrary_accuracy'])
     
         self.theta_limits = []
         for mode in range(len(self.RXY_stack[:,0])):

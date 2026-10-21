@@ -99,6 +99,7 @@ class Input:
         self.nglimber = None
         self.multiplicative_shear_bias_uncertainty = None
         self.pixelised_cell = None
+        self.projection_method = 'quadrature'
         self.pixel_Nside = None
         self.n_spec = None
         self.ell_spec_min = None
@@ -370,6 +371,7 @@ class Input:
         # misc
         self.misc = dict()
         self.num_cores = None
+        self.cache_directory = None
 
     def __read_in_cov_dict(self,
                            config,
@@ -667,6 +669,12 @@ class Input:
                 self.limber = config['covELLspace settings'].getboolean('limber')
                 if not self.limber:
                     print("Note that the full non-Limber calculation slows down the code significantly.")
+            if 'projection_method' in config['covELLspace settings']:
+                self.projection_method = config['covELLspace settings']['projection_method'].strip().lower()
+                if self.projection_method not in ('quadrature', 'cquad'):
+                    raise Exception("ConfigError: [covELLspace settings]: 'projection_method' must be " +
+                                    "'quadrature' or 'cquad', not '" + self.projection_method + "'. Must " +
+                                    "be adjusted in config file " + config_name + ".")
             if 'pixelised_cell' in config['covELLspace settings']:
                 self.pixelised_cell = config['covELLspace settings'].getboolean('pixelised_cell')
                 if self.pixelised_cell:
@@ -3625,8 +3633,15 @@ class Input:
                 self.num_cores = int(config['misc']['num_cores'])
             else:
                 self.num_cores = 8
+            if 'cache_directory' in config['misc']:
+                self.cache_directory = config['misc']['cache_directory'].strip()
+            else:
+                self.cache_directory = './cache/'
         else:
             self.num_cores = 8
+            self.cache_directory = './cache/'
+        if self.cache_directory.lower() in ('', 'none', 'false'):
+            self.cache_directory = None
 
         return True
 
@@ -3711,7 +3726,7 @@ class Input:
                 'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type',
                 'ell_spec_photo_min', 'ell_spec_photo_max', 'ell_spec_photo_bins', 'ell_spec_photo_type',
                 'ell_min_clustering', 'ell_max_clustering', 'ell_bins_clustering', 'ell_type_clustering',
-                'ell_min_lensing', 'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing']
+                'ell_min_lensing', 'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing', 'projection_method']
         values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
                   self.delta_z, self.integration_steps, self.nz_polyorder,
                   self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.n_spec,
@@ -3719,7 +3734,7 @@ class Input:
                   self.ell_photo_min, self.ell_photo_max, self.ell_photo_bins, self.ell_photo_type,
                   self.ell_spec_photo_min, self.ell_spec_photo_max, self.ell_spec_photo_bins, self.ell_spec_photo_type,
                   self.ell_min_clustering, self.ell_max_clustering, self.ell_bins_clustering, self.ell_type_clustering,
-                  self.ell_min_lensing, self.ell_max_lensing, self.ell_bins_lensing, self.ell_type_lensing]
+                  self.ell_min_lensing, self.ell_max_lensing, self.ell_bins_lensing, self.ell_type_lensing, self.projection_method]
         self.covELLspace_settings = dict(zip(keys, values))
 
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
@@ -3727,7 +3742,7 @@ class Input:
                 'ell_spec_min', 'ell_spec_max', 'ell_spec_bins', 'ell_spec_type', 'ell_photo_min', 'ell_photo_max', 'ell_photo_bins', 'ell_photo_type',
                 'ell_spec_photo_min', 'ell_spec_photo_max', 'ell_spec_photo_bins', 'ell_spec_photo_type',
                 'ell_min_clustering', 'ell_max_clustering', 'ell_bins_clustering', 'ell_type_clustering',
-                'ell_min_lensing', 'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing','adjacent_clustering_bins']
+                'ell_min_lensing', 'ell_max_lensing', 'ell_bins_lensing', 'ell_type_lensing','adjacent_clustering_bins', 'projection_method']
         values = [self.limber, self.nglimber, self.pixelised_cell, self.pixel_Nside, self.ell_min, self.ell_max, self.ell_bins, self.ell_type,
                   self.delta_z, self.integration_steps, self.nz_polyorder,
                   self.tri_delta_z, self.multiplicative_shear_bias_uncertainty, self.n_spec,
@@ -3735,7 +3750,7 @@ class Input:
                   self.ell_photo_min, self.ell_photo_max, self.ell_photo_bins, self.ell_photo_type,
                   self.ell_spec_photo_min, self.ell_spec_photo_max, self.ell_spec_photo_bins, self.ell_spec_photo_type,
                   self.ell_min_clustering, self.ell_max_clustering, self.ell_bins_clustering, self.ell_type_clustering,
-                  self.ell_min_lensing, self.ell_max_lensing, self.ell_bins_lensing, self.ell_type_lensing,self.adjacent_clustering_bins]
+                  self.ell_min_lensing, self.ell_max_lensing, self.ell_bins_lensing, self.ell_type_lensing,self.adjacent_clustering_bins, self.projection_method]
         self.covELLspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.cosmicshear or self.ggl:
@@ -4064,8 +4079,8 @@ class Input:
                 'matter_mulim', 'small_k_damping_for1h', 'lower_calc_limit']
         self.trispec_prec_abr = dict(zip(keys, values))
 
-        keys = ['num_cores']
-        values = [self.num_cores]
+        keys = ['num_cores', 'cache_directory']
+        values = [self.num_cores, self.cache_directory]
         self.misc = dict(zip(keys, values))
 
         return True
@@ -4107,7 +4122,7 @@ class Input:
         params_used['powspec evaluation'] = self.powspec_prec_abr
         if self.nongauss:
             params_used['trispec evaluation'] = self.trispec_prec_abr
-        params_used['misc'] = self.misc
+        params_used['misc'] = {key: str(value) for key, value in self.misc.items()}
         #all_section_names: list[str] = config_pars.sections()
         #all_section_names.append("DEFAULT")
         #for section_name in all_section_names:
@@ -5314,6 +5329,58 @@ class FileInput:
 
         return theta_npair, npair
 
+    @staticmethod
+    def __expand_npair_filenames(files, combos, keyword):
+        """
+        The npair file names for the bin combinations combos (tuples of bin
+        numbers starting at 1). If the first given file name contains '?',
+        they are generated from it by replacing the '?' in order with the
+        numbers of each combination. Otherwise the files must be listed in
+        the order of combos.
+        """
+        if '?' not in files[0]:
+            if len(files) < len(combos):
+                raise Exception("ConfigError: [tabulated inputs files]: '" + keyword + "' lists " +
+                                str(len(files)) + " files, but " + str(len(combos)) + " (one per bin " +
+                                "combination) are needed. Alternatively give one file name with " +
+                                str(len(combos[0])) + " '?' to be replaced by the bin numbers.")
+            return files[:len(combos)]
+        parts = files[0].split('?')
+        if len(parts) - 1 != len(combos[0]):
+            raise Exception("ConfigError: Cannot auto-insert the bin combinations into the file name " +
+                            files[0] + " of [tabulated inputs files]: '" + keyword + "'. It must contain " +
+                            "exactly " + str(len(combos[0])) + " '?', which are replaced by the bin numbers " +
+                            "(tomographic bins" + (" and sample bin" if len(combos[0]) == 3 else "") + ").")
+        return [''.join(part + str(number) for part, number in zip(parts, combo)) + parts[-1]
+                for combo in combos]
+
+    def __read_npair_set(self, files, combos, shape, symmetric):
+        """
+        Reads one npair file per bin combination into an array with the
+        angular bins first and then shape (tomographic bin i, j, sample);
+        symmetric fills (j, i) as well. Returns (theta, npair), or (None,
+        None) if one of the files can not be read, in which case all files of
+        this kind are ignored.
+        """
+        theta_ref, npair = None, None
+        for nfile, combo in zip(files, combos):
+            theta, values = self.__read_in_npair_files(nfile)
+            if type(values) == bool:
+                return None, None
+            if theta_ref is not None and (len(theta) != len(theta_ref) or
+                                          np.any(np.abs(theta - theta_ref) > 1e-4)):
+                raise Exception("ConfigError: The angular bins in file " +
+                                path.join(self.npair_dir, nfile) + " don't match " +
+                                "the angular bins of the other files.")
+            if npair is None:
+                npair = np.zeros((len(values),) + tuple(shape))
+            index = tuple(number - 1 for number in combo) + (0,)*(3 - len(combo))
+            npair[(slice(None),) + index] = values
+            if symmetric:
+                npair[(slice(None), index[1], index[0], index[2])] = values
+            theta_ref = theta
+        return theta_ref, npair
+
     def __get_npair_tabs(self,
                          config):
         """
@@ -5359,251 +5426,40 @@ class FileInput:
         else:
             pass
 
+        n_sample = max(len(self.bias_dict['logmass_bins']) - 1, 1)
         if self.clustering and self.npair_gg_file is not None:
-            if len(self.bias_dict['logmass_bins']) <= 2:
-                if '?' in self.npair_gg_file[0]:
-                    loc_pt1 = self.npair_gg_file[0].find('?')
-                    fn_pt1 = self.npair_gg_file[0][:loc_pt1]
-                    loc_pt2 = self.npair_gg_file[0][loc_pt1+1:].find('?')
-                    if loc_pt2 == -1:
-                        raise Exception("ConfigError: Cannot auto-insert the " +
-                                        str(self.n_tomo_clust) + "*(" + str(self.n_tomo_clust) +
-                                        "+1) bin combinations into the filename " +
-                                        self.npair_gg_file[0] + ". Auto-insertion requires " +
-                                        "a filename with two '?' which the code replaces " +
-                                        "with bin combinations (1,1), (1,2), ...")
-                    fn_pt2 = self.npair_gg_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
-                    fn_pt3 = self.npair_gg_file[0][loc_pt1+loc_pt2+2:]
-                    self.npair_gg_file = []
-                    for bin1 in range(self.n_tomo_clust):
-                        for bin2 in range(bin1, self.n_tomo_clust):
-                            self.npair_gg_file.append(
-                                fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
-                fidx = 0
-                for bin1 in range(self.n_tomo_clust):
-                    for bin2 in range(bin1, self.n_tomo_clust):
-                        nfile = self.npair_gg_file[fidx]
-                        theta_npair_gg, npair_gg = self.__read_in_npair_files(
-                            nfile)
-                        if type(npair_gg) == bool:
-                            self.theta_npair_gg = None
-                            self.npair_gg = None
-                            break
-                        if self.theta_npair_gg is not None:
-                            if all(abs(theta_npair_gg - self.theta_npair_gg) > 1e-4):
-                                raise Exception("ConfigError: The angular bins " +
-                                                "in file " + path.join(self.npair_dir, nfile) +
-                                                " don't match the angular bins of the other " +
-                                                "files.")
-                        if self.npair_gg is None:
-                            self.npair_gg = np.zeros((len(npair_gg),
-                                                    self.n_tomo_clust,
-                                                    self.n_tomo_clust))
-                        self.theta_npair_gg = theta_npair_gg
-                        self.npair_gg[:, bin1, bin2] = npair_gg
-                        self.npair_gg[:, bin2, bin1] = npair_gg
-                        self.npair_gg = self.npair_gg[:,:,:,None]
-                        fidx += 1
-            else:
-                if '?' in self.npair_gg_file[0]:
-                    loc_pt1 = self.npair_gg_file[0].find('?')
-                    fn_pt1 = self.npair_gg_file[0][:loc_pt1]
-                    loc_pt2 = self.npair_gg_file[0][loc_pt1+1:].find('?')
-                    fn_pt2 = self.npair_gg_file[0][:loc_pt2]
-                    loc_pt3 = self.npair_gg_file[0][loc_pt2+1:].find('?')
-                    if loc_pt3 == -1:
-                        raise Exception("ConfigError: Cannot auto-insert the " +
-                                        str(self.n_tomo_clust) + "*(" + str(self.n_tomo_clust) +
-                                        "+1)/2*" + str(len(self.bias_dict['logmass_bins']))+ " bin combinations into the filename " +
-                                        self.npair_gg_file[0] + ". Auto-insertion requires " +
-                                        "a filename with three '?' which the code replaces " +
-                                        "with bin combinations (1,1,1), (1,2,1), ...,("+str(self.n_tomo_clust+1) + "," + str(self.n_tomo_clust + 1)  + "),...")
-                    fn_pt2 = self.npair_gg_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
-                    fn_pt3 = self.npair_gg_file[0][loc_pt1+loc_pt2+2:loc_pt3+1]
-                    fn_pt4 = self.npair_gg_file[0][loc_pt1+loc_pt3+3:]
-                    
-                    self.npair_gg_file = []
-                    for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
-                        for bin1 in range(self.n_tomo_clust):
-                            for bin2 in range(bin1, self.n_tomo_clust):
-                                self.npair_gg_file.append(
-                                    fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3 + str(bin_sample + 1) + fn_pt4)
-                fidx = 0
-                for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
-                    for bin1 in range(self.n_tomo_clust):
-                        for bin2 in range(bin1, self.n_tomo_clust):
-                            nfile = self.npair_gg_file[fidx]
-                            theta_npair_gg, npair_gg = self.__read_in_npair_files(
-                                nfile)
-                            if type(npair_gg) == bool:
-                                self.theta_npair_gg = None
-                                self.npair_gg = None
-                                break
-                            if self.theta_npair_gg is not None:
-                                if all(abs(theta_npair_gg - self.theta_npair_gg) > 1e-4):
-                                    raise Exception("ConfigError: The angular bins " +
-                                                    "in file " + path.join(self.npair_dir, nfile) +
-                                                    " don't match the angular bins of the other " +
-                                                    "files.")
-                            if self.npair_gg is None:
-                                self.npair_gg = np.zeros(len(npair_gg),
-                                                        self.n_tomo_clust,
-                                                        self.n_tomo_clust,
-                                                        len(self.bias_dict['logmass_bins']) - 1)
-                            self.theta_npair_gg = theta_npair_gg
-                            self.npair_gg[:, bin1, bin2, bin_sample] = npair_gg
-                            self.npair_gg[:, bin2, bin1, bin_sample] = npair_gg
-
-                            fidx += 1
+            # files per (bin_i, bin_j[, sample]), bin_i <= bin_j
+            combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
+                      for b1 in range(self.n_tomo_clust) for b2 in range(b1, self.n_tomo_clust)]
+            if n_sample == 1:
+                combos = [c[:2] for c in combos]
+            files = self.__expand_npair_filenames(self.npair_gg_file, combos, 'npair_gg_file')
+            self.theta_npair_gg, self.npair_gg = self.__read_npair_set(
+                files, combos, (self.n_tomo_clust, self.n_tomo_clust, n_sample), True)
 
         if self.ggl and self.npair_gm_file is not None:
-            if len(self.bias_dict['logmass_bins']) <= 2:
-                if '?' in self.npair_gm_file[0]:
-                    loc_pt1 = self.npair_gm_file[0].find('?')
-                    fn_pt1 = self.npair_gm_file[0][:loc_pt1]
-                    loc_pt2 = self.npair_gm_file[0][loc_pt1+1:].find('?')
-                    if loc_pt2 == -1:
-                        raise Exception("ConfigError: Cannot auto-insert the " +
-                                        str(self.n_tomo_clust) + "*" + str(self.n_tomo_lens) +
-                                        ") bin combinations into the filename " +
-                                        self.npair_gm_file[0] + ". Auto-insertion requires " +
-                                        "a filename with two '?' which the code replaces " +
-                                        "with bin combinations (1,1), (1,2), ...")
-                    fn_pt2 = self.npair_gm_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
-                    fn_pt3 = self.npair_gm_file[0][loc_pt1+loc_pt2+2:]
-                    self.npair_gm_file = []
-                    for bin1 in range(self.n_tomo_clust):
-                        for bin2 in range(self.n_tomo_lens):
-                            self.npair_gm_file.append(
-                                fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
-                fidx = 0
-                for bin1 in range(self.n_tomo_clust):
-                    for bin2 in range(self.n_tomo_lens):
-                        nfile = self.npair_gm_file[fidx]
-                        theta_npair_gm, npair_gm = self.__read_in_npair_files(
-                            nfile)
-                        if type(npair_gm) == bool:
-                            self.theta_npair_gm = None
-                            self.npair_gm = None
-                            break
-                        if self.theta_npair_gm is not None:
-                            if all(abs(theta_npair_gm - self.theta_npair_gm) > 1e-4):
-                                raise Exception("ConfigError: The angular bins " +
-                                                "in file " + path.join(self.npair_dir, nfile) +
-                                                " don't match the angular bins of the other " +
-                                                "files.")
-                        if self.npair_gm is None:
-                            self.npair_gm = np.zeros((len(npair_gm),
-                                                    self.n_tomo_clust,
-                                                    self.n_tomo_lens))
-                        self.theta_npair_gm = theta_npair_gm
-                        self.npair_gm[:, bin1, bin2] = npair_gm
-                        self.npair_gm = self.npair_gm[:,:,:,None]
-                        fidx += 1
-            else: 
-                if '?' in self.npair_gm_file[0]:
-                    loc_pt1 = self.npair_gm_file[0].find('?')
-                    fn_pt1 = self.npair_gm_file[0][:loc_pt1]
-                    loc_pt2 = self.npair_gm_file[0][loc_pt1+1:].find('?')
-                    fn_pt2 = self.npair_gm_file[0][:loc_pt2]
-                    loc_pt3 = self.npair_gm_file[0][loc_pt2+1:].find('?')
-                    if loc_pt3 == -1:
-                        raise Exception("ConfigError: Cannot auto-insert the " +
-                                        str(self.n_tomo_clust) + "*(" + str(self.n_tomo_lens) +
-                                        "+1)/2*" + str(len(self.bias_dict['logmass_bins']))+ " bin combinations into the filename " +
-                                        self.npair_gm_file[0] + ". Auto-insertion requires " +
-                                        "a filename with three '?' which the code replaces " +
-                                        "with bin combinations (1,1,1), (1,2,1), ...,(" +str(self.n_tomo_clust + 1) + "," + str(self.n_tomo_lens + 1)  + ",...")
-                    fn_pt2 = self.npair_gm_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
-                    fn_pt3 = self.npair_gm_file[0][loc_pt1+loc_pt2+2:loc_pt3+1]
-                    fn_pt4 = self.npair_gm_file[0][loc_pt1+loc_pt3+3:]
-                    
-                    self.npair_gm_file = []
-                    for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
-                        for bin1 in range(self.n_tomo_clust):
-                            for bin2 in range(self.n_tomo_lens):
-                                self.npair_gm_file.append(
-                                    fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3 + str(bin_sample + 1) + fn_pt4)
-                fidx = 0
-                for bin_sample in range(len(self.bias_dict['logmass_bins']) - 1):
-                    for bin1 in range(self.n_tomo_clust):
-                        for bin2 in range(self.n_tomo_lens):
-                            nfile = self.npair_gm_file[fidx]
-                            theta_npair_gm, npair_gm = self.__read_in_npair_files(
-                                nfile)
-                            if type(npair_gm) == bool:
-                                self.theta_npair_gm = None
-                                self.npair_gm = None
-                                break
-                            if self.theta_npair_gm is not None:
-                                if all(abs(theta_npair_gm - self.theta_npair_gm) > 1e-4):
-                                    raise Exception("ConfigError: The angular bins " +
-                                                    "in file " + path.join(self.npair_dir, nfile) +
-                                                    " don't match the angular bins of the other " +
-                                                    "files.")
-                            if self.npair_gm is None:
-                                self.npair_gm = np.zeros(len(npair_gm),
-                                                        self.n_tomo_clust,
-                                                        self.n_tomo_lens,
-                                                        len(self.bias_dict['logmass_bins']) - 1)
-                            self.theta_npair_gm = theta_npair_gm
-                            self.npair_gm[:, bin1, bin2, bin_sample] = npair_gm
-                            fidx += 1
+            # files per (lens bin, source bin[, sample])
+            combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
+                      for b1 in range(self.n_tomo_clust) for b2 in range(self.n_tomo_lens)]
+            if n_sample == 1:
+                combos = [c[:2] for c in combos]
+            files = self.__expand_npair_filenames(self.npair_gm_file, combos, 'npair_gm_file')
+            self.theta_npair_gm, self.npair_gm = self.__read_npair_set(
+                files, combos, (self.n_tomo_clust, self.n_tomo_lens, n_sample), False)
 
         if self.cosmicshear and self.npair_mm_file is not None:
-            if '?' in self.npair_mm_file[0]:
-                loc_pt1 = self.npair_mm_file[0].find('?')
-                fn_pt1 = self.npair_mm_file[0][:loc_pt1]
-                loc_pt2 = self.npair_mm_file[0][loc_pt1+1:].find('?')
-                if loc_pt2 == -1:
-                    raise Exception("ConfigError: Cannot auto-insert the " +
-                                    str(self.n_tomo_lens) + "*(" + str(self.n_tomo_lens) +
-                                    "+1) bin combinations into the filename " +
-                                    self.npair_mm_file[0] + ". Auto-insertion requires " +
-                                    "a filename with two '?' which the code replaces " +
-                                    "with bin combinations (1,1), (1,2), ...")
-                fn_pt2 = self.npair_mm_file[0][loc_pt1+1:loc_pt1+loc_pt2+1]
-                fn_pt3 = self.npair_mm_file[0][loc_pt1+loc_pt2+2:]
-                self.npair_mm_file = []
-                try:
-                    ascii.read(path.join(self.npair_dir, fn_pt1 + str(1) + fn_pt2 + str(self.n_tomo_lens) + fn_pt3))
-                    for bin1 in range(self.n_tomo_lens):
-                        for bin2 in range(bin1, self.n_tomo_lens):
-                            fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3
-                            self.npair_mm_file.append(
-                                fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3)
-                except:
-                    for bin1 in range(self.n_tomo_lens):
-                        for bin2 in range(bin1, self.n_tomo_lens):
-                            fn_pt1 + str(bin1+1) + fn_pt2 + str(bin2+1) + fn_pt3
-                            self.npair_mm_file.append(
-                                fn_pt1 + str(bin2+1) + fn_pt2 + str(bin1+1) + fn_pt3)
-            fidx = 0
-            for bin1 in range(self.n_tomo_lens):
-                for bin2 in range(bin1, self.n_tomo_lens):
-                    nfile = self.npair_mm_file[fidx]
-                    theta_npair_mm, npair_mm = self.__read_in_npair_files(
-                        nfile)
-                    if type(npair_mm) == bool:
-                        self.theta_npair_mm = None
-                        self.npair_mm = None
-                        break
-                    if self.theta_npair_mm is not None:
-                        if all(abs(theta_npair_mm - self.theta_npair_mm) > 1e-4):
-                            raise Exception("ConfigError: The angular bins " +
-                                            "in file " + path.join(self.npair_dir, nfile) +
-                                            " don't match the angular bins of the other " +
-                                            "files.")
-                    if self.npair_mm is None:
-                        self.npair_mm = np.zeros((len(npair_mm),
-                                                  self.n_tomo_lens,
-                                                  self.n_tomo_lens))
-                    self.theta_npair_mm = theta_npair_mm
-                    self.npair_mm[:, bin1, bin2] = npair_mm
-                    self.npair_mm[:, bin2, bin1] = npair_mm
-                    fidx += 1
-            if self.npair_mm is not None:
-                self.npair_mm = self.npair_mm[:,:,:,None]
+            # files per (bin_i, bin_j), bin_i <= bin_j; auto-generated names
+            # may also have the larger bin number first
+            combos = [(b1 + 1, b2 + 1) for b1 in range(self.n_tomo_lens)
+                      for b2 in range(b1, self.n_tomo_lens)]
+            name_combos = combos
+            if '?' in self.npair_mm_file[0] and self.n_tomo_lens > 1:
+                last = self.__expand_npair_filenames(self.npair_mm_file, [(1, self.n_tomo_lens)], 'npair_mm_file')[0]
+                if not path.exists(path.join(self.npair_dir, last)):
+                    name_combos = [(b2, b1) for b1, b2 in combos]
+            files = self.__expand_npair_filenames(self.npair_mm_file, name_combos, 'npair_mm_file')
+            self.theta_npair_mm, self.npair_mm = self.__read_npair_set(
+                files, combos, (self.n_tomo_lens, self.n_tomo_lens, 1), True)
           
     def __read_in_powspec_files(self,
                                 Pfile):

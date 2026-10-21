@@ -1,8 +1,11 @@
+import copy
+
 import camb
 import hmf
 import numpy as np
 from camb import model
 from hmf.density_field import transfer_models as hmf_transfer_models
+from hmf._internals._framework import Component
 from scipy.integrate import simpson
 from scipy.interpolate import RectBivariateSpline, UnivariateSpline, make_interp_spline
 from scipy.special import erf, sici
@@ -64,6 +67,34 @@ def simpson_weights(x):
         _simpson_weights_cache[key] = simpson(np.eye(len(x)), x=x, axis=-1)
     return _simpson_weights_cache[key]
 
+
+
+def _copy_mass_function(mass_func):
+    """
+    Deep copy of an hmf MassFunction that shares its components (transfer
+    and growth model, filter, ...), the CAMB parameters and the CAMB results
+    with the original. hmf replaces a component instead of changing it when
+    its parameters change, so sharing is safe; copying is not: the CAMB
+    transfer model only keeps part of its parameters when copied, and CAMB
+    results cannot be copied at all.
+    """
+    memo = {}
+    for value in mass_func.__dict__.values():
+        if isinstance(value, Component):
+            memo[id(value)] = value
+    camb_params = (mass_func.transfer_params or {}).get('camb_params')
+    if camb_params is not None:
+        memo[id(camb_params)] = camb_params
+    dispatch = copy._deepcopy_dispatch
+    previous = dispatch.get(camb.CAMBdata)
+    dispatch[camb.CAMBdata] = lambda obj, memo: obj
+    try:
+        return copy.deepcopy(mass_func, memo)
+    finally:
+        if previous is None:
+            del dispatch[camb.CAMBdata]
+        else:
+            dispatch[camb.CAMBdata] = previous
 
 class HaloModel(Setup):
     """
@@ -659,6 +690,29 @@ class HaloModel(Setup):
         res = (x*weights).reshape(-1, n_m) @ y.reshape(-1, n_m).T
         return res.reshape(n_k1, n_s1, n_k2, n_s2).transpose(0, 2, 1, 3)
 
+    def _use_extended_mass_range(self, Mmin, step):
+        """
+        Replaces the mass function by one on the extended mass range starting
+        at 10**Mmin (with spacing step) as needed for the matter integrals,
+        until _use_main_mass_range is called. A separate mass function object,
+        synchronised in redshift and k range, is kept for this instead of
+        changing the mass range of the main one back and forth, which makes
+        hmf recompute sigma(M) and everything derived from it every time.
+        """
+        main = self.mass_func
+        extended = getattr(self, '_mass_func_extended', None)
+        if extended is None:
+            extended = _copy_mass_function(main)
+            self._mass_func_extended = extended
+        extended.update(z=main.z, lnk_min=main.lnk_min, lnk_max=main.lnk_max,
+                        dlnk=main.dlnk, Mmin=Mmin, dlog10m=step)
+        self.__dict__.setdefault('_mass_func_stack', []).append(main)
+        self.mass_func = extended
+
+    def _use_main_mass_range(self):
+        """Restores the mass function replaced by _use_extended_mass_range."""
+        self.mass_func = self._mass_func_stack.pop()
+
     def small_k_damping(self,
                         mode,
                         krange,
@@ -836,12 +890,11 @@ class HaloModel(Setup):
                                        * self._mass_weights()) + Abmin*hurlyX[:, :, 0]
             if type_x == 'm':
                 M_min_save = hm_prec["log10M_min"]
-                step_save = self.mass_func.dlog10m
                 Mmin = 2.0
                 hm_prec["log10M_min"] = Mmin
                 step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
                 hm_prec['M_bins'] = len(self.mass_func.m)
-                self.mass_func.update(Mmin=Mmin, dlog10m=step)
+                self._use_extended_mass_range(Mmin, step)
                 self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
@@ -853,7 +906,7 @@ class HaloModel(Setup):
                                        * self._mass_weights()) + Abmin*hurlyX[:, :, 0]
 
                 hm_prec["log10M_min"] = M_min_save
-                self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
+                self._use_main_mass_range()
                 hm_prec['M_bins'] = len(self.mass_func.m)
                 self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
@@ -988,12 +1041,11 @@ class HaloModel(Setup):
 
             if type_x == 'm' and type_y == 'm':
                 M_min_save = hm_prec["log10M_min"]
-                step_save = self.mass_func.dlog10m
                 Mmin = 2.0
                 hm_prec["log10M_min"] = Mmin
                 step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
                 hm_prec['M_bins'] = len(self.mass_func.m)
-                self.mass_func.update(Mmin=Mmin, dlog10m=step)
+                self._use_extended_mass_range(Mmin, step)
                 self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
@@ -1004,7 +1056,7 @@ class HaloModel(Setup):
                 else:
                     integral_xy = self._outer_mass_integral(hurlyX, hurlyX, weights)
                 hm_prec["log10M_min"] = M_min_save
-                self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
+                self._use_main_mass_range()
                 hm_prec['M_bins'] = len(self.mass_func.m)
                 self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
             elif diagonal:
@@ -1108,12 +1160,11 @@ class HaloModel(Setup):
             integral_mmm = 0
         else:
             M_min_save = hm_prec["log10M_min"]
-            step_save = self.mass_func.dlog10m
             Mmin = 2.0
             hm_prec["log10M_min"] = Mmin
             step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.mass_func.update(Mmin=Mmin, dlog10m=step)
+            self._use_extended_mass_range(Mmin, step)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
             hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
@@ -1123,7 +1174,7 @@ class HaloModel(Setup):
                                      for i_s in range(hurlyX.shape[1])], axis=-1)
 
             hm_prec["log10M_min"] = M_min_save
-            self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
+            self._use_main_mass_range()
             hm_prec['M_bins'] = len(self.mass_func.m)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
             

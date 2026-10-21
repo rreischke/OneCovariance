@@ -1,6 +1,35 @@
 #include "levin.h"
 #include <iomanip>
 
+// Cylindrical Bessel function J_n(x) of integer order. For n >= 2 and x > n the
+// upward recurrence J_{k+1} = 2k/x J_k - J_{k-1} from J_0 and J_1 is stable and
+// accurate to machine precision, whereas gsl_sf_bessel_Jn uses a continued fraction
+// whose cost grows with x (and is less accurate in its large-x asymptotic branch).
+static inline double cyl_bessel_J(int n, double x)
+{
+    if (n == 0)
+    {
+        return gsl_sf_bessel_J0(x);
+    }
+    if (n == 1)
+    {
+        return gsl_sf_bessel_J1(x);
+    }
+    if (!(x > n))
+    {
+        return gsl_sf_bessel_Jn(n, x);
+    }
+    double j_prev = gsl_sf_bessel_J0(x);
+    double j = gsl_sf_bessel_J1(x);
+    for (int k = 1; k < n; k++)
+    {
+        double j_next = 2.0 * k / x * j - j_prev;
+        j_prev = j;
+        j = j_next;
+    }
+    return j;
+}
+
 const double Levin::min_interval = 1.e-4;
 const double Levin::tol_abs = 1.0e-200;
 const double Levin::min_sv = 1.0e-10;
@@ -380,10 +409,12 @@ double Levin::w_single(double x, double k, uint ell, uint i)
         switch (i)
         {
         case 0:
-            status = gsl_sf_bessel_Jn_e(ell, x * k, &r);
+            r.val = cyl_bessel_J(ell, x * k);
+            status = GSL_SUCCESS;
             break;
         case 1:
-            status = gsl_sf_bessel_Jn_e(ell + 1, x * k, &r);
+            r.val = cyl_bessel_J(ell + 1, x * k);
+            status = GSL_SUCCESS;
             break;
         default:
             return 0.0;
@@ -426,27 +457,35 @@ double Levin::w_double(double x, double k1, double k2, uint ell_1, uint ell_2, u
         switch (i)
         {
         case 0:
-            status = gsl_sf_bessel_Jn_e(ell_1, x * k1, &r);
+            r.val = cyl_bessel_J(ell_1, x * k1);
+            status = GSL_SUCCESS;
             result = r.val;
-            status = gsl_sf_bessel_Jn_e(ell_2, x * k2, &r);
+            r.val = cyl_bessel_J(ell_2, x * k2);
+            status = GSL_SUCCESS;
             result *= r.val;
             break;
         case 1:
-            status = gsl_sf_bessel_Jn_e(ell_1 + 1, x * k1, &r);
+            r.val = cyl_bessel_J(ell_1 + 1, x * k1);
+            status = GSL_SUCCESS;
             result = r.val;
-            status = gsl_sf_bessel_Jn_e(ell_2, x * k2, &r);
+            r.val = cyl_bessel_J(ell_2, x * k2);
+            status = GSL_SUCCESS;
             result *= r.val;
             break;
         case 2:
-            status = gsl_sf_bessel_Jn_e(ell_1, x * k1, &r);
+            r.val = cyl_bessel_J(ell_1, x * k1);
+            status = GSL_SUCCESS;
             result = r.val;
-            status = gsl_sf_bessel_Jn_e(ell_2 + 1, x * k2, &r);
+            r.val = cyl_bessel_J(ell_2 + 1, x * k2);
+            status = GSL_SUCCESS;
             result *= r.val;
             break;
         case 3:
-            status = gsl_sf_bessel_Jn_e(ell_1 + 1, x * k1, &r);
+            r.val = cyl_bessel_J(ell_1 + 1, x * k1);
+            status = GSL_SUCCESS;
             result = r.val;
-            status = gsl_sf_bessel_Jn_e(ell_2 + 1, x * k2, &r);
+            r.val = cyl_bessel_J(ell_2 + 1, x * k2);
+            status = GSL_SUCCESS;
             result *= r.val;
             break;
         default:
@@ -1159,7 +1198,7 @@ double Levin::single_bessel_integrand(double x, void *p)
     double bessel = 0.0;
     if (lp->type == 0)
     {
-        bessel = gsl_sf_bessel_Jn(lp->int_ell_single_bessel[tid], x * lp->int_k_single_bessel[tid]);
+        bessel = cyl_bessel_J(lp->int_ell_single_bessel[tid], x * lp->int_k_single_bessel[tid]);
     }
     else
     {
@@ -1175,7 +1214,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
     std::vector<double> result(number_integrals);
     if (k * b > 1000)
     {
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1186,7 +1225,7 @@ std::vector<double> Levin::single_bessel(double k, uint ell, double a, double b)
     else
     {
         gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1241,7 +1280,7 @@ double Levin::double_bessel_integrand(double x, void *p)
     double bessel = 0.0;
     if (lp->type == 2)
     {
-        bessel = gsl_sf_bessel_Jn(lp->int_ell1_double_bessel[tid], x * lp->int_k1_double_bessel[tid]) * gsl_sf_bessel_Jn(lp->int_ell2_double_bessel[tid], x * lp->int_k2_double_bessel[tid]);
+        bessel = cyl_bessel_J(lp->int_ell1_double_bessel[tid], x * lp->int_k1_double_bessel[tid]) * cyl_bessel_J(lp->int_ell2_double_bessel[tid], x * lp->int_k2_double_bessel[tid]);
     }
     else
     {
@@ -1256,7 +1295,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
     std::vector<double> result(number_integrals);
     if (k1 * b > 1000 && k2 * b > 1000)
     {
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1266,7 +1305,7 @@ std::vector<double> Levin::double_bessel(double k1, double k2, uint ell_1, uint 
     }
     else
     {
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
         for (uint i = 0; i < number_integrals; i++)
         {
             uint tid = omp_get_thread_num();
@@ -1293,7 +1332,7 @@ std::vector<double> Levin::double_bessel_many_args(std::vector<double> k1, doubl
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k1.size());
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
     for (uint i_k1 = 0; i_k1 < k1.size(); i_k1++)
     {
         if (k1.at(i_k1) * b > kb_levin_min && k2 * b > kb_levin_min)
@@ -1328,7 +1367,7 @@ std::vector<double> Levin::single_bessel_many_args(std::vector<double> k, uint e
 {
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k.size());
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
     for (uint ik = 0; ik < k.size(); ik++)
     {
         if (k.at(ik) * b > kb_levin_min)
@@ -1367,7 +1406,7 @@ std::vector<double> Levin::single_bessel_many_args_diagonal(std::vector<double> 
     gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
     int_index_integral = new uint[N_thread_max];
     std::vector<double> result(k.size());
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
+#pragma omp parallel for num_threads(N_thread_max) schedule(dynamic)
     for (uint ik = 0; ik < k.size(); ik++)
     {
         if (k.at(ik) * b > 1000000)
@@ -1485,6 +1524,9 @@ double Levin::cquad_integrand_single_well_params(double x, void *p)
     }
 }
 
+// The integrals cover all sub-intervals: stopping once a sub-interval contributes
+// little is not safe for oscillating weights (e.g. bandpowers, where the tail
+// beyond such a sub-interval still contributed up to ~0.5%).
 double Levin::single_well_column(uint i, const std::vector<double>& limits, uint m_mode)
 {
     uint tid = omp_get_thread_num();
@@ -1503,10 +1545,6 @@ double Levin::single_well_column(uint i, const std::vector<double>& limits, uint
         double e, result_aux;
         gsl_integration_cquad(&gf, limits.at(j), limits.at(j + 1), 0.0, relative_tol, cquad_workspaces[tid], &result_aux, &e, NULL);
         result += result_aux;
-        if (abs(result_aux / result) < converged && limits.at(j) > 1e3)
-        {
-            break;
-        }
     }
     return result;
 }
@@ -1593,10 +1631,6 @@ double Levin::double_well_column(uint i, const std::vector<double>& limits, uint
         double e, result_aux;
         gsl_integration_cquad(&gf, limits.at(j), limits.at(j + 1), 0.0, relative_tol, cquad_workspaces[tid], &result_aux, &e, NULL);
         result += result_aux;
-        if (abs(result_aux / result) < converged && limits.at(j) > 5e3)
-        {
-            break;
-        }
     }
     return result;
 }
