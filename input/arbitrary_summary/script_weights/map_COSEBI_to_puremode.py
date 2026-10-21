@@ -3,6 +3,8 @@ from argparse import ArgumentParser
 
 import numpy as np
 from mpmath import mp
+from scipy.integrate import simpson
+
 
 parser = ArgumentParser(description='Map COSEBIs to pure E/B mode correlation functions')
 parser.add_argument('--data', dest='data', type=str, required=True, nargs=2, help="File containing E and B COSEBIS measurements")
@@ -128,8 +130,8 @@ for n in range(Nmax_mm):
         theta_int = np.geomspace(theta_ul_bins[i_theta] , theta_ul_bins[i_theta + 1], 100)
         Tplus_inter = np.interp(theta_int,theta,Tplus[n,:])
         Tminus_inter = np.interp(theta_int,theta,Tminus[n,:])
-        Tplus_binned = 1/(theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta])*np.trapz(Tplus_inter,theta_int)
-        Tminus_binned = 1/(theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta])*np.trapz(Tminus_inter,theta_int)
+        Tplus_binned = 1/(theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta])*simpson(Tplus_inter,x = theta_int)
+        Tminus_binned = 1/(theta_ul_bins[i_theta + 1] - theta_ul_bins[i_theta])*simpson(Tminus_inter,x = theta_int)
         En_to_E_plus[i_theta, n] = 1/bar_theta**2/B*Tplus_binned
         En_to_E_minus[i_theta, n] = 1/bar_theta**2/B*Tminus_binned
         Bn_to_B_plus[i_theta, n] = 1/bar_theta**2/B*Tplus_binned

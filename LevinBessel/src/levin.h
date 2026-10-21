@@ -73,6 +73,8 @@ private:
   std::vector<bool> logy;
   std::vector<double> slope, slope0;
   double relative_tol;
+  // below k*b = kb_levin_min the *_bessel_many_args integrals are done with cquad instead of Levin's method
+  double kb_levin_min = 1000;
   bool already_called;
 
   std::vector<gsl_interp_accel *> acc_integrand;
@@ -321,6 +323,11 @@ public:
   static double double_bessel_integrand(double, void *);
 
   std::vector<double> single_bessel_many_args(std::vector<double> k, uint ell, double a, double b);
+
+  /**
+   * Sets the value of k*b above which the *_bessel_many_args integrals use Levin's method (default 1000).
+   */
+  void set_kb_levin_min(double kb) { kb_levin_min = kb; }
 
   std::vector<double> single_bessel_many_args_diagonal(std::vector<double> k, uint ell, double a, double b);
 

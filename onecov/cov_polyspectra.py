@@ -322,7 +322,6 @@ class PolySpectra(HaloModel):
         self.ngal = self.nbar(hod_dict)
         self.ncen = self.nbar_cen(hod_dict)
         self.nsat = self.nbar_sat(hod_dict)
-        self.norm_bias = -1
         self.effective_bias = \
             self.calc_effective_bias(
                 bias_dict, hod_dict, prec['hm'])
@@ -393,24 +392,23 @@ class PolySpectra(HaloModel):
             step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
             self.mass_func.update(Mmin=Mmin, dlog10m=step)
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
             hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
             hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
-            integral = simpson(
-                hurlyX*hurlyY*self.mass_func.dndm, x = self.mass_func.m)
+            integral = (hurlyX*hurlyY) @ (self.mass_func.dndm*self._mass_weights())
 
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
         else:
             hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
             hurlyY = self.hurly_x(bias_dict, hod_dict, type_y)
-            integral = simpson(hurlyX[:,:,None,:]*hurlyY[:,None,:,:]*self.mass_func.dndm,
-                               x = self.mass_func.m)
+            integral = np.einsum('ksm,ktm,m->kst', hurlyX, hurlyY,
+                                 self.mass_func.dndm*self._mass_weights(), optimize=True)
 
         return integral
 
@@ -479,10 +477,9 @@ class PolySpectra(HaloModel):
             bias_fac /= bias_dict['bias_2h']
 
 
-        integralX = bias_fac*simpson(self.mass_func.dndm * bias * hurlyX,
-                                      x = self.mass_func.m)
-        integralY = bias_fac*simpson(self.mass_func.dndm * bias * hurlyY,
-                                      x = self.mass_func.m)
+        weights = self.mass_func.dndm * bias * self._mass_weights()
+        integralX = bias_fac*(hurlyX @ weights)
+        integralY = bias_fac*(hurlyY @ weights)
 
         return integralX[:,:,None]*integralY[:,None,:]*self.mass_func.power[:,None,None]
 
@@ -761,18 +758,15 @@ class PolySpectra(HaloModel):
         if self.mm or self.unbiased_clustering:
             integral_mm = \
                 self.halo_model_integral_I_alpha_xy(
-                    bias_dict, hod_dict, hm_prec, 1, 'm', 'm')
-            integral_mm = np.einsum('iijj->ij', integral_mm)
+                    bias_dict, hod_dict, hm_prec, 1, 'm', 'm', diagonal=True)
         if self.gm and not self.unbiased_clustering:
             integral_gm = \
                 self.halo_model_integral_I_alpha_xy(
-                    bias_dict, hod_dict, hm_prec, 1, 'g', 'm')
-            integral_gm = np.einsum('iijj->ij', integral_gm)
+                    bias_dict, hod_dict, hm_prec, 1, 'g', 'm', diagonal=True)
         if self.gg and not self.unbiased_clustering:
             integral_gg = \
                 self.halo_model_integral_I_alpha_xy(
-                    bias_dict, hod_dict, hm_prec, 1, 'g', 'g')
-            integral_gg = np.diagonal(np.diagonal(integral_gg, axis1 = 0, axis2 = 1), axis1 = 0, axis2 = 1)
+                    bias_dict, hod_dict, hm_prec, 1, 'g', 'g', diagonal=True)
         k3lnPkspl = UnivariateSpline(np.log(self.mass_func.k),np.log(self.mass_func.k**3*self.mass_func.power),k = 3,s = 5*min(self.mass_func.k[1:]- self.mass_func.k[:-1]),ext=0)
         dk3lnPkspl_dlnk = k3lnPkspl.derivative()
         deriv_Plin = dk3lnPkspl_dlnk(np.log(self.mass_func.k))
@@ -1399,7 +1393,6 @@ class PolySpectra(HaloModel):
         """
 
         k_dim = len(self.krange_tri)
-        M_dim = len(self.mass_func.m)
 
         trispec1h_gggg = np.zeros((k_dim, k_dim,
                                    self.sample_dim, self.sample_dim))
@@ -1449,66 +1442,43 @@ class PolySpectra(HaloModel):
             self.hurly_x_spline_logk(bias_dict, hod_dict, 'cen')
         hurly_s_spline = \
             self.hurly_x_spline_logk(bias_dict, hod_dict, 'sat')
-        hurly_c = np.zeros((k_dim, self.sample_dim, M_dim))
-        hurly_s = np.zeros((k_dim, self.sample_dim, M_dim))
         hurly_m_spline = \
             self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')
-        hurly_m = np.zeros((k_dim, self.sample_dim, M_dim))
-        for nbin in range(self.sample_dim):
-            for idxM in range(M_dim):
-                hurly_c[:, nbin, idxM] = \
-                    hurly_c_spline[nbin][idxM](self.logks_tri)
-                hurly_s[:, nbin, idxM] = \
-                    hurly_s_spline[nbin][idxM](self.logks_tri)
-                hurly_m[:, nbin, idxM] = \
-                    hurly_m_spline[nbin][idxM](self.logks_tri)
+        hurly_c = hurly_c_spline(self.logks_tri)
+        hurly_s = hurly_s_spline(self.logks_tri)
+        hurly_m = hurly_m_spline(self.logks_tri)
+        weights = self.mass_func.dndm*self._mass_weights()
 
 
         if self.gg and tri_gggg:
-            integrand = np.sqrt((4 * hurly_c[:, None, :, None, :] 
-                        * hurly_s[:, None, :, None, :]**3 + hurly_s[:, None, :, None, :]**4)
-                    * (4 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]**3
-                        + hurly_s[None, :, None, :, :]**4)) \
-                    * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(4)
-            trispec1h_gggg = simpson(integrand, x = self.mass_func.m)
+            trispec1h_gggg = self.__sqrt_outer_mass_integral(
+                4 * hurly_c * hurly_s**3 + hurly_s**4,
+                4 * hurly_c * hurly_s**3 + hurly_s**4,
+                weights)*self.__poisson(4)
         if self.gg and self.gm and self.cross_terms and tri_gggm:
-            integrand = np.sqrt(
-                    (3 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**2
-                     + hurly_s[:, None, :, None, :]**3)
-                    * hurly_m[:, None, :, None, :]
-                    * (3 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]**2
-                        + hurly_s[None, :, None, :, :]**3)
-                    * hurly_m[None, :, None, :, :]) \
-                    * self.mass_func.dndm[None, None, None, None, :] * self.__poisson(3)
-            trispec1h_gggm = simpson(integrand, x = self.mass_func.m)
+            trispec1h_gggm = self.__sqrt_outer_mass_integral(
+                (3 * hurly_c * hurly_s**2 + hurly_s**3) * hurly_m,
+                (3 * hurly_c * hurly_s**2 + hurly_s**3) * hurly_m,
+                weights)*self.__poisson(3)
         
         if self.gg and self.mm and self.cross_terms and tri_ggmm:
             integrand = np.sqrt(
                 (4 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**3
                     + hurly_s[None, :, None, :, :]**4)
-                * hurly_m[None, :, None, :, :]**4) \
-                * self.mass_func.dndm[None, None, None, None, :] 
-            trispec1h_ggmm = simpson(integrand, x = self.mass_func.m)
+                * hurly_m[None, :, None, :, :]**4)
+            trispec1h_ggmm = integrand @ weights
  
         if self.gm and tri_gmgm:
-            integrand = np.sqrt(
-                (2 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]
-                    + hurly_s[:, None, :, None, :]**2)
-                * hurly_m[:, None, :, None, :]**2
-                * (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
-                    + hurly_s[None, :, None, :, :]**2)
-                * hurly_m[None, :, None, :, :]**2) \
-                * self.mass_func.dndm[None, None, None, None, :]
-            trispec1h_gmgm = simpson(integrand, x = self.mass_func.m)
+            trispec1h_gmgm = self.__sqrt_outer_mass_integral(
+                (2 * hurly_c * hurly_s + hurly_s**2) * hurly_m**2,
+                (2 * hurly_c * hurly_s + hurly_s**2) * hurly_m**2,
+                weights)
 
         if self.mm and self.gm and self.cross_terms and tri_mmgm:
-            integrand = np.sqrt(
-                hurly_m[:, None, :, None, :]**4
-                * (2 * hurly_c[None, :, None, :, :] * hurly_s[None, :, None, :, :]
-                    + hurly_s[None, :, None, :, :]**2)
-                * hurly_m[None, :, None, :, :]**2) \
-                * self.mass_func.dndm[None, None, None, None, :]
-            trispec1h_mmgm = simpson(integrand, x = self.mass_func.m)
+            trispec1h_mmgm = self.__sqrt_outer_mass_integral(
+                hurly_m**4,
+                (2 * hurly_c * hurly_s + hurly_s**2) * hurly_m**2,
+                weights)
 
         if self.mm and tri_mmmm:
             # update mass range of the halo mass function
@@ -1519,27 +1489,41 @@ class PolySpectra(HaloModel):
             step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
             hm_prec['M_bins'] = len(self.mass_func.m)
             self.mass_func.update(Mmin=Mmin, dlog10m=step)
-            self.hod.hod_update(bias_dict, hm_prec)
-            M_dim = len(self.mass_func.m)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
-            hurly_m_spline = self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')
-            hurly_m = np.zeros((k_dim, self.sample_dim, M_dim))
-            for nbin in range(self.sample_dim):
-                for idxM in range(M_dim):
-                    hurly_m[:, nbin, idxM] = \
-                        hurly_m_spline[nbin][idxM](self.logks_tri)
-            
-            
-            integrand = hurly_m[:, None, 0, :]**2 * hurly_m[None, :, 0, :]**2 * self.mass_func.dndm[None, None, :]
-            trispec1h_mmmm = simpson(integrand, x = self.mass_func.m)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
+            hurly_m = self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')(self.logks_tri)
+            hurly_m2 = hurly_m[:, 0, :]**2
+            trispec1h_mmmm = ((hurly_m2*(self.mass_func.dndm*self._mass_weights())) @ hurly_m2.T)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
             # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
         return trispec1h_gggg * damp_1h, trispec1h_gggm * damp_1h, \
             trispec1h_ggmm * damp_1h, trispec1h_gmgm * damp_1h, \
             trispec1h_mmgm * damp_1h, trispec1h_mmmm * damp_1h
+
+    def __sqrt_outer_mass_integral(self, a, b, weights):
+        """
+        sum_M weights[M] sqrt(a[k1, s1, M] b[k2, s2, M]) with shape
+        (k1, k2, s1, s2), via sqrt|a| sqrt|b| for pairs of equal sign.
+        As for the direct evaluation, the result is nan if a and b have
+        opposite signs at any mass (or are nan).
+        """
+        pos_a, neg_a, pos_b, neg_b = a > 0, a < 0, b > 0, b < 0
+        root_a, root_b = np.sqrt(np.abs(a)), np.sqrt(np.abs(b))
+        res = self._outer_mass_integral(root_a*pos_a, root_b*pos_b, weights)
+        if neg_a.any() and neg_b.any():
+            res += self._outer_mass_integral(root_a*neg_a, root_b*neg_b, weights)
+        if (neg_a.any() and pos_b.any()) or (pos_a.any() and neg_b.any()) \
+                or np.isnan(a).any() or np.isnan(b).any():
+            ones = np.ones_like(weights)
+            mixed = self._outer_mass_integral(1.0*neg_a, 1.0*pos_b, ones) \
+                + self._outer_mass_integral(1.0*pos_a, 1.0*neg_b, ones) \
+                + self._outer_mass_integral(1.0*np.isnan(a), np.ones_like(b), ones) \
+                + self._outer_mass_integral(np.ones_like(a), 1.0*np.isnan(b), ones)
+            res[mixed > 0] = np.nan
+        return res
 
     def __calc_int_for_trispec_2h(self,
                                   phi,
@@ -1828,6 +1812,108 @@ class PolySpectra(HaloModel):
         """
         return 3/7 + 4/7 * mu*mu + .5*mu * (ki/kj + kj/ki)
 
+    def __pt_angular_integrals(self):
+        """
+        Angular averages of the perturbation theory integrands of the 2-,
+        3- and 4-halo trispectrum terms (__calc_int_for_trispec_2h/3h/4h)
+        for all pairs of wavenumbers of the trispectrum k-grid.
+
+        The integrands are symmetric under mu -> -mu, so they are averaged
+        over phi in [0, pi/2] with a composite Gauss-Legendre rule,
+        vectorised over all pairs. The panels are refined geometrically
+        towards phi = 0, where the integrands vary on the scale
+        |k_i - k_j|/k (for k_i = k_j at large k they are dominated by a
+        narrow peak where |k_i - k_j| is close to the peak of the power
+        spectrum), and there is a panel boundary at the matter_mulim cut.
+
+        Returns
+        -------
+        int_2h, int_3h, int_4h : arrays
+            with shape (tri log10k bins, tri log10k bins)
+        """
+        phi_c = np.arccos(1 - self.trispec_matter_mulim)
+        edges = np.unique(np.concatenate(([0, phi_c, np.pi/2], np.geomspace(1e-7, np.pi/2, 60))))
+        x_gl, w_gl = np.polynomial.legendre.leggauss(24)
+        half = 0.5*(edges[1:] - edges[:-1])
+        phi = (half[:, None]*(x_gl[None, :] + 1) + edges[:-1, None]).ravel()
+        weights = 2/np.pi*(half[:, None]*w_gl[None, :]).ravel()
+        k_dim = len(self.krange_tri)
+        int_2h, int_3h, int_4h = (np.zeros((k_dim, k_dim)) for _ in range(3))
+        idx_i, idx_j = np.triu_indices(k_dim)
+        chunk = max(1, int(1e6 // len(phi)))
+        for start in range(0, len(idx_i), chunk):
+            i, j = idx_i[start:start + chunk], idx_j[start:start + chunk]
+            integrands = self.__pt_angular_integrands(phi[None, :], self.krange_tri[i][:, None], self.krange_tri[j][:, None])
+            for result, integrand in zip((int_2h, int_3h, int_4h), integrands):
+                result[i, j] = integrand @ weights
+                result[j, i] = result[i, j]
+        return int_2h, int_3h, int_4h
+
+    def __pt_angular_integrands(self,
+                                phi,
+                                ki,
+                                kj):
+        """
+        Vectorised integrands of __calc_int_for_trispec_2h, _3h and _4h
+        (see there). |k_i - k_j| and the terms proportional to 1 - mu are
+        written without cancellation, 1 - mu = 2 sin^2(phi/2).
+        """
+        mu, s2 = np.cos(phi), np.sin(phi/2)**2
+        excl = np.abs(ki - kj) < self.trispec_matter_klim
+        mulim = self.trispec_matter_mulim
+        km = np.sqrt((ki - kj)**2 + 4*ki*kj*s2)
+        kp = np.sqrt(ki*ki + kj*kj + 2*ki*kj*mu)
+        pm = np.exp(self.Plin_spline(np.log(km)))
+        pp = np.exp(self.Plin_spline(np.log(kp)))
+        pi = np.exp(self.Plin_spline(np.log(ki)))
+        pj = np.exp(self.Plin_spline(np.log(kj)))
+        int_2h = np.where(excl & (1 - mu < mulim), 0, pm) \
+            + np.where(excl & (1 + mu < mulim), 0, pp)
+        # bispectrum at mu (partner k_+) and -mu (partner k_-)
+        int_3h = 0
+        for sign_mu, k_s, p_s, num_i, num_j in ((mu, kp, pp, ki + mu*kj, kj + mu*ki),
+                                                (-mu, km, pm, (ki - kj) + 2*kj*s2, (kj - ki) + 2*ki*s2)):
+            term1 = 2*self.__pt_kernel_f2(sign_mu, ki, kj)*pi*pj
+            rest = 2*self.__pt_kernel_f2(-num_i/k_s, ki, k_s)*pi*p_s \
+                + 2*self.__pt_kernel_f2(-num_j/k_s, kj, k_s)*pj*p_s
+            int_3h = int_3h + term1 + np.where(excl & (1 + sign_mu < mulim), 0, rest)
+        F2_im = self.__pt_kernel_f2(((kj - ki) - 2*kj*s2)/km, ki, km)
+        F2_jm = self.__pt_kernel_f2(-((kj - ki) + 2*ki*s2)/km, kj, km)
+        F2_ip = self.__pt_kernel_f2(-(kj*mu + ki)/kp, ki, kp)
+        F2_jp = self.__pt_kernel_f2(-(ki*mu + kj)/kp, kj, kp)
+        F3_ij = self.__pt_kernel_f3_vec(mu, s2, ki, kj)
+        F3_ji = self.__pt_kernel_f3_vec(mu, s2, kj, ki)
+        int_4h = 4*pi*pi*(F2_ip*F2_ip*pp + F2_im*F2_im*pm) \
+            + 4*pj*pj*(F2_jp*F2_jp*pp + F2_jm*F2_jm*pm) \
+            + 8*pi*pj*(F2_ip*F2_jp*pp + F2_im*F2_jm*pm) \
+            + 12*pi*pj*(F3_ij*pi + F3_ji*pj)
+        return int_2h, int_3h, int_4h
+
+    def __pt_kernel_f3_vec(self,
+                           mu,
+                           s2,
+                           ki,
+                           kj):
+        """
+        Vectorised __pt_kernel_f3 with |k_j - k_i|^2 and the numerators
+        proportional to 1 - mu written without cancellation
+        (s2 = sin^2(phi/2)).
+        """
+        kmm = (ki - kj)**2 + 4*ki*kj*s2
+        kpp = ki**2 + kj**2 + 2*ki*kj*mu
+        beta_m = kj**2*ki*((kj - ki) - 2*kj*s2)/2.0/ki**2/kmm
+        alpha_m = kj*((kj - ki) + 2*ki*s2)/kmm
+        beta_p = kj**2*(-ki**2 - ki*kj*mu)/2.0/ki**2/kpp
+        alpha_p = (kj**2 + ki*kj*mu)/kpp
+        F2_plus = self.__pt_kernel_f2(mu, ki, kj)
+        F2_minus = self.__pt_kernel_f2(-mu, ki, kj)
+        G2_plus = self.__pt_kernel_g2(mu, ki, kj)
+        G2_minus = self.__pt_kernel_g2(-mu, ki, kj)
+        return 7/54 * F2_minus * kj/ki*mu \
+            - 7/54 * F2_plus * kj/ki*mu \
+            + 4/54 * (G2_minus * beta_m + G2_plus * beta_p) \
+            + 7/54 * (G2_minus * alpha_m + G2_plus * alpha_p)
+
     def __trispectra_234h(self,
                           bias_dict,
                           hod_dict,
@@ -1891,54 +1977,11 @@ class PolySpectra(HaloModel):
         integral_mmm = \
             10**halomod_integral_mmm_spline(self.logks_tri, self.logks_tri)
 
-        phis = np.linspace(0, np.pi/2, 3000)
         kidxlist = \
             list(itertools.combinations_with_replacement(np.arange(k_dim), 2))
 
         if self.int_2h is None:
-            self.int_4h = np.zeros((len(self.krange_tri),len(self.krange_tri)))
-            self.int_3h = np.zeros((len(self.krange_tri),len(self.krange_tri)))
-            self.int_2h = np.zeros((len(self.krange_tri),len(self.krange_tri)))
-            for i in range(len(self.krange_tri)):
-                for j in range(i, len(self.krange_tri)):
-                    ki = self.krange_tri[i]
-                    kj = self.krange_tri[j]
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("error")
-                        try:
-                            self.int_2h[i,j] = 2/np.pi \
-                                * quad(self.__calc_int_for_trispec_2h, 0, .5*np.pi,
-                                        args=(ki, kj), limit=50, epsrel=1e-05)[0]
-                        except IntegrationWarning:
-                            integrand = np.zeros_like(phis)
-                            for idx, phi in enumerate(phis):
-                                integrand[idx] = \
-                                    self.__calc_int_for_trispec_2h(phi, ki, kj)
-                            self.int_2h[i,j] = 2/np.pi * simpson(integrand, x = phis)
-                        try:
-                            self.int_3h[i,j] = 2/np.pi \
-                                * quad(self.__calc_int_for_trispec_3h, 0, .5*np.pi,
-                                        args=(ki, kj), limit=50, epsrel=1e-05)[0]
-                        except IntegrationWarning:
-                            integrand = np.zeros_like(phis)
-                            for idx, phi in enumerate(phis):
-                                integrand[idx] = \
-                                    self.__calc_int_for_trispec_3h(phi, ki, kj)
-                            self.int_3h[i,j] = 2/np.pi * simpson(integrand, x = phis)
-
-                        try:
-                            self.int_4h[i,j] = 1/np.pi \
-                                * quad(self.__calc_int_for_trispec_4h, 0, np.pi,
-                                        args=(ki, kj), limit=100, epsrel=1e-05)[0]    
-                        except IntegrationWarning:
-                            integrand = np.zeros_like(phis)
-                            for idx, phi in enumerate(phis):
-                                integrand[idx] = \
-                                    self.__calc_int_for_trispec_4h(phi, ki, kj)
-                            self.int_4h[i,j] = 2/np.pi * simpson(integrand, x = phis)  
-                        self.int_4h[j,i] = self.int_4h[i,j]
-                        self.int_3h[j,i] = self.int_3h[i,j]
-                        self.int_2h[j,i] = self.int_2h[i,j]
+            self.int_2h, self.int_3h, self.int_4h = self.__pt_angular_integrals()
                                  
             Dp = self.mass_func.growth_factor
             self.int_2h /= Dp**2

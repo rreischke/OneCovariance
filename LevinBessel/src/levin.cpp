@@ -1296,7 +1296,7 @@ std::vector<double> Levin::double_bessel_many_args(std::vector<double> k1, doubl
 #pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint i_k1 = 0; i_k1 < k1.size(); i_k1++)
     {
-        if (k1.at(i_k1) * b > 1000 && k2 * b > 1000)
+        if (k1.at(i_k1) * b > kb_levin_min && k2 * b > kb_levin_min)
         {
             uint tid = omp_get_thread_num();
             int_index_integral[tid] = tid;
@@ -1331,7 +1331,7 @@ std::vector<double> Levin::single_bessel_many_args(std::vector<double> k, uint e
 #pragma omp parallel for num_threads(N_thread_max) schedule(auto)
     for (uint ik = 0; ik < k.size(); ik++)
     {
-        if (k.at(ik) * b > 1000)
+        if (k.at(ik) * b > kb_levin_min)
         {
             uint tid = omp_get_thread_num();
             int_index_integral[tid] = tid;

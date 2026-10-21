@@ -41,6 +41,7 @@ PYBIND11_MODULE(levin, m)
          .def("get_integrand",&Levin::get_integrand,
               "x"_a, "j"_a,
               py::call_guard<py::gil_scoped_release>())
+         .def("set_kb_levin_min", &Levin::set_kb_levin_min, "kb"_a)
          .def("single_bessel_many_args", &Levin::single_bessel_many_args,
               "k"_a, "ell"_a, "a"_a, "b"_a,
               py::call_guard<py::gil_scoped_release>())

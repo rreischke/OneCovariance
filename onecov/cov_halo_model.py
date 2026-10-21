@@ -2,8 +2,9 @@ import camb
 import hmf
 import numpy as np
 from camb import model
+from hmf.density_field import transfer_models as hmf_transfer_models
 from scipy.integrate import simpson
-from scipy.interpolate import RectBivariateSpline, UnivariateSpline
+from scipy.interpolate import RectBivariateSpline, UnivariateSpline, make_interp_spline
 from scipy.special import erf, sici
 
 try:
@@ -12,6 +13,56 @@ try:
 except:
     from cov_hod import HOD
     from cov_setup import Setup
+
+_camb_transfer_cache = {}
+
+# maximum wavenumber in h/Mpc up to which CAMB calculates the linear transfer
+# function for the halo model, hmf extrapolates ln T linearly in ln k beyond
+# (extrapolate_with_eh = False). Changes the non-Gaussian and super-sample
+# covariance by ~0.3% (within CAMB's own sampling noise at high k), the total
+# covariance by ~2e-4 in correlation units.
+CAMB_KMAX_LINEAR = 100.
+
+
+def camb_transfer_functions(params):
+    """
+    camb.get_transfer_functions, but CAMB is only run once per distinct set
+    of parameters within a run (the transfer functions are only read).
+    """
+    key = repr(params)
+    if key not in _camb_transfer_cache:
+        _camb_transfer_cache[key] = camb.get_transfer_functions(params)
+    return _camb_transfer_cache[key]
+
+
+class _CAMBWithCachedTransfers:
+    """
+    Stands in for the camb module in hmf's transfer models, so that hmf
+    does not rerun CAMB for transfer functions it has already calculated.
+    """
+
+    def __getattr__(self, name):
+        return getattr(camb, name)
+
+    @staticmethod
+    def get_transfer_functions(params):
+        return camb_transfer_functions(params)
+
+
+hmf_transfer_models.camb = _CAMBWithCachedTransfers()
+
+_simpson_weights_cache = {}
+
+
+def simpson_weights(x):
+    """
+    Weights w such that simpson(y, x=x, axis=-1) = y @ w for any y (Simpson's
+    rule is linear in y). Cached per grid.
+    """
+    key = x.tobytes()
+    if key not in _simpson_weights_cache:
+        _simpson_weights_cache[key] = simpson(np.eye(len(x)), x=x, axis=-1)
+    return _simpson_weights_cache[key]
 
 
 class HaloModel(Setup):
@@ -113,8 +164,6 @@ class HaloModel(Setup):
         with unit 1 / (Mpc/h)^3
         with shape (sample_bins)
         average number density of satellite galaxies given an HOD
-    norm_bias : float
-        normalization constant for the bias model
     effective_bias : array
         with shape (sample_bins)
         effective bias for tracers assuming an HOD
@@ -151,11 +200,10 @@ class HaloModel(Setup):
         
         self.mass_func = \
             self.calc_mass_func(zet, cosmo_dict, prec['hm'], prec['powspec'])
-        self.hod = HOD(bias_dict, prec['hm'])
+        self.hod = HOD(bias_dict, prec['hm'], self.mass_func.m)
         self.ngal = self.nbar(hod_dict)
         self.ncen = self.nbar_cen(hod_dict)
         self.nsat = self.nbar_sat(hod_dict)
-        self.norm_bias = -1
         self.effective_bias = self.calc_effective_bias(
             bias_dict, hod_dict, prec['hm'])
         if self.hod.mass_bins_disagree:
@@ -166,11 +214,11 @@ class HaloModel(Setup):
             else:
                 bias_dict['logmass_bins'][0] = bias_dict['csmf_log10M_bins'][0]
                 bias_dict['logmass_bins'][-1] = bias_dict['csmf_log10M_bins'][-1]
-            self.hod.hod_update(bias_dict, prec['hm'])
+            self.hod.hod_update(bias_dict, prec['hm'], self.mass_func.m)
             self.set_spline_galaxy_stellar_mf(hod_dict)
             self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
             bias_dict = save_bias
-            self.hod.hod_update(bias_dict, prec['hm'])
+            self.hod.hod_update(bias_dict, prec['hm'], self.mass_func.m)
         else:
             self.set_spline_galaxy_stellar_mf(hod_dict)
             self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
@@ -219,7 +267,7 @@ class HaloModel(Setup):
         self.camb_pars.set_dark_energy(w=self.cosmology.w0, wa=self.cosmology.wa, dark_energy_model='fluid') 
         self.camb_pars.InitPower.set_params(ns=cosmo_dict['ns'],
                                     As = 1.8e-9)
-        self.camb_pars.set_matter_power(kmax=1000, redshifts = [0])
+        self.camb_pars.set_matter_power(kmax=CAMB_KMAX_LINEAR, redshifts = [0])
         self.camb_pars.NonLinear = model.NonLinear_none
 
         mstep = (hm_prec['log10M_max'] - hm_prec['log10M_min']) \
@@ -401,8 +449,10 @@ class HaloModel(Setup):
             (i) 'Tinker10' empirical model (see 
                 __bias_tinker10_fittfunc)
             (ii) shame we didn't do more yet 
-        All bias models are normalized, i.e., the integral over the peak 
-        height is required to be unity.
+        The bias is not renormalised: the integral of n(M) b(M) M/rho_bg over
+        the mass range is in general not unity. This is corrected for in the
+        large-scale limit of the matter integrals by assigning the missing mass
+        to the lowest mass (see halo_model_integral_I_alpha_x), as in CCL.
 
         Parameters
         ----------
@@ -424,30 +474,8 @@ class HaloModel(Setup):
         """
 
         if bias_dict['model'] == 'Tinker10':
-            step_save = self.mass_func.dlog10m
-            nu_save = self.mass_func.nu**0.5
-
-            norm_Mmin = 2.
-            norm_Mbins = 900.
-
-            Mmin_new = norm_Mmin
-            step_new = (self.mass_func.Mmax - Mmin_new) / norm_Mbins
-            self.mass_func.update(Mmin=Mmin_new, dlog10m=step_new)
-            nu_new = self.mass_func.nu**0.5
-            if self.norm_bias == -1:
-                self.norm_bias = \
-                    simpson(self.mass_func.fsigma
-                             / nu_new
-                             * self.__bias_tinker10_fittfunc(nu_new),
-                              x = nu_new)
-            spline_tinker = \
-                UnivariateSpline(nu_new, self.__bias_tinker10_fittfunc(nu_new),
-                                 k=2, s=0, ext=0)
-            tinker = spline_tinker(nu_save)
-            self.mass_func.update(Mmin=hm_prec['log10M_min'],
-                                  dlog10m=step_save)
-
-            return tinker / self.norm_bias
+            # Tinker et al. (2010) at the peak height of the current masses
+            return self.__bias_tinker10_fittfunc(self.mass_func.nu**0.5)
         else:
             raise Exception("For now the only valid bias model is " +
                             "'Tinker10', sorry for the inconvenience, work in progress.")
@@ -529,6 +557,19 @@ class HaloModel(Setup):
         """
 
         overdensity = self.mass_func.mdef_params['overdensity']
+        # cached for the current redshift (hurly_x needs it many times per
+        # redshift), the cached arrays are read-only
+        if type in ('cen', 'sat'):
+            key = (type, bias_dict['Mc_relation_'+type],
+                   bias_dict['norm_Mc_relation_'+type], overdensity,
+                   self.rho_bg, self.mass_func.k.tobytes(),
+                   self.mass_func.m.tobytes())
+            cache = self.__dict__.setdefault('_uk_cache', {'z': None})
+            if cache['z'] != self.mass_func.z or len(cache) > 8:
+                cache.clear()
+                cache['z'] = self.mass_func.z
+            if key in cache:
+                return cache[key]
         if type == 'sat':
             con = self.__concentration(bias_dict['Mc_relation_sat'])
             con *= bias_dict['norm_Mc_relation_sat']
@@ -547,6 +588,8 @@ class HaloModel(Setup):
         u_k = 4*np.pi * self.rho_bg * deltac * rs**3 / self.mass_func.m \
             * (np.sin(rsk) * (asin-bsin) - np.sin(con*rsk) / ((1+con)*rsk)
                + np.cos(rsk) * (acos - bcos))
+        u_k.setflags(write=False)
+        cache[key] = u_k
 
         return u_k
 
@@ -597,6 +640,24 @@ class HaloModel(Setup):
                             Mc_relation + " is not implemented (yet). Available options " +
                             "are: 'duffy08', 'flat'.")
         return con
+
+    def _mass_weights(self):
+        """
+        Simpson weights for integrals over the halo mass of the current
+        mass function, simpson(y, x=m, axis=-1) = y @ weights.
+        """
+        return simpson_weights(self.mass_func.m)
+
+    @staticmethod
+    def _outer_mass_integral(x, y, weights):
+        """
+        sum_M weights[M] x[k1, s1, M] y[k2, s2, M] for all k1, k2, s1, s2,
+        returned with shape (k1, k2, s1, s2).
+        """
+        n_k1, n_s1, n_m = x.shape
+        n_k2, n_s2, _ = y.shape
+        res = (x*weights).reshape(-1, n_m) @ y.reshape(-1, n_m).T
+        return res.reshape(n_k1, n_s1, n_k2, n_s2).transpose(0, 2, 1, 3)
 
     def small_k_damping(self,
                         mode,
@@ -707,22 +768,15 @@ class HaloModel(Setup):
 
         Returns
         -------
-        hurly_x : nested list of UnivariateSplines
-            with shape (sample_bins, M_bins)
+        hurly_x : BSpline
+            in log10(k), evaluates to shape (..., sample_bins, M_bins)
 
         """
         hurlyX = self.hurly_x(bias_dict, hod_dict, type_x)
 
-        hurly_shape = hurlyX.shape
-        log10k = np.log10(self.mass_func.k)
-        hurlyX_spline = [[] for _ in range(hurly_shape[1])]
-        for nbin in range(hurly_shape[1]):
-            for idxM in range(hurly_shape[2]):
-                hurlyX_spline[nbin].append(UnivariateSpline(
-                    log10k,
-                    hurlyX[:, nbin, idxM], s=0, ext=0))
-
-        return hurlyX_spline
+        # interpolating cubic spline (not-a-knot, as UnivariateSpline with
+        # s=0) for all samples and masses at once
+        return make_interp_spline(np.log10(self.mass_func.k), hurlyX, k=3, axis=0)
 
     def halo_model_integral_I_alpha_x(self,
                                       bias_dict,
@@ -774,14 +828,12 @@ class HaloModel(Setup):
                 hurlyX = \
                     self.hurly_x(bias_dict, hod_dict, 'cen') \
                     + self.hurly_x(bias_dict, hod_dict, 'sat')
-                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']*self.norm_bias
+                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']
                 norm = simpson(self.mass_func.dndm * bias *
                               self.mass_func.m, x = self.mass_func.m) / self.rho_bg
                 Abmin = (1-norm)*self.rho_bg/self.mass_func.m[0]
-                integral_x = simpson(self.mass_func.dndm
-                                      * bias
-                                      * hurlyX,
-                                     x = self.mass_func.m) + Abmin*hurlyX[:, :, 0]
+                integral_x = hurlyX @ (self.mass_func.dndm * bias
+                                       * self._mass_weights()) + Abmin*hurlyX[:, :, 0]
             if type_x == 'm':
                 M_min_save = hm_prec["log10M_min"]
                 step_save = self.mass_func.dlog10m
@@ -790,20 +842,20 @@ class HaloModel(Setup):
                 step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
                 hm_prec['M_bins'] = len(self.mass_func.m)
                 self.mass_func.update(Mmin=Mmin, dlog10m=step)
-                self.hod.hod_update(bias_dict, hm_prec)
+                self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
-                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']*self.norm_bias
+                bias = self.bias(bias_dict, hm_prec) * bias_dict['bias_2h']
                 norm = simpson(self.mass_func.dndm * bias *
                               self.mass_func.m, x = self.mass_func.m) / self.rho_bg
                 Abmin = (1-norm)*self.rho_bg/self.mass_func.m[0]
-                integral_x = simpson(
-                    self.mass_func.dndm * hurlyX * bias, x = self.mass_func.m) + Abmin*hurlyX[:, :, 0]
+                integral_x = hurlyX @ (self.mass_func.dndm * bias
+                                       * self._mass_weights()) + Abmin*hurlyX[:, :, 0]
 
                 hm_prec["log10M_min"] = M_min_save
                 self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
                 hm_prec['M_bins'] = len(self.mass_func.m)
-                self.hod.hod_update(bias_dict, hm_prec)
+                self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
         return integral_x
 
@@ -850,7 +902,8 @@ class HaloModel(Setup):
                                        hm_prec,
                                        alpha,
                                        type_x,
-                                       type_y):
+                                       type_y,
+                                       diagonal=False):
         """
         Calculates quantities for the halo model.
 
@@ -879,12 +932,17 @@ class HaloModel(Setup):
         type_y : string
             - "m" for matter
             - "g" for tracers
+        diagonal : bool
+            If True, only the diagonal (k_1 = k_2, same sample bins) is
+            calculated, which avoids the (log10k_bins^2 * sample_bins^2 *
+            M_bins) integrand.
 
         Returns
         -------
         integral_xy : array
             with shape (log10k_bins, log10k_bins, 
                         sample_bins, sample_bins)
+            or (log10k_bins, sample_bins) if diagonal
 
         References
         ----------
@@ -924,7 +982,8 @@ class HaloModel(Setup):
                 bias = bias_val
 
             if type_x == 'g' and type_y == 'g':
-                correct = hurly_cen[:, None, :, None, :] * hurly_cen[None, :, None, :, :]
+                if diagonal:
+                    correct = hurly_cen * hurly_cen
                 bias = bias_val
 
             if type_x == 'm' and type_y == 'm':
@@ -935,26 +994,27 @@ class HaloModel(Setup):
                 step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
                 hm_prec['M_bins'] = len(self.mass_func.m)
                 self.mass_func.update(Mmin=Mmin, dlog10m=step)
-                self.hod.hod_update(bias_dict, hm_prec)
+                self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
                 hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
                 bias = self.bias(bias_dict, hm_prec)
-                integral_xy = simpson(self.mass_func.dndm
-                                       * hurlyX[:, None, :,  None, :]
-                                       * hurlyX[None, :, None, :, :]
-                                       * bias[None, None, None, None, :],
-                                       x = self.mass_func.m)
+                weights = self.mass_func.dndm * bias * self._mass_weights()
+                if diagonal:
+                    integral_xy = (hurlyX * hurlyX) @ weights
+                else:
+                    integral_xy = self._outer_mass_integral(hurlyX, hurlyX, weights)
                 hm_prec["log10M_min"] = M_min_save
                 self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
                 hm_prec['M_bins'] = len(self.mass_func.m)
-                self.hod.hod_update(bias_dict, hm_prec)
+                self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
+            elif diagonal:
+                integral_xy = (hurlyX * hurlyY - correct) @ (
+                    self.mass_func.dndm * bias * self._mass_weights())
             else:
-                integral_xy = simpson(self.mass_func.dndm
-                                       * (hurlyX[:, None, :,  None, :]
-                                          * hurlyY[None, :, None, :, :]
-                                          - correct)
-                                       * bias[None, None, None, None, :],
-                                       x = self.mass_func.m)
+                weights = self.mass_func.dndm * bias * self._mass_weights()
+                integral_xy = self._outer_mass_integral(hurlyX, hurlyY, weights)
+                if type_x == 'g' and type_y == 'g':
+                    integral_xy -= self._outer_mass_integral(hurly_cen, hurly_cen, weights)
 
         return integral_xy
 
@@ -1054,20 +1114,18 @@ class HaloModel(Setup):
             step = (self.mass_func.Mmax - Mmin) / hm_prec["M_bins"]
             hm_prec['M_bins'] = len(self.mass_func.m)
             self.mass_func.update(Mmin=Mmin, dlog10m=step)
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
             hurlyX = self.hurly_x(bias_dict, hod_dict, 'm')
             bias = self.bias(bias_dict, hm_prec)
-            integral_mmm = simpson(self.mass_func.dndm[None, None, None, :]
-                                    * hurlyX[:, None, :, :]
-                                    * hurlyX[None, :, :, :]**2.0
-                                    * bias[None, None, None, :],
-                                    x = self.mass_func.m)
+            weights = self.mass_func.dndm * bias * self._mass_weights()
+            integral_mmm = np.stack([(hurlyX[:, i_s, :]*weights) @ (hurlyX[:, i_s, :]**2.0).T
+                                     for i_s in range(hurlyX.shape[1])], axis=-1)
 
             hm_prec["log10M_min"] = M_min_save
             self.mass_func.update(Mmin=M_min_save, dlog10m=step_save)
             hm_prec['M_bins'] = len(self.mass_func.m)
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
             
 
         return integral_mmm
@@ -1326,13 +1384,18 @@ class HaloModel(Setup):
         halo_profile = self.uk(bias_dict)
         halo_bias = self.bias(bias_dict,hm_prec)
         csmf = self.conditional_galaxy_stellar_mf(hod_dict,'cen') + self.conditional_galaxy_stellar_mf(hod_dict,'sat')
-        term1 = self.mass_func.dndm[None, None, None, :]*csmf[None, :, :, :]*(self.mass_func.m**2)[None, None, None,:]/self.rho_bg**2*(halo_profile**2)[:, None, None, :]
-        term2 = self.mass_func.dndm[None, None, None, :]*csmf[None, :, :, :]*(self.mass_func.m)[None, None, None,:]/self.rho_bg*(halo_profile)[:, None, None, :]*halo_bias[None, None , None, :]
-        term3 = self.mass_func.dndm[None,:]*(self.mass_func.m)[None,:]/self.rho_bg*(halo_profile)[:, :]*halo_bias[None,:]
-
-        I1 = simpson(term1, x = self.mass_func.m, axis=-1)
-        I2 = simpson(term2, x = self.mass_func.m, axis=-1) * simpson(term3, x = self.mass_func.m, axis=-1)[:, None, None]
-        return I1 + 2.0 * self.mass_func.power[:, None, None] * I2
+        m = self.mass_func.m
+        # the mass integrals (Simpson's rule) as matrix products over the
+        # halo mass, csmf_weighted has shape (sample bins * stellar masses, M)
+        weights = simpson_weights(m)
+        csmf_weighted = csmf.reshape(-1, len(m))*(self.mass_func.dndm*weights)
+        I1 = ((halo_profile**2)*(m**2/self.rho_bg**2)) @ csmf_weighted.T
+        I2 = (halo_profile*(m/self.rho_bg*halo_bias)) @ csmf_weighted.T
+        # matter I_1^1 with the missing mass assigned to the lowest mass, as in
+        # halo_model_integral_I_alpha_x
+        mass_weights = self.mass_func.dndm*m/self.rho_bg*halo_bias*weights
+        I3 = halo_profile @ mass_weights + (1 - np.sum(mass_weights))*halo_profile[:, 0]
+        return (I1 + 2.0 * self.mass_func.power[:, None] * I2 * I3[:, None]).reshape((len(halo_profile),) + csmf.shape[:-1])
     
     def get_count_matter_bispectrum(self,
                                     bias_dict,
@@ -1365,7 +1428,7 @@ class HaloModel(Setup):
             else:
                 bias_dict['logmass_bins'][0] = bias_dict['csmf_log10M_bins'][0]
                 bias_dict['logmass_bins'][-1] = bias_dict['csmf_log10M_bins'][-1]
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
             aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
             indices = np.unique(aux_M,return_index = True)[1]
             aux_bispec_count_mm = self.count_matter_bispectrum(bias_dict, hod_dict, hm_prec)
@@ -1375,7 +1438,7 @@ class HaloModel(Setup):
             for i_k in range(len(self.mass_func.k)):
                 count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins, log10_aux_M, np.log(aux_bispec_count_mm[i_k,indices])))
             bias_dict = save_bias
-            self.hod.hod_update(bias_dict, hm_prec)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
         else:
             aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
             indices = np.unique(aux_M,return_index = True)[1]

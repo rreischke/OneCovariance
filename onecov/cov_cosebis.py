@@ -4,7 +4,7 @@ import levin
 import mpmath
 import numpy as np
 from mpmath import mp
-from scipy.integrate import simpson
+from scipy.integrate import cumulative_simpson, simpson
 from scipy.interpolate import UnivariateSpline, interp1d
 from scipy.signal import argrelextrema
 from scipy.special import eval_legendre
@@ -262,31 +262,25 @@ class CovCOSEBI(CovELLSpace):
         return tplus
 
     def __tminus(self, tmin,tmax,n,norm,root,tp,theta,ntheta=10000):
-        tplus_func=interp1d(np.log(tp[:,0]/tmin),tp[:,1])
+        """
+        Calculates T_-(theta) from T_+(theta) on the same theta grid,
+        T_-(z) = T_+(z) + 4 int_0^z dy T_+(y) [exp(2(y-z)) - 3 exp(4(y-z))]
+        with z = ln(theta/tmin). The integrals are cumulative integrals of
+        T_+(y) exp(k y), done with Simpson's rule on the theta grid of T_+.
+        """
+        z = np.log(theta/tmin)
+        tplus = tp[:,1]
+        int_2 = cumulative_simpson(tplus*np.exp(2*z), x=z, initial=0)
+        int_4 = cumulative_simpson(tplus*np.exp(4*z), x=z, initial=0)
         rtminus = np.zeros_like(tp)
         rtminus[:,0] = tp[:,0]
-        z=np.log(theta/tmin)
-        rtminus[:,1]= tplus_func(z)
-        lev = levin.Levin(0, 16, 32, 1e-8, 200, self.num_cores)
-        wide_theta = np.linspace(theta[0]*0.999, theta[-1]*1.001,int(1e4))
-        lev.init_w_ell(np.log(wide_theta/tmin), np.ones_like(wide_theta)[:,None])
-        z=np.log(theta/tmin)
-        for i_z, val_z in enumerate(z[1:]):
-            y = np.linspace(z[0],val_z, 1000)
-            integrand = tplus_func(y)*(np.exp(2*(y-val_z)) - 3*np.exp(4*(y-val_z)))
-            limits_at_mode = np.array(y[argrelextrema(integrand, np.less)[0][:]])
-            limits_at_mode_append = np.zeros(len(limits_at_mode) + 2)
-            if len(limits_at_mode) != 0:
-                limits_at_mode_append[1:-1] = limits_at_mode
-            limits_at_mode_append[0] = y[0]
-            limits_at_mode_append[-1] = y[-1]
-            
-            lev.init_integral(y,integrand[:,None],False,False)
-            rtminus[i_z, 1] +=  4*lev.cquad_integrate_single_well(limits_at_mode_append,0)[0]
+        rtminus[:,1] = tplus + 4*(int_2*np.exp(-2*z) - 3*int_4*np.exp(-4*z))
         return rtminus
 
     def __get_W_ell(self, theta, tp, ell):
         lev_w = levin.Levin(0, 16, 32, 1e-8, 200, self.num_cores)
+        # Levin's method is accurate (and faster than cquad) for k*theta_max > 100
+        lev_w.set_kb_levin_min(100)
         lev_w.init_integral(theta,(theta*tp)[:,None]*np.ones(self.num_cores)[None,:],True,True)
         return lev_w.single_bessel_many_args(ell,0,theta[0],theta[-1])
 
@@ -300,13 +294,15 @@ class CovCOSEBI(CovELLSpace):
         return result
         
     def __get_Qn(self, Un, theta, Nmax):
-        theta_integral_weight = np.ones((len(theta),len(theta)))
-        theta_integral_weight = np.triu(theta_integral_weight)[None, :, :]*np.ones(Nmax)[:, None, None]
-        theta_integral_weight += (np.diag(np.ones_like(theta)))[None,:,:]
-        return 2/theta**2*simpson(theta_integral_weight*theta[None,:,None]*Un[:,:,None], x = theta,axis = 1) - Un
+        """
+        Q_n(theta) = 2/theta^2 int_tmin^theta dtheta' theta' U_n(theta') - U_n(theta)
+        """
+        return 2/theta**2*cumulative_simpson(theta[None, :]*Un, x=theta, axis=1, initial=0) - Un
 
     def __get_Wpsi_ell(self, n, Un, theta, ell):
         lev = levin.Levin(0, 16, 32, 1e-8, 200, self.num_cores)
+        # Levin's method is accurate (and faster than cquad) for k*theta_max > 100
+        lev.set_kb_levin_min(100)
         lev.init_integral(theta,(theta*Un)[:,None]*np.ones(self.num_cores)[None, :],True,True)
         Wngg = np.zeros_like(ell)
         Wngg = lev.single_bessel_many_args(ell,0,theta[0],theta[-1])

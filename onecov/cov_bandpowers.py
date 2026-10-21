@@ -389,89 +389,92 @@ class CovBandPowers(CovTHETASpace):
                 else:
                     self.T_of_theta_lensing[i_theta] = np.cos(np.pi/2.*((x - (xup - self.delta_ln_theta_lensing/2.))/self.delta_ln_theta_lensing))**2.0
 
-    def __call_levin_many_args_WE_non_par(self, ells, ell_up, ell_lo, theta_range, T_of_theta):
+    def __get_bandpower_weights(self, ells, ell_ul_bins, theta_range, T_of_theta, weights, label):
         """
-        Auxillary function for the calculation of the weight functions for the bandpowers.
-        Carries out the integrals over the Bessel functions in parallel for many arguments.
-        
+        Calculates the Fourier weights of all bandpowers with bin edges
+        ell_ul_bins.
+
         Parameter
         ---------
         ells : array
             Fourier multipole (\\ell) where the Weights should be evaluated at.
-        ell_up : float
-            Upper limit of the bandpower interval
-        ell_lo : float
-            Lower limit of the bandpower interval
+        ell_ul_bins : array
+            Edges of the bandpower intervals.
         theta_range : array
             Theta range over which the Integration is carried out.
         T_of_theta : array
             Window function to select theta range over which the band power is estimated.
             We use a Hann window by default. Must have the same length as theta_range.
-        num_cores : array
-            Number of cores used for the computation. 
-        
+        weights : list
+            Which of the weights 'EE', 'EB' and 'nE' are needed.
+
         Returns
         -------
-        result_WEE, result_WEB, result_WnE : arrays
-            The 3 weight for bandpower in a single ell_band but at all ells.
-            Have the same length as ells
+        result : dictionary
+            for each requested weight an array with shape
+            (len(ell_ul_bins) - 1, len(ells)).
 
+        Note
+        ----
+        The weights are sums of integrals over a product of two Bessel
+        functions, each of which only depends on one edge of the bandpower
+        interval. They are calculated once per edge and shared between the
+        two adjacent bandpowers and between the weights.
         """
-        result_WEE = np.zeros(len(ells))
-        result_WEB = np.zeros(len(ells))
-        result_WnE = np.zeros(len(ells))
+        integrands = [T_of_theta, T_of_theta/theta_range, T_of_theta/theta_range**2]
         lev = levin.Levin(2, 16, 32, 1e-6, 50, self.num_cores)
-        lev.init_integral(theta_range, T_of_theta[:,None]*np.ones(self.num_cores)[None,:], True, False) 
-        result_WEE = ell_up*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 0, 1, theta_range[0], theta_range[-1]))
-        result_WEE -=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 0, 1, theta_range[0], theta_range[-1]))
-        result_WEE -=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
-        result_WEE +=ell_up*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None]*np.ones(self.num_cores)[None,:], True, False)
-        result_WEE -=8.0*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 4, 2, theta_range[0], theta_range[-1]))
-        result_WEE +=8.0*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 4, 2, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None]*np.ones(self.num_cores)[None,:], True, False)
-        result_WEE -=8.0/ell_up*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        result_WEE +=8.0/ell_lo*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
+        # note: lowering the Levin threshold (set_kb_levin_min) below the default speeds this up,
+        # but the weights are sums of strongly cancelling integrals and change at the percent level
+        cache = {}
+        initialised = [None]
 
-        lev.init_integral(theta_range, T_of_theta[:,None]*np.ones(self.num_cores)[None,:], True, False)
-        result_WEB = ell_up*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 0, 1, theta_range[0], theta_range[-1]))
-        result_WEB -=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 0, 1, theta_range[0], theta_range[-1]))
-        result_WEB +=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
-        result_WEB -=ell_up*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None]*np.ones(self.num_cores)[None,:], True, True)
-        result_WEB +=8.0*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 4, 2, theta_range[0], theta_range[-1]))
-        result_WEB -=8.0*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 4, 2, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range**2)[:,None]*np.ones(self.num_cores)[None,:], True, True)
-        result_WEB +=8.0/ell_up*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 4, 1, theta_range[0], theta_range[-1]))
-        result_WEB -=8.0/ell_lo*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
-        
-        lev.init_integral(theta_range, T_of_theta[:,None]*np.ones(self.num_cores)[None,:], True, False) 
-        result_WnE = -ell_up*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 2, 1, theta_range[0], theta_range[-1]))
-        result_WnE +=ell_lo*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 2, 1, theta_range[0], theta_range[-1]))
-        lev.init_integral(theta_range, (T_of_theta/theta_range)[:,None]*np.ones(self.num_cores)[None,:], True, False)
-        result_WnE -=2.0*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_up, 2, 0, theta_range[0], theta_range[-1]))
-        result_WnE +=2.0*np.nan_to_num(lev.double_bessel_many_args(
-            ells, ell_lo, 2, 0, theta_range[0], theta_range[-1]))
-        return result_WEE, result_WEB, result_WnE
+        def D(kind, logy, ell_edge, order_ell, order_edge):
+            # the integrator only interpolates in log space if the integrand is positive
+            logy = logy and bool(np.all(integrands[kind] > 0))
+            key = (kind, logy, ell_edge, order_ell, order_edge)
+            if key not in cache:
+                if initialised[0] != (kind, logy):
+                    lev.init_integral(theta_range, integrands[kind][:,None]*np.ones(self.num_cores)[None,:], True, logy)
+                    initialised[0] = (kind, logy)
+                cache[key] = np.nan_to_num(lev.double_bessel_many_args(
+                    ells, ell_edge, order_ell, order_edge, theta_range[0], theta_range[-1]))
+            return cache[key]
+
+        result = {weight: np.zeros((len(ell_ul_bins) - 1, len(ells))) for weight in weights}
+        t0 = time.time()
+        for i_ell in range(len(ell_ul_bins) - 1):
+            ell_lo, ell_up = ell_ul_bins[i_ell], ell_ul_bins[i_ell + 1]
+            if 'EE' in weights:
+                result_WEE = ell_up*D(0, False, ell_up, 0, 1)
+                result_WEE -= ell_lo*D(0, False, ell_lo, 0, 1)
+                result_WEE -= ell_lo*D(0, False, ell_lo, 4, 1)
+                result_WEE += ell_up*D(0, False, ell_up, 4, 1)
+                result_WEE -= 8.0*D(1, False, ell_up, 4, 2)
+                result_WEE += 8.0*D(1, False, ell_lo, 4, 2)
+                result_WEE -= 8.0/ell_up*D(2, False, ell_up, 4, 1)
+                result_WEE += 8.0/ell_lo*D(2, False, ell_lo, 4, 1)
+                result['EE'][i_ell, :] = result_WEE
+            if 'EB' in weights:
+                result_WEB = ell_up*D(0, False, ell_up, 0, 1)
+                result_WEB -= ell_lo*D(0, False, ell_lo, 0, 1)
+                result_WEB += ell_lo*D(0, False, ell_lo, 4, 1)
+                result_WEB -= ell_up*D(0, False, ell_up, 4, 1)
+                result_WEB += 8.0*D(1, True, ell_up, 4, 2)
+                result_WEB -= 8.0*D(1, True, ell_lo, 4, 2)
+                result_WEB += 8.0/ell_up*D(2, True, ell_up, 4, 1)
+                result_WEB -= 8.0/ell_lo*D(2, True, ell_lo, 4, 1)
+                result['EB'][i_ell, :] = result_WEB
+            if 'nE' in weights:
+                result_WnE = -ell_up*D(0, False, ell_up, 2, 1)
+                result_WnE += ell_lo*D(0, False, ell_lo, 2, 1)
+                result_WnE -= 2.0*D(1, False, ell_up, 2, 0)
+                result_WnE += 2.0*D(1, False, ell_lo, 2, 0)
+                result['nE'][i_ell, :] = result_WnE
+            print('\rCalculating Fourier weights for ' + label + ' bandpower covariance '
+                  + str(round((i_ell + 1)/(len(ell_ul_bins) - 1)*100, 1)) + '% in '
+                  + str(round(((time.time()-t0)/60), 1)) + 'min', end="")
+        print("")
+        return result
 
     def __get_WXY(self):
         """
@@ -483,42 +486,16 @@ class CovBandPowers(CovTHETASpace):
         Wl_EE_clust = np.zeros((len(self.ell_bins_clustering), len(self.ell_fourier_integral)))
         
         self.WXY_stack = np.zeros((2*len(self.ell_bins_clustering) + 2*len(self.ell_bins_lensing), len(self.ell_fourier_integral)))
-        t0, tcomb = time.time(), 1
-        tcombs = len(self.ell_bins_clustering)
         if self.gg or self.gm:
-            for i_ell in range(len(self.ell_bins_clustering)):
-                Wl_EE_clust[i_ell, :], _ , Wl_nE[i_ell, :] = self.__call_levin_many_args_WE_non_par(self.ell_fourier_integral,
-                                                                                                        self.ell_ul_bins_clustering[i_ell+1],
-                                                                                                        self.ell_ul_bins_clustering[i_ell],
-                                                                                                        self.thetabins/60/180*np.pi,
-                                                                                                        self.T_of_theta_clustering)
-                eta = (time.time()-t0) / \
-                    60 * (tcombs/tcomb-1)
-                print('\rCalculating Fourier weights for clustering bandpower covariance '
-                        + str(round(tcomb/tcombs*100, 1)) + '% in '
-                        + str(round(((time.time()-t0)/60), 1)) +
-                        'min  ETA '
-                        'in ' + str(round(eta, 1)) + 'min', end="")
-                tcomb += 1
-            print("")
-        t0, tcomb = time.time(), 1
-        tcombs = len(self.ell_bins_lensing)
+            weights = self.__get_bandpower_weights(self.ell_fourier_integral, self.ell_ul_bins_clustering,
+                                                   self.thetabins/60/180*np.pi, self.T_of_theta_clustering,
+                                                   ['EE', 'nE'], 'clustering')
+            Wl_EE_clust, Wl_nE = weights['EE'], weights['nE']
         if self.mm or self.gm:
-            for i_ell in range(len(self.ell_bins_lensing)):
-                Wl_EE_lens[i_ell, :], Wl_EB[i_ell, :], _ = self.__call_levin_many_args_WE_non_par(self.ell_fourier_integral,
-                                                                                                        self.ell_ul_bins_lensing[i_ell+1],
-                                                                                                        self.ell_ul_bins_lensing[i_ell],
-                                                                                                        self.thetabins/60/180*np.pi,
-                                                                                                        self.T_of_theta_lensing)
-                eta = (time.time()-t0) / \
-                    60 * (tcombs/tcomb-1)
-                print('\rCalculating Fourier weights for lensing bandpower covariance '
-                        + str(round(tcomb/tcombs*100, 1)) + '% in '
-                        + str(round(((time.time()-t0)/60), 1)) +
-                        'min  ETA '
-                        'in ' + str(round(eta, 1)) + 'min', end="")
-                tcomb += 1
-            print("")
+            weights = self.__get_bandpower_weights(self.ell_fourier_integral, self.ell_ul_bins_lensing,
+                                                   self.thetabins/60/180*np.pi, self.T_of_theta_lensing,
+                                                   ['EE', 'EB'], 'lensing')
+            Wl_EE_lens, Wl_EB = weights['EE'], weights['EB']
         self.WXY_stack[:len(self.ell_bins_clustering), : ] = Wl_EE_clust
         self.WXY_stack[len(self.ell_bins_clustering):2*len(self.ell_bins_clustering), : ] = Wl_nE
         self.WXY_stack[2*len(self.ell_bins_clustering): 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing), : ] = Wl_EE_lens

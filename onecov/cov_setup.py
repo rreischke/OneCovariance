@@ -1248,6 +1248,19 @@ class Setup:
 
         return npair_gg, npair_gm, npair_mm
 
+    @staticmethod
+    def _read_healpix_mask(mfile):
+        """
+        Reads a HEALPix mask with healpy, which handles full-sky and
+        partial-sky (explicitly indexed) maps and NESTED ordering (the map
+        is returned in RING ordering as needed by anafast). Unobserved
+        pixels (UNSEEN, nan) are set to zero.
+        """
+        import healpy
+        data = np.asarray(healpy.read_map(mfile, field=0, dtype=None), dtype=np.float64)
+        data[~np.isfinite(data) | (data == healpy.UNSEEN)] = 0.0
+        return data
+
     def calc_survey_area(self,
                          survey_params_dict):
         """
@@ -1272,7 +1285,6 @@ class Setup:
             except ImportError:
                 raise Exception("ImportError: To process the the mask file, " +
                                 "healpy>=1.15.0 must be installed.")
-            from astropy.io import fits
 
         for est in ['clust', 'ggl', 'lens']:
             if not survey_params_dict['read_mask_'+est+'_'+est]:
@@ -1292,9 +1304,7 @@ class Setup:
 
                 print("Reading in the mask file " + mfile + " to get " +
                       "the survey area.")
-                data = fits.getdata(mfile, 1).field(0)
-                data = data.flatten()
-                #data = np.where(data < 1.0, 0, 1)
+                data = self._read_healpix_mask(mfile)
                 Nside = healpy.npix2nside(len(data))
                 survey_params_dict['survey_area_'+est].append(
                     np.sum(data)
@@ -1329,7 +1339,9 @@ class Setup:
             else:
                 raise Exception("shouldn't happen clust area")
 
-            if len(survey_params_dict['survey_area_ggl']) == 1:
+            if survey_params_dict['survey_area_ggl'] is None:
+                ...
+            elif len(survey_params_dict['survey_area_ggl']) == 1:
                 survey_params_dict['survey_area_ggl'] = \
                     [survey_params_dict['survey_area_clust'][0]]*2
             elif len(survey_params_dict['survey_area_ggl']) == 2:
@@ -1337,15 +1349,15 @@ class Setup:
             else:
                 raise Exception("shouldn't happen ggl area")
 
-            if len(survey_params_dict['survey_area_lens']) != 1:
+            if survey_params_dict['survey_area_lens'] is not None and \
+               len(survey_params_dict['survey_area_lens']) != 1:
                 raise Exception("shouldn't happen lens area")
 
-        survey_params_dict['survey_area_clust'] = \
-            np.array(survey_params_dict['survey_area_clust'])
-        survey_params_dict['survey_area_ggl'] = \
-            np.array(survey_params_dict['survey_area_ggl'])
-        survey_params_dict['survey_area_lens'] = \
-            np.array(survey_params_dict['survey_area_lens'])
+        # probes that are not calculated have no survey area (None)
+        for est in ['clust', 'ggl', 'lens']:
+            if survey_params_dict['survey_area_'+est] is not None:
+                survey_params_dict['survey_area_'+est] = \
+                    np.array(survey_params_dict['survey_area_'+est])
 
         return True
 
@@ -1381,7 +1393,9 @@ class Setup:
         """
 
         import healpy
-        from astropy.io import ascii, fits
+        from astropy.io import ascii
+        if not hasattr(self, '_mask_cl_cache'):
+            self._mask_cl_cache = {}
         if (est1 == 'mm' and est2 == 'gg') or est1 == 'gm':
             est1, est2 = est2, est1
         if est1 == 'gg':
@@ -1431,8 +1445,7 @@ class Setup:
                 try:
                     print("Reading in the mask file " + mfile + " to get the " +
                         "survey area modes.")
-                    data = fits.getdata(mfile, 1).field(0)
-                    data = data.flatten()
+                    data = self._read_healpix_mask(mfile)
                     Nside = healpy.npix2nside(len(data))
                     ellmax = 3 * Nside - 1
                     '''if est1 == est2:
@@ -1446,20 +1459,23 @@ class Setup:
                             survey_params_dict['mask_file_'+est1+'_'+est2]:
                         print("Reading in the second mask file " + mfile +
                             " to get the cross survey area modes.")
-                        data2 = fits.getdata(mfile2, 1).field(0)
-                        data2 = data2.flatten()
-                        #data2 = np.where(data2 > 0.0, 1, 0)
+                        data2 = self._read_healpix_mask(mfile2)
                         Nside2 = healpy.npix2nside(len(data2))
                         ellmax2 = 3 * Nside2 - 1
                         ellmax = ellmax if ellmax < ellmax2 else ellmax2
 
                         aux_ell = np.arange(ellmax)
                         ell.append(aux_ell)
-                        C_ell = healpy.anafast(data, data2, use_weights=True)
+                        # the survey modes only depend on the masks, calculate them once per run
+                        key = ('mask', mfile, mfile2)
+                        if key not in self._mask_cl_cache:
+                            self._mask_cl_cache[key] = healpy.anafast(data, data2, use_weights=True)
+                        C_ell = self._mask_cl_cache[key]
                         sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
                     failure = False
-                except:
-                    print("WARNING: mask file " + mfile + " not found. Will use circular mask for response")
+                except Exception as error:
+                    print("WARNING: could not process the mask file " + mfile + " (" +
+                          type(error).__name__ + ": " + str(error) + "). Will use circular mask for response")
                     ell, sum_m_a_lm = None, None
                     failure = True
         else:
@@ -1494,7 +1510,11 @@ class Setup:
                     ellmax = 3 * NSIDE - 1
                     aux_ell = np.arange(ellmax)
                     ell.append(aux_ell)
-                    C_ell = healpy.sphtfunc.anafast(m, use_weights=True)
+                    # the survey modes of a circular mask only depend on its area, calculate them once per run
+                    key = ('circle', survey_area, NSIDE)
+                    if key not in self._mask_cl_cache:
+                        self._mask_cl_cache[key] = healpy.sphtfunc.anafast(m, use_weights=True)
+                    C_ell = self._mask_cl_cache[key]
                     sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
                     print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")   
         return ell, sum_m_a_lm

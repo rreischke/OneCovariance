@@ -2701,7 +2701,7 @@ class Input:
             else:
                 self.mask_dir = ''
 
-            self.survey_area_clust = []
+            self.survey_area_clust = None
             if 'survey_area_clust_in_deg2' in config['survey specs']:
                 self.survey_area_clust = np.array(config['survey specs']
                                                     ['survey_area_clust_in_deg2'].split(','))
@@ -2727,11 +2727,6 @@ class Input:
                                     config['survey specs']['survey_area_clust_in_deg2'] +
                                     "' to numpy array. Must be adjusted in config " +
                                     "file " + config_name + ".")
-            elif self.clustering:
-                raise Exception("ConfigError: You requested clustering " +
-                                "in [observables]: But did not specify 'survey_area_clust_in_deg2'" +
-                                "in '[survey specs]'. Must be adjusted in config " +
-                                "file " + config_name + ".")
 
             self.mask_file_clust = []
             if 'mask_file_clust' in config['survey specs']:
@@ -2752,7 +2747,7 @@ class Input:
             else:
                 self.mask_file_clust = None
 
-            self.survey_area_ggl = []
+            self.survey_area_ggl = None
             
             if 'survey_area_ggl_in_deg2' in config['survey specs']:
                 self.survey_area_ggl = np.array(config['survey specs']
@@ -2779,11 +2774,6 @@ class Input:
                                     config['survey specs']['survey_area_ggl_in_deg2'] +
                                     "' to numpy array. Must be adjusted in config " +
                                     "file " + config_name + ".")
-            elif self.ggl:
-                raise Exception("ConfigError: You requested GGL " +
-                                "in [observables]: But did not specify 'survey_area_ggl_in_deg2'" +
-                                "in '[survey specs]'. Must be adjusted in config " +
-                                "file " + config_name + ".")
             
             self.mask_file_ggl = []
             if 'mask_file_ggl' in config['survey specs']:
@@ -3033,6 +3023,16 @@ class Input:
                     #                "clustering area are missing. Either provide a " +
                     #                "[survey specs]: 'mask_file_clust' or " +
                     #                "[survey specs]: 'alm_file_clust'.")
+                # the survey area is read from the mask if it is not given
+                # (the a_lm are still taken from the a_lm file if provided)
+                if self.survey_area_clust is None and not self.read_mask_clust:
+                    if self.mask_file_clust is not None:
+                        self.read_mask_clust = True
+                    else:
+                        raise Exception("ConfigError: The survey area for " +
+                                        "the clustering measurements is missing. Either " +
+                                        "provide a [survey specs]: 'mask_file_clust' or " +
+                                        "[survey specs]: 'survey_area_clust_in_deg2'.")
             elif self.survey_area_clust is None:
                 if self.mask_file_clust is not None:
                     self.read_mask_clust = True
@@ -3075,6 +3075,16 @@ class Input:
                     #                "galaxy-galaxy lensing area are missing. Either " +
                     #                "provide a [survey specs]: 'mask_file_ggl' or " +
                     #                "[survey specs]: 'alm_file_ggl'.")
+                # the survey area is read from the mask if it is not given
+                # (the a_lm are still taken from the a_lm file if provided)
+                if self.survey_area_ggl is None and not self.read_mask_ggl:
+                    if self.mask_file_ggl is not None:
+                        self.read_mask_ggl = True
+                    else:
+                        raise Exception("ConfigError: The survey area for " +
+                                        "the galaxy-galaxy lensing measurements is missing. Either " +
+                                        "provide a [survey specs]: 'mask_file_ggl' or " +
+                                        "[survey specs]: 'survey_area_ggl_in_deg2'.")
             elif self.survey_area_ggl is None:
                 if self.mask_file_ggl is not None:
                     self.read_mask_ggl = True
@@ -3116,6 +3126,16 @@ class Input:
                     #                "the lensing area are missing. Either provide a " +
                     #                "[survey specs]: 'mask_file_lensing' or " +
                     #                "[survey specs]: 'alm_file_lensing'.")
+                # the survey area is read from the mask if it is not given
+                # (the a_lm are still taken from the a_lm file if provided)
+                if self.survey_area_lens is None and not self.read_mask_lens:
+                    if self.mask_file_lens is not None:
+                        self.read_mask_lens = True
+                    else:
+                        raise Exception("ConfigError: The survey area for " +
+                                        "the lensing measurements is missing. Either " +
+                                        "provide a [survey specs]: 'mask_file_lensing' or " +
+                                        "[survey specs]: 'survey_area_lensing_in_deg2'.")
             elif self.survey_area_lens is None:
                 if self.mask_file_lens is not None:
                     self.read_mask_lens = True

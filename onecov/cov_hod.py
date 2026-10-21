@@ -65,8 +65,12 @@ class HOD:
 
     def __init__(self, 
                  bias_dict, 
-                 hm_prec):
+                 hm_prec,
+                 mass=None):
         self.mass_bins_disagree = False
+        # occupation numbers and probabilities per population for the
+        # current mass ranges (they do not depend on redshift)
+        self._occ_cache = {}
         if bias_dict['has_csmf']:
             if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
                 if bias_dict['logmass_bins_lower'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins_upper'][-1] < bias_dict['csmf_log10M_bins'][-1]:
@@ -74,8 +78,7 @@ class HOD:
             elif bias_dict['logmass_bins'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins'][-1] < bias_dict['csmf_log10M_bins'][-1]:
                 self.mass_bins_disagree = True
         self.N_stellar_mass = 300
-        self.Mrange = np.logspace(
-            hm_prec['log10M_min'], hm_prec['log10M_max'], hm_prec['M_bins'])
+        self.Mrange = self.__mass_range(hm_prec, mass)
         self.Mbins = self.mass_bins(bias_dict, hm_prec)
         
     def mass_bins(self, 
@@ -104,7 +107,7 @@ class HOD:
 
         """
         if bias_dict['logmass_bins'][0] == bias_dict['logmass_bins'][1] and (bias_dict['logmass_bins_upper'] is None and bias_dict['logmass_bins_lower'] is None):
-            return self.Mrange.reshape((1,hm_prec['M_bins']))
+            return self.Mrange.reshape((1, -1))
         else:
             try:
                 if (bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_lower'] is not None):
@@ -136,9 +139,22 @@ class HOD:
 
         return bins
 
+    @staticmethod
+    def __mass_range(hm_prec, mass):
+        """
+        The halo masses of the HOD: the mass grid of the halo mass function
+        if given (the occupation is integrated against its dn/dM), otherwise
+        logarithmically spaced in the range of hm_prec.
+        """
+        if mass is not None:
+            return np.array(mass, dtype=float)
+        return np.logspace(
+            hm_prec['log10M_min'], hm_prec['log10M_max'], hm_prec['M_bins'])
+
     def hod_update(self, 
                    bias_dict, 
-                   hm_prec):
+                   hm_prec,
+                   mass=None):
         """
         Updates the private variables Mrange and Mbins to a new mass 
         range
@@ -154,11 +170,13 @@ class HOD:
             range and spacing for the mass integrations in the halo 
             model. To be passed from the read_input method of the Input 
             class.
+        mass : array
+            halo masses of the halo mass function (default: logarithmically
+            spaced in the range given by hm_prec)
 
         """
 
-        self.Mrange = np.logspace(
-            hm_prec['log10M_min'], hm_prec['log10M_max'], hm_prec['M_bins'])
+        self.Mrange = self.__mass_range(hm_prec, mass)
         self.Mbins = self.mass_bins(bias_dict, hm_prec)
 
         return True
@@ -325,8 +343,17 @@ class HOD:
         if occnum_tab['M'] is not None:
             occ_num = occnum_tab[pop]
             occ_prob = None
-        
-        elif occprob_tab['M'] is not None:
+            return occ_num, occ_prob
+
+        # only depends on the population and the (halo and stellar) mass
+        # ranges, the cached arrays are read-only
+        key = (pop, self.Mrange.tobytes(), self.Mbins.tobytes())
+        if key in self._occ_cache:
+            return self._occ_cache[key]
+        if len(self._occ_cache) >= 16:
+            self._occ_cache.clear()
+
+        if occprob_tab['M'] is not None:
             occ_prob = occprob_tab[pop]
             if np.isnan(occ_prob).any():
                 print("HODWarning: One or several elements in the occupation "
@@ -356,6 +383,9 @@ class HOD:
                     + "zeros. This might bias the result.")
                 occ_prob = np.nan_to_num(occ_prob)
             occ_num = simpson(occ_prob, x = self.Mbins[:, :, None], axis=1)
+        occ_num.setflags(write=False)
+        occ_prob.setflags(write=False)
+        self._occ_cache[key] = (occ_num, occ_prob)
         return occ_num, occ_prob
 
     def occ_num_and_prob(self, 
