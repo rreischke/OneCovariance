@@ -4372,6 +4372,7 @@ class FileInput:
         # number of galaxy pairs per angular bin
         self.npair = dict()
         self.npair_dir = None
+        self.npair_column = None
         self.npair_gg_file = None
         self.theta_npair_gg = None
         self.npair_gg = None
@@ -5281,6 +5282,11 @@ class FileInput:
         --------------
         N_pairs must be the last column (as in the treecorr output, or 
                                          just a 2 column file)
+        The first column must be the angular bins. By default, N_pairs is
+        taken from the last column (as in the treecorr output, or just a
+        2 column file). If N_pairs is in a different column, set the
+        column name via 'npair_column'. If that name is not found in the
+        file, the last column is used.
         # theta  ...  N_pairs
         0.5      ...  100
         0.6      ...  300
@@ -5310,7 +5316,16 @@ class FileInput:
             return False, False
 
         theta_npair = np.array(data[data.colnames[0]])
-        npair = np.array(data[data.colnames[-1]])
+
+        if self.npair_column in data.colnames:
+            npair = np.array(data[self.npair_column])
+        else:
+            npair = np.array(data[data.colnames[-1]])
+            if self.npair_column is not None:
+                print("InputWarning: The column '" + self.npair_column +
+                      "' in keyword 'npair_column' was not found in file " +
+                      path.join(self.npair_dir, nfile) + ". The last column " +
+                      "will be used as the number of galaxy pairs.")
 
         return theta_npair, npair
 
@@ -5341,6 +5356,10 @@ class FileInput:
                     config['tabulated inputs files']['input_directory']
             else:
                 self.npair_dir = ''
+            if 'npair_column' in config['tabulated inputs files']:
+                self.npair_column = config['tabulated inputs files']['npair_column']
+                if self.npair_column == '':
+                    self.npair_column = None
             if 'npair_gg_file' in config['tabulated inputs files']:
                 self.npair_gg_file = (config['tabulated inputs files']
                                       ['npair_gg_file'].replace(" ", "")).split(',')
