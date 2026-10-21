@@ -58,22 +58,7 @@ Levin::~Levin()
         gsl_spline_free(spline_integrand.at(i));
         gsl_interp_accel_free(acc_integrand.at(i));
     }
-    for (uint j = 0; j < N_thread_max; j++)
-    {
-        if (number_of_modes != 0)
-        {
-            for (uint i = 0; i < number_of_modes; i++)
-            {
-                gsl_spline_free(spline_w_ell.at(j).at(i));
-                gsl_interp_accel_free(acc_w_ell.at(j).at(i));
-            }
-            if (j == 0)
-            {
-                delete[] int_m_mode;
-                delete[] int_n_mode;
-            }
-        }
-    }
+    free_w_ell();
     if (type < 2)
     {
         delete[] int_k_single_bessel;
@@ -176,34 +161,62 @@ void Levin::update_Levin(uint type1, uint col1, uint nsub1, double relative_tol1
     setup(type);
 }
 
+void Levin::free_w_ell()
+{
+    if (number_of_modes == 0)
+    {
+        return;
+    }
+    // the splines are shared by all threads, the accelerators are per thread
+    for (uint i = 0; i < number_of_modes; i++)
+    {
+        gsl_spline_free(spline_w_ell.at(0).at(i));
+    }
+    for (uint j = 0; j < N_thread_max; j++)
+    {
+        for (uint i = 0; i < number_of_modes; i++)
+        {
+            gsl_interp_accel_free(acc_w_ell.at(j).at(i));
+        }
+    }
+    spline_w_ell.clear();
+    acc_w_ell.clear();
+    delete[] int_m_mode;
+    delete[] int_n_mode;
+    number_of_modes = 0;
+}
+
 void Levin::init_w_ell(const std::vector<double>& ell, const std::vector<std::vector<double>>& w_ells)
 {
+    free_w_ell();
     ell_w_ell = ell;
     int_m_mode = new uint[N_thread_max];
     int_n_mode = new uint[N_thread_max];
     number_of_modes = w_ells.at(0).size();
+    // one spline per weight, shared by all threads (it is only read after
+    // the initialisation); every thread has its own accelerators
+    std::vector<gsl_spline *> splines(number_of_modes);
+    std::vector<double> y_value(ell.size());
+    for (uint a = 0; a < number_of_modes; a++)
+    {
+        for (uint i = 0; i < ell.size(); i++)
+        {
+            y_value.at(i) = w_ells.at(i).at(a);
+        }
+        splines.at(a) = gsl_spline_alloc(gsl_interp_akima, ell.size());
+        gsl_spline_init(splines.at(a), &ell[0], &y_value[0], ell.size());
+    }
     for (uint j = 0; j < N_thread_max; j++)
     {
-        spline_w_ell.push_back(std::vector<gsl_spline *>());
+        spline_w_ell.push_back(splines);
         acc_w_ell.push_back(std::vector<gsl_interp_accel *>());
-        std::vector<double> y_value(ell.size());
         for (uint i = 0; i < number_of_modes; i++)
         {
-            spline_w_ell.at(j).push_back(gsl_spline_alloc(gsl_interp_akima, ell.size()));
             acc_w_ell.at(j).push_back(gsl_interp_accel_alloc());
         }
-        for (uint a = 0; a < number_of_modes; a++)
-        {
-#pragma omp parallel for num_threads(N_thread_max) schedule(auto)
-            for (uint i = 0; i < ell.size(); i++)
-            {
-                y_value.at(i) = w_ells.at(i).at(a);
-            }
-            gsl_spline_init(spline_w_ell.at(j).at(a), &ell[0], &y_value[0], ell.size());
-        }
-        xmax_weight = ell.back();
-        xmin_weight = ell.at(0);
     }
+    xmax_weight = ell.back();
+    xmin_weight = ell.at(0);
     w_ell_size = ell.size();
     w_ell_log_min = log(ell.at(0));
     w_ell_inv_dlog = (w_ell_size - 1) / (log(ell.back()) - log(ell.at(0)));

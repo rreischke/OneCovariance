@@ -64,6 +64,9 @@ private:
   uint d;
   uint type;
   uint number_of_modes = 0;
+
+  // frees the weights of init_w_ell (if initialised)
+  void free_w_ell();
   uint n_split_rs;
   uint col, nsub;
   uint number_x_values;

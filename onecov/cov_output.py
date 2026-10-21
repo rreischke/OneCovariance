@@ -1633,7 +1633,7 @@ class Output:
             splitidx = 0
             write_header = True
             for oidx, obs in enumerate(obslist):
-                obs_copy = np.copy(obs)
+                obs_copy = str(obs)
                 if obs == 'xipxip' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'CE_mmCE_mm'
                 if obs == 'xipxim' and obs_dict['observables']['est_shear'] == 'bandpowers' and obs_dict['observables']['cosmic_shear'] == True:
@@ -1993,7 +1993,7 @@ class Output:
                                             for t4 in range(t3, tomo2):
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
-                                                        idxs = (i_r1, i_r2, i_s1, i_s2, t1, t1, t3, t4)
+                                                        idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                         cov = gauss[splitidx][idxs] \
                                                             + gauss[splitidx+1][idxs] \
                                                             + gauss[splitidx+2][idxs] \
@@ -3550,7 +3550,7 @@ class Output:
                                         for t4 in range(t3, tomo2):
                                             for i_s1 in range(sampledim1):
                                                 for i_s2 in range(sampledim2):
-                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t1, t3, t4)
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[splitidx][idxs] \
                                                         + gauss[splitidx+1][idxs] \
                                                         + gauss[splitidx+2][idxs] \
@@ -4492,7 +4492,7 @@ class Output:
                                                         else:
                                                             #obs_copy += str(summary['mmB_summary_name'][0])
                                                             obs_copy += '__mmB_summary_A'
-                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t1, t3, t4)
+                                                    idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
                                                     cov = gauss[splitidx][idxs] \
                                                         + gauss[splitidx+1][idxs] \
                                                         + gauss[splitidx+2][idxs] \
@@ -5794,7 +5794,7 @@ class Output:
                             cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                         if self.has_ssc:
                             cov2d_ssc[j,i] = cov2d_ssc[i,j]
-            if len(np.where(np.linalg.eig(cov2d_total)[0] < 0)[0]) > 0:
+            if len(np.where(np.linalg.eigvalsh(cov2d_total) < 0)[0]) > 0:
                 print("ALARM: The resulting covariance matrix has negative eigenvalues")
                 print("Try to adjust the accuracy settings in the config file:")
                 print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
@@ -6349,7 +6349,7 @@ class Output:
                             cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                         if self.has_ssc:
                             cov2d_ssc[j,i] = cov2d_ssc[i,j]
-            if len(np.where(np.linalg.eig(cov2d_total)[0] <= 0)[0]) > 0:
+            if len(np.where(np.linalg.eigvalsh(cov2d_total) <= 0)[0]) > 0:
                 print("ALARM: The resulting covariance matrix has negative eigenvalues")
                 print("Try to adjust the accuracy settings in the config file:")
                 print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
@@ -7017,7 +7017,7 @@ class Output:
                     cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                     cov2d_ssc[j,i] = cov2d_ssc[i,j]
 
-        if len(np.where(np.linalg.eig(cov2d_total)[0] < 0)[0]) > 0:
+        if len(np.where(np.linalg.eigvalsh(cov2d_total) < 0)[0]) > 0:
             print("ALARM: The resulting covariance matrix has negative eigenvalues")
             print("Try to adjust the accuracy settings in the config file:")
             print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")

@@ -1070,36 +1070,44 @@ class Setup:
 
         return covELL_sym
 
-    def __rebin_npair(self, npairs, theta_npair, theta_ul_bins, theta_bins):
-        pair_rebinned = np.zeros((len(theta_ul_bins)-1,len(npairs[0,:,0,0]),len(npairs[0,0,:,0]), len(npairs[0,0,0,:])))
-        for i_sample in range(len(npairs[0,0,0,:])):
-            for i_tomo in range(len(npairs[0,:,0,0])):
-                for j_tomo in range(len(npairs[0,0,:,0])):
-                    for i_theta in range(len(theta_ul_bins)-1):
-                        for j_theta in range(len(theta_npair)):
-                            if theta_npair[j_theta] > theta_ul_bins[i_theta] and theta_npair[j_theta] <= theta_ul_bins[i_theta+1]:
-                                pair_rebinned[i_theta,i_tomo,j_tomo,i_sample] += npairs[j_theta,i_tomo,j_tomo,i_sample]
-                            elif theta_npair[j_theta] > theta_ul_bins[i_theta]:
-                                break
-                    if np.all(pair_rebinned[:,i_tomo,j_tomo,i_sample]):
-                        continue
-                    else:
-                        i_theta_lo = 0
-                        i_theta_hi = 0
-                        for i_theta in range(len(theta_ul_bins) - 1):
-                            if pair_rebinned[i_theta,i_tomo,j_tomo,i_sample] != 0:
-                                i_theta_lo = i_theta + 1
-                                break
-                        for i_theta in range(i_theta_lo, len(theta_ul_bins) - 1):
-                            if pair_rebinned[i_theta,i_tomo,j_tomo,i_sample] == 0:
-                                i_theta_hi = i_theta - 1
-                                break
-                        if i_theta_lo >= i_theta_hi:
-                            raise Exception("SetupError: The paircount file you have passed does not support the desired angular range and a rebinning is not possible. There is at least one theta bin without any pairs. Please check the files or the theta range")
-                        pair_rebinned_spline = interp1d(theta_bins[i_theta_lo:i_theta_hi],pair_rebinned[i_theta_lo:i_theta_hi,i_tomo, j_tomo,i_sample], fill_value="extrapolate")
-                        pair_rebinned[:,i_tomo, j_tomo,i_sample] = pair_rebinned_spline(theta_bins)
+    def __rebin_npair(self, npairs, theta_npair, theta_ul_bins, theta_bins, analytic, name):
+        """
+        Sums the tabulated pair counts npairs (angular bins at theta_npair,
+        the nominal centres of logarithmic bins) into the angular bins with
+        edges theta_ul_bins. Bins that the table does not fully cover get the
+        analytic pair counts (same shape as the result); covered bins without
+        any tabulated pairs are interpolated (in log theta) from the covered
+        bins with pairs.
+        """
+        n_theta = len(theta_ul_bins) - 1
+        pair_rebinned = np.zeros((n_theta,) + npairs.shape[1:])
+        bin_index = np.searchsorted(theta_ul_bins, theta_npair, side='left') - 1
+        inside = (bin_index >= 0) & (bin_index < n_theta)
+        np.add.at(pair_rebinned, bin_index[inside], npairs[inside])
+        # range covered by the table (half a bin beyond the outermost centres,
+        # with half a bin of tolerance for rounding)
+        dlog_lo = np.log(theta_npair[1]/theta_npair[0]) if len(theta_npair) > 1 else 0.0
+        dlog_hi = np.log(theta_npair[-1]/theta_npair[-2]) if len(theta_npair) > 1 else 0.0
+        covered = (np.log(theta_ul_bins[:-1]) >= np.log(theta_npair[0]) - dlog_lo) & \
+                  (np.log(theta_ul_bins[1:]) <= np.log(theta_npair[-1]) + dlog_hi)
+        log_theta = np.log(theta_bins)
+        for index in np.ndindex(npairs.shape[1:]):
+            column = pair_rebinned[(slice(None),) + index]
+            good = covered & (column > 0)
+            holes = covered & ~(column > 0)
+            if np.any(holes):
+                if np.sum(good) < 2:
+                    raise Exception("SetupError: The paircount file you have passed does not support the desired angular range "
+                                    "and a rebinning is not possible. There is at least one theta bin without any pairs. Please "
+                                    "check the files or the theta range")
+                column[holes] = np.interp(log_theta[holes], log_theta[good], column[good])
+            column[~covered] = analytic[(~covered,) + index]
+        if not np.all(covered):
+            print("Warning: The pair counts for " + name + " do not cover the angular bin(s) " +
+                  ", ".join("[" + str(round(lo, 4)) + ", " + str(round(hi, 4)) + "]"
+                            for lo, hi, c in zip(theta_ul_bins[:-1], theta_ul_bins[1:], covered) if not c) +
+                  " (arcmin) fully, using the analytic number of pairs from the effective number density there.")
         return pair_rebinned
-    
 
     def get_dnpair(self,
                    obsbool,
@@ -1235,6 +1243,19 @@ class Setup:
         theta_log = 10**(.5 * (np.log10(theta_ul_bins[1:])
                                + np.log10(theta_ul_bins[:-1])))
 
+        area = np.pi*(theta_ul_bins[1:]**2 - theta_ul_bins[:-1]**2)[:, None, None, None]*60*60
+        if gg:
+            analytic_gg = area*survey_params_dict['survey_area_clust'][0] \
+                * survey_params_dict['n_eff_clust'][None, :, None, :] \
+                * survey_params_dict['n_eff_clust'][None, None, :, :]
+        if gm:
+            analytic_gm = area*survey_params_dict['survey_area_ggl'][0] \
+                * survey_params_dict['n_eff_clust'][None, :, None, :] \
+                * survey_params_dict['n_eff_lens'][None, None, :, :]
+        if mm:
+            analytic_mm = area*survey_params_dict['survey_area_lens'][0] \
+                * survey_params_dict['n_eff_lens'][None, :, None, :] \
+                * survey_params_dict['n_eff_lens'][None, None, :, :]
         if gg and npair_tab['npair_gg'] is not None:
             if len(npair_tab['theta_gg']) == len(theta_ul_bins)-1 and \
                (np.allclose(npair_tab['theta_gg'], theta_lin) or
@@ -1249,7 +1270,8 @@ class Setup:
                 npair_gg = self.__rebin_npair(npair_tab['npair_gg'],
                                               npair_tab['theta_gg'],
                                               theta_ul_bins,
-                                              theta_bins)
+                                              theta_bins,
+                                              analytic_gg, 'clustering')
             npair_gg = npair_gg.transpose(0, 3, 1, 2)
         elif gg:
             print("Approximating the clustering real space shot noise " +
@@ -1279,7 +1301,8 @@ class Setup:
                 npair_gm = self.__rebin_npair(npair_tab['npair_gm'],
                                               npair_tab['theta_gm'],
                                               theta_ul_bins,
-                                              theta_bins)
+                                              theta_bins,
+                                              analytic_gm, 'galaxy-galaxy lensing')
             npair_gm = npair_gm.transpose(0, 3, 1, 2)
         elif gm:
             print("Approximating the galaxy-galaxy lensing real space shot " +
@@ -1296,7 +1319,9 @@ class Setup:
             npair_gm = None
 
         if mm and npair_tab['npair_mm'] is not None:
-            if len(npair_tab['theta_mm']) == len(theta_ul_bins)-1:
+            if len(npair_tab['theta_mm']) == len(theta_ul_bins)-1 and \
+               (np.allclose(npair_tab['theta_mm'], theta_lin) or
+                    np.allclose(npair_tab['theta_mm'], theta_log)):
                 npair_mm = npair_tab['npair_mm']
             else:
                 print("Warning: The number of pairs for cosmic shear is not " +
@@ -1307,7 +1332,8 @@ class Setup:
                 npair_mm = self.__rebin_npair(npair_tab['npair_mm'],
                                               npair_tab['theta_mm'],
                                               theta_ul_bins,
-                                              theta_bins)
+                                              theta_bins,
+                                              analytic_mm, 'cosmic shear')
             npair_mm = npair_mm.transpose(0, 3, 1, 2)
         elif mm:
             print("Approximating the cosmic shear real space shot noise " +
