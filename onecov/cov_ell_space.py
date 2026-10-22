@@ -34,6 +34,26 @@ CAMB_KMAX_NONLINEAR = 100.
 PROJECTION_BLOCK_SIZE = 4_000_000
 
 
+class EllCovColumns(np.ndarray):
+    """
+    Four-point ell-space covariance of the projections stored only for the
+    tomographic combinations that are calculated: an array (ell, ell,
+    column) with tomo_shape, the full shape (sample, sample, tomo, tomo,
+    tomo, tomo) of the covariance, and columns, the flat indices (in
+    tomo_shape) of the stored columns. All other combinations are zero.
+    """
+
+    def __new__(cls, n_ell, tomo_shape, columns):
+        obj = np.zeros((n_ell, n_ell, len(columns))).view(cls)
+        obj.tomo_shape, obj.columns = tuple(tomo_shape), np.asarray(columns)
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is not None:
+            self.tomo_shape = getattr(obj, 'tomo_shape', None)
+            self.columns = getattr(obj, 'columns', None)
+
+
 class _LineOfSightIntegrals:
     """
     Line-of-sight integrals target[:, :, *index] = sum_chi weight(chi)
@@ -46,6 +66,10 @@ class _LineOfSightIntegrals:
         self.target = target
         self.los_weights = los_weights
         self.integrand, self.indices, self.weights = None, [], []
+        # position of each stored tomographic column of an EllCovColumns
+        self.position = None
+        if isinstance(target, EllCovColumns):
+            self.position = {column: i for i, column in enumerate(target.columns.tolist())}
 
     @staticmethod
     def _same(a, b):
@@ -68,7 +92,11 @@ class _LineOfSightIntegrals:
         weights = np.array(self.weights)
         for rows in CovELLSpace._blocks(len(self.indices), flat.shape[1]):
             for index, value in zip(self.indices[rows], weights[rows] @ flat):
-                self.target[(slice(None), slice(None)) + index] = np.reshape(value, self.integrand.shape[1:])
+                if self.position is None:
+                    self.target[(slice(None), slice(None)) + index] = np.reshape(value, self.integrand.shape[1:])
+                else:
+                    column = self.position[int(np.ravel_multi_index(index, self.target.tomo_shape))]
+                    self.target[:, :, column] = np.reshape(value, self.integrand.shape[1:])
         self.integrand, self.indices, self.weights = None, [], []
 
 
@@ -494,6 +522,78 @@ class CovELLSpace(PolySpectra):
         d_left = csr_matrix((h*(t**3 - t**2), (rows, k + 1)), shape=shape)
         return values, d_right, d_left
 
+    @property
+    def _compact_ell_cov(self):
+        """
+        Whether the ell-space covariances are only calculated as needed by
+        the projections (in the classes of the projected estimators): the
+        Gaussian ones only on the diagonal (shape (ell, 1, ...)), the
+        four-point ones only for the calculated tomographic combinations
+        (EllCovColumns). Not if the multiplicative shear bias terms of the
+        C_ell estimator are added to the four-point ones.
+        """
+        return type(self) is not CovELLSpace and not ((self.mm or self.gm) and self.est_shear == 'C_ell')
+
+    def _ell_4pt_array(self, tomo_shape, symmetric_12, symmetric_34, compact=True):
+        """
+        Zero array for a four-point ell-space covariance with the
+        tomographic shape (sample, sample, tomo, tomo, tomo, tomo). With
+        _compact_ell_cov (and compact) an EllCovColumns with the combinations
+        t1 <= t2 (if symmetric_12) and t3 <= t4 (if symmetric_34).
+        """
+        if not (self._compact_ell_cov and compact):
+            return np.zeros((len(self.ellrange), len(self.ellrange)) + tuple(tomo_shape))
+        s1, s2, t1, t2, t3, t4 = np.indices(tomo_shape).reshape(6, -1)
+        keep = np.ones(len(s1), dtype=bool)
+        if symmetric_12:
+            keep &= t2 >= t1
+        if symmetric_34:
+            keep &= t4 >= t3
+        return EllCovColumns(len(self.ellrange), tomo_shape, np.nonzero(keep)[0])
+
+    def _ell_cov_flat(self, ell_cov, flat_length):
+        """
+        An ell-space covariance as (ell, ell, column), or (ell, 1, column) if
+        only its diagonal is stored; EllCovColumns as they are.
+        """
+        if isinstance(ell_cov, EllCovColumns):
+            return ell_cov
+        return np.reshape(ell_cov, (len(self.ellrange), -1, flat_length))
+
+    @staticmethod
+    def _tomo_shape(ell_cov):
+        """
+        The shape of an ell-space covariance without its two ell axes.
+        """
+        if isinstance(ell_cov, EllCovColumns):
+            return ell_cov.tomo_shape
+        return ell_cov[0, 0].shape
+
+    @staticmethod
+    def _expand_columns(values, columns, original_shape):
+        """
+        Results for the stored columns of an EllCovColumns (columns, or None
+        for all columns) in the full original_shape (zero elsewhere).
+        """
+        if columns is None:
+            return np.reshape(values, original_shape)
+        full = np.zeros(int(np.prod(original_shape)))
+        full[columns] = values
+        return np.reshape(full, original_shape)
+
+    def _pixel_weights(self, ell_cov):
+        """
+        The pixel window weights (ell, ell) shaped to multiply an ell-space
+        covariance (only their diagonal if only that is stored).
+        """
+        weights = self.pixelweight_matrix
+        if np.ndim(ell_cov) < 2:
+            # terms that are not calculated (0) stay a number
+            return 1.0
+        if np.shape(ell_cov)[1] == 1 and len(self.ellrange) > 1:
+            weights = np.diagonal(weights)[:, None]
+        return np.reshape(weights, np.shape(weights) + (1,)*(np.ndim(ell_cov) - 2))
+
     @staticmethod
     def _blocks(n, size):
         """
@@ -612,7 +712,8 @@ class CovELLSpace(PolySpectra):
         """
         tol = self._projection_weights_of[id(levin_int)][3]
         n_ell = len(self.ellrange)
-        flat = np.reshape(ell_cov, (n_ell, n_ell, -1))
+        columns = getattr(ell_cov, 'columns', None)
+        flat = np.reshape(np.asarray(ell_cov), (n_ell, n_ell, -1))
         unique_idx, inverse = self._unique_columns_blocked(np.reshape(flat, (n_ell*n_ell, -1)))
         n_col = len(unique_idx)
         inner_modes = sorted(set(self._weight_key(job[1]) for job in live))
@@ -663,8 +764,8 @@ class CovELLSpace(PolySpectra):
         for job in live:
             key = (self._weight_key(job[0]), self._weight_key(job[1]))
             if key not in results:
-                results[key] = np.reshape(projected[position_outer[key[0]], position_inner[key[1]]][inverse],
-                                          original_shape)
+                results[key] = self._expand_columns(projected[position_outer[key[0]], position_inner[key[1]]][inverse],
+                                                    columns, original_shape)
         for job in live:
             job[2][job[3]] = job[4]*results[(self._weight_key(job[0]), self._weight_key(job[1]))]
             if job[5] is not None:
@@ -821,7 +922,9 @@ class CovELLSpace(PolySpectra):
             integrator with the weights initialised via init_w_ell
         todo : list
             of (ell_cov_flat, jobs) with ell_cov_flat of shape
-            (len(ellrange), len(ellrange), number of integrals) and jobs
+            (len(ellrange), len(ellrange), number of integrals), or
+            (len(ellrange), 1, number of integrals) if only the diagonal is
+            stored, and jobs
             (ell_limits, m_mode, n_mode, target_array, target_index, prefac[,
             mirror_index]). If mirror_index is given, the result is also
             stored there (blocks symmetric in m_mode and n_mode).
@@ -846,7 +949,11 @@ class CovELLSpace(PolySpectra):
                     live.setdefault(key, []).append(job)
             if len(live) == 0:
                 continue
-            integrand = np.moveaxis(np.diagonal(ell_cov_flat)*self.ellrange,0,-1)
+            if ell_cov_flat.shape[1] == 1 and len(self.ellrange) > 1:
+                # only the diagonal is stored
+                integrand = ell_cov_flat[:, 0, :]*self.ellrange[:, None]
+            else:
+                integrand = np.moveaxis(np.diagonal(ell_cov_flat)*self.ellrange,0,-1)
             if self._use_quadrature_projection(levin_int):
                 by_range = {}
                 for key, key_jobs in live.items():
@@ -900,7 +1007,8 @@ class CovELLSpace(PolySpectra):
         ell_limits : list
             integration limits for each weight
         ell_cov : array
-            with shape (len(ellrange), len(ellrange), ...)
+            with shape (len(ellrange), len(ellrange), ...), or an
+            EllCovColumns (the results are expanded to original_shape)
         jobs : list
             of jobs (outer_mode, inner_mode, target_array, target_index,
             prefac, divisor)
@@ -931,7 +1039,8 @@ class CovELLSpace(PolySpectra):
                 return
             print("ProjectionWarning: the integrands of the four-point projection for the " + name +
                   " are not sampled accurately enough for the quadrature, using cquad instead.")
-        ell_cov_flat = np.reshape(ell_cov, (len(self.ellrange), len(self.ellrange), -1))
+        columns = getattr(ell_cov, 'columns', None)
+        ell_cov_flat = np.reshape(np.asarray(ell_cov), (len(self.ellrange), len(self.ellrange), -1))
         inner_modes = sorted(set(self._weight_key(job[1]) for job in live))
         inner = {n_mode: np.zeros((len(self.ellrange), ell_cov_flat.shape[2])) for n_mode in inner_modes}
         for i_ell in range(len(self.ellrange)):
@@ -953,7 +1062,7 @@ class CovELLSpace(PolySpectra):
             unique_idx, inverse = self._unique_columns(integrand)
             results = levin_int.cquad_integrate_single_well_subset(
                 [ell_limits[m_mode][:] for m_mode in outer_modes], outer_modes, unique_idx)
-            result_of = {m_mode: np.reshape(np.array(result)[inverse], original_shape)
+            result_of = {m_mode: self._expand_columns(np.array(result)[inverse], columns, original_shape)
                          for m_mode, result in zip(outer_modes, results)}
             for job in outer_jobs:
                 job[2][job[3]] = job[4]*result_of[self._weight_key(job[0])]
@@ -4031,24 +4140,24 @@ class CovELLSpace(PolySpectra):
                 cov_csmf_mm = self.__bin_cov_ell_csmf(self.ellrange_lensing_ul,cov_csmf_mm,True)
         if covELLspacesettings['pixelised_cell']:
             
-            gaussELLgggg_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLgggg_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLgggg_sn *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLgggm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLgggm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]  
-            gaussELLgggm_sn *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLggmm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLggmm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLggmm_sn *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLgmgm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLgmgm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLgmgm_sn *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLmmgm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLmmgm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLmmgm_sn *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLmmmm_sva *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLmmmm_mix *= self.pixelweight_matrix[:,:, None, None, None, None, None, None] 
-            gaussELLmmmm_sn  *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+            gaussELLgggg_sva *= self._pixel_weights(gaussELLgggg_sva) 
+            gaussELLgggg_mix *= self._pixel_weights(gaussELLgggg_mix) 
+            gaussELLgggg_sn *= self._pixel_weights(gaussELLgggg_sn) 
+            gaussELLgggm_sva *= self._pixel_weights(gaussELLgggm_sva) 
+            gaussELLgggm_mix *= self._pixel_weights(gaussELLgggm_mix)  
+            gaussELLgggm_sn *= self._pixel_weights(gaussELLgggm_sn) 
+            gaussELLggmm_sva *= self._pixel_weights(gaussELLggmm_sva) 
+            gaussELLggmm_mix *= self._pixel_weights(gaussELLggmm_mix) 
+            gaussELLggmm_sn *= self._pixel_weights(gaussELLggmm_sn) 
+            gaussELLgmgm_sva *= self._pixel_weights(gaussELLgmgm_sva) 
+            gaussELLgmgm_mix *= self._pixel_weights(gaussELLgmgm_mix) 
+            gaussELLgmgm_sn *= self._pixel_weights(gaussELLgmgm_sn) 
+            gaussELLmmgm_sva *= self._pixel_weights(gaussELLmmgm_sva) 
+            gaussELLmmgm_mix *= self._pixel_weights(gaussELLmmgm_mix) 
+            gaussELLmmgm_sn *= self._pixel_weights(gaussELLmmgm_sn) 
+            gaussELLmmmm_sva *= self._pixel_weights(gaussELLmmmm_sva) 
+            gaussELLmmmm_mix *= self._pixel_weights(gaussELLmmmm_mix) 
+            gaussELLmmmm_sn *= self._pixel_weights(gaussELLmmmm_sn)
         if calc_prefac and self.ellrange_spec is None:
             if self.gg and self.ellrange_clustering_ul is not None:
                 gaussELLgggg_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
@@ -5316,7 +5425,10 @@ class CovELLSpace(PolySpectra):
                     for i_tomo in range(self.n_tomo_clust):
                         noise_g[i_sample, i_sample, i_tomo, i_tomo] = 1.0/self.Ngal[i_sample,i_tomo]
        
-        reshape_mat = np.eye(len(self.ellrange))[
+        # diagonal in ell: the full (ell, ell) matrix, or only the diagonal
+        # (shape (ell, 1, ...)) for the projections
+        ell_diagonal = np.ones((len(self.ellrange), 1)) if self._compact_ell_cov else np.eye(len(self.ellrange))
+        reshape_mat = ell_diagonal[
             :, :, None, None, None, None, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :, None, None, None, None]
         if self.gg:
             # Cov_sva(gg^ij gg^kl) = Cgg^ik Cgg^jl + Cgg^il Cgg^jk
@@ -6020,8 +6132,9 @@ class CovELLSpace(PolySpectra):
         zclust_chi = [spline(self.los_integration_chi) for spline in getattr(self, 'spline_zclust', [])]
         lensweight_chi = [spline(self.los_integration_chi) for spline in getattr(self, 'spline_lensweight', [])]
         if self.gg:
-            nongaussELLgggg = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
-                                        self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))
+            nongaussELLgggg = self._ell_4pt_array(
+                (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust),
+                self.ellrange_photo is None, self.ellrange_photo is None, compact=covELLspacesettings['nglimber'])
             los_gggg = _LineOfSightIntegrals(nongaussELLgggg, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
@@ -6061,14 +6174,15 @@ class CovELLSpace(PolySpectra):
             
             los_gggg.flush()
             if covELLspacesettings['pixelised_cell']:
-                nongaussELLgggg *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                nongaussELLgggg *= self._pixel_weights(nongaussELLgggg)
             print("")
         else:
             nongaussELLgggg = 0
 
         if self.gg and self.gm and self.cross_terms:
-            nongaussELLgggm = np.zeros((len(self.ellrange), len(self.ellrange),  self.sample_dim, self.sample_dim, self.n_tomo_clust,
-                                        self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens))
+            nongaussELLgggm = self._ell_4pt_array(
+                (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens),
+                self.ellrange_photo is None, False)
             los_gggm = _LineOfSightIntegrals(nongaussELLgggm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
@@ -6105,14 +6219,15 @@ class CovELLSpace(PolySpectra):
                 
             los_gggm.flush()
             if covELLspacesettings['pixelised_cell']:
-                nongaussELLgggm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                nongaussELLgggm *= self._pixel_weights(nongaussELLgggm)
             print("")
         else:
             nongaussELLgggm = 0
 
         if self.gg and self.mm and self.cross_terms:
-            nongaussELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, 1, self.n_tomo_clust,
-                                        self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))
+            nongaussELLggmm = self._ell_4pt_array(
+                (self.sample_dim, 1, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens),
+                self.ellrange_photo is None, True)
             
             los_ggmm = _LineOfSightIntegrals(nongaussELLggmm, self._los_weights)
             t0, tomos = time.time(), 0
@@ -6147,14 +6262,15 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_ggmm.flush()
             if covELLspacesettings['pixelised_cell']:
-                nongaussELLggmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                nongaussELLggmm *= self._pixel_weights(nongaussELLggmm)
             print("")
         else:
             nongaussELLggmm = 0
 
         if self.gm:
-            nongaussELLgmgm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
-                                        self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
+            nongaussELLgmgm = self._ell_4pt_array(
+                (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
+                False, False)
             los_gmgm = _LineOfSightIntegrals(nongaussELLgmgm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = self.n_tomo_clust*(self.n_tomo_lens)*self.sample_dim**2
@@ -6187,7 +6303,7 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_gmgm.flush()
             if covELLspacesettings['pixelised_cell']:
-                nongaussELLgmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                nongaussELLgmgm *= self._pixel_weights(nongaussELLgmgm)
             if self.est_shear == "C_ell":
                 adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_gm[:, None, :, None, :,:, None, None]*self.Cell_gm[None, :, None, :, None, None, :, :])
                 nongaussELLgmgm[:, :, :, :, :, :, :, :] = nongaussELLgmgm[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
@@ -6196,8 +6312,9 @@ class CovELLSpace(PolySpectra):
             nongaussELLgmgm = 0
 
         if self.gm and self.mm and self.cross_terms:
-            nongaussELLmmgm = np.zeros((len(self.ellrange), len(self.ellrange), 1, self.sample_dim, self.n_tomo_lens,
-                                        self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
+            nongaussELLmmgm = self._ell_4pt_array(
+                (1, self.sample_dim, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
+                True, False)
             los_mmgm = _LineOfSightIntegrals(nongaussELLmmgm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = self.n_tomo_lens*(self.n_tomo_lens + 1)/2*self.sample_dim
@@ -6220,7 +6337,7 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_mmgm.flush()
             if covELLspacesettings['pixelised_cell']:
-                nongaussELLmmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                nongaussELLmmgm *= self._pixel_weights(nongaussELLmmgm)
             if self.est_shear == "C_ell" and self.est_ggl == "C_ell":
                 adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_mm[:, None, :, None, :,:, None, None]*self.Cell_gm[None, :, None, :, None, None, :, :])
                 nongaussELLmmgm[:, :, 0, :, :, :, :, :] = nongaussELLmmgm[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
@@ -6229,8 +6346,9 @@ class CovELLSpace(PolySpectra):
             nongaussELLmmgm = 0
 
         if self.mm:
-            nongaussELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), 1, 1, self.n_tomo_lens,
-                                        self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
+            nongaussELLmmmm = self._ell_4pt_array(
+                (1, 1, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens),
+                True, True)
             los_mmmm = _LineOfSightIntegrals(nongaussELLmmmm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = self.n_tomo_lens*(self.n_tomo_lens + 1)/2*1
@@ -6252,7 +6370,7 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_mmmm.flush()
             if covELLspacesettings['pixelised_cell']:
-                nongaussELLmmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                nongaussELLmmmm *= self._pixel_weights(nongaussELLmmmm)
             print("")
             if self.est_shear == "C_ell":
                 adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_mm[:, None, :, None, :,:, None, None]*self.Cell_mm[None, :, None, :, None, None, :, :])
@@ -6544,8 +6662,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim**2
-            SSCELLgggg = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
-                                   self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))
+            SSCELLgggg = self._ell_4pt_array(
+                (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust),
+                self.ellrange_photo is None, self.ellrange_photo is None, compact=covELLspacesettings['nglimber'])
             los_gggg = _LineOfSightIntegrals(SSCELLgggg, self._los_weights)
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
@@ -6596,15 +6715,16 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_gggg.flush()
             if covELLspacesettings['pixelised_cell']:
-                SSCELLgggg *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                SSCELLgggg *= self._pixel_weights(SSCELLgggg)
             print("")
         else:
             SSCELLgggg = 0
 
         if self.gg and self.gm and self.cross_terms:
             print("At gggm contribution")
-            SSCELLgggm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
-                                   self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens))
+            SSCELLgggm = self._ell_4pt_array(
+                (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens),
+                self.ellrange_photo is None, False)
             los_gggm = _LineOfSightIntegrals(SSCELLgggm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
@@ -6656,15 +6776,16 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_gggm.flush()
             if covELLspacesettings['pixelised_cell']:
-                SSCELLgggm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                SSCELLgggm *= self._pixel_weights(SSCELLgggm)
             print("")
         else:
             SSCELLgggm = 0
 
         if self.gg and self.mm and self.cross_terms:
             print("At ggmm contribution")
-            SSCELLggmm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, 1, self.n_tomo_clust,
-                                   self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))
+            SSCELLggmm = self._ell_4pt_array(
+                (self.sample_dim, 1, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens),
+                self.ellrange_photo is None, True)
             los_ggmm = _LineOfSightIntegrals(SSCELLggmm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim)
@@ -6714,15 +6835,16 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_ggmm.flush()
             if covELLspacesettings['pixelised_cell']:
-                SSCELLggmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                SSCELLggmm *= self._pixel_weights(SSCELLggmm)
             print("")
         else:
             SSCELLggmm = 0
 
         if self.gm:
             print("At gmgm contribution")
-            SSCELLgmgm = np.zeros((len(self.ellrange), len(self.ellrange), self.sample_dim, self.sample_dim, self.n_tomo_clust,
-                                   self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
+            SSCELLgmgm = self._ell_4pt_array(
+                (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
+                False, False)
             los_gmgm = _LineOfSightIntegrals(SSCELLgmgm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = self.n_tomo_clust*(self.n_tomo_lens)*self.sample_dim**2
@@ -6771,15 +6893,16 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_gmgm.flush()
             if covELLspacesettings['pixelised_cell']:
-                SSCELLgmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                SSCELLgmgm *= self._pixel_weights(SSCELLgmgm)
             print("")
         else:
             SSCELLgmgm = 0
 
         if self.gm and self.mm and self.cross_terms:
             print("At mmgm contribution")
-            SSCELLmmgm = np.zeros((len(self.ellrange), len(self.ellrange), 1, self.sample_dim, self.n_tomo_lens,
-                                   self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
+            SSCELLmmgm = self._ell_4pt_array(
+                (1, self.sample_dim, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
+                True, False)
             los_mmgm = _LineOfSightIntegrals(SSCELLmmgm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = self.n_tomo_lens*(self.n_tomo_lens + 1)/2*self.sample_dim
@@ -6827,15 +6950,16 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_mmgm.flush()
             if covELLspacesettings['pixelised_cell']:
-                SSCELLmmgm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                SSCELLmmgm *= self._pixel_weights(SSCELLmmgm)
             print("")
         else:
             SSCELLmmgm = 0
 
         if self.mm:
             print("At mmmm contribution")
-            SSCELLmmmm = np.zeros((len(self.ellrange), len(self.ellrange), 1, 1, self.n_tomo_lens,
-                                  self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
+            SSCELLmmmm = self._ell_4pt_array(
+                (1, 1, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens),
+                True, True)
             los_mmmm = _LineOfSightIntegrals(SSCELLmmmm, self._los_weights)
             t0, tomos = time.time(), 0
             tomos_comb = (self.n_tomo_lens*(self.n_tomo_lens+1)/2)
@@ -6864,7 +6988,7 @@ class CovELLSpace(PolySpectra):
                                 str(round(eta, 1)) + 'min', end="")
             los_mmmm.flush()
             if covELLspacesettings['pixelised_cell']:
-                SSCELLmmmm *= self.pixelweight_matrix[:,:, None, None, None, None, None, None]
+                SSCELLmmmm *= self._pixel_weights(SSCELLmmmm)
             print("")       
         else:
             SSCELLmmmm = 0

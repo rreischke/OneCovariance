@@ -1116,10 +1116,8 @@ class CovBandPowers(CovTHETASpace):
             gauss_BPgggg_sn = np.zeros_like(gauss_BPgggg_sva)
             original_shape = gauss_BPgggg_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**4
-            gaussELL_sva_flat = np.reshape(gaussELLgggg_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLgggg_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLgggg_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLgggg_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)**2
             sva_jobs, mix_jobs = [], []
@@ -1161,10 +1159,8 @@ class CovBandPowers(CovTHETASpace):
             gauss_BPgggm_mix = np.zeros_like(gauss_BPgggm_sva)
             original_shape = gauss_BPgggm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**3*self.n_tomo_lens
-            gaussELL_sva_flat = np.reshape(gaussELLgggm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLgggm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLgggm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLgggm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)**2
             if not self.cov_dict['sn_only']:
@@ -1198,8 +1194,7 @@ class CovBandPowers(CovTHETASpace):
                 (len(self.ell_bins_clustering), len(self.ell_bins_lensing), self.sample_dim, 1, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))  
             original_shape = gauss_BPEggmm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_clust**2*self.n_tomo_lens**2
-            gaussELL_sva_flat = np.reshape(gaussELLggmm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLggmm_sva, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)*len(self.ell_bins_lensing)
             if not self.cov_dict['sn_only']:
@@ -1234,10 +1229,8 @@ class CovBandPowers(CovTHETASpace):
             gauss_BPgmgm_sn = np.zeros_like(gauss_BPgmgm_sva)
             original_shape = gauss_BPgmgm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**2*self.n_tomo_lens**2
-            gaussELL_sva_flat = np.reshape(gaussELLgmgm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLgmgm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLgmgm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLgmgm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)**2
             sva_jobs, mix_jobs = [], []
@@ -1283,10 +1276,8 @@ class CovBandPowers(CovTHETASpace):
             
             original_shape = gauss_BPEmmgm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens**3
-            gaussELL_sva_flat = np.reshape(gaussELLmmgm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLmmgm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLmmgm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLmmgm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)*len(self.ell_bins_lensing)
             if not self.cov_dict['sn_only']:
@@ -1335,10 +1326,8 @@ class CovBandPowers(CovTHETASpace):
             
             original_shape = gauss_BPEEmmmm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.n_tomo_lens**4
-            gaussELL_sva_flat = np.reshape(gaussELLmmmm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLmmmm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLmmmm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLmmmm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_lensing)**2
             sva_jobs, mix_jobs = [], []
@@ -1737,8 +1726,7 @@ class CovBandPowers(CovTHETASpace):
                 (len(self.ell_bins_clustering), len(self.ell_bins_clustering), self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))
             original_shape = nongauss_BPgggg[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**4
-            nongaussELL_flat = np.reshape(nongaussELLgggg, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLgggg, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)**2
             jobs = []
@@ -1755,8 +1743,7 @@ class CovBandPowers(CovTHETASpace):
                 (len(self.ell_bins_clustering), len(self.ell_bins_clustering), self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens))
             original_shape = nongauss_BPgggm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**3*self.n_tomo_lens
-            nongaussELL_flat = np.reshape(nongaussELLgggm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLgggm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)**2
             jobs = []
@@ -1774,8 +1761,7 @@ class CovBandPowers(CovTHETASpace):
             nongauss_BPBggmm = np.zeros_like(nongauss_BPEggmm)
             original_shape = nongauss_BPEggmm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_clust**2*self.n_tomo_lens**2
-            nongaussELL_flat = np.reshape(nongaussELLggmm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLggmm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)*len(self.ell_bins_lensing)
             jobs = []
@@ -1794,8 +1780,7 @@ class CovBandPowers(CovTHETASpace):
                 (len(self.ell_bins_clustering), len(self.ell_bins_clustering), self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
             original_shape = nongauss_BPgmgm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**2*self.n_tomo_lens**2
-            nongaussELL_flat = np.reshape(nongaussELLgmgm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLgmgm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)**2
             jobs = []
@@ -1814,8 +1799,7 @@ class CovBandPowers(CovTHETASpace):
             nongauss_BPBmmgm = np.zeros_like(nongauss_BPEmmgm)
             original_shape = nongauss_BPEmmgm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens**3
-            nongaussELL_flat = np.reshape(nongaussELLmmgm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLmmgm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_clustering)*len(self.ell_bins_lensing)
             jobs = []
@@ -1835,8 +1819,7 @@ class CovBandPowers(CovTHETASpace):
             nongauss_BPBBmmmm = np.zeros_like(nongauss_BPEEmmmm)
             original_shape = nongauss_BPEEmmmm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.n_tomo_lens**4
-            nongaussELL_flat = np.reshape(nongaussELLmmmm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLmmmm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = len(self.ell_bins_lensing)**2
             jobs = []

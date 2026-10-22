@@ -1091,10 +1091,8 @@ class CovTHETASpace(CovELLSpace):
             gauss_ww_sva = np.zeros(covww_shape_sva)
             gauss_ww_mix = np.zeros(covww_shape_sva)
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**4
-            gaussELLgggg_sva_flat = np.reshape(gaussELLgggg_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELLgggg_mix_flat = np.reshape(gaussELLgggg_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELLgggg_sva_flat = self._ell_cov_flat(gaussELLgggg_sva, flat_length)
+            gaussELLgggg_mix_flat = self._ell_cov_flat(gaussELLgggg_mix, flat_length)
             if not self.cov_dict['sn_only']:
                 sva_jobs, mix_jobs = [], []
                 for m_mode in range(self.gg_summaries):
@@ -1126,10 +1124,8 @@ class CovTHETASpace(CovELLSpace):
             gauss_wgt_sva = np.zeros(covwgt_shape_sva)
             gauss_wgt_mix = np.zeros(covwgt_shape_sva)
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_lens*self.n_tomo_clust**3
-            gaussELLgggm_sva_flat = np.reshape(gaussELLgggm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELLgggm_mix_flat = np.reshape(gaussELLgggm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELLgggm_sva_flat = self._ell_cov_flat(gaussELLgggm_sva, flat_length)
+            gaussELLgggm_mix_flat = self._ell_cov_flat(gaussELLgggm_mix, flat_length)
             
             if not self.cov_dict['sn_only']:
                 sva_jobs, mix_jobs = [], []
@@ -1152,8 +1148,7 @@ class CovTHETASpace(CovELLSpace):
             gauss_wxip_sva = np.zeros(covwxipm_shape_sva) if self.xi_pp else 0
             gauss_wxim_sva = np.zeros(covwxipm_shape_sva) if self.xi_mm else 0
             flat_length = self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
-            gaussELLggmm_sva_flat = np.reshape(gaussELLggmm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELLggmm_sva_flat = self._ell_cov_flat(gaussELLggmm_sva, flat_length)
             if not self.cov_dict['sn_only']:
                 sva_jobs = []
                 for m_mode in range(self.gg_summaries):
@@ -1177,10 +1172,8 @@ class CovTHETASpace(CovELLSpace):
             gauss_gtgt_sva = np.zeros(covgtgt_shape_sva)
             gauss_gtgt_mix = np.zeros(covgtgt_shape_sva)
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**2*self.n_tomo_lens**2
-            gaussELLgmgm_sva_flat = np.reshape(gaussELLgmgm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELLgmgm_mix_flat = np.reshape(gaussELLgmgm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELLgmgm_sva_flat = self._ell_cov_flat(gaussELLgmgm_sva, flat_length)
+            gaussELLgmgm_mix_flat = self._ell_cov_flat(gaussELLgmgm_mix, flat_length)
             if not self.cov_dict['sn_only']:
                 sva_jobs, mix_jobs = [], []
                 for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
@@ -1220,10 +1213,8 @@ class CovTHETASpace(CovELLSpace):
             gauss_ximgt_mix = \
                 np.zeros(covxipmgt_shape_sva) if self.xi_mm else 0
             flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens**3
-            gaussELLmmgm_sva_flat = np.reshape(gaussELLmmgm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELLmmgm_mix_flat = np.reshape(gaussELLmmgm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELLmmgm_sva_flat = self._ell_cov_flat(gaussELLmmgm_sva, flat_length)
+            gaussELLmmgm_mix_flat = self._ell_cov_flat(gaussELLmmgm_mix, flat_length)
             
             if not self.cov_dict['sn_only']:
                 sva_jobs, mix_jobs = [], []
@@ -1258,10 +1249,8 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipxim_mix = np.zeros(covxipm_shape_sva) if self.xi_pm else 0
             gauss_ximxim_mix = np.zeros(covxipm_shape_sva) if self.xi_mm else 0
             flat_length = self.n_tomo_lens**4
-            gaussELLmmmm_sva_flat = np.reshape(gaussELLmmmm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELLmmmm_mix_flat = np.reshape(gaussELLmmmm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELLmmmm_sva_flat = self._ell_cov_flat(gaussELLmmmm_sva, flat_length)
+            gaussELLmmmm_mix_flat = self._ell_cov_flat(gaussELLmmmm_mix, flat_length)
             if not self.cov_dict['sn_only']:
                 sva_jobs, mix_jobs = [], []
                 for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
@@ -1657,7 +1646,7 @@ class CovTHETASpace(CovELLSpace):
         # jobs: (outer_mode, inner_mode, target_array, target_index)
         if self.gg:
             print("")
-            original_shape = nongaussELLgggg[0, 0, :, :, :, :, :, :].shape
+            original_shape = self._tomo_shape(nongaussELLgggg)
             nongauss_ww = np.zeros((len(self.theta_bins_clustering), len(self.theta_bins_clustering),
                                     self.sample_dim, self.sample_dim,
                                     self.n_tomo_clust, self.n_tomo_clust,
@@ -1671,7 +1660,7 @@ class CovTHETASpace(CovELLSpace):
         if self.gg and self.gm and self.cross_terms:
             print("")
             # cov_NG(w^ij(theta1) gt^kl(theta2))
-            original_shape = nongaussELLgggm[0, 0, :, :, :, :, :, :].shape
+            original_shape = self._tomo_shape(nongaussELLgggm)
             nongauss_wgt = np.zeros((len(self.theta_bins_clustering), len(self.theta_bins_clustering),
                                      self.sample_dim, self.sample_dim,
                                      self.n_tomo_clust, self.n_tomo_clust,
@@ -1684,7 +1673,7 @@ class CovTHETASpace(CovELLSpace):
 
         if self.gg and self.mm and self.cross_terms:
             print("")
-            original_shape = nongaussELLggmm[0, 0, :, :, :, :, :, :].shape
+            original_shape = self._tomo_shape(nongaussELLggmm)
             covwxipm_shape_nongauss = (len(self.theta_bins_clustering), len(self.theta_bins_lensing),
                                        self.sample_dim, 1,
                                        self.n_tomo_clust, self.n_tomo_clust,
@@ -1704,7 +1693,7 @@ class CovTHETASpace(CovELLSpace):
 
         if self.gm:
             print("")
-            original_shape = nongaussELLgmgm[0, 0, :, :, :, :, :, :].shape
+            original_shape = self._tomo_shape(nongaussELLgmgm)
             nongauss_gtgt = np.zeros((len(self.theta_bins_clustering), len(self.theta_bins_clustering),
                                       self.sample_dim, self.sample_dim,
                                       self.n_tomo_clust, self.n_tomo_lens,
@@ -1717,7 +1706,7 @@ class CovTHETASpace(CovELLSpace):
 
         if self.mm and self.gm and self.cross_terms:
             print("")
-            original_shape = nongaussELLmmgm[0, 0, :, :, :, :, :, :].shape
+            original_shape = self._tomo_shape(nongaussELLmmgm)
             covxipmgt_shape_nongauss = (len(self.theta_bins_lensing), len(self.theta_bins_clustering),
                                         1, self.sample_dim,
                                         self.n_tomo_lens, self.n_tomo_lens,
@@ -1737,7 +1726,7 @@ class CovTHETASpace(CovELLSpace):
 
         if self.mm:
             print("")
-            original_shape = nongaussELLmmmm[0, 0, :, :, :, :, :, :].shape
+            original_shape = self._tomo_shape(nongaussELLmmmm)
             covxipm_shape_nongauss = (len(self.theta_bins_lensing), len(self.theta_bins_lensing),
                                       1, 1,
                                       self.n_tomo_lens, self.n_tomo_lens,

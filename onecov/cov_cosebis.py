@@ -1196,10 +1196,8 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIgggg_sn = np.zeros_like(gaussCOSEBIgggg_sva)
             original_shape = gaussCOSEBIgggg_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**4
-            gaussELL_sva_flat = np.reshape(gaussELLgggg_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLgggg_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLgggg_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLgggg_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
             sva_jobs, mix_jobs = [], []
@@ -1247,10 +1245,8 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIgggm_mix = np.zeros_like(gaussCOSEBIgggm_sva)
             original_shape = gaussCOSEBIgggm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_lens*self.n_tomo_clust**3
-            gaussELL_sva_flat = np.reshape(gaussELLgggm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLgggm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLgggm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLgggm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
             if not self.cov_dict['sn_only']:
@@ -1291,8 +1287,7 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIBggmm_sn = 0
             original_shape = gaussCOSEBIEggmm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
-            gaussELL_sva_flat = np.reshape(gaussELLggmm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLggmm_sva, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes*self.En_modes
             if not self.cov_dict['sn_only']:
@@ -1326,10 +1321,8 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIgmgm_sn = np.zeros_like(gaussCOSEBIgmgm_sva)
             original_shape = gaussCOSEBIgmgm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**2*self.n_tomo_lens**2
-            gaussELL_sva_flat = np.reshape(gaussELLgmgm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLgmgm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLgmgm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLgmgm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
             sva_jobs, mix_jobs = [], []
@@ -1381,10 +1374,8 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIBmmgm_mix = np.zeros_like(gaussCOSEBIEmmgm_sva)
             original_shape = gaussCOSEBIEmmgm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_lens**3*self.n_tomo_clust
-            gaussELL_sva_flat = np.reshape(gaussELLmmgm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLmmgm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLmmgm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLmmgm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes*self.En_modes
             if not self.cov_dict['sn_only']:
@@ -1435,10 +1426,8 @@ class CovCOSEBI(CovELLSpace):
 
             original_shape = gaussCOSEBIEEmmmm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.n_tomo_lens**4
-            gaussELL_sva_flat = np.reshape(gaussELLmmmm_sva, (len(self.ellrange), len(
-                self.ellrange), flat_length))
-            gaussELL_mix_flat = np.reshape(gaussELLmmmm_mix, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            gaussELL_sva_flat = self._ell_cov_flat(gaussELLmmmm_sva, flat_length)
+            gaussELL_mix_flat = self._ell_cov_flat(gaussELLmmmm_mix, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_modes**2
             sva_jobs, mix_jobs = [], []
@@ -1825,8 +1814,7 @@ class CovCOSEBI(CovELLSpace):
                 (self.En_g_modes, self.En_g_modes, self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust))
             original_shape = nongaussCOSEBIEgggg[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**4
-            nongaussELL_flat = np.reshape(nongaussELLgggg, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLgggg, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
             jobs = []
@@ -1844,8 +1832,7 @@ class CovCOSEBI(CovELLSpace):
                 (self.En_g_modes, self.En_g_modes, self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens))
             original_shape = nongaussCOSEBIEgggm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**3*self.n_tomo_lens
-            nongaussELL_flat = np.reshape(nongaussELLgggm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLgggm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
             jobs = []
@@ -1864,8 +1851,7 @@ class CovCOSEBI(CovELLSpace):
                 (self.En_g_modes, self.En_modes, self.sample_dim, 1, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens))
             original_shape = nongaussCOSEBIEggmm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
-            nongaussELL_flat = np.reshape(nongaussELLggmm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLggmm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_modes*self.En_g_modes
             jobs = []
@@ -1883,7 +1869,7 @@ class CovCOSEBI(CovELLSpace):
                 (self.En_g_modes, self.En_g_modes, self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))
             original_shape = nongaussCOSEBIEgmgm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
-            nongaussELL_flat = np.reshape(nongaussELLgmgm, (len(self.ellrange), len(self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLgmgm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes**2
             jobs = []
@@ -1902,8 +1888,7 @@ class CovCOSEBI(CovELLSpace):
                 (self.En_modes, self.En_g_modes, 1, self.sample_dim, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens))   
             original_shape = nongaussCOSEBIEmmgm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.sample_dim*self.n_tomo_lens**3*self.n_tomo_clust
-            nongaussELL_flat = np.reshape(nongaussELLmmgm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLmmgm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_g_modes*self.En_modes
             jobs = []
@@ -1925,8 +1910,7 @@ class CovCOSEBI(CovELLSpace):
                 (self.En_modes, self.En_modes, 1, 1, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens))
             original_shape = nongaussCOSEBIEEmmmm[0, 0, :, :, :, :, :, :].shape
             flat_length = self.n_tomo_lens**4
-            nongaussELL_flat = np.reshape(nongaussELLmmmm, (len(self.ellrange), len(
-                self.ellrange), flat_length))
+            nongaussELL_flat = self._ell_cov_flat(nongaussELLmmmm, flat_length)
             t0, tcomb = time.time(), 1
             tcombs = self.En_modes**2
             jobs = []
