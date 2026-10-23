@@ -652,8 +652,8 @@ class CovCOSEBI(CovELLSpace):
         -------
         E_mode_mm : array
             An numpy array containing all E modes for cosmic shear with
-            the following shape:
-            (E_mode order, sample_bin, tomo_bin_i, tomo_bin_j)
+            the following shape (a single sample axis):
+            (E_mode order, 1, tomo_bin_i, tomo_bin_j)
 
         E_mode_gm : array
             An numpy array containing all E modes for GGL with
@@ -667,7 +667,8 @@ class CovCOSEBI(CovELLSpace):
 
         """
 
-        E_mode_mm = np.zeros((self.En_modes, self.sample_dim,
+        # cosmic shear has a single sample axis
+        E_mode_mm = np.zeros((self.En_modes, 1,
                               self.n_tomo_lens, self.n_tomo_lens))
         E_mode_gm = np.zeros((self.En_g_modes, self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_lens))
@@ -678,7 +679,7 @@ class CovCOSEBI(CovELLSpace):
                 t0, tcomb = time.time(), 1
                 tcombs = self.En_modes
                 original_shape = self.Cell_mm[0, :, :, :].shape
-                flat_length = self.n_tomo_lens**2*self.sample_dim
+                flat_length = self.n_tomo_lens**2
                 Cell_mm_flat = np.reshape(self.Cell_mm, (len(
                     self.ellrange), flat_length))
                 for mode in range(self.En_modes):

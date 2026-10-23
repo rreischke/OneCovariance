@@ -330,7 +330,9 @@ class CovELLSpace(PolySpectra):
         also returns the derivatives with respect to ln x from the right and
         from the left (they differ at the nodes of x_tab, where the spline
         is only once differentiable, and where the extrapolation starts).
-        The spline is evaluated as matrix products (in blocks of x_eval).
+        The table is prepared here; the evaluation is done in parallel by
+        levin.evaluate_hermite (num_cores threads), or as matrix products in
+        blocks of x_eval if levin does not provide it (older build).
         """
         lx, le = np.log(x_tab), np.log(x_eval)
         positive = np.all(y_tab > 0, axis=0) if logy else np.zeros(y_tab.shape[1], dtype=bool)
@@ -338,6 +340,10 @@ class CovELLSpace(PolySpectra):
         YP = self._steffen_slopes(lx, Y)
         slope = np.minimum((Y[-1] - Y[-2])/(lx[-1] - lx[-2]), 0.0)
         slope0 = (Y[1] - Y[0])/(lx[1] - lx[0])
+        if hasattr(levin, 'evaluate_hermite'):
+            result = levin.evaluate_hermite(lx, Y, YP, slope, slope0, positive, le, derivative,
+                                            int(getattr(self, 'num_cores', 1)))
+            return result if derivative else result[0]
         values = np.empty((len(le), y_tab.shape[1]))
         if derivative:
             d_right, d_left = np.empty_like(values), np.empty_like(values)
@@ -490,10 +496,13 @@ class CovELLSpace(PolySpectra):
             for cols in self._blocks(len(columns), 3*len(grid)):
                 values, d_right, d_left = self._integrand_at(self.ellrange, integrand[:, columns[cols]], grid, True,
                                                              derivative=True)
+                i = 0
                 for rows in self._blocks(len(keys), len(x)):
                     R = Wx[first[rows]]*Wx[second[rows]]*w
                     K, D_r, D_l = ((matrix.T @ R.T).T for matrix in basis)
                     result[rows, columns[cols]] = K @ values + D_r @ d_right + D_l @ d_left
+                    i += 1
+                    
         # the others directly on the nodes of the weights (blocks of columns
         # and of pairs of weights, the sums over the nodes are not split)
         for cols in self._blocks(len(todo), len(x)):
@@ -973,6 +982,7 @@ class CovELLSpace(PolySpectra):
             levin_int.init_integral(self.ellrange, integrand, True, True)
             unique_idx, inverse = self._unique_columns(integrand)
             representatives = [key_jobs[0] for key_jobs in live.values()]
+            print(unique_idx)
             results = levin_int.cquad_integrate_double_well_subset(
                 [job[0] for job in representatives], [job[1] for job in representatives],
                 [job[2] for job in representatives], unique_idx)
@@ -1966,6 +1976,9 @@ class CovELLSpace(PolySpectra):
                                     iA_dict,
                                     hod_dict, prec,
                                     read_in_tables['Cxy'])
+            # cosmic shear has a single sample axis (also for tabulated input)
+            if isinstance(self.Cell_mm, np.ndarray) and self.Cell_mm.ndim == 4:
+                self.Cell_mm = np.ascontiguousarray(self.Cell_mm[:, :1])
             if not obs_dict['ELLspace']['limber']:
                 self.Cell_gg_limber = np.copy(self.Cell_gg)
                 self.calc_Cells_nonLimber(obs_dict['ELLspace'],
@@ -2443,8 +2456,9 @@ class CovELLSpace(PolySpectra):
                     integrand = spline_Pmm(xi).reshape((len(self.los_integration_chi),len(self.ellrange)))
                     Cell_mm[:, tomo_i, tomo_j] = self.fijl*simpson(10**integrand*(self.spline_lensweight[tomo_i](self.los_integration_chi)*self.spline_lensweight[tomo_j](self.los_integration_chi)/ self.los_integration_chi**2)[:,None], x =(self.los_integration_chi), axis = 0)
                     Cell_mm[:, tomo_j, tomo_i] = Cell_mm[:, tomo_i, tomo_j]
-            Cell_mm = Cell_mm[:, None, :, :] \
-                * np.ones(self.sample_dim)[None, :, None, None]            
+            # the shear spectrum does not depend on the galaxy sample: one
+            # sample axis of length one
+            Cell_mm = Cell_mm[:, None, :, :]
         elif self.tab_bools[2]:
             Cell_mm = self.Cells[2]
         else:

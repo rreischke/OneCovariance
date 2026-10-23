@@ -148,6 +148,7 @@ class Input:
         self.xi_mm = None
         self.theta_list = None
         self.theta_acc = None
+        self.bin_averaging = None
         self.integration_intervals = None
         self.mix_term_file_path_catalog = None
         self.mix_term_col_name_weight = None
@@ -1027,6 +1028,10 @@ class Input:
                 self.xi_mm = True
             if 'theta_accuracy' in config['covTHETAspace settings']:
                 self.theta_acc = float(config['covTHETAspace settings']['theta_accuracy'])
+            if 'bin_averaging' in config['covTHETAspace settings']:
+                self.bin_averaging = config['covTHETAspace settings']['bin_averaging']
+            else:
+                self.bin_averaging = None
             if 'integration_intervals' in config['covTHETAspace settings']:
                 self.integration_intervals = int(config['covTHETAspace settings']['integration_intervals'])
                 
@@ -1233,6 +1238,11 @@ class Input:
                 print("The accuracy for the theta space covariance " +
                       "[covTHETAspace settings]: 'theta_accuracy' is set to  " +
                       str(self.theta_acc))
+            if self.bin_averaging is None:
+                self.bin_averaging = True
+                print("The bin averaging for the theta space covariance " +
+                      "[covTHETAspace settings]: 'bin_averaging' is set to  " +
+                      str(self.bin_averaging))
             if self.integration_intervals is None:
                 self.integration_intervals = 40
                 print("The number of integration intervals for the theta space covariance " +
@@ -3760,7 +3770,7 @@ class Input:
         keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type',
                 'theta_min_clustering', 'theta_max_clustering', 'theta_bins_clustering', 'theta_type_clustering',
                 'theta_min_lensing', 'theta_max_lensing', 'theta_bins_lensing', 'theta_type_lensing', 'theta_list', 'xi_pp',
-                'xi_pm', 'xi_mm', 'theta_acc', 'integration_intervals', 'mix_term_file_path_catalog',
+                'xi_pm', 'xi_mm', 'theta_acc', 'bin_averaging', 'integration_intervals', 'mix_term_file_path_catalog',
                 'mix_term_col_name_weight',
                 'mix_term_col_name_pos1', 'mix_term_col_name_pos2', 'mix_term_col_name_zbin',
                 'mix_term_isspherical', 'mix_term_target_patchsize', 'mix_term_do_overlap',
@@ -3770,7 +3780,7 @@ class Input:
         values = [self.theta_min, self.theta_max, self.theta_bins, self.theta_type,
                   self.theta_min_clustering, self.theta_max_clustering, self.theta_bins_clustering, self.theta_type_clustering,
                   self.theta_min_lensing, self.theta_max_lensing, self.theta_bins_lensing, self.theta_type_lensing,
-                  self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc,
+                  self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc, self.bin_averaging,
                   self.integration_intervals, self.mix_term_file_path_catalog, self.mix_term_col_name_weight,
                   self.mix_term_col_name_pos1, self.mix_term_col_name_pos2, self.mix_term_col_name_zbin,
                   self.mix_term_isspherical, self.mix_term_target_patchsize, self.mix_term_do_overlap,

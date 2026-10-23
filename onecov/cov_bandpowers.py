@@ -237,9 +237,10 @@ class CovBandPowers(CovTHETASpace):
 
         """
 
-        self.CE_mm = np.zeros((len(self.ell_bins_lensing), self.sample_dim,
+        # cosmic shear has a single sample axis
+        self.CE_mm = np.zeros((len(self.ell_bins_lensing), 1,
                               self.n_tomo_lens, self.n_tomo_lens))
-        self.CB_mm = np.zeros((len(self.ell_bins_lensing), self.sample_dim,
+        self.CB_mm = np.zeros((len(self.ell_bins_lensing), 1,
                               self.n_tomo_lens, self.n_tomo_lens))
         self.CE_gm = np.zeros((len(self.ell_bins_clustering), self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_lens))
@@ -250,7 +251,7 @@ class CovBandPowers(CovTHETASpace):
                 t0, tcomb = time.time(), 1
                 tcombs = len(self.ell_bins_lensing)
                 original_shape = self.Cell_mm[0, :, :, :].shape
-                flat_length = self.n_tomo_lens**2*self.sample_dim
+                flat_length = self.n_tomo_lens**2
                 Cell_mm_flat = np.reshape(self.Cell_mm, (len(
                     self.ellrange), flat_length))
                 for mode in range(len(self.ell_bins_lensing)):

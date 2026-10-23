@@ -677,9 +677,13 @@ class PolySpectra(HaloModel):
                             self.mass_func.k)[:, None] \
                         + self.mass_func.power[:, None])[:,:,None]
                 else:
-                    Pgg = (2 *
-                        self.__P_xy_1h(bias_dict, hod_dict,
+                    # central-satellite pairs in both orders (s1 central and
+                    # s2 satellite, and vice versa): symmetric in the two
+                    # galaxy samples (twice the first one for one sample)
+                    Pgg = (self.__P_xy_1h(bias_dict, hod_dict,
                                         hm_prec, 'sat', 'cen')
+                        + self.__P_xy_1h(bias_dict, hod_dict,
+                                        hm_prec, 'cen', 'sat')
                         + self.__P_xy_1h(bias_dict, hod_dict,
                                             hm_prec, 'sat', 'sat')
                         #+ self.__P_xy_1h(bias_dict, hod_dict,
@@ -1241,8 +1245,11 @@ class PolySpectra(HaloModel):
         x_values = np.stack([kk_i.ravel(), kk_j.ravel()])
         xi = x_values.T 
         np.seterr(over='ignore')
+        # all pairs of samples: the trispectra are not symmetric in them (the
+        # cross terms gggm, ggmm, mmgm have different tracers on the two
+        # sides), and the ell-space covariances use every pair
         for nbin in range(self.sample_dim):
-            for mbin in range(nbin, self.sample_dim):
+            for mbin in range(self.sample_dim):
                 if self.gg and tri_gggg:
                     tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
                                                     logtrispec_gggg_ktri[:,:,nbin,mbin],bounds_error= False, fill_value = None)
@@ -1337,6 +1344,13 @@ class PolySpectra(HaloModel):
         for _ in range(2, lam):
             res *= (lam - 1) * fac - lam + 2
         return res
+
+    def __logks_tri_in_table(self):
+        """
+        log10 of the wavenumbers of the trispectra, limited to the range of
+        mass_func.k on which the halo model quantities are tabulated.
+        """
+        return np.clip(self.logks_tri, np.log10(self.mass_func.k[0]), np.log10(self.mass_func.k[-1]))
 
     def __trispectra_1h(self,
                         bias_dict,
@@ -1444,9 +1458,14 @@ class PolySpectra(HaloModel):
             self.hurly_x_spline_logk(bias_dict, hod_dict, 'sat')
         hurly_m_spline = \
             self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')
-        hurly_c = hurly_c_spline(self.logks_tri)
-        hurly_s = hurly_s_spline(self.logks_tri)
-        hurly_m = hurly_m_spline(self.logks_tri)
+        # the splines are tabulated on mass_func.k, which ends one step below
+        # the largest k of the trispectra (hmf leaves out lnk_max): evaluate at
+        # most at the end of the table instead of extrapolating the cubic
+        # spline (which turns negative and gives nan in the square roots)
+        logk = self.__logks_tri_in_table()
+        hurly_c = hurly_c_spline(logk)
+        hurly_s = hurly_s_spline(logk)
+        hurly_m = hurly_m_spline(logk)
         weights = self.mass_func.dndm*self._mass_weights()
 
 
@@ -1462,11 +1481,10 @@ class PolySpectra(HaloModel):
                 weights)*self.__poisson(3)
         
         if self.gg and self.mm and self.cross_terms and tri_ggmm:
-            integrand = np.sqrt(
-                (4 * hurly_c[:, None, :, None, :] * hurly_s[:, None, :, None, :]**3
-                    + hurly_s[None, :, None, :, :]**4)
-                * hurly_m[None, :, None, :, :]**4)
-            trispec1h_ggmm = integrand @ weights
+            # galaxy pair (central-satellite and satellite-satellite) at k1,
+            # matter pair at k2: int dM n(M) (2 c s(k1) + s(k1)^2) m(k2)^2
+            trispec1h_ggmm = self._outer_mass_integral(
+                2 * hurly_c * hurly_s + hurly_s**2, hurly_m**2, weights)
  
         if self.gm and tri_gmgm:
             trispec1h_gmgm = self.__sqrt_outer_mass_integral(
@@ -1490,7 +1508,7 @@ class PolySpectra(HaloModel):
             self._use_extended_mass_range(Mmin, step)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
 
-            hurly_m = self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')(self.logks_tri)
+            hurly_m = self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')(self.__logks_tri_in_table())
             hurly_m2 = hurly_m[:, 0, :]**2
             trispec1h_mmmm = ((hurly_m2*(self.mass_func.dndm*self._mass_weights())) @ hurly_m2.T)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
             # resets mass range of the halo mass function

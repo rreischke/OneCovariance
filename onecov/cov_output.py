@@ -652,6 +652,17 @@ class Output:
                                     n_tomo_lens, sampledim, proj_quant, 
                                     gauss, nongauss, ssc, fct_args)
 
+    @staticmethod
+    def _has_negative_eigenvalues(covmatrix):
+        """
+        Whether the (symmetric) covariance matrix has eigenvalues below
+        -1e-12 times the largest one, i.e. negative ones beyond rounding (an
+        exactly degenerate matrix has eigenvalues of order -1e-16 of the
+        largest one).
+        """
+        eigenvalues = np.linalg.eigvalsh(covmatrix)
+        return bool(np.any(eigenvalues < -1e-12*np.max(np.abs(eigenvalues))))
+
     def plot_corrcoeff_matrix(self,
                               obs_dict,
                               covmatrix, 
@@ -5794,7 +5805,7 @@ class Output:
                             cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                         if self.has_ssc:
                             cov2d_ssc[j,i] = cov2d_ssc[i,j]
-            if len(np.where(np.linalg.eigvalsh(cov2d_total) < 0)[0]) > 0:
+            if self._has_negative_eigenvalues(cov2d_total):
                 print("ALARM: The resulting covariance matrix has negative eigenvalues")
                 print("Try to adjust the accuracy settings in the config file:")
                 print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
@@ -6349,7 +6360,7 @@ class Output:
                             cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                         if self.has_ssc:
                             cov2d_ssc[j,i] = cov2d_ssc[i,j]
-            if len(np.where(np.linalg.eigvalsh(cov2d_total) <= 0)[0]) > 0:
+            if self._has_negative_eigenvalues(cov2d_total):
                 print("ALARM: The resulting covariance matrix has negative eigenvalues")
                 print("Try to adjust the accuracy settings in the config file:")
                 print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")
@@ -7017,7 +7028,7 @@ class Output:
                     cov2d_nongauss[j,i] = cov2d_nongauss[i,j]
                     cov2d_ssc[j,i] = cov2d_ssc[i,j]
 
-        if len(np.where(np.linalg.eigvalsh(cov2d_total) < 0)[0]) > 0:
+        if self._has_negative_eigenvalues(cov2d_total):
             print("ALARM: The resulting covariance matrix has negative eigenvalues")
             print("Try to adjust the accuracy settings in the config file:")
             print("For configuration space covariance reduce theta_accuracy and increase integration_intervals, usually a factor of 2 is enough.")

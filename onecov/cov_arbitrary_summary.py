@@ -226,9 +226,10 @@ class CovARBsummary(CovELLSpace):
 
         """
 
-        self.arbE_mm = np.zeros((self.mmE_summaries, self.sample_dim,
+        # cosmic shear has a single sample axis
+        self.arbE_mm = np.zeros((self.mmE_summaries, 1,
                               self.n_tomo_lens, self.n_tomo_lens))
-        self.arbB_mm = np.zeros((self.mmB_summaries, self.sample_dim,
+        self.arbB_mm = np.zeros((self.mmB_summaries, 1,
                               self.n_tomo_lens, self.n_tomo_lens))
         self.arbE_gm = np.zeros((self.gm_summaries, self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_lens))
@@ -239,7 +240,7 @@ class CovARBsummary(CovELLSpace):
             t0, tcomb = time.time(), 1
             tcombs = self.mmE_summaries
             original_shape = self.Cell_mm[0, :, :, :].shape
-            flat_length = self.n_tomo_lens**2*self.sample_dim
+            flat_length = self.n_tomo_lens**2
             Cell_mm_flat = np.reshape(self.Cell_mm, (len(
                 self.ellrange), flat_length))
             for mode in range(self.mmE_summaries):

@@ -176,6 +176,7 @@ class CovTHETASpace(CovELLSpace):
         self.xi_pp = obs_dict['THETAspace']['xi_pp']
         self.xi_pm = obs_dict['THETAspace']['xi_pm']
         self.xi_mm = obs_dict['THETAspace']['xi_mm']
+        self.bin_averaging = obs_dict['THETAspace']['bin_averaging']
         self.accuracy = obs_dict['THETAspace']['theta_acc']
         self.theta_space_dict = obs_dict['THETAspace']
         self.thetabins, self.theta_ul_bins = \
@@ -362,7 +363,8 @@ class CovTHETASpace(CovELLSpace):
             original_shape = self.Cell_mm[0, :, :, :].shape
             xip_signal = np.zeros(mm_signal_shape)
             xim_signal = np.zeros(mm_signal_shape)
-            flat_length = self.sample_dim*self.n_tomo_lens*self.n_tomo_lens
+            # cosmic shear has a single sample axis
+            flat_length = self.n_tomo_lens*self.n_tomo_lens
             Cell_mm_flat = np.reshape(
                 self.Cell_mm, (len(self.ellrange), flat_length))
             for i_theta in range(len(self.theta_bins_lensing)):
@@ -475,20 +477,28 @@ class CovTHETASpace(CovELLSpace):
         self.ell_fourier_integral = np.geomspace(1,1e5,N_fourier)
         if self.gg or self.gm:
             for i_theta in range(len(self.theta_bins_clustering)):
-                theta_u = self.theta_ul_bins_clustering[i_theta+1]/60/180*np.pi
-                theta_l = self.theta_ul_bins_clustering[i_theta]/60/180*np.pi
-                xu = self.ell_fourier_integral*theta_u
-                xl = self.ell_fourier_integral*theta_l
-                self.K_gg.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
-                self.K_gm.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 2) - self.__int_x_jn(xl, 2)))
+                if self.bin_averaging:
+                    theta_u = self.theta_ul_bins_clustering[i_theta+1]/60/180*np.pi
+                    theta_l = self.theta_ul_bins_clustering[i_theta]/60/180*np.pi
+                    xu = self.ell_fourier_integral*theta_u
+                    xl = self.ell_fourier_integral*theta_l
+                    self.K_gg.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
+                    self.K_gm.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 2) - self.__int_x_jn(xl, 2)))
+                else:
+                    self.K_gg.append(jv(0, self.ell_fourier_integral*self.theta_bins_clustering[i_theta]))
+                    self.K_gm.append(jv(2, self.ell_fourier_integral*self.theta_bins_clustering[i_theta]))
         if self.mm:
             for i_theta in range(len(self.theta_bins_lensing)):
-                theta_u = self.theta_ul_bins_lensing[i_theta+1]/60/180*np.pi
-                theta_l = self.theta_ul_bins_lensing[i_theta]/60/180*np.pi
-                xu = self.ell_fourier_integral*theta_u
-                xl = self.ell_fourier_integral*theta_l
-                self.K_mmE.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
-                self.K_mmB.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 4) - self.__int_x_jn(xl, 4)))
+                if self.bin_averaging:
+                    theta_u = self.theta_ul_bins_lensing[i_theta+1]/60/180*np.pi
+                    theta_l = self.theta_ul_bins_lensing[i_theta]/60/180*np.pi
+                    xu = self.ell_fourier_integral*theta_u
+                    xl = self.ell_fourier_integral*theta_l
+                    self.K_mmE.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
+                    self.K_mmB.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 4) - self.__int_x_jn(xl, 4)))
+                else:
+                    self.K_mmE.append(jv(0, self.ell_fourier_integral*self.theta_bins_lensing[i_theta]))
+                    self.K_mmB.append(jv(4, self.ell_fourier_integral*self.theta_bins_lensing[i_theta]))
         self.K_gg = np.array(self.K_gg)
         self.K_gm = np.array(self.K_gm)
         self.K_mmE = np.array(self.K_mmE)
