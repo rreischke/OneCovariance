@@ -177,6 +177,8 @@ class CovCOSEBI(CovELLSpace):
                              read_in_tables)
         
         self.__get_WXY(obs_dict)
+        # only the shot noise (calculated in real space) without the integrator
+        self.levin_int = None
         if not self.cov_dict['sn_only']:
             self.ell_limits = []
             for mode in range(self.total_modes):
@@ -199,7 +201,7 @@ class CovCOSEBI(CovELLSpace):
             save_n_eff_lens = survey_params_dict['n_eff_lens']
         if self.sample_dim > 1:
             if self.gg or self.gm:
-                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+                survey_params_dict['n_eff_clust'] = self._n_eff_clust_per_sample(survey_params_dict)
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
         else:
@@ -224,6 +226,13 @@ class CovCOSEBI(CovELLSpace):
             survey_params_dict['n_eff_lens'] = save_n_eff_lens
         if self.cov_dict['gauss']:
             self.E_mode_gg, self.E_mode_gm, self.E_mode_mm = self.calc_E_mode()
+            # B_n = int dell ell/(2 pi) W_n(ell) C_BB(ell), zero without
+            # intrinsic B-modes
+            self.B_mode_mm = np.zeros_like(self.E_mode_mm)
+            if self.mm and self.Cell_mmB is not None and not self.cov_dict['sn_only']:
+                self.B_mode_mm = self._Cell_mmB_projected(self.levin_int, self.ell_limits,
+                                                          list(range(self.En_modes)),
+                                                          [1/2/np.pi]*self.En_modes)
 
 
     def __get_wn_kernels(self,
@@ -923,7 +932,7 @@ class CovCOSEBI(CovELLSpace):
                                     prec,
                                     read_in_tables['tri'])
 
-        return list(gauss), list(nongauss), list(ssc)
+        return self._split_csmf_terms(list(gauss), list(nongauss), list(ssc))
 
     def covCOSEBI_gaussian(self,
                            obs_dict,
@@ -1222,8 +1231,7 @@ class CovCOSEBI(CovELLSpace):
                                                                             * kron_delta_tomo_clust[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_clust[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_clust[None, None, None, :, :, None]) \
-                                                                            * kron_delta_mass_bins[:, :, None, None, None, None] \
-                                                                            * (np.ones(self.n_tomo_clust)[None, :]**2*np.ones(self.n_tomo_clust)[:, None]**2*aux_gg_sn)[None, :, :, :, None, None]
+                                                                            * self._sample_overlap_sn(aux_gg_sn, True)[:, :, :, :, None, None]
                     print('\rCOSEBI E-mode covariance calculation for the '
                             'gggg term '
                             + str(round(tcomb/tcombs*100, 1)) + '% in '
@@ -1346,8 +1354,7 @@ class CovCOSEBI(CovELLSpace):
                     aux_gm_sn = simpson(integrand, x = self.theta_gm,axis=0)/self.arcmin2torad2**2
                     gaussCOSEBIgmgm_sn[n_mode, m_mode, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
-                                                                            * kron_delta_mass_bins[:,:, None, None, None, None] \
-                                                                            * (aux_gm_sn)[None, :, :, :, None, None]
+                                                                            * self._sample_overlap_sn(aux_gm_sn, False)[:, :, :, :, None, None]
                     
                     print('\rCOSEBI E-mode covariance calculation for the '
                             'gmgm term '
@@ -1403,6 +1410,9 @@ class CovCOSEBI(CovELLSpace):
                 self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_mm[:, None, :, None, :, :, None, None]*self.E_mode_gm[None, :, None, :, None, None, :, :])
             gaussCOSEBIEmmgm_sva[:, :, 0, :, :, :, :, :] = gaussCOSEBIEmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
+            if self.Cell_mmB is not None:
+                adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.B_mode_mm[:, None, :, None, :, :, None, None]*self.E_mode_gm[None, :, None, :, None, None, :, :])
+                gaussCOSEBIBmmgm_sva[:, :, 0, :, :, :, :, :] = gaussCOSEBIBmmgm_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             print("")
         else:
             gaussCOSEBIEmmgm_sva = 0
@@ -1464,6 +1474,27 @@ class CovCOSEBI(CovELLSpace):
             self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'COSEBI covariance  term')
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_mm[:, None, :, None, :, :, None, None]*self.E_mode_mm[None, :, None, :, None, None, :, :])
             gaussCOSEBIEEmmmm_sva[:, :, 0, 0, :, :, :, :] = gaussCOSEBIEEmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+            if self.gaussELLmmmm_BB is not None:
+                # intrinsic B-modes: B_n = int W_n C_BB, so the B-mode
+                # covariance is the projection of the ell-space B-mode
+                # covariance with the same weights (no Gaussian E-B term)
+                if not self.cov_dict['sn_only']:
+                    BB_sva_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[0], flat_length)
+                    BB_mix_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[1], flat_length)
+                    prefac = 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                    BB_sva_jobs, BB_mix_jobs = [], []
+                    for m_mode in range(self.En_modes):
+                        for n_mode in range(m_mode, self.En_modes):
+                            limits = self._ell_limits_double(self.ell_limits, m_mode, n_mode)
+                            BB_sva_jobs.append((limits, m_mode, n_mode, gaussCOSEBIBBmmmm_sva, (m_mode, n_mode), prefac, (n_mode, m_mode)))
+                            BB_mix_jobs.append((limits, m_mode, n_mode, gaussCOSEBIBBmmmm_mix, (m_mode, n_mode), prefac, (n_mode, m_mode)))
+                    if not self.cov_dict['split_gauss']:
+                        BB_mix_jobs = []
+                    self._project_gauss_jobs(self.levin_int, self._gauss_todo(BB_sva_flat, BB_mix_flat, BB_sva_jobs, BB_mix_jobs), original_shape, 'COSEBI covariance term (intrinsic B-modes)')
+                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.B_mode_mm[:, None, :, None, :, :, None, None]*self.B_mode_mm[None, :, None, :, None, None, :, :])
+                gaussCOSEBIBBmmmm_sva[:, :, 0, 0, :, :, :, :] = gaussCOSEBIBBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.E_mode_mm[:, None, :, None, :, :, None, None]*self.B_mode_mm[None, :, None, :, None, None, :, :])
+                gaussCOSEBIEBmmmm_sva[:, :, 0, 0, :, :, :, :] = gaussCOSEBIEBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             print("")
         else:
             gaussCOSEBIEEmmmm_sva = 0
@@ -1477,43 +1508,53 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIBBmmmm_sn = 0
 
         if self.csmf:
-            if self.gg:
-                csmf_COSEBIgg = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gg[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
-                    csmf_COSEBI_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.En_g_modes):
-                        local_ell_limit = self.ell_limits[m_mode + + self.En_modes][:]
-                        self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
-                        csmf_COSEBIgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
-            else:
-                csmf_COSEBIgg = 0
-            if self.gm:
-                csmf_COSEBIgm = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
-                    csmf_COSEBI_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.En_g_modes):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
-                        csmf_COSEBIgm[m_mode , :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
-            else:
-                csmf_COSEBIgm = 0
-            if self.mm:
-                csmf_COSEBImmE = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                csmf_COSEBImmB = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_mm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
-                    csmf_COSEBI_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.En_modes):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat, True, True)
-                        csmf_COSEBImmE[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-            else:
-                csmf_COSEBImmE, csmf_COSEBImmB = 0, 0
+            # the projections of the cross-covariance with the SMF and, for
+            # the split output, of its super-sample part (see _split_csmf_terms)
+            csmf_cross_parts = [(csmf_gg, csmf_gm, csmf_mm)]
+            if self.cov_dict['ssc'] and getattr(self, 'csmf_parts', None) is not None:
+                csmf_cross_parts.append(tuple(self.csmf_parts['cross_ssc']))
+            csmf_projected = []
+            for csmf_gg, csmf_gm, csmf_mm in csmf_cross_parts:
+                if self.gg:
+                    csmf_COSEBIgg = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gg[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
+                        csmf_COSEBI_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.En_g_modes):
+                            local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
+                            self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat*self.ellrange[:, None], True, True)
+                            csmf_COSEBIgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+                else:
+                    csmf_COSEBIgg = 0
+                if self.gm:
+                    csmf_COSEBIgm = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
+                        csmf_COSEBI_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.En_g_modes):
+                            local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
+                            self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat*self.ellrange[:, None], True, True)
+                            csmf_COSEBIgm[m_mode , :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+                else:
+                    csmf_COSEBIgm = 0
+                if self.mm:
+                    csmf_COSEBImmE = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    csmf_COSEBImmB = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_mm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
+                        csmf_COSEBI_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.En_modes):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat*self.ellrange[:, None], True, True)
+                            csmf_COSEBImmE[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                else:
+                    csmf_COSEBImmE, csmf_COSEBImmB = 0, 0
+                csmf_projected.append((csmf_COSEBIgg, csmf_COSEBIgm, csmf_COSEBImmE, csmf_COSEBImmB))
+            csmf_COSEBIgg, csmf_COSEBIgm, csmf_COSEBImmE, csmf_COSEBImmB = csmf_projected[0]
+            self.csmf_projected_ssc = list(csmf_projected[1]) if len(csmf_projected) > 1 else None
 
         if self.csmf:
             return gaussCOSEBIgggg_sva, gaussCOSEBIgggg_mix, gaussCOSEBIgggg_sn, \
@@ -1858,7 +1899,7 @@ class CovCOSEBI(CovELLSpace):
             jobs = []
             for m_mode in range(self.En_g_modes):
                 for n_mode in range(self.En_modes):
-                    jobs.append((m_mode, n_mode + self.En_modes, nongaussCOSEBIEggmm, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2) if connected else None))
+                    jobs.append((m_mode + self.En_modes, n_mode, nongaussCOSEBIEggmm, (m_mode, n_mode), 1.0/(4.0*np.pi**2), (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2) if connected else None))
             self._project_4pt_jobs(self.levin_int, self.ell_limits, nongaussELL_flat, jobs, original_shape, 'COSEBI covariance  term', outer_logy=True)
             print("")
         else:

@@ -72,16 +72,28 @@ class HOD:
         # current mass ranges (they do not depend on redshift)
         self._occ_cache = {}
         if bias_dict['has_csmf']:
-            if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
-                if bias_dict['logmass_bins_lower'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins_upper'][-1] < bias_dict['csmf_log10M_bins'][-1]:
+            csmf_min, csmf_max = self.csmf_mass_range(bias_dict)
+            if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_lower'] is not None:
+                if np.min(bias_dict['logmass_bins_lower']) > csmf_min or np.max(bias_dict['logmass_bins_upper']) < csmf_max:
                     self.mass_bins_disagree = True
-            elif bias_dict['logmass_bins'][0] > bias_dict['csmf_log10M_bins'][0] or bias_dict['logmass_bins'][-1] < bias_dict['csmf_log10M_bins'][-1]:
+            elif bias_dict['logmass_bins'][0] > csmf_min or bias_dict['logmass_bins'][-1] < csmf_max:
                 self.mass_bins_disagree = True
         self.N_stellar_mass = 300
         self.Mrange = self.__mass_range(hm_prec, mass)
         self.Mbins = self.mass_bins(bias_dict, hm_prec)
-        
-    def mass_bins(self, 
+
+    @staticmethod
+    def csmf_mass_range(bias_dict):
+        """
+        Smallest and largest log10 stellar mass of the bins of the stellar
+        mass function, given either by csmf_log10M_bins or by
+        csmf_log10M_bins_lower and csmf_log10M_bins_upper.
+        """
+        if bias_dict.get('csmf_log10M_bins_lower') is not None and bias_dict.get('csmf_log10M_bins_upper') is not None:
+            return np.min(bias_dict['csmf_log10M_bins_lower']), np.max(bias_dict['csmf_log10M_bins_upper'])
+        return bias_dict['csmf_log10M_bins'][0], bias_dict['csmf_log10M_bins'][-1]
+
+    def mass_bins(self,
                   bias_dict,
                   hm_prec):
         """
@@ -248,7 +260,7 @@ class HOD:
 
 
         logMbinsMobs = np.log10(self.Mbins[:, :, None]/Mobs[None, None, :])
-        return 1.0/np.sqrt(2.*np.pi)/np.log(10)/hod_dict['logn_sigma_c_'+pop]/Mobs[None, None, :]*np.exp(-logMbinsMobs**2./2/hod_dict['logn_sigma_c_'+pop]**2.)
+        return 1.0/np.sqrt(2.*np.pi)/np.log(10)/hod_dict['logn_sigma_c_'+pop]/self.Mbins[:, :, None]*np.exp(-logMbinsMobs**2./2/hod_dict['logn_sigma_c_'+pop]**2.)
 
     def modschechter(self, 
                      hod_dict, 
@@ -280,7 +292,7 @@ class HOD:
             with shape (sample_bins, self.N_stellar_mass, M_bins)
         """
         MbinsMobs = self.Mbins[:, :, None]/Mobs[None, None, :]
-        phi_s = 10**(-hod_dict['modsch_b_'+pop][0] + hod_dict['modsch_b_'+pop][1]   *np.log10(self.Mrange/10**hod_dict['modsch_logMref_'+pop]))
+        phi_s = 10**(hod_dict['modsch_b_'+pop][0] + hod_dict['modsch_b_'+pop][1]   *np.log10(self.Mrange/10**hod_dict['modsch_logMref_'+pop]))
         return (phi_s/Mobs)[None, None, :]*(MbinsMobs**hod_dict['modsch_alpha_s_'+pop]*np.exp(-MbinsMobs**2.0))[:,:,:]
 
     

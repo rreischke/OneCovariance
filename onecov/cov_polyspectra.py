@@ -686,6 +686,7 @@ class PolySpectra(HaloModel):
                                         hm_prec, 'cen', 'sat')
                         + self.__P_xy_1h(bias_dict, hod_dict,
                                             hm_prec, 'sat', 'sat')
+                        * self.satellite_moment_factor(hod_dict, 2)
                         #+ self.__P_xy_1h(bias_dict, hod_dict,
                         #                hm_prec, 'cen', 'cen')
                         ) \
@@ -1017,6 +1018,95 @@ class PolySpectra(HaloModel):
             trispec_gggg, trispec_gggm, trispec_ggmm, \
             trispec_gmgm, trispec_mmgm, trispec_mmmm
 
+    @staticmethod
+    def _pad_log_trispectrum(log_k, log_tri, log_k_min, log_k_max):
+        """
+        Extends a log-trispectrum table ln T(chi, ln k_1, ln k_2) to the
+        range [log_k_min, log_k_max] by one node on each side where needed.
+        The new nodes are power laws along each k axis separately, with the
+        slopes of the outermost interval (at high k at most zero). Without
+        them the linear extrapolation of the interpolator is bilinear in
+        (ln k_1, ln k_2), and a positive curvature of the corner cell lets the
+        diagonal k_1 = k_2 grow exponentially at high k. Works for any base
+        of the logarithms (the same for k and T).
+
+        Parameters
+        ----------
+        log_k : array
+            with unit h/Mpc
+            ln k of the table, ascending
+        log_tri : array
+            with shape (chi, len(log_k), len(log_k))
+            ln T on the table nodes
+        log_k_min, log_k_max : float
+            the range of ln k at which the table is evaluated
+
+        Returns
+        -------
+        log_k, log_tri : arrays
+            the padded nodes and table
+
+        """
+        if log_k_max > log_k[-1]:
+            dx = log_k_max - log_k[-1]
+            slope_1 = np.minimum((log_tri[:, -1, :] - log_tri[:, -2, :])/(log_k[-1] - log_k[-2]), 0.0)
+            padded = np.concatenate((log_tri, (log_tri[:, -1, :] + slope_1*dx)[:, None, :]), axis=1)
+            slope_2 = np.minimum((padded[:, :, -1] - padded[:, :, -2])/(log_k[-1] - log_k[-2]), 0.0)
+            log_tri = np.concatenate((padded, (padded[:, :, -1] + slope_2*dx)[:, :, None]), axis=2)
+            log_k = np.append(log_k, log_k_max)
+        if log_k_min < log_k[0]:
+            dx = log_k_min - log_k[0]
+            slope_1 = (log_tri[:, 1, :] - log_tri[:, 0, :])/(log_k[1] - log_k[0])
+            padded = np.concatenate(((log_tri[:, 0, :] + slope_1*dx)[:, None, :], log_tri), axis=1)
+            slope_2 = (padded[:, :, 1] - padded[:, :, 0])/(log_k[1] - log_k[0])
+            log_tri = np.concatenate(((padded[:, :, 0] + slope_2*dx)[:, :, None], padded), axis=2)
+            log_k = np.insert(log_k, 0, log_k_min)
+        return log_k, log_tri
+
+    def __trispectrum_on_k_grid(self, table, xi):
+        """
+        A trispectrum on the k-grid of the mass function (points xi, pairs of
+        log10 k) from its table on self.logks_tri. table is log10 T, or T
+        itself if it has negative entries (then its maximum exceeds the
+        largest log10 of a float). Positive trispectra are extrapolated as
+        power laws (__log_trispectrum_power_law); the others linearly,
+        limited to the value at the edge of the k-range.
+        """
+        shape = (len(self.mass_func.k), len(self.mass_func.k))
+        if np.max(table) > 308.255:
+            interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri), table,
+                                                   bounds_error=False, fill_value=None)
+            xi_edge = np.minimum(xi, self.logks_tri[-1])
+            return np.minimum(interpolator(xi), interpolator(xi_edge)).reshape(shape)
+        return (10**self.__log_trispectrum_power_law(table, xi)).reshape(shape)
+
+    def __log_trispectrum_power_law(self, table, xi):
+        """
+        log10 T at the points xi (pairs of log10 k) from the table log10 T
+        on self.logks_tri: interpolated inside the k-range and, beyond its
+        largest k, extrapolated as a power law. If both k exceed it, the
+        common excess follows the slope of the diagonal k_1 = k_2 (the
+        trispectra have a ridge there), the rest the slope along the other
+        k at the edge of the table; all slopes are at most zero. This is
+        exact for T ~ k_1^a k_2^b and does not have the curvature of a
+        bilinear extrapolation in both k.
+        """
+        log_k = self.logks_tri
+        interpolator = RegularGridInterpolator((log_k, log_k), table, bounds_error=False, fill_value=None)
+        x, y = xi[:, 0], xi[:, 1]
+        x_edge, y_edge = np.minimum(x, log_k[-1]), np.minimum(y, log_k[-1])
+        log_tri = interpolator(np.stack([x_edge, y_edge], axis=-1))
+        dx, dy = x - x_edge, y - y_edge
+        if np.any(dx > 0) or np.any(dy > 0):
+            step = log_k[-1] - log_k[-2]
+            # slopes at the edge: along k_1 (a function of k_2), along k_2 and along the diagonal
+            slope_1 = np.interp(y_edge, log_k, np.minimum((table[-1, :] - table[-2, :])/step, 0.0))
+            slope_2 = np.interp(x_edge, log_k, np.minimum((table[:, -1] - table[:, -2])/step, 0.0))
+            slope_diag = min((table[-1, -1] - table[-2, -2])/step, 0.0)
+            common = np.minimum(dx, dy)
+            log_tri = log_tri + slope_diag*common + slope_1*(dx - common) + slope_2*(dy - common)
+        return log_tri
+
     def trispectra(self,
                    output_dict,
                    bias_dict,
@@ -1245,53 +1335,20 @@ class PolySpectra(HaloModel):
         x_values = np.stack([kk_i.ravel(), kk_j.ravel()])
         xi = x_values.T 
         np.seterr(over='ignore')
-        # all pairs of samples: the trispectra are not symmetric in them (the
-        # cross terms gggm, ggmm, mmgm have different tracers on the two
-        # sides), and the ell-space covariances use every pair
         for nbin in range(self.sample_dim):
             for mbin in range(self.sample_dim):
                 if self.gg and tri_gggg:
-                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
-                                                    logtrispec_gggg_ktri[:,:,nbin,mbin],bounds_error= False, fill_value = None)
-                    if np.max(logtrispec_gggg_ktri[:,:,nbin,mbin]) > 308.255:
-                        trispec_gggg[:,:,nbin,mbin] = tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
-                    else:
-                        trispec_gggg[:,:,nbin,mbin] = 10**tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                    trispec_gggg[:,:,nbin,mbin] = self.__trispectrum_on_k_grid(logtrispec_gggg_ktri[:,:,nbin,mbin], xi)
                 if self.gg and self.gm and self.cross_terms:
-                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
-                                                    logtrispec_gggm_ktri[:,:,nbin,mbin],bounds_error= False, fill_value = None)
-                    if np.max(logtrispec_gggm_ktri[:,:,nbin,mbin]) > 308.255:
-                        trispec_gggm[:,:,nbin,mbin] = tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
-                    else:
-                        trispec_gggm[:,:,nbin,mbin] = 10**tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                    trispec_gggm[:,:,nbin,mbin] = self.__trispectrum_on_k_grid(logtrispec_gggm_ktri[:,:,nbin,mbin], xi)
                 if self.gg and self.mm and self.cross_terms:
-                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
-                                                    logtrispec_ggmm_ktri[:,:,nbin,mbin],bounds_error= False, fill_value = None)
-                    if np.max(logtrispec_ggmm_ktri[:,:,nbin,mbin]) > 308.255:
-                        trispec_ggmm[:,:,nbin,mbin] = tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
-                    else:
-                        trispec_ggmm[:,:,nbin,mbin] = 10**tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                    trispec_ggmm[:,:,nbin,mbin] = self.__trispectrum_on_k_grid(logtrispec_ggmm_ktri[:,:,nbin,mbin], xi)
                 if self.gm:
-                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
-                                                    logtrispec_gmgm_ktri[:,:,nbin,mbin],bounds_error= False, fill_value = None)
-                    if np.max(logtrispec_gmgm_ktri[:,:,nbin,mbin]) > 308.255:
-                        trispec_gmgm[:,:,nbin,mbin] = tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
-                    else:
-                        trispec_gmgm[:,:,nbin,mbin] = 10**tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                    trispec_gmgm[:,:,nbin,mbin] = self.__trispectrum_on_k_grid(logtrispec_gmgm_ktri[:,:,nbin,mbin], xi)
                 if self.gm and self.mm and self.cross_terms:
-                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
-                                                    logtrispec_mmgm_ktri[:,:,nbin,mbin],bounds_error= False, fill_value = None)
-                    if np.max(logtrispec_mmgm_ktri[:,:,nbin,mbin]) > 308.255:
-                        trispec_mmgm[:,:,nbin,mbin] = tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
-                    else:
-                        trispec_mmgm[:,:,nbin,mbin] = 10**tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                    trispec_mmgm[:,:,nbin,mbin] = self.__trispectrum_on_k_grid(logtrispec_mmgm_ktri[:,:,nbin,mbin], xi)
                 if self.mm:
-                    tri_interpolator = RegularGridInterpolator((self.logks_tri, self.logks_tri),
-                                                    logtrispec_mmmm_ktri[:,:,nbin,mbin],bounds_error= False, fill_value = None)
-                    if np.max(logtrispec_mmmm_ktri[:,:,nbin,mbin]) > 308.255:
-                        trispec_mmmm[:,:,nbin,mbin] = tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
-                    else:
-                        trispec_mmmm[:,:,nbin,mbin] = 10**tri_interpolator(xi).reshape((len(self.mass_func.k),len(self.mass_func.k)))
+                    trispec_mmmm[:,:,nbin,mbin] = self.__trispectrum_on_k_grid(logtrispec_mmmm_ktri[:,:,nbin,mbin], xi)
         np.seterr(over='warn')
         if self.gg:
             trispec_gggg[np.where(trispec_gggg < self.tri_lowlim)] = \
@@ -1320,30 +1377,6 @@ class PolySpectra(HaloModel):
         else:
             return trispec_gggg, trispec_gggm, trispec_ggmm, \
                 trispec_gmgm, trispec_mmgm, trispec_mmmm
-
-    def __poisson(self,
-                  lam,
-                  fac=0.9):
-        """
-        Computing poisson factors necessary for halomodel integrals and HoD functions
-        for the trispectrum.
-
-        Parameters
-        ----------
-        lam : int
-            ...
-        fac : float
-            ...
-
-        Returns
-        -------
-        res : float
-
-        """
-        res = 1
-        for _ in range(2, lam):
-            res *= (lam - 1) * fac - lam + 2
-        return res
 
     def __logks_tri_in_table(self):
         """
@@ -1469,37 +1502,43 @@ class PolySpectra(HaloModel):
         weights = self.mass_func.dndm*self._mass_weights()
 
 
+        # factorial moments of the satellite occupation relative to the
+        # Poisson case for 2, 3 and 4 satellites in the same halo (one
+        # central at most: (N_c + N_s)_n = (N_s)_n + n N_c (N_s)_{n-1})
+        poisson_2 = self.satellite_moment_factor(hod_dict, 2)
+        poisson_3 = self.satellite_moment_factor(hod_dict, 3)
+        poisson_4 = self.satellite_moment_factor(hod_dict, 4)
+        galaxy_pairs = 2 * hurly_c * hurly_s + poisson_2 * hurly_s**2
         if self.gg and tri_gggg:
             trispec1h_gggg = self.__sqrt_outer_mass_integral(
-                4 * hurly_c * hurly_s**3 + hurly_s**4,
-                4 * hurly_c * hurly_s**3 + hurly_s**4,
-                weights)*self.__poisson(4)
+                4 * poisson_3 * hurly_c * hurly_s**3 + poisson_4 * hurly_s**4,
+                4 * poisson_3 * hurly_c * hurly_s**3 + poisson_4 * hurly_s**4,
+                weights)
         if self.gg and self.gm and self.cross_terms and tri_gggm:
             trispec1h_gggm = self.__sqrt_outer_mass_integral(
-                (3 * hurly_c * hurly_s**2 + hurly_s**3) * hurly_m,
-                (3 * hurly_c * hurly_s**2 + hurly_s**3) * hurly_m,
-                weights)*self.__poisson(3)
+                (3 * poisson_2 * hurly_c * hurly_s**2 + poisson_3 * hurly_s**3) * hurly_m,
+                (3 * poisson_2 * hurly_c * hurly_s**2 + poisson_3 * hurly_s**3) * hurly_m,
+                weights)
         
         if self.gg and self.mm and self.cross_terms and tri_ggmm:
             # galaxy pair (central-satellite and satellite-satellite) at k1,
-            # matter pair at k2: int dM n(M) (2 c s(k1) + s(k1)^2) m(k2)^2
+            # matter pair at k2: int dM n(M) (2 c s(k1) + P s(k1)^2) m(k2)^2
             trispec1h_ggmm = self._outer_mass_integral(
-                2 * hurly_c * hurly_s + hurly_s**2, hurly_m**2, weights)
+                galaxy_pairs, hurly_m**2, weights)
  
         if self.gm and tri_gmgm:
             trispec1h_gmgm = self.__sqrt_outer_mass_integral(
-                (2 * hurly_c * hurly_s + hurly_s**2) * hurly_m**2,
-                (2 * hurly_c * hurly_s + hurly_s**2) * hurly_m**2,
+                galaxy_pairs * hurly_m**2,
+                galaxy_pairs * hurly_m**2,
                 weights)
 
         if self.mm and self.gm and self.cross_terms and tri_mmgm:
             trispec1h_mmgm = self.__sqrt_outer_mass_integral(
                 hurly_m**4,
-                (2 * hurly_c * hurly_s + hurly_s**2) * hurly_m**2,
+                galaxy_pairs * hurly_m**2,
                 weights)
 
         if self.mm and tri_mmmm:
-            # update mass range of the halo mass function
             M_min_save = hm_prec["log10M_min"]
             Mmin = 2.0
             hm_prec["log10M_min"] = Mmin
@@ -1511,7 +1550,6 @@ class PolySpectra(HaloModel):
             hurly_m = self.hurly_x_spline_logk(bias_dict, hod_dict, 'm')(self.__logks_tri_in_table())
             hurly_m2 = hurly_m[:, 0, :]**2
             trispec1h_mmmm = ((hurly_m2*(self.mass_func.dndm*self._mass_weights())) @ hurly_m2.T)[:, :, None, None]*np.ones((self.sample_dim,self.sample_dim))[None, None, :, :]
-            # resets mass range of the halo mass function
             hm_prec["log10M_min"] = M_min_save
             self._use_main_mass_range()
             hm_prec['M_bins'] = len(self.mass_func.m)

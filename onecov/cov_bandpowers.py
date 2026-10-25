@@ -195,7 +195,7 @@ class CovBandPowers(CovTHETASpace):
             save_n_eff_lens = survey_params_dict['n_eff_lens']
         if self.sample_dim > 1:
             if self.gg or self.gm:
-                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+                survey_params_dict['n_eff_clust'] = self._n_eff_clust_per_sample(survey_params_dict)
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
         else:
@@ -266,6 +266,15 @@ class CovBandPowers(CovTHETASpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
                 print(" ")
+                if self.Cell_mmB is not None:
+                    # intrinsic B-modes (Eqs. G.15, G.16 of arXiv:2410.06962):
+                    # C_E = int W_EE C_EE + W_EB C_BB, C_B = int W_EB C_EE + W_EE C_BB
+                    n_lens, first = len(self.ell_bins_lensing), 2*len(self.ell_bins_clustering)
+                    prefactors = [1 / 2 / self.N_ell_lensing[mode] for mode in range(n_lens)]
+                    self.CE_mm += self._Cell_mmB_projected(self.levin_int, self.ell_limits,
+                                                           [first + n_lens + mode for mode in range(n_lens)], prefactors)
+                    self.CB_mm += self._Cell_mmB_projected(self.levin_int, self.ell_limits,
+                                                           [first + mode for mode in range(n_lens)], prefactors)
 
             if self.gm:
                 t0, tcomb = time.time(), 1
@@ -845,7 +854,7 @@ class CovBandPowers(CovTHETASpace):
             self.ell_bins_lensing = None
         if not (self.gg or self.gm):
             self.ell_bins_clustering = None
-        return list(gauss), list(nongauss), list(ssc)
+        return self._split_csmf_terms(list(gauss), list(nongauss), list(ssc))
 
     def covbandpowers_gaussian(self,
                                obs_dict,
@@ -972,22 +981,18 @@ class CovBandPowers(CovTHETASpace):
                     gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
                     csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB 
             else:
-                gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
-                gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
-                gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
-                gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
-                gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
-                gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
-                gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
-                gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
-                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
-                gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
-                return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
-                    gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
-                    gauss_BPEEmmmm, gauss_BPEBmmmm, \
-                    gauss_BPBBmmmm, \
-                    gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
-                    csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB 
+                # split into sample variance, mixed and shot noise term
+                return gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
+                    gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
+                    gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
+                    gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
+                    gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
+                    gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
+                    gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
+                    gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
+                    gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
+                    gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn, \
+                    csmf_BP_auto, csmf_BP_gg, csmf_BP_gm, csmf_BP_mmE, csmf_BP_mmB
         elif not self.cov_dict['split_gauss']:
             gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
             gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
@@ -1005,21 +1010,17 @@ class CovBandPowers(CovTHETASpace):
                 gauss_BPBBmmmm, \
                 gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn
         else:
-            gauss_BPgggg = gauss_BPgggg_sva + gauss_BPgggg_mix
-            gauss_BPgggm = gauss_BPgggm_sva + gauss_BPgggm_mix
-            gauss_BPEggmm = gauss_BPEggmm_sva + gauss_BPEggmm_mix
-            gauss_BPBggmm = gauss_BPBggmm_sva + gauss_BPBggmm_mix
-            gauss_BPgmgm = gauss_BPgmgm_sva + gauss_BPgmgm_mix
-            gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
-            gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
-            gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
-            gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
-            gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
-            return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
-                gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
-                gauss_BPEEmmmm, gauss_BPEBmmmm, \
-                gauss_BPBBmmmm, \
-                gauss_BPgggg_sn, gauss_BPgmgm_sn, gauss_BPEEmmmm_sn, gauss_BPBBmmmm_sn, \
+            # split into sample variance, mixed and shot noise term
+            return gauss_BPgggg_sva, gauss_BPgggg_mix, gauss_BPgggg_sn, \
+                gauss_BPgggm_sva, gauss_BPgggm_mix, gauss_BPgggm_sn, \
+                gauss_BPEggmm_sva, gauss_BPEggmm_mix, gauss_BPEggmm_sn, \
+                gauss_BPBggmm_sva, gauss_BPBggmm_mix, gauss_BPBggmm_sn, \
+                gauss_BPgmgm_sva, gauss_BPgmgm_mix, gauss_BPgmgm_sn, \
+                gauss_BPEmmgm_sva, gauss_BPEmmgm_mix, gauss_BPEmmgm_sn, \
+                gauss_BPBmmgm_sva, gauss_BPBmmgm_mix, gauss_BPBmmgm_sn, \
+                gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, gauss_BPEEmmmm_sn, \
+                gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn, \
+                gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, gauss_BPBBmmmm_sn
 
     def __covbandpowers_split_gaussian(self,
                                        obs_dict,
@@ -1138,8 +1139,7 @@ class CovBandPowers(CovTHETASpace):
                                                                             * kron_delta_tomo_clust[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_clust[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_clust[None, None, None, :, :, None]) \
-                                                                            * kron_delta_mass_bins[:, :, None, None, None, None] \
-                                                                            * (np.ones(self.n_tomo_clust)[None, :]**2*np.ones(self.n_tomo_clust)[:, None]**2)[None, None, :, :, None, None]*self.SN_integral_gggg[m_mode, n_mode, None, :, :, : ,None, None] 
+                                                                            * self._sample_overlap_sn(self.SN_integral_gggg[m_mode, n_mode], True)[:, :, :, :, None, None]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rBand power covariance calculation for the Gaussian '
@@ -1249,8 +1249,7 @@ class CovBandPowers(CovTHETASpace):
                             
                     gauss_BPgmgm_sn[n_mode, m_mode, :, :, :, :, :, :] = 4*np.pi**2/self.N_ell_clustering[m_mode]/self.N_ell_clustering[n_mode]*(kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
-                                                                            * kron_delta_mass_bins[:, :, None, None, None, None] \
-                                                                            * self.SN_integral_gmgm[m_mode, n_mode, None, :, :, : ,None, None] 
+                                                                            * self._sample_overlap_sn(self.SN_integral_gmgm[m_mode, n_mode], False)[:, :, :, :, None, None]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rBand power covariance calculation for the Gaussian '
@@ -1370,6 +1369,35 @@ class CovBandPowers(CovTHETASpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
             self._project_gauss_jobs(self.levin_int, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'bandpower covariance  term')
+            if self.gaussELLmmmm_BB is not None and not self.cov_dict['sn_only']:
+                # intrinsic B-modes: the B-mode spectrum enters C_E with W_EB
+                # and C_B with W_EE (Eqs. G.15 to G.18 of arXiv:2410.06962)
+                BB_sva_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[0], flat_length)
+                BB_mix_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[1], flat_length)
+                n_lens, first = len(self.ell_bins_lensing), 2*len(self.ell_bins_clustering)
+
+                def weight_EE(mode):
+                    return first + mode
+
+                def weight_EB(mode):
+                    return first + n_lens + mode
+
+                BB_sva_jobs, BB_mix_jobs = [], []
+                for m_mode in range(n_lens):
+                    for n_mode in range(n_lens):
+                        prefac = np.pi / 2.0 / self.N_ell_lensing[m_mode] / self.N_ell_lensing[n_mode] / (survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                        blocks = [(weight_EB(m_mode), weight_EE(n_mode), gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, None)]
+                        if n_mode >= m_mode:
+                            blocks += [(weight_EB(m_mode), weight_EB(n_mode), gauss_BPEEmmmm_sva, gauss_BPEEmmmm_mix, (n_mode, m_mode)),
+                                       (weight_EE(m_mode), weight_EE(n_mode), gauss_BPBBmmmm_sva, gauss_BPBBmmmm_mix, (n_mode, m_mode))]
+                        for w_m, w_n, target_sva, target_mix, mirror_index in blocks:
+                            limits = self._ell_limits_double(self.ell_limits, w_m, w_n)
+                            mirror = () if mirror_index is None else (mirror_index,)
+                            BB_sva_jobs.append((limits, w_m, w_n, target_sva, (m_mode, n_mode), prefac) + mirror)
+                            BB_mix_jobs.append((limits, w_m, w_n, target_mix, (m_mode, n_mode), prefac) + mirror)
+                if not self.cov_dict['split_gauss']:
+                    BB_mix_jobs = []
+                self._project_gauss_jobs_added(self.levin_int, self._gauss_todo(BB_sva_flat, BB_mix_flat, BB_sva_jobs, BB_mix_jobs), original_shape, 'bandpower covariance term (intrinsic B-modes)')
             gauss_BPEBmmmm_sn = 0
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CB_mm[:, None, :, None, :, :, None, None]*self.CB_mm[None, :, None, :, None, None, :, :])
             gauss_BPBBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_BPBBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
@@ -1384,46 +1412,57 @@ class CovBandPowers(CovTHETASpace):
             gauss_BPEBmmmm_sva, gauss_BPEBmmmm_mix, gauss_BPEBmmmm_sn = 0, 0, 0
         
         if self.csmf:
-            if self.gg:
-                csmf_BPgg = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gg[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
-                    csmf_BP_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                    for m_mode in range(len(self.ell_bins_clustering)):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int.init_integral(self.ellrange, csmf_BP_flat, True, True)
-                        csmf_BPgg[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-            else:
-                csmf_BPgg = 0
-            if self.gm:
-                csmf_BPgm = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
-                    csmf_BP_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                    for m_mode in range(len(self.ell_bins_clustering)):
-                        local_ell_limit = self.ell_limits[m_mode + len(self.ell_bins_clustering)][:]
-                        self.levin_int.init_integral(self.ellrange, csmf_BP_flat, True, True)
-                        csmf_BPgm[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + len(self.ell_bins_clustering))),original_shape)            
-            else:
-                csmf_BPgm = 0
+            # the projections of the cross-covariance with the SMF and, for
+            # the split output, of its super-sample part (see _split_csmf_terms)
+            csmf_cross_parts = [(csmf_gg, csmf_gm, csmf_mm)]
+            if self.cov_dict['ssc'] and getattr(self, 'csmf_parts', None) is not None:
+                csmf_cross_parts.append(tuple(self.csmf_parts['cross_ssc']))
+            csmf_projected = []
+            for csmf_gg, csmf_gm, csmf_mm in csmf_cross_parts:
+                if self.gg:
+                    csmf_BPgg = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gg[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
+                        csmf_BP_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
+                        for m_mode in range(len(self.ell_bins_clustering)):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int.init_integral(self.ellrange, csmf_BP_flat*self.ellrange[:, None], True, True)
+                            csmf_BPgg[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                else:
+                    csmf_BPgg = 0
+                if self.gm:
+                    csmf_BPgm = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
+                        csmf_BP_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
+                        for m_mode in range(len(self.ell_bins_clustering)):
+                            local_ell_limit = self.ell_limits[m_mode + len(self.ell_bins_clustering)][:]
+                            self.levin_int.init_integral(self.ellrange, csmf_BP_flat*self.ellrange[:, None], True, True)
+                            csmf_BPgm[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + len(self.ell_bins_clustering))),original_shape)            
+                else:
+                    csmf_BPgm = 0
             
-            if self.gm:
-                csmf_BPmmE = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                csmf_BPmmB = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_mm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
-                    csmf_BP_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                    for m_mode in range(len(self.ell_bins_lensing)):
-                        local_ell_limit_E = self.ell_limits[m_mode + 2*len(self.ell_bins_clustering)][:]
-                        self.levin_int.init_integral(self.ellrange, csmf_BP_flat, True, True)
-                        csmf_BPmmE[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering)),original_shape))           
-                        csmf_BPmmB[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + 2*len(self.ell_bins_clustering) +  len(self.ell_bins_lensing)),original_shape))       
+                if self.mm:
+                    csmf_BPmmE = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    csmf_BPmmB = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_mm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
+                        csmf_BP_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
+                        for m_mode in range(len(self.ell_bins_lensing)):
+                            local_ell_limit_E = self.ell_limits[m_mode + 2*len(self.ell_bins_clustering)][:]
+                            local_ell_limit_B = self.ell_limits[m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing)][:]
+                            self.levin_int.init_integral(self.ellrange, csmf_BP_flat*self.ellrange[:, None], True, True)
+                            csmf_BPmmE[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit_E, m_mode + 2*len(self.ell_bins_clustering))), original_shape)
+                            csmf_BPmmB[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit_B, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))), original_shape)
 
-            else:
-                csmf_BPmmE, csmf_BPmmB = 0, 0
+                else:
+                    csmf_BPmmE, csmf_BPmmB = 0, 0
+                csmf_projected.append((csmf_BPgg, csmf_BPgm, csmf_BPmmE, csmf_BPmmB))
+            csmf_BPgg, csmf_BPgm, csmf_BPmmE, csmf_BPmmB = csmf_projected[0]
+            self.csmf_projected_ssc = list(csmf_projected[1]) if len(csmf_projected) > 1 else None
 
         print("\nWrapping up all Gaussian bandpower covariance contributions.")
 

@@ -188,7 +188,7 @@ class CovTHETASpace(CovELLSpace):
                 save_n_eff_lens = survey_params_dict['n_eff_lens']
             if self.sample_dim > 1:
                 if self.gg or self.gm:
-                    survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+                    survey_params_dict['n_eff_clust'] = self._n_eff_clust_per_sample(survey_params_dict)
                 if self.mm or self.gm:
                     survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
             else:
@@ -373,6 +373,19 @@ class CovTHETASpace(CovELLSpace):
                     self.ellrange, integrand, True, True)
                 xip_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries],i_theta + self.gg_summaries + self.gm_summaries),original_shape)/2.0/np.pi
                 xim_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries],i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries),original_shape)/2.0/np.pi
+            if self.Cell_mmB is not None:
+                # intrinsic B-modes: xi_+ = int J_0 (C_EE + C_BB),
+                # xi_- = int J_4 (C_EE - C_BB)
+                n_theta = len(self.theta_bins_lensing)
+                first = self.gg_summaries + self.gm_summaries
+                xip_signal += self._Cell_mmB_projected(
+                    self.levin_int_fourier, self.ell_limits,
+                    [first + i_theta for i_theta in range(n_theta)],
+                    [1/2.0/np.pi]*n_theta, self.pixel_weight)
+                xim_signal += self._Cell_mmB_projected(
+                    self.levin_int_fourier, self.ell_limits,
+                    [first + self.mmE_summaries + i_theta for i_theta in range(n_theta)],
+                    [-1/2.0/np.pi]*n_theta, self.pixel_weight)
             self.xi_plus = xip_signal
             self.xi_minus = xim_signal
             
@@ -435,6 +448,15 @@ class CovTHETASpace(CovELLSpace):
                         xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + len(theta_bins)],i_theta + len(theta_bins))
                         xim_signal[i_theta, :, :, :] = np.reshape(
                             xim_signal_at_thetai_flat, original_shape)/2.0/np.pi    
+                    if self.Cell_mmB is not None:
+                        # the correlation functions of the full shear field
+                        # include the intrinsic B-modes
+                        xip_signal += self._Cell_mmB_projected(
+                            levin_int_fourier, ell_limits, list(range(len(theta_bins))),
+                            [1/2.0/np.pi]*len(theta_bins))
+                        xim_signal += self._Cell_mmB_projected(
+                            levin_int_fourier, ell_limits, [len(theta_bins) + i for i in range(len(theta_bins))],
+                            [-1/2.0/np.pi]*len(theta_bins))
                     self.xip = xip_signal
                     self.xim = xim_signal
                     flat_idx = 0
@@ -485,8 +507,10 @@ class CovTHETASpace(CovELLSpace):
                     self.K_gg.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
                     self.K_gm.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 2) - self.__int_x_jn(xl, 2)))
                 else:
-                    self.K_gg.append(jv(0, self.ell_fourier_integral*self.theta_bins_clustering[i_theta]))
-                    self.K_gm.append(jv(2, self.ell_fourier_integral*self.theta_bins_clustering[i_theta]))
+                    # at the bin centre (theta in arcmin)
+                    theta = self.theta_bins_clustering[i_theta]/60/180*np.pi
+                    self.K_gg.append(jv(0, self.ell_fourier_integral*theta))
+                    self.K_gm.append(jv(2, self.ell_fourier_integral*theta))
         if self.mm:
             for i_theta in range(len(self.theta_bins_lensing)):
                 if self.bin_averaging:
@@ -497,8 +521,10 @@ class CovTHETASpace(CovELLSpace):
                     self.K_mmE.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
                     self.K_mmB.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 4) - self.__int_x_jn(xl, 4)))
                 else:
-                    self.K_mmE.append(jv(0, self.ell_fourier_integral*self.theta_bins_lensing[i_theta]))
-                    self.K_mmB.append(jv(4, self.ell_fourier_integral*self.theta_bins_lensing[i_theta]))
+                    # at the bin centre (theta in arcmin)
+                    theta = self.theta_bins_lensing[i_theta]/60/180*np.pi
+                    self.K_mmE.append(jv(0, self.ell_fourier_integral*theta))
+                    self.K_mmB.append(jv(4, self.ell_fourier_integral*theta))
         self.K_gg = np.array(self.K_gg)
         self.K_gm = np.array(self.K_gm)
         self.K_mmE = np.array(self.K_mmE)
@@ -527,10 +553,12 @@ class CovTHETASpace(CovELLSpace):
                         mix_jobs,
                         prefac,
                         original_shape,
-                        name):
+                        name,
+                        added=False):
         """
         Projects the Gaussian ell-space covariance to real space with
-        CovELLSpace._project_gauss_jobs.
+        CovELLSpace._project_gauss_jobs (with added=True the results are
+        added to the target arrays, CovELLSpace._project_gauss_jobs_added).
 
         Parameters
         ----------
@@ -550,9 +578,10 @@ class CovTHETASpace(CovELLSpace):
         def with_limits(jobs):
             return [(self._ell_limits_double(self.ell_limits, job[0], job[1]), job[0], job[1], job[2], job[3], prefac) + tuple(job[4:])
                     for job in jobs]
-        self._project_gauss_jobs(self.levin_int_fourier,
-                                 self._gauss_todo(sva_flat, mix_flat, with_limits(sva_jobs), with_limits(mix_jobs)),
-                                 original_shape, 'real-space covariance ' + name)
+        project = self._project_gauss_jobs_added if added else self._project_gauss_jobs
+        project(self.levin_int_fourier,
+                self._gauss_todo(sva_flat, mix_flat, with_limits(sva_jobs), with_limits(mix_jobs)),
+                original_shape, 'real-space covariance ' + name)
 
     def __project_4pt(self,
                       ell_cov,
@@ -858,7 +887,7 @@ class CovTHETASpace(CovELLSpace):
                                     hod_dict,
                                     prec,
                                     read_in_tables['tri'], True)
-        return list(gauss), list(nongauss), list(ssc)
+        return self._split_csmf_terms(list(gauss), list(nongauss), list(ssc))
 
     def covTHETA_gaussian(self,
                           covELLspacesettings,
@@ -1116,8 +1145,7 @@ class CovTHETASpace(CovELLSpace):
                  * kron_delta_tomo_clust[None, None, None, None, :, None, :]
                  + kron_delta_tomo_clust[None, None, None, :, None, None, :]
                  * kron_delta_tomo_clust[None, None, None, None, :, :, None]) \
-                 * kron_delta_mass_bins[None, :, :, None, None, None, None] \
-                / self.npair_gg[:, :, None, :, :, None, None]
+                 * self._sample_overlap_sn(1.0/self.npair_gg, True)[:, :, :, :, :, None, None]
             gauss_ww_sn = \
                 gauss_ww_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.theta_bins_clustering))[:, :, None, None, None, None, None, None]
@@ -1198,8 +1226,7 @@ class CovTHETASpace(CovELLSpace):
             gauss_gtgt_sn = \
                 kron_delta_tomo_clust[None, None, None, :, None, :, None] \
                 * kron_delta_tomo_lens[None, None, None, None, :, None, :] \
-                * kron_delta_mass_bins[None, :, :, None, None, None, None] \
-                / self.npair_gm[:, :, None, :, :, None, None] 
+                * self._sample_overlap_sn(1.0/self.npair_gm, False)[:, :, :, :, :, None, None]
             gauss_gtgt_sn = \
                 gauss_gtgt_sn[:, None, :, :, :, :, :, :] \
                 * np.eye(len(self.theta_bins_clustering))[:, :, None, None, None, None, None, None]
@@ -1279,6 +1306,20 @@ class CovTHETASpace(CovELLSpace):
                                 sva_jobs.append((m_mode, n_mode + self.mmE_summaries, gauss_xipxim_sva, idx))
                                 mix_jobs.append((m_mode, n_mode + self.mmE_summaries, gauss_xipxim_mix, idx))
                 self.__project_gauss(gaussELLmmmm_sva_flat, gaussELLmmmm_mix_flat, sva_jobs, mix_jobs, 1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2), original_shape, 'xipmxipm')
+                if self.gaussELLmmmm_BB is not None:
+                    # intrinsic B-modes, xi_+ = int J_0 (C_EE + C_BB) and
+                    # xi_- = int J_4 (C_EE - C_BB): the B-mode covariance
+                    # enters with the same weights, with a minus sign for
+                    # xi_+ xi_-
+                    BB_sva_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[0], flat_length)
+                    BB_mix_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[1], flat_length)
+                    negative = (id(gauss_xipxim_sva), id(gauss_xipxim_mix))
+                    for sign in [1, -1]:
+                        self.__project_gauss(BB_sva_flat, BB_mix_flat,
+                                             [job for job in sva_jobs if (id(job[2]) in negative) == (sign < 0)],
+                                             [job for job in mix_jobs if (id(job[2]) in negative) == (sign < 0)],
+                                             sign/(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2),
+                                             original_shape, 'xipmxipm (intrinsic B-modes)', added=True)
                 adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
                 gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] = gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
                 adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
@@ -1298,46 +1339,56 @@ class CovTHETASpace(CovELLSpace):
             gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, gauss_xipm_sn = 0, 0, 0, 0, 0, 0, 0
 
         if self.csmf:
-            if self.gg:
-                csmf_w = np.zeros((self.gg_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gg[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
-                    csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.gg_summaries):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                        csmf_w[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-            else:
-                csmf_w = 0
-            if self.gm:
-                csmf_gt = np.zeros((self.gm_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
-                    csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                        csmf_gt[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-            else:
-                csmf_gt = 0
+            # the projections of the cross-covariance with the SMF and, for
+            # the split output, of its super-sample part (see _split_csmf_terms)
+            csmf_cross_parts = [(csmf_gg, csmf_gm, csmf_mm)]
+            if self.cov_dict['ssc'] and getattr(self, 'csmf_parts', None) is not None:
+                csmf_cross_parts.append(tuple(self.csmf_parts['cross_ssc']))
+            csmf_projected = []
+            for csmf_gg, csmf_gm, csmf_mm in csmf_cross_parts:
+                if self.gg:
+                    csmf_w = np.zeros((len(self.theta_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gg[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
+                        csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.gg_summaries):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
+                            csmf_w[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                else:
+                    csmf_w = 0
+                if self.gm:
+                    csmf_gt = np.zeros((len(self.theta_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
+                        csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
+                            csmf_gt[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                else:
+                    csmf_gt = 0
             
-            if self.mm:
-                csmf_xip = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                csmf_xim = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_mm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
-                    csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                        csmf_xip[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-                        csmf_xim[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.mmE_summaries)),original_shape)            
+                if self.mm:
+                    csmf_xip = np.zeros((len(self.theta_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    csmf_xim = np.zeros((len(self.theta_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_mm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
+                        csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
+                            csmf_xip[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                            csmf_xim[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.mmE_summaries)),original_shape)            
 
-            else:
-                csmf_xip, csmf_xim = 0, 0
+                else:
+                    csmf_xip, csmf_xim = 0, 0
+                csmf_projected.append((csmf_w, csmf_gt, csmf_xip, csmf_xim))
+            csmf_w, csmf_gt, csmf_xip, csmf_xim = csmf_projected[0]
+            self.csmf_projected_ssc = list(csmf_projected[1]) if len(csmf_projected) > 1 else None
         
         print("\nWrapping up all Gaussian real-space covariance contributions.")
 

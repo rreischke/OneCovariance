@@ -6,8 +6,8 @@ import numpy as np
 from camb import model
 from hmf.density_field import transfer_models as hmf_transfer_models
 from hmf._internals._framework import Component
-from scipy.integrate import simpson
-from scipy.interpolate import RectBivariateSpline, UnivariateSpline, make_interp_spline
+from scipy.integrate import cumulative_trapezoid, simpson
+from scipy.interpolate import RectBivariateSpline, UnivariateSpline, interp1d, make_interp_spline
 from scipy.special import erf, sici
 
 try:
@@ -238,22 +238,47 @@ class HaloModel(Setup):
         self.effective_bias = self.calc_effective_bias(
             bias_dict, hod_dict, prec['hm'])
         if self.hod.mass_bins_disagree:
-            save_bias = bias_dict.copy()
-            if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
-                bias_dict['logmass_bins_upper'][-1] = bias_dict['csmf_log10M_bins'][-1]
-                bias_dict['logmass_bins_lower'][0] = bias_dict['csmf_log10M_bins'][0]
-            else:
-                bias_dict['logmass_bins'][0] = bias_dict['csmf_log10M_bins'][0]
-                bias_dict['logmass_bins'][-1] = bias_dict['csmf_log10M_bins'][-1]
+            saved_bins = self.__widen_mass_bins(bias_dict)
             self.hod.hod_update(bias_dict, prec['hm'], self.mass_func.m)
             self.set_spline_galaxy_stellar_mf(hod_dict)
             self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
-            bias_dict = save_bias
+            self.__restore_mass_bins(bias_dict, saved_bins)
             self.hod.hod_update(bias_dict, prec['hm'], self.mass_func.m)
         else:
             self.set_spline_galaxy_stellar_mf(hod_dict)
             self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
         self.zet= zet
+
+    @staticmethod
+    def __widen_mass_bins(bias_dict):
+        """
+        Extends the stellar mass bins of the galaxy samples in bias_dict to
+        the stellar mass range of the SMF (for the SMF splines and the
+        count bispectra) and returns copies of the original bins for
+        __restore_mass_bins.
+        """
+        keys = ('logmass_bins', 'logmass_bins_upper', 'logmass_bins_lower')
+        saved_bins = {key: None if bias_dict[key] is None else np.copy(bias_dict[key]) for key in keys}
+        csmf_min, csmf_max = HOD.csmf_mass_range(bias_dict)
+        if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_lower'] is not None:
+            upper, lower = np.copy(bias_dict['logmass_bins_upper']), np.copy(bias_dict['logmass_bins_lower'])
+            upper[np.argmax(upper)] = max(np.max(upper), csmf_max)
+            lower[np.argmin(lower)] = min(np.min(lower), csmf_min)
+            bias_dict['logmass_bins_upper'], bias_dict['logmass_bins_lower'] = upper, lower
+        else:
+            bins = np.copy(bias_dict['logmass_bins'])
+            bins[0], bins[-1] = csmf_min, csmf_max
+            bias_dict['logmass_bins'] = bins
+        return saved_bins
+
+    @staticmethod
+    def __restore_mass_bins(bias_dict, saved_bins):
+        """
+        Restores the stellar mass bins of the galaxy samples in bias_dict
+        after __widen_mass_bins.
+        """
+        for key, value in saved_bins.items():
+            bias_dict[key] = value
 
     def calc_mass_func(self,
                        zet,
@@ -378,6 +403,51 @@ class HaloModel(Setup):
                             self.occnum_tab
                         )[0],
                         x = self.hod.Mrange[None, :])
+
+    def nbar_overlap(self,
+                     hod_dict):
+        """
+        Calculates the average number density of the galaxies which belong
+        to two galaxy samples at the same time, i.e. with stellar masses in
+        the overlap of their stellar mass bins (log10mass_bins_lower/upper),
+        n_overlap = int dM n(M) int_overlap dM* Phi(M*|M).
+
+        Parameters
+        ----------
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation
+            distribution used. To be passed from the read_input method of
+            the Input class.
+
+        Returns
+        -------
+        nbar_overlap : array
+            with unit 1 / (Mpc/h)^3
+            with shape (sample_bins, sample_bins), nbar on the diagonal and
+            zero for disjoint samples
+        """
+        nbar = np.diag(np.array(self.ngal, dtype=float))
+        occ_prob = self.hod.occ_num_and_prob(hod_dict, self.mor_tab, self.occprob_tab, self.occnum_tab)[1]
+        if occ_prob is None:
+            return nbar
+        grid = self.hod.Mbins
+        for i_sample in range(len(grid)):
+            # occupation integrated over stellar mass of sample i_sample
+            cumulative = None
+            for j_sample in range(len(grid)):
+                low = max(grid[i_sample, 0], grid[j_sample, 0])
+                high = min(grid[i_sample, -1], grid[j_sample, -1])
+                if j_sample == i_sample or high <= low:
+                    continue
+                if cumulative is None:
+                    cumulative = cumulative_trapezoid(occ_prob[i_sample], grid[i_sample], axis=0, initial=0)
+                occ_num = np.zeros(len(self.mass_func.m))
+                for edge, sign in ((high, 1.0), (low, -1.0)):
+                    idx = np.clip(np.searchsorted(grid[i_sample], edge) - 1, 0, len(grid[i_sample]) - 2)
+                    frac = (edge - grid[i_sample, idx])/(grid[i_sample, idx + 1] - grid[i_sample, idx])
+                    occ_num += sign*((1 - frac)*cumulative[idx] + frac*cumulative[idx + 1])
+                nbar[i_sample, j_sample] = simpson(self.mass_func.dndm*occ_num, x=self.hod.Mrange)
+        return nbar
 
     def nbar_cen(self,
                  hod_dict):
@@ -746,6 +816,39 @@ class HaloModel(Setup):
                             "evaluation]: 'small_k_damping_for1h' must be either " +
                             "'damped' or 'none'.")
 
+    @staticmethod
+    def satellite_moment_factor(hod_dict,
+                                order):
+        """
+        Ratio of the factorial moment of the satellite occupation to the
+        Poisson case, <N_s (N_s - 1) ... (N_s - n + 1)|M> / <N_s|M>^n,
+        for n = order galaxies in the same halo. The second moment is set
+        by the Poisson parameter P, <N_s (N_s - 1)|M> = P <N_s|M>^2 (Eq. 21
+        of Dvornik et al. 2023), the higher ones follow from the count
+        distribution with this second moment,
+        prod_{j=1}^{n-1} max(0, 1 + j (P - 1)), which is exact for a
+        Poisson (P = 1), negative binomial (P > 1) or binomial (P < 1)
+        distribution; the factors are set to zero where they would turn
+        negative.
+
+        Parameters
+        ----------
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation
+            distribution used, here 'poisson_sat' (default 1).
+        order : int
+            number of satellite galaxies in the same halo
+
+        Returns
+        -------
+        factor : float
+        """
+        poisson = hod_dict.get('poisson_sat', 1.0)
+        factor = 1.0
+        for j in range(1, order):
+            factor *= max(0.0, 1.0 + j*(poisson - 1.0))
+        return factor
+
     def hurly_x(self,
                 bias_dict,
                 hod_dict,
@@ -1035,8 +1138,10 @@ class HaloModel(Setup):
                 bias = bias_val
 
             if type_x == 'g' and type_y == 'g':
+                # galaxy pairs in the same halo, 2 c s + P s^2
+                poisson_correction = 1.0 - self.satellite_moment_factor(hod_dict, 2)
                 if diagonal:
-                    correct = hurly_cen * hurly_cen
+                    correct = hurly_cen * hurly_cen + poisson_correction * hurly_sat * hurly_sat
                 bias = bias_val
 
             if type_x == 'm' and type_y == 'm':
@@ -1067,6 +1172,7 @@ class HaloModel(Setup):
                 integral_xy = self._outer_mass_integral(hurlyX, hurlyY, weights)
                 if type_x == 'g' and type_y == 'g':
                     integral_xy -= self._outer_mass_integral(hurly_cen, hurly_cen, weights)
+                    integral_xy -= poisson_correction*self._outer_mass_integral(hurly_sat, hurly_sat, weights)
 
         return integral_xy
 
@@ -1472,13 +1578,7 @@ class HaloModel(Setup):
             of the Input class.)
         """
         if self.hod.mass_bins_disagree:
-            save_bias = bias_dict.copy()
-            if bias_dict['logmass_bins_upper'] is not None and bias_dict['logmass_bins_upper'] is not None:
-                bias_dict['logmass_bins_upper'][-1] = bias_dict['csmf_log10M_bins'][-1]
-                bias_dict['logmass_bins_lower'][0] = bias_dict['csmf_log10M_bins'][0]
-            else:
-                bias_dict['logmass_bins'][0] = bias_dict['csmf_log10M_bins'][0]
-                bias_dict['logmass_bins'][-1] = bias_dict['csmf_log10M_bins'][-1]
+            saved_bins = self.__widen_mass_bins(bias_dict)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
             aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
             indices = np.unique(aux_M,return_index = True)[1]
@@ -1488,7 +1588,7 @@ class HaloModel(Setup):
             count_matter_bispec = np.zeros((len(self.mass_func.k), len(log10csmf_mass_bins)))
             for i_k in range(len(self.mass_func.k)):
                 count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins, log10_aux_M, np.log(aux_bispec_count_mm[i_k,indices])))
-            bias_dict = save_bias
+            self.__restore_mass_bins(bias_dict, saved_bins)
             self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
         else:
             aux_M = self.hod.Mbins.reshape(len(self.hod.Mbins[0,:])*len(self.hod.Mbins[:,0]))
@@ -1500,3 +1600,118 @@ class HaloModel(Setup):
             for i_k in range(len(self.mass_func.k)):
                 count_matter_bispec[i_k, :] = np.exp(np.interp(log10csmf_mass_bins, log10_aux_M, np.log(aux_bispec_count_mm[i_k,indices])))
         return count_matter_bispec
+
+    def __csmf_at_stellar_masses(self,
+                                 bias_dict,
+                                 hod_dict,
+                                 hm_prec,
+                                 log10csmf_mass_bins):
+        """
+        Conditional stellar mass function of centrals and satellites,
+        Phi_c(M*|M) and Phi_s(M*|M), at the stellar masses of the SMF bins.
+        If the SMF bins extend beyond the stellar mass bins of the galaxy
+        samples, the stellar mass grid of the HOD is extended for this
+        evaluation only.
+
+        Returns
+        -------
+        csmf_cen, csmf_sat : arrays
+            with shape (SMF bins, M_bins)
+        """
+        if self.hod.mass_bins_disagree:
+            saved_bins = self.__widen_mass_bins(bias_dict)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
+        log10_aux_M = np.log10(self.hod.Mbins.reshape(-1))
+        indices = np.unique(log10_aux_M, return_index=True)[1]
+        csmf = []
+        for pop in ('cen', 'sat'):
+            aux_csmf = self.conditional_galaxy_stellar_mf(hod_dict, pop).reshape(-1, len(self.mass_func.m))[indices]
+            csmf.append(interp1d(log10_aux_M[indices], aux_csmf, axis=0, bounds_error=False,
+                                 fill_value=0.0)(log10csmf_mass_bins))
+        if self.hod.mass_bins_disagree:
+            self.__restore_mass_bins(bias_dict, saved_bins)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
+        return csmf[0], csmf[1]
+
+    def get_count_galaxy_bispectra(self,
+                                   bias_dict,
+                                   hod_dict,
+                                   hm_prec,
+                                   log10csmf_mass_bins):
+        """
+        Calculates the count-galaxy-galaxy and count-galaxy-matter
+        bispectra for a collapsed triangle (the counts at k = 0), i.e. the
+        three-point functions of the galaxies in the stellar mass bins of the
+        SMF with two galaxies of each galaxy sample, or with one galaxy and
+        the matter, in analogy to the count-matter bispectrum. Only
+        triplets of distinct galaxies contribute: a halo hosts at most one
+        central and the moments of the satellite occupation follow from the
+        Poisson parameter (see satellite_moment_factor). The 1-halo terms
+        read, with Phi_c/s(M*|M) the conditional stellar mass function of
+        the counts, H_c/s/m(k, M) as in hurly_x and P the Poisson parameter,
+            nB_cgg^1h = int dM n(M) [Phi_c P H_s^2 + 2 Phi_s P H_c H_s
+                                     + Phi_s P(2P - 1) H_s^2],
+            nB_cgm^1h = int dM n(M) [Phi_c H_s + Phi_s H_c + P Phi_s H_s] H_m,
+        and the 2-halo terms (count and one tracer in the same halo)
+            nB_cgg^2h = 2 P_lin(k) A_cg(k) I_g(k),
+            nB_cgm^2h = P_lin(k) [A_cg(k) I_m(k) + A_cm(k) I_g(k)],
+        with A_cg = int dM n b [Phi_c H_s + Phi_s H_c + P Phi_s H_s],
+        A_cm = int dM n b (Phi_c + Phi_s) H_m and I_x = int dM n b H_x.
+
+        Parameters
+        ----------
+        bias_dict : dictionary
+            Specifies all the information about the bias model. To be
+            passed from the read_input method of the Input class.
+        hod_dict : dictionary
+            Specifies all the information about the halo occupation
+            distribution used. To be passed from the read_input method of
+            the Input class.
+        hm_prec : dictionary
+            Contains precision information about the HaloModel. To be
+            passed from the read_input method of the Input class.
+        log10csmf_mass_bins : array
+            stellar masses of the SMF bins
+
+        Returns
+        -------
+        nBcgg, nBcgm : arrays
+            with shape (log10k bins, SMF bins, sample bins)
+
+        References
+        ----------
+        Takada and Bridle 2007,  New Journal of Physics, 9, 446
+        """
+        csmf_cen, csmf_sat = self.__csmf_at_stellar_masses(bias_dict, hod_dict, hm_prec, log10csmf_mass_bins)
+        hurly_c = self.hurly_x(bias_dict, hod_dict, 'cen')
+        hurly_s = self.hurly_x(bias_dict, hod_dict, 'sat')
+        hurly_m = self.hurly_x(bias_dict, hod_dict, 'm')[:, 0, :]
+        poisson_2 = self.satellite_moment_factor(hod_dict, 2)
+        poisson_3 = self.satellite_moment_factor(hod_dict, 3)
+        m = self.mass_func.m
+        halo_bias = self.bias(bias_dict, hm_prec)
+        weights = self.mass_func.dndm*simpson_weights(m)
+        def mass_integral(csmf, hurly, mass_weights):
+            # int dM w(M) Phi(M*_mu|M) H(k, s, M) as a matrix product, with
+            # shape (k, SMF bins, samples)
+            n_k, n_sample, n_m = hurly.shape
+            return (hurly.reshape(n_k*n_sample, n_m) @ (csmf*mass_weights).T).reshape(n_k, n_sample, -1).transpose(0, 2, 1)
+        # count and one galaxy in the same halo: Phi_c H_s + Phi_s (H_c + P H_s)
+        pair_sat = hurly_c + poisson_2*hurly_s
+        bispec_cgg_1h = mass_integral(csmf_cen, poisson_2*hurly_s**2, weights) \
+            + mass_integral(csmf_sat, (2*poisson_2*hurly_c + poisson_3*hurly_s)*hurly_s, weights)
+        bispec_cgm_1h = mass_integral(csmf_cen, hurly_s*hurly_m[:, None, :], weights) \
+            + mass_integral(csmf_sat, pair_sat*hurly_m[:, None, :], weights)
+        a_cg = mass_integral(csmf_cen, hurly_s, weights*halo_bias) + mass_integral(csmf_sat, pair_sat, weights*halo_bias)
+        a_cm = ((csmf_cen + csmf_sat)[None, :, :]*hurly_m[:, None, :]) @ (weights*halo_bias)
+        integral_g = (hurly_c + hurly_s) @ (weights*halo_bias)
+        # matter I_1^1 with the missing mass assigned to the lowest mass, as in
+        # count_matter_bispectrum
+        mass_weights = weights*m/self.rho_bg*halo_bias
+        halo_profile = self.uk(bias_dict)
+        integral_m = halo_profile @ mass_weights + (1 - np.sum(mass_weights))*halo_profile[:, 0]
+        power = self.mass_func.power
+        bispec_cgg = bispec_cgg_1h + 2*power[:, None, None]*a_cg*integral_g[:, None, :]
+        bispec_cgm = bispec_cgm_1h + power[:, None, None]*(a_cg*integral_m[:, None, None]
+                                                           + a_cm[:, :, None]*integral_g[:, None, :])
+        return bispec_cgg, bispec_cgm

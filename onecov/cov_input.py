@@ -66,6 +66,7 @@ class Input:
         self.csmf_auto_only = None
         self.csmf_log10M_bins_upper = None
         self.csmf_log10M_bins_lower = None
+        self.csmf_settings_abr = dict()
 
         
 
@@ -292,6 +293,9 @@ class Input:
         self.modsch_logMref_sat = None
         self.modsch_alpha_s_sat = None
         self.modsch_b_sat = None
+        # Poisson parameter of the satellite occupation,
+        # <N_s(N_s - 1)|M> = P <N_s|M>^2
+        self.poisson_sat = None
 
         # parameters unique to a specific survey
         self.survey_params = dict()
@@ -570,8 +574,27 @@ class Input:
                 raise Exception("ConfigError: You requested the stellar mass function as an observable, "+
                                 "but did not specify the mass bins. Please adjust "
                                 + config_name + " in the [csmf settings] section ")
+            # settings of the stellar mass function for the save_configs file
+            if self.csmf_log10M_bins_upper is not None and self.csmf_log10M_bins_lower is not None:
+                self.csmf_settings_abr['csmf_log10M_bins_lower'] = ', '.join(map(str, self.csmf_log10M_bins_lower))
+                self.csmf_settings_abr['csmf_log10M_bins_upper'] = ', '.join(map(str, self.csmf_log10M_bins_upper))
+            else:
+                self.csmf_settings_abr['csmf_log10M_bins'] = ', '.join(map(str, self.csmf_log10M_bins))
+            for key in ('csmf_directory', 'V_max_file', 'V_max_zmin'):
+                if key in config['csmf settings']:
+                    self.csmf_settings_abr[key] = config['csmf settings'][key]
+            self.csmf_settings_abr['csmf_diagonal'] = str(self.csmf_diagonal)
+            self.csmf_settings_abr['csmf_diagonal_lenses'] = str(self.csmf_diagonal_lenses)
+            self.csmf_settings_abr['csmf_auto_only'] = str(self.csmf_auto_only)
         else:
             self.cstellar_mf = False
+        # galaxy sample i only in clustering bin i: also used without the
+        # stellar mass function
+        if self.csmf_diagonal_lenses is None:
+            self.csmf_diagonal_lenses = 'csmf settings' in config and \
+                config['csmf settings'].getboolean('csmf_diagonal_lenses', fallback=False)
+            if self.csmf_diagonal_lenses:
+                self.csmf_settings_abr['csmf_diagonal_lenses'] = 'True'
         if not self.cosmicshear and \
            not self.ggl and \
            not self.clustering:
@@ -1029,7 +1052,7 @@ class Input:
             if 'theta_accuracy' in config['covTHETAspace settings']:
                 self.theta_acc = float(config['covTHETAspace settings']['theta_accuracy'])
             if 'bin_averaging' in config['covTHETAspace settings']:
-                self.bin_averaging = config['covTHETAspace settings']['bin_averaging']
+                self.bin_averaging = config['covTHETAspace settings'].getboolean('bin_averaging')
             else:
                 self.bin_averaging = None
             if 'integration_intervals' in config['covTHETAspace settings']:
@@ -2288,7 +2311,7 @@ class Input:
                                     config['bias']['log10mass_bins'] + "' to numpy " +
                                     "array. Must be adjusted in config file " +
                                     config_name + ".")
-            elif 'log10mass_bins_upper' and 'log10mass_bins_lower' in config['bias']:
+            elif 'log10mass_bins_upper' in config['bias'] and 'log10mass_bins_lower' in config['bias']:
                 self.logmass_bins_lower = \
                     np.array(config['bias']['log10mass_bins_lower'].split(',')).astype(float)
                 self.logmass_bins_upper = \
@@ -2471,11 +2494,20 @@ class Input:
                                     config['hod']['modsch_b_sat'] + "' to numpy " +
                                     "array. Must be adjusted in config file " +
                                     config_name + ".")
+            if 'poisson_sat' in config['hod']:
+                self.poisson_sat = float(config['hod']['poisson_sat'])
+                if self.poisson_sat < 0:
+                    raise Exception("ConfigError: The satellite Poisson parameter " +
+                                    "[hod]: 'poisson_sat' must be non-negative. Must be " +
+                                    "adjusted in config file " + config_name + ".")
+            else:
+                self.poisson_sat = 1.0
         else:
             self.hod_model_mor_cen = 'self.double_powerlaw'
             self.hod_model_mor_sat = 'self.double_powerlaw'
             self.hod_model_scatter_cen = 'self.lognormal'
             self.hod_model_scatter_sat = 'self.modschechter'
+            self.poisson_sat = 1.0
             self.dpow_logM0_cen = 10.6
             self.dpow_logM1_cen = 11.2
             
@@ -3675,7 +3707,8 @@ class Input:
                 'combinations_ggl','combinations_lensing']
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
-                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal, self.csmf_auto_only, self.csmf_diagonal_lenses, self.csmf_log10M_bins_upper,self.csmf_log10M_bins_lower,
+                  self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal, self.csmf_auto_only,
+                  bool(self.csmf_diagonal_lenses) and (self.sampledim or 1) > 1, self.csmf_log10M_bins_upper, self.csmf_log10M_bins_lower,
                   self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
         self.observables = dict(zip(keys, values))
         
@@ -3887,7 +3920,7 @@ class Input:
                 'dpow_norm_sat', 'model_scatter_cen', 'model_scatter_sat',
                 'logn_sigma_c_cen', 'logn_sigma_c_sat', 'modsch_logMref_cen',
                 'modsch_alpha_s_cen', 'modsch_b_cen', 'modsch_logMref_sat',
-                'modsch_alpha_s_sat', 'modsch_b_sat']
+                'modsch_alpha_s_sat', 'modsch_b_sat', 'poisson_sat']
         values = [self.hod_model_mor_cen, self.hod_model_mor_sat,
                   self.dpow_logM0_cen, self.dpow_logM1_cen, self.dpow_a_cen,
                   self.dpow_b_cen, self.dpow_norm_cen, self.dpow_logM0_sat,
@@ -3897,7 +3930,7 @@ class Input:
                   self.logn_sigma_c_sat, self.modsch_logMref_cen,
                   self.modsch_alpha_s_cen, self.modsch_b_cen,
                   self.modsch_logMref_sat, self.modsch_alpha_s_sat,
-                  self.modsch_b_sat]
+                  self.modsch_b_sat, self.poisson_sat]
         self.hod.update({k: v for k, v in zip(keys, values) if v is not None})
         values = [self.hod_model_mor_cen[5:], self.hod_model_mor_sat[5:],
                   self.dpow_logM0_cen, self.dpow_logM1_cen, self.dpow_a_cen,
@@ -3908,7 +3941,7 @@ class Input:
                   self.logn_sigma_c_sat, self.modsch_logMref_cen,
                   self.modsch_alpha_s_cen, self.modsch_b_cen,
                   self.modsch_logMref_sat, self.modsch_alpha_s_sat,
-                  self.modsch_b_sat]
+                  self.modsch_b_sat, self.poisson_sat]
         self.hod_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         if self.modsch_b_cen is not None:
@@ -4127,6 +4160,8 @@ class Input:
         params_used['IA'] = self.intrinsic_alignments_abr
         if len(self.hod_abr) > 0:
             params_used['hod'] = self.hod_abr
+        if self.cstellar_mf and len(self.csmf_settings_abr) > 0:
+            params_used['csmf settings'] = self.csmf_settings_abr
         params_used['survey specs'] = self.survey_params_abr
         params_used['halomodel evaluation'] = self.hm_prec_abr
         params_used['powspec evaluation'] = self.powspec_prec_abr
@@ -4385,13 +4420,17 @@ class FileInput:
         self.zet_csmf_z = None
         self.zet_csmf_pz = None
         self.n_tomo_csmf = None
-        
+        self.zet_csmf_mass_file = None
+        self.zet_csmf_mass_z = None
+        self.zet_csmf_mass_pz = None
+
         self.csmf = dict()
         self.csmf_directory = None
         self.V_max_file = None
         self.f_tomo_file = None
         self.V_max = None
         self.f_tomo = None
+        self.V_max_zmin = None
 
 
         # number of galaxy pairs per angular bin
@@ -4424,6 +4463,7 @@ class FileInput:
         self.Cellxy_tab = dict()
         self.Cell_dir = None
         self.Cmm_file = None
+        self.CmmB_file = None
         self.Cgm_file = None
         self.Cgg_file = None
         self.Cxy_ell = None
@@ -4432,6 +4472,8 @@ class FileInput:
         self.Cxy_tomo_clust = None
         self.Cxy_tomo_lens = None
         self.Cmm_tab = None
+        self.CmmB_tab = None
+        self.CmmB_ell = None
         self.Cgm_tab = None
         self.Cgg_tab = None
         self.Txy_ell = None
@@ -4536,6 +4578,10 @@ class FileInput:
         self.arb_real_filter_gm_file = None
         self.arb_fourier_filter_mmE_file = None
         self.arb_fourier_filter_mmB_file = None
+        self.arb_fourier_filter_mmE_BB_file = None
+        self.arb_fourier_filter_mmB_BB_file = None
+        self.WL_mmE_BB, self.WL_ell_mmE_BB = None, None
+        self.WL_mmB_BB, self.WL_ell_mmB_BB = None, None
         self.arb_real_filter_mm_p_file = None
         self.arb_real_filter_mm_m_file = None
         self.arb_number_summary_gg = None
@@ -4853,8 +4899,12 @@ class FileInput:
                     config['redshift']['value_loc_in_bin']
             else:
                 self.value_loc_in_csmfbin = 'mid'
+            if 'zcsmf_mass_file' in config['redshift'] and self.cstellar_mf:
+                self.zet_csmf_mass_file =  \
+                    (config['redshift']['zcsmf_mass_file'].replace(
+                        " ", "")).split(',')
             if 'zcsmf_directory' in config['redshift']:
-                self.zet_csmf_dir = config['redshift']['zlens_directory']
+                self.zet_csmf_dir = config['redshift']['zcsmf_directory']
             elif 'z_directory' in config['redshift']:
                 self.zet_csmf_dir = config['redshift']['z_directory']
             
@@ -4916,12 +4966,12 @@ class FileInput:
                             "specified for the redshift distribution which requires " +
                             "the name of the extension where to find the n(z). " +
                             "Please adjust '[redshift]: zlens_extension = ' to go on.")
-        if self.zet_csmf_file is None:
+        if self.zet_csmf_file is None and self.zet_csmf_mass_file is None:
             if self.cstellar_mf:
                 raise Exception("ConfigError: No file(s) with redshift " +
                                 "distributions for the conditional stellar mass function have been specified. Must " +
                                 "be adjusted in config file " + config_name + ", " +
-                                "[redshift]: 'zcsmf_file = ...' (separated by comma/s).")
+                                "[redshift]: 'zcsmf_file = ...' or 'zcsmf_mass_file = ...' (separated by comma/s).")
 
 
         if (self.ggl and
@@ -5134,9 +5184,10 @@ class FileInput:
 
         self.zet_csmf_pz = np.array([])
         try:
-            save_zet_csmf_z = []
-            save_zet_csmf_nz = []
-            for fidx, file in enumerate(self.zet_csmf_file):
+            # all redshift distributions (columns) of all files with the
+            # redshifts of their file
+            zets, columns = [], []
+            for file in self.zet_csmf_file:
                 print("Reading in redshift distributions for csmf from " +
                       "file " + path.join(self.zet_csmf_dir, file) + ".")
                 data = ascii.read(path.join(self.zet_csmf_dir, file))
@@ -5147,48 +5198,26 @@ class FileInput:
                           "column and the redshift distribution in the " +
                           "second. This file will be ignored.")
                     continue
-                different_redshifts = False
-                if fidx == 0:
-                    self.zet_csmf_z = np.array(data[data.colnames[0]])
-                    save_zet_csmf_z.append(self.zet_csmf_z)
-                    self.zet_csmf_pz = np.array(data[data.colnames[1]])
-                    save_zet_csmf_nz.append(self.zet_csmf_pz)
-                    for colname in data.colnames[2:]:
-                        self.zet_csmf_pz = \
-                            np.vstack([self.zet_csmf_pz, data[colname]])
-                        save_zet_csmf_nz.append(data[colname])
+                zet = np.array(data[data.colnames[0]])
+                for colname in data.colnames[1:]:
+                    zets.append(zet)
+                    columns.append(np.array(data[colname]))
+            if len(columns) > 0:
+                if all(len(zet) == len(zets[0]) and np.allclose(zet, zets[0]) for zet in zets):
+                    self.zet_csmf_z = zets[0]
                 else:
-                    save_zet_csmf_z.append(np.array(data[data.colnames[0]]))
-                    if len(np.array(data[data.colnames[0]])) != len(self.zet_csmf_z):
-                        redshift_increment = min(self.zet_csmf_z[1]- self.zet_csmf_z[0], np.array(data[data.colnames[0]])[1] - np.array(data[data.colnames[0]][0]))
-                        redshift_max = max(np.max(min(self.zet_csmf_z)),np.max(np.array(data[data.colnames[0]])))
-                        redshift_min = min(np.min(min(self.zet_csmf_z)),np.min(np.array(data[data.colnames[0]])))
-                        self.zet_csmf_z = np.linspace(redshift_min,redshift_max,int((redshift_max -redshift_min)/redshift_increment))
-                        different_redshifts = True         
-                        print("ConfigWarning: Adjusting the redshift range in the zcsmf_files due to different redshift ranges in csmf redshift distribution")
-                    if not different_redshifts:
-                        for colname in data.colnames[1:]:
-                            self.zet_csmf_pz = \
-                                np.vstack([self.zet_csmf_pz, data[colname]])
-                            save_zet_csmf_nz.append(data[colname])
-                    else:
-                        for colname in data.colnames[1:]:
-                            save_zet_csmf_nz.append(data[colname])
-            if different_redshifts:
-                self.zet_csmf_pz = np.array([])
-                for i_z in range(len(save_zet_csmf_nz)):
-                    if i_z == 0:
-                        self.zet_csmf_pz = np.interp(self.zet_csmf_z,
-                                                        save_zet_csmf_z[i_z],
-                                                        save_zet_csmf_nz[i_z],
-                                                        left = 0,
-                                                        right = 0)
-                    else:
-                        self.zet_csmf_pz = np.vstack([self.zet_csmf_pz, np.interp(self.zet_csmf_z,
-                                                                                    save_zet_csmf_z[i_z],
-                                                                                    save_zet_csmf_nz[i_z],
-                                                                                    left = 0,
-                                                                                    right = 0)])
+                    # common redshift grid over the range of all files with
+                    # the finest spacing, the distributions are zero outside
+                    # of the range of their file
+                    step = min(np.min(np.diff(zet)) for zet in zets)
+                    zet_min, zet_max = min(zet[0] for zet in zets), max(zet[-1] for zet in zets)
+                    self.zet_csmf_z = np.linspace(zet_min, zet_max, int(round((zet_max - zet_min)/step)) + 1)
+                    columns = [np.interp(self.zet_csmf_z, zet, column, left=0, right=0)
+                               for zet, column in zip(zets, columns)]
+                    print("ConfigWarning: The files in 'zcsmf_file' have different redshift " +
+                          "grids, the redshift distributions are interpolated to a common grid " +
+                          "from " + str(zet_min) + " to " + str(zet_max) + ".")
+                self.zet_csmf_pz = np.array(columns) if len(columns) > 1 else columns[0]
         except TypeError:
             self.zet_csmf_pz = None
         except UnicodeDecodeError:  # fits
@@ -5231,11 +5260,46 @@ class FileInput:
                 self.zet_clust_nz = np.array([self.zet_clust_nz])
             self.n_tomo_clust = len(self.zet_clust_nz)
         if self.zet_csmf_z is not None:
+            if len(self.zet_csmf_pz.shape) == 1:
+                self.zet_csmf_pz = np.array([self.zet_csmf_pz])
             if self.zet_csmf_z[0] < 1e-2 and self.value_loc_in_csmfbin != 'left':
                 self.zet_csmf_z = self.zet_csmf_z[1:]
                 self.zet_csmf_pz = self.zet_csmf_pz[:, 1:]
-            if len(self.zet_csmf_pz.shape) == 1:
-                self.zet_csmf_pz = np.array([self.zet_csmf_pz])
+            self.n_tomo_csmf = len(self.zet_csmf_pz)
+        if self.zet_csmf_mass_file is not None:
+            for fidx, file in enumerate(self.zet_csmf_mass_file):
+                print("Reading in redshift distributions per stellar mass bin " +
+                      "for csmf from file " + path.join(self.zet_csmf_dir, file) + ".")
+                data = ascii.read(path.join(self.zet_csmf_dir, file))
+                if len(data.colnames) != self.csmf_N_log10M_bin + 1:
+                    raise Exception("ConfigError: The file " + file + " in keyword " +
+                                    "'zcsmf_mass_file' has " + str(len(data.colnames)) +
+                                    " columns, but it must provide the redshift in the " +
+                                    "first column followed by the redshift distribution of " +
+                                    "each of the " + str(self.csmf_N_log10M_bin) + " stellar " +
+                                    "mass bins of the csmf (see [csmf settings]).")
+                zet = np.array(data[data.colnames[0]])
+                if fidx == 0:
+                    self.zet_csmf_mass_z = zet
+                    self.zet_csmf_mass_pz = np.zeros((len(self.zet_csmf_mass_file),
+                                                      self.csmf_N_log10M_bin,
+                                                      len(zet)))
+                for i_mass, colname in enumerate(data.colnames[1:]):
+                    self.zet_csmf_mass_pz[fidx, i_mass] = np.interp(
+                        self.zet_csmf_mass_z, zet, np.array(data[colname]), left = 0, right = 0)
+            if self.zet_csmf_mass_z[0] < 1e-2 and self.value_loc_in_csmfbin != 'left':
+                self.zet_csmf_mass_z = self.zet_csmf_mass_z[1:]
+                self.zet_csmf_mass_pz = self.zet_csmf_mass_pz[:, :, 1:]
+            if self.zet_csmf_z is None:
+                # the redshift distributions of the tomographic bins are only
+                # used for the redshift range
+                self.zet_csmf_z = self.zet_csmf_mass_z
+                self.zet_csmf_pz = np.sum(self.zet_csmf_mass_pz, axis = 1)
+            if len(self.zet_csmf_mass_pz) != len(self.zet_csmf_pz):
+                raise Exception("ConfigError: The number of files in 'zcsmf_mass_file' (" +
+                                str(len(self.zet_csmf_mass_pz)) + ") must match the number " +
+                                "of tomographic bins of the csmf given in 'zcsmf_file' (" +
+                                str(len(self.zet_csmf_pz)) + ").")
             self.n_tomo_csmf = len(self.zet_csmf_pz)
         if self.zet_lens_z is not None:
             if self.zet_lens_z[0] < 1e-2 and self.value_loc_in_lensbin != 'left':
@@ -5272,21 +5336,18 @@ class FileInput:
                                     "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
                 if 'f_tomo_file' in config['csmf settings']:
                     self.f_tomo_file = config['csmf settings']['f_tomo_file']
-                    data = np.array(np.loadtxt(path.join(self.csmf_directory, self.f_tomo_file)))
-                    if self.n_tomo_csmf != 1:
-                        if len(data) != int(self.n_tomo_csmf):
-                            raise Exception("ConfigError: The f_tomo file needs to have the dimensions fitting to the "+
-                                            "number of tomographic bins for the csmf. Please check those in the csmf and redshift section respectively.")
-                        self.f_tomo = data
-                    else:
-                        self.f_tomo = data
-                else:
-                    raise Exception("ConfigError: We require a file for the Vmax estimator if the csmf is to be calculated. "+
-                                    "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
+                    print("ConfigWarning: [csmf settings]: 'f_tomo_file' is no longer used. " +
+                          "The galaxies entering each stellar mass bin and tomographic bin of the csmf " +
+                          "are described by the V_max volumes or by 'zcsmf_mass_file' in the " +
+                          "[redshift] section.")
+                if 'V_max_zmin' in config['csmf settings']:
+                    self.V_max_zmin = np.array(config['csmf settings']['V_max_zmin'].split(',')).astype(float)
+                    if len(self.V_max_zmin) != self.n_tomo_csmf:
+                        raise Exception("ConfigError: [csmf settings]: 'V_max_zmin' needs one value " +
+                                        "per tomographic bin of the csmf (" + str(self.n_tomo_csmf) + ").")
             else:
                 raise Exception("ConfigError: We require a files for the Vmax estimator if the csmf is to be calculated. "+
-                                "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." +
-                                "f_tomo_file = ....")
+                                "Please specify it in the config vile in the [csmf settings] section via V_max_file = ....")
         return True
 
 
@@ -5361,8 +5422,15 @@ class FileInput:
         numbers starting at 1). If the first given file name contains '?',
         they are generated from it by replacing the '?' in order with the
         numbers of each combination. Otherwise the files must be listed in
-        the order of combos.
+        the order of combos. combos can also be a dictionary {number of
+        '?': combinations}, if the file names may contain different numbers
+        of '?' (e.g. one bin number for sample i in tomographic bin i).
         """
+        if isinstance(combos, dict):
+            n_question = files[0].count('?')
+            if n_question == 0 or n_question not in combos:
+                n_question = max(combos)
+            combos = combos[n_question]
         if '?' not in files[0]:
             if len(files) < len(combos):
                 raise Exception("ConfigError: [tabulated inputs files]: '" + keyword + "' lists " +
@@ -5383,9 +5451,10 @@ class FileInput:
         """
         Reads one npair file per bin combination into an array with the
         angular bins first and then shape (tomographic bin i, j, sample);
-        symmetric fills (j, i) as well. Returns (theta, npair), or (None,
-        None) if one of the files can not be read, in which case all files of
-        this kind are ignored.
+        symmetric fills (j, i) as well. Combinations without a file are NaN
+        (the analytic number of pairs is used for them). Returns (theta,
+        npair), or (None, None) if one of the files can not be read, in which
+        case all files of this kind are ignored.
         """
         theta_ref, npair = None, None
         for nfile, combo in zip(files, combos):
@@ -5398,7 +5467,7 @@ class FileInput:
                                 path.join(self.npair_dir, nfile) + " don't match " +
                                 "the angular bins of the other files.")
             if npair is None:
-                npair = np.zeros((len(values),) + tuple(shape))
+                npair = np.full((len(values),) + tuple(shape), np.nan)
             index = tuple(number - 1 for number in combo) + (0,)*(3 - len(combo))
             npair[(slice(None),) + index] = values
             if symmetric:
@@ -5456,23 +5525,41 @@ class FileInput:
             pass
 
         n_sample = max(len(self.bias_dict['logmass_bins']) - 1, 1)
+        # with csmf_diagonal_lenses only sample i in clustering bin i is
+        # measured, so only these pair counts are needed
+        diagonal_lenses = self.diagonal_lenses
         if self.clustering and self.npair_gg_file is not None:
-            # files per (bin_i, bin_j[, sample]), bin_i <= bin_j
-            combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
-                      for b1 in range(self.n_tomo_clust) for b2 in range(b1, self.n_tomo_clust)]
-            if n_sample == 1:
-                combos = [c[:2] for c in combos]
-            files = self.__expand_npair_filenames(self.npair_gg_file, combos, 'npair_gg_file')
+            if diagonal_lenses:
+                # files per sample i (in bin i): the name contains the
+                # number i once, twice (bin_i, bin_i) or three times
+                combos = [(smp + 1, smp + 1, smp + 1) for smp in range(n_sample)]
+                name_combos = {1: [c[:1] for c in combos], 2: [c[:2] for c in combos], 3: combos}
+            else:
+                # files per (bin_i, bin_j[, sample]), bin_i <= bin_j
+                combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
+                          for b1 in range(self.n_tomo_clust) for b2 in range(b1, self.n_tomo_clust)]
+                if n_sample == 1:
+                    combos = [c[:2] for c in combos]
+                name_combos = combos
+            files = self.__expand_npair_filenames(self.npair_gg_file, name_combos, 'npair_gg_file')
             self.theta_npair_gg, self.npair_gg = self.__read_npair_set(
                 files, combos, (self.n_tomo_clust, self.n_tomo_clust, n_sample), True)
 
         if self.ggl and self.npair_gm_file is not None:
-            # files per (lens bin, source bin[, sample])
-            combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
-                      for b1 in range(self.n_tomo_clust) for b2 in range(self.n_tomo_lens)]
-            if n_sample == 1:
-                combos = [c[:2] for c in combos]
-            files = self.__expand_npair_filenames(self.npair_gm_file, combos, 'npair_gm_file')
+            if diagonal_lenses:
+                # files per (lens bin i = sample i, source bin j): the name
+                # contains (i, j) or (i, j, i)
+                combos = [(smp + 1, b2 + 1, smp + 1) for smp in range(n_sample)
+                          for b2 in range(self.n_tomo_lens)]
+                name_combos = {2: [c[:2] for c in combos], 3: combos}
+            else:
+                # files per (lens bin, source bin[, sample])
+                combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
+                          for b1 in range(self.n_tomo_clust) for b2 in range(self.n_tomo_lens)]
+                if n_sample == 1:
+                    combos = [c[:2] for c in combos]
+                name_combos = combos
+            files = self.__expand_npair_filenames(self.npair_gm_file, name_combos, 'npair_gm_file')
             self.theta_npair_gm, self.npair_gm = self.__read_npair_set(
                 files, combos, (self.n_tomo_clust, self.n_tomo_lens, n_sample), False)
 
@@ -5948,6 +6035,10 @@ class FileInput:
                     if(min(data[data.colnames[2]]) == 0):
                         n_tomo_2 += 1
                     elldim = int(len(data) / n_tomo_1 / n_tomo_2)
+                    # with csmf_diagonal_lenses one C_ell column is enough for
+                    # gg and gm: sample i is in clustering bin i, so the
+                    # spectrum of bins (i, j) is the one of samples (i, j)
+                    one_column = self.diagonal_lenses and type in ("gg", "gm") and len(data.colnames[3:]) == 1
                     if type == "gg":
                         sampledim = int(np.sqrt(len(data.colnames[3:])))
                         if sampledim > self.sampledim:
@@ -5979,6 +6070,8 @@ class FileInput:
                             for j_sample in range(sampledim):
                                 if i_sample == 0 and j_sample == 0:
                                     continue
+                                elif one_column:
+                                    Ctab_aux[:,i_sample, j_sample,:,:] = Ctab
                                 else:
                                     Ctab_aux[:,i_sample, j_sample,:,:] = data[data.colnames[counter]].reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2))
                                     counter +=1
@@ -5994,6 +6087,8 @@ class FileInput:
                         for i_sample in range(sampledim):
                             if i_sample == 0:
                                 continue
+                            elif one_column:
+                                Ctab_aux[:,i_sample,:,:] = Ctab
                             else:
                                 Ctab_aux[:,i_sample,:,:] = data[data.colnames[counter]].reshape((len(self.Cxy_ell),n_tomo_1,n_tomo_2))
                                 counter +=1
@@ -6030,6 +6125,54 @@ class FileInput:
                     raise Exception("Something happened with z-files.")
             Ctabs = np.moveaxis(np.array(Ctabs), 0, -1)
             return Ctabs, len(self.Cxy_ell), len(Ctab[0]), -1, -1
+
+    def __read_in_CmmB_files(self,
+                             n_tomo_lens_mm):
+        """
+        Reads in the tabulated intrinsic cosmic shear B-mode angular power
+        spectrum (CmmB_file, same format as Cmm_file). It has its own ell
+        grid (self.CmmB_ell) and is interpolated onto the ell grid of the
+        covariance later, so it does not change the ell grid of the other
+        tabulated spectra.
+
+        Parameters
+        ----------
+        n_tomo_lens_mm : int
+            number of tomographic lensing bins in Cmm_file (None if not
+            given) for a consistency check
+        """
+        if self.CmmB_file is None:
+            return
+        # the reader stores the ell grid of the file it reads
+        ell_save, ell_lens_save = self.Cxy_ell, self.Cxy_ell_lens
+        self.CmmB_tab, _, _, n_tomo_lens_mmB, _ = \
+            self.__read_in_Cell_files(self.CmmB_file, 'mm')
+        self.CmmB_ell = self.Cxy_ell
+        self.Cxy_ell, self.Cxy_ell_lens = ell_save, ell_lens_save
+        if self.CmmB_tab is None:
+            raise Exception("FileInputError: The intrinsic B-mode angular " +
+                            "power spectrum in 'CmmB_file' " + str(self.CmmB_file) +
+                            " could not be read. Please check the file " +
+                            "name and the Cell_directory.")
+        if n_tomo_lens_mmB == -1:
+            CmmB_reshape = np.zeros((len(self.CmmB_ell), self.CmmB_tab.shape[1],
+                                     self.n_tomo_lens, self.n_tomo_lens))
+            tidx = 0
+            for t1 in range(self.n_tomo_lens):
+                for t2 in range(t1, self.n_tomo_lens):
+                    CmmB_reshape[:, :, t1, t2] = self.CmmB_tab[:, :, tidx]
+                    CmmB_reshape[:, :, t2, t1] = self.CmmB_tab[:, :, tidx]
+                    tidx += 1
+            self.CmmB_tab = CmmB_reshape
+            n_tomo_lens_mmB = self.n_tomo_lens
+        # cosmic shear has a single sample axis
+        self.CmmB_tab = np.ascontiguousarray(self.CmmB_tab[:, :1])
+        if n_tomo_lens_mmB != self.n_tomo_lens or \
+           (n_tomo_lens_mm is not None and n_tomo_lens_mm != n_tomo_lens_mmB):
+            raise Exception("FileInputError: The number of tomographic " +
+                            "lensing bins in the file(s) " + str(self.CmmB_file) +
+                            " does not match the number of lensing bins " +
+                            "(and those of 'Cmm_file'). Must be adjusted to go on.")
 
     def __get_Cell_tabs(self,
                         config):
@@ -6094,6 +6237,10 @@ class FileInput:
                 self.Cmm_file = \
                     (config['tabulated inputs files']
                         ['Cmm_file'].replace(" ", "")).split(',')
+            if 'CmmB_file' in config['tabulated inputs files']:
+                self.CmmB_file = \
+                    (config['tabulated inputs files']
+                        ['CmmB_file'].replace(" ", "")).split(',')
         else:
             ...
 
@@ -6109,6 +6256,10 @@ class FileInput:
             if '?' in self.Cmm_file[0]:
                 self.Cmm_file = self.__find_filename_two_inserts(
                     self.Cmm_file[0], self.n_tomo_lens, self.n_tomo_lens)
+        if self.CmmB_file is not None:
+            if '?' in self.CmmB_file[0]:
+                self.CmmB_file = self.__find_filename_two_inserts(
+                    self.CmmB_file[0], self.n_tomo_lens, self.n_tomo_lens)
 
         self.Cgg_tab, elldim_gg, sampledim_gg, n_tomo_clust_gg, _ = \
             self.__read_in_Cell_files(self.Cgg_file, 'gg')
@@ -6149,6 +6300,7 @@ class FileInput:
                     tidx += 1
             self.Cmm_tab = Cmm_reshape
             n_tomo_lens_mm = self.n_tomo_lens
+        self.__read_in_CmmB_files(n_tomo_lens_mm)
         if elldim_gg is not None and elldim_gm is not None:
             if elldim_gg != elldim_gm:
                 raise Exception("FileInputError: The number of wavenumber " +
@@ -7289,6 +7441,46 @@ class FileInput:
             else:
                 self.wz_mm, self.z_mm = None, None
 
+    def __read_arb_BB_filters(self,
+                              files,
+                              zero):
+        """
+        Reads the Fourier filters of the arbitrary summary statistics for
+        lensing which act on the intrinsic B-mode spectrum C_BB. The files
+        follow the conventions of arb_fourier_filter_mmB_file (one entry with
+        a '?' per summary statistic).
+
+        Parameters
+        ----------
+        files : list
+            of file names, one per summary statistic
+        zero : list
+            of booleans, per summary statistic, whether the filter vanishes
+
+        Returns
+        -------
+        ells, filters : lists
+            of arrays, one per filter
+        """
+        ells, filters = [], []
+        for i in range(self.arb_number_summary_mm):
+            if '?' not in files[i]:
+                raise Exception("ConfigError: Please pass the arbitrary Fourier filters for the intrinsic " +
+                                "B-mode spectrum in the desired format (with a '?' for the running index).")
+            last_slash_index = files[i].rfind('/')
+            _, _, filenames = next(walk(self.arbitrary_summary_dir + files[i][:last_slash_index + 1]))
+            file_id = files[i][:files[i].find('?')]
+            aux_dir = files[i][:last_slash_index + 1]
+            matched = sorted([fstr for fstr in filenames if file_id in aux_dir + fstr])
+            if len(matched) == 0:
+                raise Exception("ConfigError: The Fourier filter files " + files[i] + " for the intrinsic " +
+                                "B-mode spectrum have not been found, please check the path in " + str(self.config_name))
+            for fstr in matched:
+                wn_ell, wn = self.__read_in_fourier_filter_files(aux_dir + fstr)
+                ells.append(wn_ell)
+                filters.append(np.zeros_like(wn) if zero[i] else wn)
+        return ells, filters
+
     def __get_arbitrary_filter_tabs(self,
                                     config):
         """
@@ -7395,7 +7587,32 @@ class FileInput:
                                         "the config file under [tabulated inputs files] and arb_fourier_filter_mmE_file and/or arb_fourier_filter_mmB_file")
                 else:
                     self.arb_fourier_filter_mmB_file = self.arb_fourier_filter_mmE_file
+                    self.arb_fourier_filter_mmB_file_save = np.copy(self.arb_fourier_filter_mmB_file)
+                    self.arb_fourier_filter_no_B = [True, True]
                     print("ConfigWarning: No B-mode Fourier filter file has been passed for lensing, setting this partto zero")
+                # filters of the intrinsic B-mode spectrum C_BB, only needed
+                # (and then required) if a CmmB_file is given
+                if self.CmmB_file is not None:
+                    for key in ['arb_fourier_filter_mmE_BB_file', 'arb_fourier_filter_mmB_BB_file']:
+                        if key not in config['tabulated inputs files']:
+                            raise Exception("ConfigError: An intrinsic B-mode angular power spectrum is passed " +
+                                            "(CmmB_file), so the Fourier filters mapping it to the E- and B-mode " +
+                                            "summaries of the arbitrary summary statistics for lensing are required. " +
+                                            "Please adjust " + key + " in the config file under [tabulated inputs files].")
+                    self.arb_fourier_filter_mmE_BB_file = (config['tabulated inputs files']
+                                                            ['arb_fourier_filter_mmE_BB_file'].replace(" ", "")).split(',')
+                    self.arb_fourier_filter_mmB_BB_file = (config['tabulated inputs files']
+                                                            ['arb_fourier_filter_mmB_BB_file'].replace(" ", "")).split(',')
+                    if self.arb_number_summary_mm != len(self.arb_fourier_filter_mmE_BB_file) or \
+                       self.arb_number_summary_mm != len(self.arb_fourier_filter_mmB_BB_file):
+                        raise Exception("ConfigError: The number of Fourier filters for the intrinsic B-mode " +
+                                        "spectrum does not match the number of E-mode filters for lensing. Please adjust " +
+                                        "arb_fourier_filter_mmE_BB_file and arb_fourier_filter_mmB_BB_file in the config file " +
+                                        "under [tabulated inputs files].")
+                    # the same file for both: C_BB does not enter the E-mode
+                    # summary (as for COSEBIs)
+                    self.arb_fourier_filter_no_E_BB = [self.arb_fourier_filter_mmE_BB_file[i] == self.arb_fourier_filter_mmB_BB_file[i]
+                                                       for i in range(self.arb_number_summary_mm)]
 
                 if 'arb_real_filter_mm_p_file' in config['tabulated inputs files']:
                     self.arb_real_filter_mm_p_file =(config['tabulated inputs files']
@@ -7648,6 +7865,15 @@ class FileInput:
                     raise Exception("ConfigError: Please pass the arbitrary Fourier filters for lensing in the desired format")
             else:
                 self.WL_mmB, self.WL_ell_mmB = None, None
+            if self.cosmicshear and self.arb_fourier_filter_mmE_BB_file is not None:
+                self.WL_ell_mmE_BB, self.WL_mmE_BB = \
+                    self.__read_arb_BB_filters(self.arb_fourier_filter_mmE_BB_file, self.arb_fourier_filter_no_E_BB)
+                self.WL_ell_mmB_BB, self.WL_mmB_BB = \
+                    self.__read_arb_BB_filters(self.arb_fourier_filter_mmB_BB_file, [False]*self.arb_number_summary_mm)
+                if len(self.WL_mmE_BB) != len(self.WL_mmE) or len(self.WL_mmB_BB) != len(self.WL_mmE):
+                    raise Exception("ConfigError: The number of Fourier filter files for the intrinsic B-mode " +
+                                    "spectrum (arb_fourier_filter_mmE_BB_file, arb_fourier_filter_mmB_BB_file) " +
+                                    "does not match the number of E-mode filter files for lensing.")
             if self.cosmicshear:
                 if '?' in self.arb_real_filter_mm_p_file[0]:
                     aux_arb_file = []
@@ -8060,12 +8286,13 @@ class FileInput:
                   self.value_loc_in_lensbin]
         self.zet_lens = dict(zip(keys, values))
 
-        keys = ['z', 'pz']
-        values = [self.zet_csmf_z, self.zet_csmf_pz]
+        keys = ['z', 'pz', 'z_mass', 'pz_mass']
+        values = [self.zet_csmf_z, self.zet_csmf_pz,
+                  self.zet_csmf_mass_z, self.zet_csmf_mass_pz]
         self.zet_csmf = dict(zip(keys, values))
 
-        keys = ['V_max', 'f_tomo']
-        values = [self.V_max, self.f_tomo]
+        keys = ['V_max', 'f_tomo', 'V_max_zmin']
+        values = [self.V_max, self.f_tomo, self.V_max_zmin]
         self.csmf = dict(zip(keys, values))
 
 
@@ -8097,6 +8324,10 @@ class FileInput:
         if self.zet_csmf_file is not None:
             self.zet_input['zcsmf_file'] = \
                 ', '.join(map(str, self.zet_csmf_file))
+        if self.zet_csmf_mass_file is not None:
+            self.zet_input['zcsmf_directory'] = self.zet_csmf_dir
+            self.zet_input['zcsmf_mass_file'] = \
+                ', '.join(map(str, self.zet_csmf_mass_file))
 
         keys = ['theta_mm', 'npair_mm', 'theta_gm', 'npair_gm', 'theta_gg',
                 'npair_gg']
@@ -8109,9 +8340,10 @@ class FileInput:
                   self.Pgg_tab, ]
         self.Pxy_tab = dict(zip(keys, values))
 
-        keys = ['ell','ell_clust', 'ell_lens', 'tomo_clust', 'tomo_lens', 'mm', 'gm', 'gg']
+        keys = ['ell','ell_clust', 'ell_lens', 'tomo_clust', 'tomo_lens', 'mm', 'gm', 'gg',
+                'ell_mmB', 'mmB']
         values = [self.Cxy_ell, self.Cxy_ell_clust, self.Cxy_ell_lens, self.Cxy_tomo_clust, self.Cxy_tomo_lens,
-                  self.Cmm_tab, self.Cgm_tab, self.Cgg_tab, ]
+                  self.Cmm_tab, self.Cgm_tab, self.Cgg_tab, self.CmmB_ell, self.CmmB_tab]
         self.Cxy_tab = dict(zip(keys, values))
 
         keys = ['z', 'bias']
@@ -8147,12 +8379,14 @@ class FileInput:
                     'ell_mmE', 'WL_mmE', 'ell_mmB', 'WL_mmB', 'theta_mm_p', 'RL_mm_p', 'theta_mm_m', 'RL_mm_m',
                     'number_summary_gg', 'number_summary_gm', 'number_summary_mm',
                     'arb_number_first_summary_gg', 'arb_number_first_summary_gm', 'arb_number_first_summary_mm',
-                    'gg_summary_name', 'gm_summary_name','mmE_summary_name','mmB_summary_name',]
+                    'gg_summary_name', 'gm_summary_name','mmE_summary_name','mmB_summary_name',
+                    'ell_mmE_BB', 'WL_mmE_BB', 'ell_mmB_BB', 'WL_mmB_BB']
             values = [self.WL_ell_gg, self.WL_gg, self.RL_theta_gg, self.RL_gg, self.WL_ell_gm, self.WL_gm, self.RL_theta_gm, self.RL_gm,
                     self.WL_ell_mmE, self.WL_mmE, self.WL_ell_mmB, self.WL_mmB, self.RL_theta_mm_p, self.RL_mm_p, self.RL_theta_mm_m, self.RL_mm_m,
                     self.arb_number_summary_gg, self.arb_number_summary_gm, self.arb_number_summary_mm, 
                     self.arb_number_first_summary_gg, self.arb_number_first_summary_gm, self.arb_number_first_summary_mm,
-                    self.gg_summary_name, self.gm_summary_name, self.mmE_summary_name, self.mmB_summary_name]
+                    self.gg_summary_name, self.gm_summary_name, self.mmE_summary_name, self.mmB_summary_name,
+                    self.WL_ell_mmE_BB, self.WL_mmE_BB, self.WL_ell_mmB_BB, self.WL_mmB_BB]
             self.arbitrary_summary = dict(zip(keys, values))
         else:
             self.arbitrary_summary = dict([])
@@ -8206,12 +8440,15 @@ class FileInput:
             keys.append('Pgg_file')
             values.append(self.Pgg_file)
         if self.Cmm_file is not None or self.Cgm_file is not None or \
-           self.Cgg_file is not None:
+           self.Cgg_file is not None or self.CmmB_file is not None:
             keys.append('Cell_directory')
             values.append(self.Cell_dir)
         if self.Cmm_file is not None:
             keys.append('Cmm_file')
             values.append(', '.join(map(str, self.Cmm_file)))
+        if self.CmmB_file is not None:
+            keys.append('CmmB_file')
+            values.append(', '.join(map(str, self.CmmB_file)))
         if self.Cgm_file is not None:
             keys.append('Cgm_file')
             values.append(', '.join(map(str, self.Cgm_file)))
@@ -8310,6 +8547,11 @@ class FileInput:
         if self.arb_fourier_filter_mmE_file is not None:
             keys.append('arb_fourier_filter_mmB_file')
             values.append(', '.join(map(str, self.arb_fourier_filter_mmB_file_save)))
+        if self.arb_fourier_filter_mmE_BB_file is not None:
+            keys.append('arb_fourier_filter_mmE_BB_file')
+            values.append(', '.join(map(str, self.arb_fourier_filter_mmE_BB_file)))
+            keys.append('arb_fourier_filter_mmB_BB_file')
+            values.append(', '.join(map(str, self.arb_fourier_filter_mmB_BB_file)))
         if self.arb_real_filter_mm_p_file is not None:
             keys.append('arb_real_filter_mm_p_file')
             values.append(', '.join(map(str, self.arb_real_filter_mm_p_file_save)))
@@ -8452,6 +8694,11 @@ class FileInput:
         config = configparser.ConfigParser()
         config.read(config_name)
         self.__read_config_for_consistency_checks(config, config_name)
+        # with csmf_diagonal_lenses only galaxy sample i in clustering bin i
+        # is measured, which reduces the tabulated inputs
+        self.diagonal_lenses = max(len(self.bias_dict['logmass_bins']) - 1, 1) > 1 and \
+            'csmf settings' in config and \
+            config['csmf settings'].getboolean('csmf_diagonal_lenses', fallback=False)
         self.__read_in_z_files(config, config_name)
         self.__read_in_csmf_files(config)
         self.__get_npair_tabs(config)

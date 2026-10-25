@@ -7,8 +7,7 @@ import healpy as hp
 import levin
 import numpy as np
 from camb import model
-from scipy.integrate import simpson
-from scipy.sparse import csr_matrix
+from scipy.integrate import cumulative_trapezoid, simpson
 from scipy.interpolate import Akima1DInterpolator, RegularGridInterpolator, UnivariateSpline, interp1d
 
 DEG2TORAD2 = (180 / np.pi) ** 2
@@ -363,7 +362,6 @@ class CovELLSpace(PolySpectra):
             dout[above] = slope
             dout[below] = slope0
             d_right[rows] = np.where(positive, values[rows]*dout, dout)
-            # the derivative from the left only differs at the nodes
             d_left[rows] = d_right[rows]
             at_node = np.isin(e, lx)
             if np.any(at_node):
@@ -394,12 +392,10 @@ class CovELLSpace(PolySpectra):
             return
         ell = np.array(ell, dtype=float)
         weights = np.array(weights, dtype=float)
-        # never coarser than 1e-5: the quadrature is cheap
         tol = max(min(0.1*accuracy, 1e-5), 1e-10)
         for _ in range(6):
             error = self._weight_quadrature_error(ell, weights)
             if error <= tol:
-                # the last entry caches the quadrature nodes of each weight
                 registry[id(levin_int)] = (ell, weights, levin_int, tol, {})
                 return
             ell_mid = np.sqrt(ell[:-1]*ell[1:])
@@ -440,7 +436,6 @@ class CovELLSpace(PolySpectra):
         sel = (ell_w > lo) & (ell_w < hi)
         x = np.concatenate(([lo], ell_w[sel], [hi]))
         W = W[mode_list]
-        # Akima interpolation is local: a few nodes around each end suffice
         ends = []
         for end in (lo, hi):
             i = np.searchsorted(ell_w, end)
@@ -468,7 +463,6 @@ class CovELLSpace(PolySpectra):
         second = np.array([position[n] for _, n in keys], dtype=int)
         result = np.empty((len(keys), integrand.shape[1]))
         tol = 0.01*self._projection_weights_of[id(levin_int)][3]
-        # the level of _refined_grids on which each column becomes accurate
         grids, level = [], np.full(integrand.shape[1], -1)
         todo = np.arange(integrand.shape[1])
         for grid in self._refined_grids(lo, hi, len(x)//4):
@@ -478,8 +472,6 @@ class CovELLSpace(PolySpectra):
             todo = todo[~ok]
             if len(todo) == 0:
                 break
-        # one grid: the columns accurate on it with Hermite polynomials, the
-        # others directly; chosen by the (rough) number of operations
         best, cost_best = None, (len(keys) + 400)*len(x)*integrand.shape[1]
         for i_grid, grid in enumerate(grids):
             n_ok = np.sum((level >= 0) & (level <= i_grid))
@@ -487,49 +479,57 @@ class CovELLSpace(PolySpectra):
                     + (len(keys) + 400)*len(x)*(integrand.shape[1] - n_ok))
             if cost < cost_best:
                 best, cost_best = i_grid, cost
+        first_modes, first = np.unique(first, return_inverse=True)
+        second_modes, second = np.unique(second, return_inverse=True)
+        pair = first*len(second_modes) + second
+        W_first, W_second = Wx[first_modes], Wx[second_modes]*w
         todo = np.arange(integrand.shape[1])
         if best is not None:
             grid = grids[best]
             columns = np.nonzero((level >= 0) & (level <= best))[0]
             todo = np.nonzero((level < 0) | (level > best))[0]
-            basis = self._hermite_basis(grid, x)
+            k, coefficients = self._hermite_coefficients(grid, x)
+            starts = np.flatnonzero(np.diff(k, prepend=-1))
+            stops = np.append(starts[1:], len(x))
             for cols in self._blocks(len(columns), 3*len(grid)):
                 values, d_right, d_left = self._integrand_at(self.ellrange, integrand[:, columns[cols]], grid, True,
                                                              derivative=True)
-                i = 0
-                for rows in self._blocks(len(keys), len(x)):
-                    R = Wx[first[rows]]*Wx[second[rows]]*w
-                    K, D_r, D_l = ((matrix.T @ R.T).T for matrix in basis)
-                    result[rows, columns[cols]] = K @ values + D_r @ d_right + D_l @ d_left
-                    i += 1
-                    
-        # the others directly on the nodes of the weights (blocks of columns
-        # and of pairs of weights, the sums over the nodes are not split)
+                part = np.zeros((len(keys), cols.stop - cols.start))
+                for segs in self._blocks(len(starts), 4*len(keys)):
+                    G = np.empty((4, segs.stop - segs.start, len(keys)))
+                    for i, (start, stop) in enumerate(zip(starts[segs], stops[segs])):
+                        A = (coefficients[:, None, start:stop]*W_first[None, :, start:stop]).reshape(-1, stop - start)
+                        G[:, i] = (A @ W_second[:, start:stop].T).reshape(4, -1)[:, pair]
+                    k_seg = k[starts[segs]]
+                    part += (G[0].T @ values[k_seg] + G[1].T @ values[k_seg + 1]
+                             + G[2].T @ d_right[k_seg] + G[3].T @ d_left[k_seg + 1])
+                result[:, columns[cols]] = part
         for cols in self._blocks(len(todo), len(x)):
             F = self._integrand_at(self.ellrange, integrand[:, todo[cols]], x)
-            for rows in self._blocks(len(keys), len(x)):
-                result[rows, todo[cols]] = (Wx[first[rows]]*Wx[second[rows]]*w) @ F
+            if len(keys)*len(x) <= PROJECTION_BLOCK_SIZE:
+                result[:, todo[cols]] = (W_first[first]*W_second[second]) @ F
+                continue
+            for j, column in enumerate(todo[cols]):
+                gram = np.zeros((len(first_modes), len(second_modes)))
+                for nodes in self._blocks(len(x), len(second_modes)):
+                    gram += W_first[:, nodes] @ (W_second[:, nodes]*F[nodes, j]).T
+                result[:, column] = gram.ravel()[pair]
         return result
 
     @staticmethod
-    def _hermite_basis(grid, x):
+    def _hermite_coefficients(grid, x):
         """
-        Sparse matrices (len(x), len(grid)) that give the piecewise cubic
-        Hermite interpolant (in u = ln ell) at x from the values, the
-        derivatives from the right (at the start of each interval) and from
-        the left (at its end) on grid.
+        The interval k of grid that contains each x (ascending) and the
+        coefficients (4, len(x)) of the piecewise cubic Hermite interpolant
+        (in u = ln ell) at x: of the values at grid[k] and grid[k + 1], of the
+        derivative from the right at grid[k] and of the derivative from the
+        left at grid[k + 1].
         """
         u_grid, u = np.log(grid), np.clip(np.log(x), np.log(grid[0]), np.log(grid[-1]))
         k = np.clip(np.searchsorted(u_grid, u, side='right') - 1, 0, len(u_grid) - 2)
         h = u_grid[k + 1] - u_grid[k]
         t = (u - u_grid[k])/h
-        rows = np.arange(len(x))
-        shape = (len(x), len(grid))
-        values = csr_matrix((np.concatenate((2*t**3 - 3*t**2 + 1, 3*t**2 - 2*t**3)),
-                             (np.concatenate((rows, rows)), np.concatenate((k, k + 1)))), shape=shape)
-        d_right = csr_matrix((h*(t**3 - 2*t**2 + t), (rows, k)), shape=shape)
-        d_left = csr_matrix((h*(t**3 - t**2), (rows, k + 1)), shape=shape)
-        return values, d_right, d_left
+        return k, np.array((2*t**3 - 3*t**2 + 1, 3*t**2 - 2*t**3, h*(t**3 - 2*t**2 + t), h*(t**3 - t**2)))
 
     @property
     def _compact_ell_cov(self):
@@ -543,12 +543,72 @@ class CovELLSpace(PolySpectra):
         """
         return type(self) is not CovELLSpace and not ((self.mm or self.gm) and self.est_shear == 'C_ell')
 
-    def _ell_4pt_array(self, tomo_shape, symmetric_12, symmetric_34, compact=True):
+    @staticmethod
+    def _linear_weights(grid, x):
         """
-        Zero array for a four-point ell-space covariance with the
-        tomographic shape (sample, sample, tomo, tomo, tomo, tomo). With
-        _compact_ell_cov (and compact) an EllCovColumns with the combinations
-        t1 <= t2 (if symmetric_12) and t3 <= t4 (if symmetric_34).
+        Interval indices i (in [0, len(grid) - 2]) and weights t such that
+        the linear interpolation (and extrapolation from the outermost
+        intervals) of f on grid at x is (1 - t) f[i] + t f[i + 1], as in
+        RegularGridInterpolator.
+        """
+        index = np.clip(np.searchsorted(grid, x) - 1, 0, len(grid) - 2)
+        return index, (x - grid[index])/(grid[index + 1] - grid[index])
+
+    @classmethod
+    def _trilinear_on_mesh(cls, interpolator, chi, log_k):
+        """
+        The linear RegularGridInterpolator (chi, ln k_1, ln k_2) of a
+        trispectrum evaluated on the mesh (chi, ln k(chi, ell_1), ln k(chi,
+        ell_2)), with log_k of shape (len(chi), ell), as sums of gathered
+        table values: the same as calling the interpolator on all points,
+        but without its search and weight arrays for every point.
+        """
+        grid_chi, grid_k, table = interpolator.grid[0], interpolator.grid[1], interpolator.values
+        i_chi, t_chi = cls._linear_weights(grid_chi, chi)
+        i_k, t_k = cls._linear_weights(grid_k, log_k)
+        result = np.zeros((len(chi),) + (log_k.shape[1],)*2)
+        for shift_chi, weight_chi in ((0, 1 - t_chi), (1, t_chi)):
+            for shift_1, weight_1 in ((0, 1 - t_k), (1, t_k)):
+                for shift_2, weight_2 in ((0, 1 - t_k), (1, t_k)):
+                    result += weight_chi[:, None, None]*weight_1[:, :, None]*weight_2[:, None, :] \
+                        * table[(i_chi + shift_chi)[:, None, None], (i_k + shift_1)[:, :, None], (i_k + shift_2)[:, None, :]]
+        return result
+
+    def _diagonal_lens_mask(self, probes):
+        """
+        With csmf_diagonal_lenses only galaxy sample i in clustering bin i
+        is measured. Returns 1 for these combinations and 0 otherwise, with
+        shape (sample, sample, tomo, tomo, tomo, tomo) of the covariance of
+        probes ('gggg', 'gggm', 'ggmm', 'gmgm' or 'mmgm'): both bins of a gg
+        pair and the lens bin of a gm pair are the bin of the sample.
+        """
+        n_clust, n_lens = self.n_tomo_clust, self.n_tomo_lens
+        in_bin = np.eye(self.sample_dim, n_clust)
+        if probes == 'gggg':
+            return in_bin[:, None, :, None, None, None]*in_bin[:, None, None, :, None, None] \
+                * in_bin[None, :, None, None, :, None]*in_bin[None, :, None, None, None, :]
+        if probes == 'gggm':
+            return in_bin[:, None, :, None, None, None]*in_bin[:, None, None, :, None, None] \
+                * in_bin[None, :, None, None, :, None]*np.ones(n_lens)[None, None, None, None, None, :]
+        if probes == 'ggmm':
+            return in_bin[:, None, :, None, None, None]*in_bin[:, None, None, :, None, None] \
+                * np.ones((1, 1, 1, 1, n_lens, n_lens))
+        if probes == 'gmgm':
+            return in_bin[:, None, :, None, None, None]*in_bin[None, :, None, None, :, None] \
+                * np.ones((1, 1, 1, n_lens, 1, n_lens))
+        if probes == 'mmgm':
+            return in_bin[None, :, None, None, :, None]*np.ones((1, 1, n_lens, n_lens, 1, n_lens))
+        raise Exception("WildError: no clustering sample in " + probes + ".")
+
+    def _ell_4pt_array(self, probes, tomo_shape, symmetric_12, symmetric_34, compact=True):
+        """
+        Zero array for a four-point ell-space covariance of the probes
+        (e.g. 'gggm') with the tomographic shape (sample, sample, tomo,
+        tomo, tomo, tomo). With _compact_ell_cov (and compact) an
+        EllCovColumns with the combinations t1 <= t2 (if symmetric_12) and
+        t3 <= t4 (if symmetric_34). With csmf_diagonal_lenses only the
+        combinations with galaxy sample i in tomographic clustering bin i
+        are stored, as only those are calculated.
         """
         if not (self._compact_ell_cov and compact):
             return np.zeros((len(self.ellrange), len(self.ellrange)) + tuple(tomo_shape))
@@ -558,6 +618,15 @@ class CovELLSpace(PolySpectra):
             keep &= t2 >= t1
         if symmetric_34:
             keep &= t4 >= t3
+        if self.csmf_diagonal_lenses:
+            if probes[:2] == 'gg':
+                keep &= (t1 == s1) & (t2 == s1)
+            if probes[:2] == 'gm':
+                keep &= t1 == s1
+            if probes[2:] == 'gg':
+                keep &= (t3 == s2) & (t4 == s2)
+            if probes[2:] == 'gm':
+                keep &= t3 == s2
         return EllCovColumns(len(self.ellrange), tomo_shape, np.nonzero(keep)[0])
 
     def _ell_cov_flat(self, ell_cov, flat_length):
@@ -775,10 +844,7 @@ class CovELLSpace(PolySpectra):
             if key not in results:
                 results[key] = self._expand_columns(projected[position_outer[key[0]], position_inner[key[1]]][inverse],
                                                     columns, original_shape)
-        for job in live:
-            job[2][job[3]] = job[4]*results[(self._weight_key(job[0]), self._weight_key(job[1]))]
-            if job[5] is not None:
-                job[2][job[3]] /= job[5]
+        self._assign_4pt_results(live, [results[(self._weight_key(job[0]), self._weight_key(job[1]))] for job in live])
         return True
 
     @staticmethod
@@ -796,6 +862,100 @@ class CovELLSpace(PolySpectra):
         as numbers or as the (one-element) arrays of survey_params_dict.
         """
         return float(max(np.max(area_12), np.max(area_34)))
+
+    def _sample_overlap_sn(self,
+                           shot_noise,
+                           galaxy_pairs):
+        """
+        Shot noise of two galaxy samples, which can share galaxies, from
+        the shot noise of each sample (with the sample and the two
+        tomographic bins as its last three axes, ~ 1/n_1^i n_1^j for
+        clustering or 1/n_1^i for ggl): rho^i rho^j sqrt(SN_1 SN_2) for
+        galaxy pairs and rho^i sqrt(SN_1 SN_2) for ggl, with rho the overlap
+        of the samples in tomographic bin i (see calc_Cells_Limber). For
+        disjoint samples this is delta_12 SN_1.
+
+        Returns
+        -------
+        shot_noise_12 : array
+            with the axes (..., sample, sample, tomo_i, tomo_j)
+        """
+        rho = getattr(self, 'sample_overlap', None)
+        if rho is None:
+            rho = np.eye(self.sample_dim)[:, :, None]*np.ones(shot_noise.shape[-2])[None, None, :]
+        product = np.sqrt(np.abs(shot_noise[..., :, None, :, :]*shot_noise[..., None, :, :, :]))
+        factor = rho[:, :, :, None]*rho[:, :, None, :] if galaxy_pairs else rho[:, :, :, None]
+        result = factor*product
+        # a single sample exactly as before
+        for i_sample in range(self.sample_dim):
+            result[..., i_sample, i_sample, :, :] = shot_noise[..., i_sample, :, :]
+        return result
+
+    def _split_csmf_terms(self,
+                          gauss,
+                          nongauss,
+                          ssc):
+        """
+        Splits the covariance of the stellar mass function (SMF) and its
+        cross-covariance with the LSS probes, which the calc_cov methods
+        collect at the end of the Gaussian terms, into their Gaussian (shot
+        noise of the SMF, and its sample variance if the SSC is not
+        requested), non-Gaussian (three-point cross term) and super-sample
+        parts, which are appended to the respective lists in the
+        same order (the auto-covariance first, then the cross-covariances).
+
+        Parameters
+        ----------
+        gauss, nongauss, ssc : lists
+            covariance terms as returned by the calc_cov methods
+
+        Returns
+        -------
+        gauss, nongauss, ssc : lists
+        """
+        if not self.csmf:
+            return gauss, nongauss, ssc
+        n_csmf = 4 if type(self) is CovELLSpace else 5
+        auto, cross = gauss[-n_csmf], gauss[-n_csmf + 1:]
+        gauss = gauss[:-n_csmf]
+        if type(self) is CovELLSpace:
+            cross_ssc = list(self.csmf_parts['cross_ssc'])
+        else:
+            cross_ssc = getattr(self, 'csmf_projected_ssc', None)
+        if cross_ssc is None or not self.cov_dict['ssc']:
+            cross_ssc = [0*term for term in cross]
+        cross_ssc = cross_ssc + [0*term for term in cross[len(cross_ssc):]]
+        auto_sn, auto_ssc = self.csmf_parts['auto_sn'], self.csmf_parts['auto_ssc']
+        if not self.cov_dict['ssc']:
+            # the sample variance of the SMF is always included, without the
+            # SSC terms in the Gaussian part
+            auto_sn, auto_ssc = auto_sn + auto_ssc, 0*auto_ssc
+        gauss = gauss + [auto_sn] + [0*term for term in cross]
+        nongauss = list(nongauss) + [0*auto] + [term - term_ssc for term, term_ssc in zip(cross, cross_ssc)]
+        ssc = list(ssc) + [auto_ssc] + cross_ssc
+        return gauss, nongauss, ssc
+
+    def _n_eff_clust_per_sample(self, survey_params_dict):
+        """
+        Effective number density of the clustering galaxies in 1/arcmin^2
+        with shape (n_tomo_clust, sample_dim). 'n_eff_clust' is either one
+        value per tomographic bin and galaxy sample (all samples of the first
+        tomographic bin, then those of the second, ...), or one value per
+        tomographic bin for a single sample or with csmf_diagonal_lenses
+        (sample i in tomographic bin i). Otherwise the number density is
+        estimated from the HoD.
+        """
+        n_eff = survey_params_dict['n_eff_clust']
+        if n_eff is not None:
+            n_eff = np.asarray(n_eff, dtype=float).ravel()
+            if len(n_eff) == self.n_tomo_clust*self.sample_dim:
+                return n_eff.reshape((self.n_tomo_clust, self.sample_dim))
+            if len(n_eff) == self.n_tomo_clust and self.csmf_diagonal_lenses:
+                return np.repeat(n_eff[:, None], self.sample_dim, axis=1)
+        print("ConfigWarning: [survey specs]: 'n_eff_clust' does not give one "
+              "value per tomographic bin and galaxy sample, the number density "
+              "of the clustering galaxies is estimated from the HoD.")
+        return self.Ngal.T/self.arcmin2torad2
 
     @property
     def _los_weights(self):
@@ -982,7 +1142,6 @@ class CovELLSpace(PolySpectra):
             levin_int.init_integral(self.ellrange, integrand, True, True)
             unique_idx, inverse = self._unique_columns(integrand)
             representatives = [key_jobs[0] for key_jobs in live.values()]
-            print(unique_idx)
             results = levin_int.cquad_integrate_double_well_subset(
                 [job[0] for job in representatives], [job[1] for job in representatives],
                 [job[2] for job in representatives], unique_idx)
@@ -994,6 +1153,115 @@ class CovELLSpace(PolySpectra):
                         job[3][job[6]] = job[3][job[4]]
         print('\rProjection of the Gaussian term for the ' + name + ' done in ' +
               str(round((time.time()-t0)/60, 1)) + 'min', end="")
+
+    def _project_gauss_jobs_added(self,
+                                  levin_int,
+                                  todo,
+                                  original_shape,
+                                  name):
+        """
+        As _project_gauss_jobs, but the results are added to the target
+        arrays, target_array[target_index] += prefac * int dell ell W_m(ell)
+        W_n(ell) Cov(ell, ell). Used for the contribution of the intrinsic
+        B-modes (with their own pair of weights) to covariance blocks which
+        already hold the E-mode contribution.
+        """
+        buffers = {}
+        added = []
+        for ell_cov_flat, jobs in todo:
+            buffered_jobs = []
+            for job in jobs:
+                if id(job[3]) not in buffers:
+                    buffers[id(job[3])] = (job[3], np.zeros_like(job[3]))
+                buffered_jobs.append(tuple(job[:3]) + (buffers[id(job[3])][1],) + tuple(job[4:]))
+            added.append((ell_cov_flat, buffered_jobs))
+        self._project_gauss_jobs(levin_int, added, original_shape, name)
+        for target, buffer in buffers.values():
+            target += buffer
+
+    def _Cell_mmB_projected(self,
+                            levin_int,
+                            ell_limits,
+                            modes,
+                            prefactors,
+                            pixel_weight=None):
+        """
+        Projections of the intrinsic B-mode spectrum C_BB with the weights
+        'modes' of levin_int, prefactor * int dell ell W_mode(ell) C_BB(ell),
+        for the signals of the projected cosmic shear estimators.
+
+        Parameters
+        ----------
+        levin_int : levin.Levin
+            integrator with the weights initialised via init_w_ell
+        ell_limits : list
+            of the integration limits of all weights
+        modes : list
+            of the weights to be used
+        prefactors : list
+            of the prefactors for each weight (e.g. including a sign)
+        pixel_weight : array
+            optional, multiplied twice to the spectrum
+
+        Returns
+        -------
+        result : array
+            with shape (len(modes), 1, n_tomo_lens, n_tomo_lens)
+        """
+        result = np.zeros((len(modes), 1, self.n_tomo_lens, self.n_tomo_lens))
+        if self.Cell_mmB is None:
+            return result
+        original_shape = self.Cell_mmB[0].shape
+        integrand = np.reshape(self.Cell_mmB, (len(self.ellrange), -1))*self.ellrange[:, None]
+        if pixel_weight is not None:
+            integrand = integrand*(pixel_weight**2)[:, None]
+        levin_int.init_integral(self.ellrange, integrand, True, True)
+        for i_mode, (mode, prefactor) in enumerate(zip(modes, prefactors)):
+            result[i_mode] = prefactor*np.reshape(np.array(
+                levin_int.cquad_integrate_single_well(ell_limits[mode], mode)), original_shape)
+        return result
+
+    def _assign_4pt_results(self, live, values):
+        """
+        target_array[target_index] = prefac*value (divided by the divisor if
+        not None) for the jobs of _project_4pt_jobs. A job and its mirror,
+        which writes the same target array at the exchanged index with the
+        outer and inner weights exchanged (the same summary statistics on
+        both sides), give the same covariance with its two sides exchanged:
+        both are set to their average (it is symmetric then). They differ by
+        the different treatment of the two multipoles, mostly the
+        extrapolation of the ell-space covariance beyond the ell range
+        (T(ell_1, ell_2) is extrapolated in ell_2 for the inner integrals,
+        the inner integrals in ell_1 for the outer ones).
+        """
+        final = []
+        for job, value in zip(live, values):
+            value = job[4]*value
+            if job[5] is not None:
+                value = value/job[5]
+            final.append(value)
+        position = {(id(job[2]), tuple(np.atleast_1d(job[3]))): i for i, job in enumerate(live)}
+        for i, job in enumerate(live):
+            index = tuple(np.atleast_1d(job[3]))
+            j = position.get((id(job[2]), index[::-1])) if len(index) == 2 else None
+            if j is None or j < i:
+                continue
+            mirror = live[j]
+            if (self._weight_key(mirror[0]), self._weight_key(mirror[1])) != \
+                    (self._weight_key(job[1]), self._weight_key(job[0])):
+                continue
+            a, b = final[i], final[j]
+            if np.ndim(a) != 6:
+                continue
+            # (sample_1, sample_2, tomo_i, tomo_j, tomo_k, tomo_l) of one side
+            # is (sample_2, sample_1, tomo_k, tomo_l, tomo_i, tomo_j) of the other
+            b_t = np.transpose(b, (1, 0, 4, 5, 2, 3))
+            if b_t.shape != np.shape(a):
+                continue
+            mean = 0.5*(a + b_t)
+            final[i], final[j] = mean, np.transpose(mean, (1, 0, 4, 5, 2, 3))
+        for job, value in zip(live, final):
+            job[2][job[3]] = value
 
     def _project_4pt_jobs(self,
                           levin_int,
@@ -1053,6 +1321,7 @@ class CovELLSpace(PolySpectra):
         ell_cov_flat = np.reshape(np.asarray(ell_cov), (len(self.ellrange), len(self.ellrange), -1))
         inner_modes = sorted(set(self._weight_key(job[1]) for job in live))
         inner = {n_mode: np.zeros((len(self.ellrange), ell_cov_flat.shape[2])) for n_mode in inner_modes}
+        projected = {}
         for i_ell in range(len(self.ellrange)):
             integrand = ell_cov_flat[i_ell, :, :]*self.ellrange[:, None]
             levin_int.init_integral(self.ellrange, integrand, True, True)
@@ -1075,9 +1344,8 @@ class CovELLSpace(PolySpectra):
             result_of = {m_mode: self._expand_columns(np.array(result)[inverse], columns, original_shape)
                          for m_mode, result in zip(outer_modes, results)}
             for job in outer_jobs:
-                job[2][job[3]] = job[4]*result_of[self._weight_key(job[0])]
-                if job[5] is not None:
-                    job[2][job[3]] /= job[5]
+                projected[id(job)] = result_of[self._weight_key(job[0])]
+        self._assign_4pt_results(live, [projected[id(job)] for job in live])
 
     def __init__(self,
                  cov_dict,
@@ -1147,20 +1415,34 @@ class CovELLSpace(PolySpectra):
                 self.deltaM_csmf = 10**obs_dict['observables']['csmf_log10M_bins'][1:] - 10**obs_dict['observables']['csmf_log10M_bins'][:-1]
                 self.log10csmf_mass_bins = np.log10(10**obs_dict['observables']['csmf_log10M_bins'][:-1] + self.deltaM_csmf/2)
             self.Vmax = read_in_tables['csmf']['V_max']
-            self.f_tomo = np.zeros(self.n_tomo_csmf)
-            self.f_tomo[:] = read_in_tables['csmf']['f_tomo']
+            self.csmf_V_max_zmin = read_in_tables['csmf']['V_max_zmin']
+            # overlapping stellar mass bins of the SMF (bins given via
+            # csmf_log10M_bins_lower/upper) share galaxies: (bin 1, bin 2,
+            # log10 of the centre of the overlap, width of the overlap)
+            if obs_dict['observables']['csmf_log10M_bins_upper'] is not None and obs_dict['observables']['csmf_log10M_bins_lower'] is not None:
+                csmf_lower = 10**obs_dict['observables']['csmf_log10M_bins_lower']
+                csmf_upper = 10**obs_dict['observables']['csmf_log10M_bins_upper']
+            else:
+                csmf_lower = 10**obs_dict['observables']['csmf_log10M_bins'][:-1]
+                csmf_upper = 10**obs_dict['observables']['csmf_log10M_bins'][1:]
+            self.csmf_bin_overlaps = []
+            for i_mass in range(len(csmf_lower)):
+                for j_mass in range(i_mass + 1, len(csmf_lower)):
+                    low, high = max(csmf_lower[i_mass], csmf_lower[j_mass]), min(csmf_upper[i_mass], csmf_upper[j_mass])
+                    if high > low:
+                        self.csmf_bin_overlaps.append((i_mass, j_mass, np.log10(low + (high - low)/2), high - low))
             self.csmf_number_mass_bins = len(self.log10csmf_mass_bins)
             self.csmf_diagonal = obs_dict['observables']['csmf_diagonal']
-            self.csmf_diagonal_lenses = obs_dict['observables']['csmf_diagonal_lenses']
             self.csmf_auto_only = obs_dict['observables']['csmf_auto_only']
             if self.csmf_diagonal and (self.n_tomo_csmf != self.csmf_number_mass_bins):
                 raise Exception("ConfigError: You ask for the diagonal-only mode in the stellar mass function, i.e. considering only bins i with tomographic bin j. However, "
                                 "the number of tomographic bins is " + str(self.n_tomo_csmf) + ", while the number of mass bins is " + str(self.csmf_number_mass_bins) +
                                 ". Please fix this in the config so that they are equal, or deactivate 'csmf_diagonal'.") 
-            if self.csmf_diagonal_lenses and (self.n_tomo_clust != self.sample_dim):
-                raise Exception("ConfigError: You ask for the diagonal-only mode in the stellar mass function for the clustering measurement, i.e. considering only stellar mass bins i with tomographic bin i. However, "
-                                "the number of tomographic bins for clustering is " + str(self.n_tomo_clust) + ", while the number of stellar mass bins for clustering is " + str(self.sample_dim) +
-                                ". Please fix this in the config so that they are equal, or deactivate 'csmf_diagonal_lenses'.") 
+        self.csmf_diagonal_lenses = bool(obs_dict['observables']['csmf_diagonal_lenses']) and self.sample_dim > 1
+        if self.csmf_diagonal_lenses and (self.n_tomo_clust != self.sample_dim):
+            raise Exception("ConfigError: You ask for the diagonal-only mode for the clustering measurement, i.e. considering only stellar mass bins i with tomographic bin i. However, "
+                            "the number of tomographic bins for clustering is " + str(self.n_tomo_clust) + ", while the number of stellar mass bins for clustering is " + str(self.sample_dim) +
+                            ". Please fix this in the config so that they are equal, or deactivate 'csmf_diagonal_lenses'.")
         self.ellrange = self.__set_multipoles(obs_dict['ELLspace'])
         self.Cells, self.tab_bools = self.__check_for_tabulated_Cells(read_in_tables['Cxy'])
         if (self.mm and self.est_shear == 'C_ell') and ((self.gm and self.est_ggl == 'C_ell') or (self.gg and self.est_clust == 'C_ell')):
@@ -1184,6 +1466,9 @@ class CovELLSpace(PolySpectra):
                 )
         # Set up redshift distribution splines
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'], read_in_tables)
+        if self.csmf:
+            self.__set_csmf_windows(obs_dict['ELLspace'], survey_params_dict, read_in_tables)
+            self.__print_csmf_settings(read_in_tables)
         # Check k-range support for ell calculations
         self.__check_krange_support(
             obs_dict, cosmo_dict, bias_dict, hod_dict, prec)
@@ -1427,6 +1712,9 @@ class CovELLSpace(PolySpectra):
             * self.cosmology.h
         self.los_integration_chi = np.geomspace(
             self.chimin, self.chimax, covELLspacesettings['integration_steps'])
+        # the line-of-sight grid of all tracers (the C_ell calculations
+        # narrow self.los_integration_chi to the range of each bin pair)
+        self.los_integration_chi_full = np.copy(self.los_integration_chi)
 
         self.spline_zclust = []
         self.spline_zlens = []
@@ -1579,12 +1867,6 @@ class CovELLSpace(PolySpectra):
                     * self.cosmology.h,
                     self.zet_csmf['pz'][tomo]*dzdchi_csmf/norm,
                     s=0, ext=1)
-                
-            aux_zet_total = np.zeros_like(self.los_integration_chi)
-            for tomo in range(self.n_tomo_csmf):
-                aux_zet_total += self.spline_zcsmf[tomo](self.los_integration_chi)
-            norm = simpson(aux_zet_total, x = self.los_integration_chi)
-            self.spline_zcsmf_total = UnivariateSpline(self.los_integration_chi, aux_zet_total/norm, s=0, ext=1)
 
             
         for tomo in range(self.n_tomo_lens - self.number_radial_weights_mm):
@@ -1602,6 +1884,142 @@ class CovELLSpace(PolySpectra):
         
         
         
+    def __set_csmf_windows(self,
+                           covELLspacesettings,
+                           survey_params_dict,
+                           read_in_tables):
+        r"""
+        Sets the normalised line-of-sight distributions p_mu^i(chi) of the
+        galaxies which enter stellar mass bin mu and tomographic bin i of
+        the stellar mass function (SMF), Phi_mu^i = N_mu^i/(Delta M V_max).
+        They are either read in per stellar mass bin ('zcsmf_mass_file'),
+        or they are top-hats in comoving volume defined by V_max,
+        p_mu^i(chi) = 3 chi^2 / (chi_u^3 - chi_l^3) for chi_l < chi < chi_u,
+        with V_max = A/3 (chi_u^3 - chi_l^3), as for volume limited
+        samples. The lower bound chi_l is set by 'V_max_zmin' or, if not
+        given, by the lower edge (0.1 per cent quantile) of the redshift
+        distribution of the tomographic bin ('zcsmf_file').
+
+        Parameters
+        ----------
+        covELLspacesettings : dictionary
+            Specifies the exact details of the projection to ell space,
+            here the polynomial order of the n(z) interpolation.
+        survey_params_dict : dictionary
+            Specifies all the information unique to a specific survey.
+            Relevant value is the survey area of the clustering
+            measurement. To be passed from the read_input method of the
+            Input class.
+        read_in_tables : dictionary
+            Look-up tables, here the redshift distributions per stellar
+            mass bin of the SMF. To be passed from the read_input method
+            of the FileInput class.
+
+        Returns
+        -------
+        Sets the private variables 'self.csmf_window_chi_range' with shape
+        (csmf mass bins, csmf tomographic bins, 2) and
+        'self.spline_csmf_window' (None for the V_max top-hats).
+
+        """
+        n_mass = len(self.log10csmf_mass_bins)
+        self.csmf_window_chi_range = np.zeros((n_mass, self.n_tomo_csmf, 2))
+        self.spline_csmf_window = None
+        if read_in_tables['zcsmf']['pz_mass'] is not None:
+            zet = read_in_tables['zcsmf']['z_mass']
+            chi = self.cosmology.comoving_distance(zet).value*self.cosmology.h
+            dzdchi = self.cosmology.efunc(zet) \
+                / self.cosmology.hubble_distance.value \
+                / self.cosmology.h
+            self.spline_csmf_window = []
+            for i_mass in range(n_mass):
+                self.spline_csmf_window.append([])
+                for i_tomo in range(self.n_tomo_csmf):
+                    p_chi = read_in_tables['zcsmf']['pz_mass'][i_tomo, i_mass]*dzdchi
+                    p_chi = p_chi/simpson(p_chi, x = chi)
+                    support = np.where(p_chi > 0)[0]
+                    self.csmf_window_chi_range[i_mass, i_tomo, 0] = chi[support[0]]
+                    self.csmf_window_chi_range[i_mass, i_tomo, 1] = chi[support[-1]]
+                    self.spline_csmf_window[i_mass].append(UnivariateSpline(
+                        chi, p_chi, k=max(1, covELLspacesettings['nz_polyorder']), s=0, ext=1))
+            return True
+
+        area = survey_params_dict['survey_area_clust'][0]/self.deg2torad2
+        chi = self.cosmology.comoving_distance(self.zet_csmf['z']).value*self.cosmology.h
+        for i_tomo in range(self.n_tomo_csmf):
+            cdf = cumulative_trapezoid(self.spline_zcsmf[i_tomo](chi), chi, initial = 0)
+            cdf /= cdf[-1]
+            if self.csmf_V_max_zmin is not None:
+                chi_low = self.cosmology.comoving_distance(self.csmf_V_max_zmin[i_tomo]).value*self.cosmology.h
+            else:
+                chi_low = np.interp(1e-3, cdf, chi)
+            chi_n_of_z_max = chi[np.where(self.spline_zcsmf[i_tomo](chi) > 0)[0][-1]]
+            for i_mass in range(n_mass):
+                chi_high = (chi_low**3 + 3.0*self.Vmax[i_mass, i_tomo]/area)**(1/3)
+                if chi_high > chi_n_of_z_max:
+                    print("ConfigWarning: The V_max of stellar mass bin " + str(i_mass + 1) +
+                          " in tomographic bin " + str(i_tomo + 1) + " of the stellar mass " +
+                          "function extends to z = " + str(round(float(self.__z_of_chi(chi_high)), 3)) +
+                          " beyond the redshift distribution of that bin (z = " +
+                          str(round(float(self.__z_of_chi(chi_n_of_z_max)), 3)) + "). Please check " +
+                          "'V_max_file', 'V_max_zmin' and 'zcsmf_file'.")
+                self.csmf_window_chi_range[i_mass, i_tomo, 0] = chi_low
+                self.csmf_window_chi_range[i_mass, i_tomo, 1] = chi_high
+        return True
+
+    def __z_of_chi(self,
+                   chi):
+        """
+        Redshift at comoving distance chi (in Mpc/h).
+        """
+        zet = np.linspace(0, 10, 10000)
+        return np.interp(chi, self.cosmology.comoving_distance(zet).value*self.cosmology.h, zet)
+
+    def _csmf_window(self,
+                     i_mass,
+                     i_tomo,
+                     chi):
+        """
+        Normalised line-of-sight distribution p_mu^i(chi) of the galaxies in
+        stellar mass bin i_mass and tomographic bin i_tomo of the stellar
+        mass function (see __set_csmf_windows), zero outside its support.
+
+        Parameters
+        ----------
+        i_mass, i_tomo : int
+            stellar mass bin and tomographic bin of the SMF
+        chi : array
+            comoving distances in Mpc/h
+
+        Returns
+        -------
+        p_chi : array
+            with unit h/Mpc
+            with shape (len(chi))
+        """
+        chi_low, chi_high = self.csmf_window_chi_range[i_mass, i_tomo]
+        inside = (chi >= chi_low) & (chi <= chi_high)
+        if self.spline_csmf_window is None:
+            return np.where(inside, 3.0*chi**2/(chi_high**3 - chi_low**3), 0.0)
+        return np.where(inside, self.spline_csmf_window[i_mass][i_tomo](chi), 0.0)
+
+    def _csmf_los_chi(self,
+                      i_mass,
+                      i_tomo,
+                      chi_low,
+                      chi_high,
+                      covELLspacesettings):
+        """
+        Line-of-sight integration points on the overlap of [chi_low,
+        chi_high] with the support of the SMF window of stellar mass bin
+        i_mass and tomographic bin i_tomo, None if they do not overlap.
+        """
+        chi_low = max(chi_low, self.csmf_window_chi_range[i_mass, i_tomo, 0])
+        chi_high = min(chi_high, self.csmf_window_chi_range[i_mass, i_tomo, 1])
+        if chi_low >= chi_high:
+            return None
+        return self.__get_updated_los_integration_chi(chi_low, chi_high, covELLspacesettings)
+
     def __set_lensweight_splines(self,
                                  covELLspacesettings,
                                  iA_dict):
@@ -1719,7 +2137,7 @@ class CovELLSpace(PolySpectra):
               
             self.ellrange = Cxy_tab['ell']
             gg_tab_bool, gm_tab_bool, mm_tab_bool = False, False, False
-            if self.gg or self.gm and Cxy_tab['gg'] is not None:
+            if (self.gg or self.gm) and Cxy_tab['gg'] is not None:
                 gg_tab_bool = True
                 ellrange_clustering = Cxy_tab['ell_clust']
             if (self.mm or self.gm) and Cxy_tab['mm'] is not None:
@@ -1753,24 +2171,26 @@ class CovELLSpace(PolySpectra):
                     if ellrange_lensing[0] < ellmin and ellrange_lensing[-1] > ellmax :
                         ellmin = ellrange_lensing[0]
                         ellmax = ellrange_lensing[-1]
-                        Cgg_aux = np.zeros((len(Cmm[:,0,0,0]), len(Cgg[0,:,0,0,0]), len(Cgg[0,0, :,0,0]), len(Cgg[0,0, 0, :,0]), len(Cgg[0,0,0,0,:])))
-                        for i_sample in range(len(Cgg[0,:,0,0,0])):
-                            for j_sample in range(len(Cgg[0,0, :, 0,0])):
-                                for i_tomo in range(len(Cgg[0,0,0,:,0])):
-                                    for j_tomo in range(len(Cgg[0,0,0,0,:])):
-                                        Cggspline = UnivariateSpline(ellrange_clustering, Cgg[:,i_sample, j_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
-                                        Cgg_aux[:,i_sample, j_sample, i_tomo,j_tomo] = Cggspline(ellrange_lensing)
-                        Cgg = Cgg_aux
-                        Cgm_aux = np.zeros((len(Cmm[:,0,0,0]), len(Cgm[0, :,0,0]), len(Cgm[0, 0, :,0]), len(Cgm[0,0,0,:])))
-                        for i_sample in range(len(Cgm[0,:,0,0])):
-                            for i_tomo in range(len(Cgm[0,0,:,0])):
-                                for j_tomo in range(len(Cgm[0,0,0,:])):
-                                        Cgmspline = UnivariateSpline(ellrange_clustering, Cgm[:,i_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
-                                        Cmm_aux[:,i_sample, i_tomo,j_tomo] = Cgmspline(ellrange_lensing)
-                        Cgm = Cgm_aux
+                        if Cgg is not None:
+                            Cgg_aux = np.zeros((len(ellrange_lensing), len(Cgg[0,:,0,0,0]), len(Cgg[0,0, :,0,0]), len(Cgg[0,0, 0, :,0]), len(Cgg[0,0,0,0,:])))
+                            for i_sample in range(len(Cgg[0,:,0,0,0])):
+                                for j_sample in range(len(Cgg[0,0, :, 0,0])):
+                                    for i_tomo in range(len(Cgg[0,0,0,:,0])):
+                                        for j_tomo in range(len(Cgg[0,0,0,0,:])):
+                                            Cggspline = UnivariateSpline(ellrange_clustering, Cgg[:,i_sample, j_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
+                                            Cgg_aux[:,i_sample, j_sample, i_tomo,j_tomo] = Cggspline(ellrange_lensing)
+                            Cgg = Cgg_aux
+                        if Cgm is not None:
+                            Cgm_aux = np.zeros((len(ellrange_lensing), len(Cgm[0, :,0,0]), len(Cgm[0, 0, :,0]), len(Cgm[0,0,0,:])))
+                            for i_sample in range(len(Cgm[0,:,0,0])):
+                                for i_tomo in range(len(Cgm[0,0,:,0])):
+                                    for j_tomo in range(len(Cgm[0,0,0,:])):
+                                            Cgmspline = UnivariateSpline(ellrange_clustering, Cgm[:,i_sample, i_tomo, j_tomo], k = 3, s = 0, ext = 0)
+                                            Cgm_aux[:,i_sample, i_tomo,j_tomo] = Cgmspline(ellrange_lensing)
+                            Cgm = Cgm_aux
                         self.ellrange = ellrange_lensing
                     else:
-                        Cmm_aux = np.zeros((len(Cmm[:,0,0,0]), len(Cmm[0, :,0,0]), len(Cmm[0, 0, :,0]), len(Cmm[0,0,0,:])))
+                        Cmm_aux = np.zeros((len(ellrange_clustering), len(Cmm[0, :,0,0]), len(Cmm[0, 0, :,0]), len(Cmm[0,0,0,:])))
                         for i_sample in range(len(Cmm[0,:,0,0])):
                             for i_tomo in range(len(Cmm[0,0,:,0])):
                                 for j_tomo in range(len(Cmm[0,0,0,:])):
@@ -1969,6 +2389,7 @@ class CovELLSpace(PolySpectra):
             Used later to calculate the Gaussian covariance matrix. See class documentation.
 
         """
+        self.Cell_mmB = None
         if self.cov_dict['gauss']:
             self.Cell_gg, self.Cell_gm, self.Cell_mm = \
                 self.calc_Cells_Limber(obs_dict['ELLspace'],
@@ -1979,16 +2400,73 @@ class CovELLSpace(PolySpectra):
             # cosmic shear has a single sample axis (also for tabulated input)
             if isinstance(self.Cell_mm, np.ndarray) and self.Cell_mm.ndim == 4:
                 self.Cell_mm = np.ascontiguousarray(self.Cell_mm[:, :1])
+            self.Cell_mmB = self._intrinsic_Bmode_Cell(read_in_tables['Cxy'])
             if not obs_dict['ELLspace']['limber']:
                 self.Cell_gg_limber = np.copy(self.Cell_gg)
                 self.calc_Cells_nonLimber(obs_dict['ELLspace'],
                                         read_in_tables['Cxy'])
             if output_dict['Cell']:
                 out = Output(output_dict)
-                Cells = [self.Cell_gg, self.Cell_gm, self.Cell_mm]
+                Cells = [self.Cell_gg, self.Cell_gm, self.Cell_mm, self.Cell_mmB]
                 out.write_Cells(self.ellrange, self.n_tomo_clust, self.n_tomo_lens,
                                 Cells)
                 
+    def _intrinsic_Bmode_Cell(self,
+                              Cxy_tab):
+        """
+        The intrinsic cosmic shear B-mode angular power spectrum C_BB from
+        the tabulated input (CmmB_file) on self.ellrange. The code does not
+        predict B-modes itself, they only enter if they are passed. They
+        enter the Gaussian covariance of all cosmic shear estimators (and
+        their signals) but not the non-Gaussian and super-sample terms, for
+        which no B-mode model is available.
+
+        Parameters
+        ----------
+        Cxy_tab : dictionary
+            Look-up table for the C_ell projected power spectra with the
+            keys 'ell_mmB' and 'mmB' for the B-modes.
+
+        Returns
+        -------
+        Cell_mmB : array or None
+            with shape (len(self.ellrange), 1, n_tomo_lens, n_tomo_lens),
+            None without a CmmB_file. Outside of the tabulated ell range it
+            is set to zero.
+        """
+        if Cxy_tab is None or Cxy_tab.get('mmB') is None:
+            return None
+        if not self.mm:
+            print("InputWarning: An intrinsic B-mode angular power spectrum " +
+                  "(CmmB_file) is passed, but cosmic shear is not requested. " +
+                  "It is ignored.")
+            return None
+        if self.n_spec is not None and self.n_spec != 0:
+            raise Exception("ConfigError: Intrinsic B-modes (CmmB_file) are " +
+                            "not supported together with spectroscopic " +
+                            "clustering bins (n_spec > 0).")
+        ell_tab = np.asarray(Cxy_tab['ell_mmB'], dtype=float)
+        CmmB_tab = np.asarray(Cxy_tab['mmB'], dtype=float)
+        if len(ell_tab) == len(self.ellrange) and np.allclose(ell_tab, self.ellrange, rtol=1e-10, atol=0):
+            Cell_mmB = np.copy(CmmB_tab)
+        else:
+            if self.ellrange[0] < ell_tab[0]*(1 - 1e-6) or self.ellrange[-1] > ell_tab[-1]*(1 + 1e-6):
+                print("FileInputWarning: The tabulated intrinsic B-mode " +
+                      "angular power spectrum (CmmB_file) covers the multipoles " +
+                      str(ell_tab[0]) + " to " + str(ell_tab[-1]) + ", but the " +
+                      "covariance needs " + str(self.ellrange[0]) + " to " +
+                      str(self.ellrange[-1]) + ". It is set to zero outside " +
+                      "of the tabulated range.")
+            # C_BB can be zero or negative (cross-spectra): interpolate
+            # linearly in the spectrum, cubically in ln(ell)
+            Cell_mmB = interp1d(np.log(ell_tab), CmmB_tab, kind='cubic', axis=0,
+                                bounds_error=False, fill_value=0.0)(np.log(self.ellrange))
+        Cell_mmB = np.ascontiguousarray(Cell_mmB.reshape(
+            (len(self.ellrange), 1, self.n_tomo_lens, self.n_tomo_lens)))
+        print("Including the tabulated intrinsic B-mode angular power " +
+              "spectrum in the Gaussian covariance of cosmic shear.")
+        return Cell_mmB
+
     def calc_Cells_nonLimber(self,
                              covELLspacesettings,
                              Cxy_tab):
@@ -2221,11 +2699,12 @@ class CovELLSpace(PolySpectra):
         self.los_chi = self.cosmology.comoving_distance(
             self.los_z).value * self.cosmology.h
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
+        grid = self.hod.Mbins
+        self.samples_overlap = any(min(grid[i, -1], grid[j, -1]) > max(grid[i, 0], grid[j, 0])
+                                   for i in range(len(grid)) for j in range(len(grid)) if i != j)
+        if self.samples_overlap:
+            aux_ngal_overlap = np.zeros((self.los_interpolation_sampling, self.sample_dim, self.sample_dim))
         if (self.mm or self.gm or self.unbiased_clustering) and prec['hm']['transfer_model'] == 'CAMB' and self.Pxy_tab['mm'] is None:
-            # CAMB's cost is set by kmax: the transfer functions are only
-            # calculated up to CAMB_KMAX_NONLINEAR, CAMB extrapolates the
-            # power spectra beyond (changes the covariances by ~1e-6 in
-            # correlation units, the C_ells by < 1e-4 up to ell = 1e4)
             self.camb_pars_new.set_matter_power(redshifts = self.los_z[::-1], kmax=min(self.mass_func.k[-1], CAMB_KMAX_NONLINEAR))
             self.camb_pars_new.NonLinear = model.NonLinear_pk
             if prec['powspec']['nl_model'] == "mead2020_feedback":
@@ -2234,9 +2713,7 @@ class CovELLSpace(PolySpectra):
                 self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'], HMCode_A_baryon = prec['powspec']['HMCode_A_baryon'], HMCode_eta_baryon = prec['powspec']['HMCode_eta_baryon'])
             else:
                 self.camb_pars_new.NonLinearModel.set_params(halofit_version=prec['powspec']['nl_model'])
-            # one CAMB run for the non-linear power spectra at all redshifts
             results = camb.get_results(self.camb_pars_new)
-            # silence CAMB's warning about extrapolating beyond its kmax
             logging_disabled = logging.root.manager.disable
             logging.disable(logging.WARNING)
             try:
@@ -2250,7 +2727,13 @@ class CovELLSpace(PolySpectra):
         if self.csmf:
             aux_stellar_mass_func = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))
             aux_stellar_mass_func_bias = np.zeros((self.los_interpolation_sampling, len(self.log10csmf_mass_bins)))
+            aux_stellar_mass_func_overlap = np.zeros((self.los_interpolation_sampling, len(self.csmf_bin_overlaps)))
             self.csmf_count_matter_bispectrum = np.zeros((len(self.mass_func.k), self.los_interpolation_sampling,len(self.log10csmf_mass_bins)))
+            self.csmf_galaxy_bispectra = (self.gg or self.gm) and not self.csmf_auto_only \
+                and not self.redshift_dep_bias and not self.unbiased_clustering
+            if self.csmf_galaxy_bispectra:
+                self.csmf_count_galaxy_galaxy_bispectrum = np.zeros((len(self.mass_func.k), self.los_interpolation_sampling, len(self.log10csmf_mass_bins), self.sample_dim))
+                self.csmf_count_galaxy_matter_bispectrum = np.zeros((len(self.mass_func.k), self.los_interpolation_sampling, len(self.log10csmf_mass_bins), self.sample_dim))
             aux_response_mm = np.zeros((len(self.los_chi),
                                     len(self.mass_func.k),
                                     self.sample_dim))
@@ -2280,6 +2763,8 @@ class CovELLSpace(PolySpectra):
         for zet in range(self.los_interpolation_sampling):
             self.update_mass_func(self.los_z[zet], bias_dict, hod_dict, prec)
             aux_ngal[zet, :] = self.ngal
+            if self.samples_overlap:
+                aux_ngal_overlap[zet] = self.nbar_overlap(hod_dict)
             if self.gg or self.gm:
                 for i_sample in range(self.sample_dim):
                     for j_sample in range(self.sample_dim):
@@ -2299,8 +2784,13 @@ class CovELLSpace(PolySpectra):
             if self.csmf:
                 aux_stellar_mass_func[zet,:] = self.galaxy_smf_c(10**self.log10csmf_mass_bins)  + self.galaxy_smf_s(10**self.log10csmf_mass_bins)
                 aux_stellar_mass_func_bias[zet,:] = self.galaxy_smf_bias_c(10**self.log10csmf_mass_bins)  + self.galaxy_smf_bias_s(10**self.log10csmf_mass_bins)
+                for i_overlap, overlap in enumerate(self.csmf_bin_overlaps):
+                    aux_stellar_mass_func_overlap[zet, i_overlap] = self.galaxy_smf_c(10**overlap[2]) + self.galaxy_smf_s(10**overlap[2])
                 if not self.csmf_auto_only:
                     self.csmf_count_matter_bispectrum[:, zet,:] = self.get_count_matter_bispectrum(bias_dict, hod_dict, prec['hm'], self.log10csmf_mass_bins)
+                    if self.csmf_galaxy_bispectra:
+                        self.csmf_count_galaxy_galaxy_bispectrum[:, zet], self.csmf_count_galaxy_matter_bispectrum[:, zet] = \
+                            self.get_count_galaxy_bispectra(bias_dict, hod_dict, prec['hm'], self.log10csmf_mass_bins)
                     aux_response_gg[zet, :, :], aux_response_gm[zet, :, :], aux_response_mm[zet, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
                     if self.redshift_dep_bias:
                         bias_at_chi = np.array([self.bias_of_zet[t](self.los_z[zet]) for t in range(self.n_tomo_clust)])
@@ -2337,8 +2827,6 @@ class CovELLSpace(PolySpectra):
                 for i_sample in range(self.sample_dim):
                     self.spline_responsePgg.append(RegularGridInterpolator((np.log(self.mass_func.k),self.los_chi), (aux_response_gg[:, :, i_sample]).T,bounds_error= False, fill_value = None))
         if self.csmf and not self.csmf_auto_only and self.redshift_dep_bias:
-            # indexed by i_sample*n_tomo_clust + i_tomo (gm) and
-            # i_sample*n_tomo_clust**2 + i_tomo*n_tomo_clust + j_tomo (gg)
             self.spline_responsePgm_tomo = []
             self.spline_responsePgg_tomo = []
             for i_sample in range(self.sample_dim):
@@ -2352,24 +2840,44 @@ class CovELLSpace(PolySpectra):
         if self.csmf:
             self.csmf_at_tomo_and_mass = np.zeros((len(self.log10csmf_mass_bins),self.n_tomo_csmf))
             self.phi_tilde_spline = []
-            csmf_evals = np.zeros((len(self.los_integration_chi), len(self.log10csmf_mass_bins)))
             for i_smf_m_bins in range(len(self.log10csmf_mass_bins)):
                 aux_csmf_spline = UnivariateSpline(self.los_chi, aux_stellar_mass_func[:, i_smf_m_bins], k=2, s=0, ext=0)
-                csmf_evals[:, i_smf_m_bins] = aux_csmf_spline(self.los_integration_chi)
                 self.phi_tilde_spline.append(UnivariateSpline(self.los_chi, aux_stellar_mass_func_bias[:, i_smf_m_bins], k=2, s=0, ext=0))
-            for i_tomo in range(self.n_tomo_csmf):
-                zcsmf_eval = self.spline_zcsmf[i_tomo](self.los_integration_chi) * self.f_tomo[i_tomo]
-                for i_smf_m_bins in range(len(self.log10csmf_mass_bins)):
+                for i_tomo in range(self.n_tomo_csmf):
+                    los_chi_csmf = self._csmf_los_chi(i_smf_m_bins, i_tomo, 0, np.inf, covELLspacesettings)
                     self.csmf_at_tomo_and_mass[i_smf_m_bins, i_tomo] = simpson(
-                        zcsmf_eval * csmf_evals[:, i_smf_m_bins], x=self.los_integration_chi)
+                        self._csmf_window(i_smf_m_bins, i_tomo, los_chi_csmf) * aux_csmf_spline(los_chi_csmf), x=los_chi_csmf)
+            self.csmf_overlap_mean = np.zeros((len(self.csmf_bin_overlaps), self.n_tomo_csmf))
+            for i_overlap, (i_mass, j_mass, _, _) in enumerate(self.csmf_bin_overlaps):
+                aux_csmf_spline = UnivariateSpline(self.los_chi, aux_stellar_mass_func_overlap[:, i_overlap], k=2, s=0, ext=0)
+                for i_tomo in range(self.n_tomo_csmf):
+                    chi_low = min(self.csmf_window_chi_range[i_mass, i_tomo, 0], self.csmf_window_chi_range[j_mass, i_tomo, 0])
+                    chi_high = max(self.csmf_window_chi_range[i_mass, i_tomo, 1], self.csmf_window_chi_range[j_mass, i_tomo, 1])
+                    los_chi_csmf = self._csmf_los_chi(i_mass, i_tomo, 0, np.inf, covELLspacesettings) if chi_low >= chi_high else \
+                        np.geomspace(chi_low, chi_high, covELLspacesettings['integration_steps'])
+                    window = 0.5*(self._csmf_window(i_mass, i_tomo, los_chi_csmf) + self._csmf_window(j_mass, i_tomo, los_chi_csmf))
+                    self.csmf_overlap_mean[i_overlap, i_tomo] = simpson(window*aux_csmf_spline(los_chi_csmf), x=los_chi_csmf)
 
+        # angular number density (per steradian) of each sample in each tomographic bin from the HoD, N = int dchi chi^2 nbar(chi) S(chi), with the selection S fixed by the normalised n(chi):
+        # N p(chi) = chi^2 nbar(chi) S(chi). Assuming S = 1 wherever the sample is selected gives N = 1/int dchi p^2/(chi^2 nbar), exact for
+        # a top-hat selection and an upper bound otherwise.
         self.Ngal = np.zeros((self.sample_dim, self.n_tomo_clust))
         for i_sample in range(self.sample_dim):
             spline_nbar = UnivariateSpline(self.los_chi, aux_ngal[:, i_sample], k=2, s=0, ext=0)
             nbar_chi2 = spline_nbar(self.los_integration_chi) * self.los_integration_chi**2
             for tomo_i in range(self.n_tomo_clust):
-                prob = self.spline_zclust[tomo_i](self.los_integration_chi)*np.append((self.los_integration_chi[1:] -self.los_integration_chi[:-1]),0)
-                self.Ngal[i_sample,tomo_i] = simpson(prob * nbar_chi2, x = self.los_integration_chi)
+                prob = self.spline_zclust[tomo_i](self.los_integration_chi)
+                selected = prob > 0
+                self.Ngal[i_sample,tomo_i] = 1.0/simpson(prob[selected]**2/nbar_chi2[selected], x = self.los_integration_chi[selected])
+        self.sample_overlap_fraction = np.eye(self.sample_dim)[:, :, None]*np.ones(self.n_tomo_clust)[None, None, :]
+        if self.samples_overlap:
+            aux_ngal_overlap = 0.5*(aux_ngal_overlap + np.swapaxes(aux_ngal_overlap, 1, 2))
+            nbar_chi = np.array([[UnivariateSpline(self.los_chi, aux_ngal_overlap[:, i_sample, j_sample], k=2, s=0, ext=0)(self.los_integration_chi)
+                                  for j_sample in range(self.sample_dim)] for i_sample in range(self.sample_dim)])
+            for tomo_i in range(self.n_tomo_clust):
+                prob = self.spline_zclust[tomo_i](self.los_integration_chi)
+                mean_nbar = simpson(prob[None, None, :]*np.maximum(nbar_chi, 0), x = self.los_integration_chi, axis = -1)
+                self.sample_overlap_fraction[:, :, tomo_i] = mean_nbar/np.minimum(np.diag(mean_nbar)[:, None], np.diag(mean_nbar)[None, :])
         if self.gg or self.gm:
             self.spline_Pgg, spline_Pgm = [], []
             for i_sample in range(self.sample_dim):
@@ -2637,6 +3145,8 @@ class CovELLSpace(PolySpectra):
         else:
             gauss = self.covELL_gaussian(obs_dict['ELLspace'],
                                          survey_params_dict, True)
+        if self.ellrange_photo is None:
+            gauss = self.__add_Cell_mult_shear_bias(list(gauss))
 
         nongauss = self.covELL_non_gaussian(obs_dict['ELLspace'],
                                             output_dict,
@@ -3493,8 +4003,170 @@ class CovELLSpace(PolySpectra):
                 sscELLgmgm_pmpm_new, sscELLmmgm_mmsm_new, sscELLmmgm_mmpm_new, \
                 sscELLmmmm_mmmm_new
         
-        return list(gauss), list(nongauss), list(ssc)
-    
+        if self.Cell_mmB is not None and self.est_shear == 'C_ell' and self.ellrange_photo is None:
+            gauss, nongauss, ssc = self.__add_Cell_Bmode_blocks(list(gauss), list(nongauss), list(ssc))
+        return self._split_csmf_terms(list(gauss), list(nongauss), list(ssc))
+
+    def __Cell_mult_shear_bias(self,
+                               Cell_12,
+                               Cell_34,
+                               bias,
+                               lensing_12,
+                               lensing_34,
+                               unique_12,
+                               unique_34):
+        """
+        Covariance due to the uncertainty of the multiplicative shear bias,
+        Eq. (60) of arXiv:2410.06962, bias * C_12(ell_1) C_34(ell_2), for
+        the C_ell estimator, averaged over the ell bins if the C_ell are
+        binned. Unlike the connected terms it does not scale with the
+        inverse survey area.
+
+        Parameters
+        ----------
+        Cell_12, Cell_34 : arrays
+            angular power spectra with shape (ell, sample, tomo, tomo)
+        bias : array
+            products of the multiplicative shear bias uncertainties with
+            shape (sample, sample, tomo, tomo, tomo, tomo)
+        lensing_12, lensing_34 : bool
+            whether the ell binning of the lensing (or else the clustering)
+            spectra applies
+        unique_12, unique_34 : bool
+            whether only the unique tomographic bin combinations are needed
+
+        Returns
+        -------
+        cov : array
+            with shape (ell bins, ell bins, sample, sample, tomo, tomo, tomo,
+            tomo)
+        """
+        cov = bias[None, None] \
+            * Cell_12[:, None, :, None, :, :, None, None] \
+            * Cell_34[None, :, None, :, None, None, :, :]
+        ul_12 = self.ellrange_lensing_ul if lensing_12 else self.ellrange_clustering_ul
+        ul_34 = self.ellrange_lensing_ul if lensing_34 else self.ellrange_clustering_ul
+        if ul_12 is None or ul_34 is None:
+            return cov
+        return self.__bin_cov_ell_nongauss(ul_12, ul_34, None, None, 1, 1, cov,
+                                           False, unique_12, unique_34)
+
+    def __add_Cell_mult_shear_bias(self,
+                                   gauss):
+        """
+        Adds the covariance due to the multiplicative shear bias uncertainty
+        to the Gaussian C_ell covariance (to the sample-variance part if it
+        is split), as for the projected estimators.
+
+        Parameters
+        ----------
+        gauss : list
+            Gaussian covariance as returned by covELL_gaussian (6 or, split
+            into sva, mix and sn, 18 entries, plus the stellar mass function
+            terms)
+
+        Returns
+        -------
+        gauss : list
+        """
+        mult = 3 if self.cov_dict['split_gauss'] else 1
+        terms = []
+        if self.gm and self.est_shear == "C_ell":
+            terms.append((3, self.Cell_gm, self.Cell_gm, self.gaussELLgmgm_sva_mult_shear_bias,
+                          False, False, False, False))
+        if self.gm and self.mm and self.cross_terms and self.est_shear == "C_ell" and self.est_ggl == "C_ell":
+            terms.append((4, self.Cell_mm, self.Cell_gm, self.gaussELLmmgm_sva_mult_shear_bias,
+                          True, False, True, False))
+        if self.mm and self.est_shear == "C_ell":
+            terms.append((5, self.Cell_mm, self.Cell_mm, self.gaussELLmmmm_sva_mult_shear_bias,
+                          True, True, True, True))
+        for probe, Cell_12, Cell_34, bias, lensing_12, lensing_34, unique_12, unique_34 in terms:
+            if not isinstance(gauss[mult*probe], np.ndarray) or not np.any(bias):
+                continue
+            gauss[mult*probe] = gauss[mult*probe] + self.__Cell_mult_shear_bias(
+                Cell_12, Cell_34, bias, lensing_12, lensing_34, unique_12, unique_34)
+        return gauss
+
+    def __add_Cell_Bmode_blocks(self,
+                                gauss,
+                                nongauss,
+                                ssc):
+        """
+        Rearranges the C_ell covariance with intrinsic B-modes into the
+        E/B layout of the projected estimators, ['gggg', 'gggm', 'ggmmE',
+        'ggmmB', 'gmgm', 'mmEgm', 'mmBgm', 'mmEmmE', 'mmEmmB', 'mmBmmB'],
+        where E (B) is the E-mode (B-mode) shear spectrum. Only the
+        Gaussian term of the B-mode spectrum and the multiplicative shear
+        bias contribute to the new blocks (C_EB = C_gB = 0, and there is no
+        model for the connected B-mode terms).
+
+        Parameters
+        ----------
+        gauss, nongauss, ssc : lists
+            covariance terms in the C_ell layout ['gggg', 'gggm', 'ggmm',
+            'gmgm', 'mmgm', 'mmmm'] (Gaussian split into sva, mix and sn if
+            requested, followed by the stellar mass function terms)
+
+        Returns
+        -------
+        gauss, nongauss, ssc : lists
+        """
+        mult = 3 if self.cov_dict['split_gauss'] else 1
+        n_lss = 6*mult
+        blocks = [gauss[mult*probe:mult*(probe + 1)] for probe in range(6)]
+        tail = gauss[n_lss:]
+
+        def zeros(term):
+            return np.zeros_like(term) if isinstance(term, np.ndarray) else 0
+
+        def total(terms):
+            return sum(terms[1:], terms[0])
+
+        BB_sva, BB_mix, BB_sn = self.gaussELLmmmm_BB
+        mmmm_ref = total(blocks[5])
+        EB_bias, BB_bias = zeros(mmmm_ref), 0
+        if np.any(self.gaussELLmmmm_sva_mult_shear_bias):
+            EB_bias = self.__Cell_mult_shear_bias(self.Cell_mm, self.Cell_mmB, self.gaussELLmmmm_sva_mult_shear_bias,
+                                                  True, True, True, True)
+            BB_bias = self.__Cell_mult_shear_bias(self.Cell_mmB, self.Cell_mmB, self.gaussELLmmmm_sva_mult_shear_bias,
+                                                  True, True, True, True)
+        EB_block = [EB_bias] + [zeros(mmmm_ref)]*(mult - 1)
+        BB_block = [BB_sva + BB_bias, BB_mix, BB_sn] if mult == 3 else [BB_sva + BB_mix + BB_sn + BB_bias]
+        ggB_block = [zeros(term) for term in blocks[2]]
+        gmB_block = [zeros(term) for term in blocks[4]]
+        if isinstance(total(blocks[4]), np.ndarray) and self.est_ggl == "C_ell" \
+           and np.any(self.gaussELLmmgm_sva_mult_shear_bias):
+            gmB_block[0] = gmB_block[0] + self.__Cell_mult_shear_bias(
+                self.Cell_mmB, self.Cell_gm, self.gaussELLmmgm_sva_mult_shear_bias,
+                True, False, True, False)
+        new_gauss = blocks[0] + blocks[1] + blocks[2] + ggB_block + blocks[3] \
+            + blocks[4] + gmB_block + blocks[5] + EB_block + BB_block
+        new_nongauss = [nongauss[0], nongauss[1], nongauss[2], zeros(nongauss[2]), nongauss[3],
+                        nongauss[4], zeros(nongauss[4]), nongauss[5], zeros(nongauss[5]), zeros(nongauss[5])]
+        new_ssc = [ssc[0], ssc[1], ssc[2], zeros(ssc[2]), ssc[3],
+                   ssc[4], zeros(ssc[4]), ssc[5], zeros(ssc[5]), zeros(ssc[5])]
+        return new_gauss + tail, new_nongauss + nongauss[6:], new_ssc + ssc[6:]
+
+    def __print_csmf_settings(self, read_in_tables):
+        """
+        Writes the settings of the stellar mass function (SMF) to the log.
+        """
+        print("Stellar mass function (SMF): " + str(len(self.log10csmf_mass_bins)) + " stellar mass bins with " +
+              "log10(M*) from " + str(round(float(np.min(self.log10csmf_mass_bins)), 3)) + " to " +
+              str(round(float(np.max(self.log10csmf_mass_bins)), 3)) + " (bin centres) in " + str(self.n_tomo_csmf) +
+              " tomographic bin(s)" + (", with overlapping bins" if len(self.csmf_bin_overlaps) else "") + ".")
+        if read_in_tables['zcsmf']['pz_mass'] is not None:
+            print("SMF line-of-sight windows: redshift distribution per stellar mass bin (zcsmf_mass_file).")
+        else:
+            print("SMF line-of-sight windows: V_max top-hats in comoving volume (V_max_file" +
+                  (", V_max_zmin" if self.csmf_V_max_zmin is not None else
+                   ", lower redshift from the redshift distribution of the tomographic bin") + ").")
+        options = [name for name, active in (('csmf_diagonal', self.csmf_diagonal),
+                                             ('csmf_diagonal_lenses', self.csmf_diagonal_lenses),
+                                             ('csmf_auto_only', self.csmf_auto_only)) if active]
+        if options:
+            print("SMF options: " + ", ".join(options) + ".")
+
     def calc_covELL_csmf(self,
                          covELLspacesettings,
                          survey_params_dict):
@@ -3520,10 +4192,29 @@ class CovELLSpace(PolySpectra):
         -------
 
         """
-        csmf_gg_sva,csmf_gm_sva,csmf_mm_sva = self.covELL_csmf_cross_LSS_sva(covELLspacesettings)
-        csmf_gg_ssc,csmf_gm_ssc,csmf_mm_ssc = self.covELL_csmf_cross_LSS_ssc(covELLspacesettings, survey_params_dict)
-        cov_csmf = self.covELL_csmf_SN() + self.covELL_csmf_SSC(survey_params_dict)
-        return cov_csmf, csmf_gg_sva + csmf_gg_ssc, csmf_gm_sva + csmf_gm_ssc, csmf_mm_sva + csmf_mm_ssc
+        terms = ["shot noise", "sample variance (super-sample term of the counts)"]
+        if self.csmf_auto_only:
+            terms.append("no cross-covariance with the 2-point functions (csmf_auto_only)")
+        else:
+            if self.cov_dict['nongauss']:
+                terms.append("three-point cross term with the 2-point functions (" +
+                             ("count-galaxy-galaxy/-matter and count-matter-matter bispectra" if getattr(self, 'csmf_galaxy_bispectra', False)
+                              else "count-matter-matter bispectrum") + ")")
+            if self.cov_dict['ssc']:
+                terms.append("super-sample cross term with the 2-point functions")
+        print("Calculating the covariance of the stellar mass function: " + ", ".join(terms) + ".")
+        csmf_gg_sva,csmf_gm_sva,csmf_mm_sva = self.covELL_csmf_cross_LSS_sva(covELLspacesettings, survey_params_dict,
+                                                                             compute=self.cov_dict['nongauss'])
+        csmf_gg_ssc,csmf_gm_ssc,csmf_mm_ssc = self.covELL_csmf_cross_LSS_ssc(covELLspacesettings, survey_params_dict,
+                                                                             compute=self.cov_dict['ssc'])
+        csmf_sn = self.covELL_csmf_SN()
+        # the sample variance of the counts (their super-sample term) is
+        # always included: without it the SMF has only the shot noise, which
+        # is inconsistent with the three-point cross term
+        csmf_ssc = self.covELL_csmf_SSC(covELLspacesettings, survey_params_dict)
+        self.csmf_parts = {'auto_sn': csmf_sn, 'auto_ssc': csmf_ssc,
+                           'cross_ssc': [csmf_gg_ssc, csmf_gm_ssc, csmf_mm_ssc]}
+        return csmf_sn + csmf_ssc, csmf_gg_sva + csmf_gg_ssc, csmf_gm_sva + csmf_gm_ssc, csmf_mm_sva + csmf_mm_ssc
     
     def __bin_cov_ell_csmf(self,
                            ellrange_12_ul,
@@ -4152,6 +4843,14 @@ class CovELLSpace(PolySpectra):
                 cov_csmf_gm = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cov_csmf_gm,False)
             if self.mm and self.ellrange_lensing_ul is not None and self.est_shear == "C_ell" and not self.do_arbitrary:
                 cov_csmf_mm = self.__bin_cov_ell_csmf(self.ellrange_lensing_ul,cov_csmf_mm,True)
+            # the SSC part of the cross terms, binned in the same way
+            cross_ssc = self.csmf_parts['cross_ssc']
+            if self.gg and self.ellrange_clustering_ul is not None and self.est_clust == "C_ell" and not self.do_arbitrary:
+                cross_ssc[0] = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cross_ssc[0],True)
+            if self.gm and self.ellrange_clustering_ul is not None and self.est_ggl == "C_ell"  and not self.do_arbitrary:
+                cross_ssc[1] = self.__bin_cov_ell_csmf(self.ellrange_clustering_ul,cross_ssc[1],False)
+            if self.mm and self.ellrange_lensing_ul is not None and self.est_shear == "C_ell" and not self.do_arbitrary:
+                cross_ssc[2] = self.__bin_cov_ell_csmf(self.ellrange_lensing_ul,cross_ssc[2],True)
         if covELLspacesettings['pixelised_cell']:
             
             gaussELLgggg_sva *= self._pixel_weights(gaussELLgggg_sva) 
@@ -4172,6 +4871,9 @@ class CovELLSpace(PolySpectra):
             gaussELLmmmm_sva *= self._pixel_weights(gaussELLmmmm_sva) 
             gaussELLmmmm_mix *= self._pixel_weights(gaussELLmmmm_mix) 
             gaussELLmmmm_sn *= self._pixel_weights(gaussELLmmmm_sn)
+            if self.gaussELLmmmm_BB is not None:
+                for term in self.gaussELLmmmm_BB:
+                    term *= self._pixel_weights(term)
         if calc_prefac and self.ellrange_spec is None:
             if self.gg and self.ellrange_clustering_ul is not None:
                 gaussELLgggg_sva = self.__bin_cov_ell_gauss(self.ellrange_clustering_ul,
@@ -4307,6 +5009,15 @@ class CovELLSpace(PolySpectra):
                                                             gaussELLmmmm_sn,
                                                             True,
                                                             True)
+                if self.gaussELLmmmm_BB is not None:
+                    self.gaussELLmmmm_BB = [self.__bin_cov_ell_gauss(self.ellrange_lensing_ul,
+                                                                     self.ellrange_lensing_ul,
+                                                                     survey_params_dict['survey_area_lens'],
+                                                                     survey_params_dict['survey_area_lens'],
+                                                                     term,
+                                                                     True,
+                                                                     True)
+                                            for term in self.gaussELLmmmm_BB]
 
         if not self.cov_dict['split_gauss'] and self.ellrange_spec is not None and calc_prefac:
             gaussELLgggg = gaussELLgggg_sva + gaussELLgggg_mix
@@ -5415,6 +6126,7 @@ class CovELLSpace(PolySpectra):
 
         """
 
+        self.gaussELLmmmm_BB = None
         if not self.cov_dict['gauss']:
             return 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         if self.mm or self.gm:
@@ -5428,16 +6140,23 @@ class CovELLSpace(PolySpectra):
 
         
         if self.gg or self.gm:
-            if survey_params_dict['n_eff_clust'] is not None and self.sample_dim <= 1:
-                noise_g =np.zeros((self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust))
-                for i_sample in range(self.sample_dim):
+            n_eff_clust = self._n_eff_clust_per_sample(survey_params_dict)
+            fraction = getattr(self, 'sample_overlap_fraction', np.eye(self.sample_dim)[:, :, None]*np.ones(self.n_tomo_clust)[None, None, :])
+            self.sample_overlap = np.eye(self.sample_dim)[:, :, None]*np.ones(self.n_tomo_clust)[None, None, :]
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
+                    if i_sample != j_sample:
+                        n_1, n_2 = n_eff_clust[:, i_sample], n_eff_clust[:, j_sample]
+                        self.sample_overlap[i_sample, j_sample] = fraction[i_sample, j_sample]*np.minimum(n_1, n_2)/np.sqrt(n_1*n_2)
+            noise_g =np.zeros((self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust))
+            for i_sample in range(self.sample_dim):
+                for j_sample in range(self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
-                        noise_g[i_sample, i_sample, i_tomo, i_tomo] = 1 / survey_params_dict['n_eff_clust'][i_tomo] / self.arcmin2torad2
-            else:
-                noise_g =np.zeros((self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust))
-                for i_sample in range(self.sample_dim):
-                    for i_tomo in range(self.n_tomo_clust):
-                        noise_g[i_sample, i_sample, i_tomo, i_tomo] = 1.0/self.Ngal[i_sample,i_tomo]
+                        if i_sample == j_sample:
+                            noise_g[i_sample, i_sample, i_tomo, i_tomo] = 1 / n_eff_clust[i_tomo, i_sample] / self.arcmin2torad2
+                        elif self.sample_overlap[i_sample, j_sample, i_tomo] > 0:
+                            noise_g[i_sample, j_sample, i_tomo, i_tomo] = self.sample_overlap[i_sample, j_sample, i_tomo] \
+                                / np.sqrt(n_eff_clust[i_tomo, i_sample]*n_eff_clust[i_tomo, j_sample]) / self.arcmin2torad2
        
         # diagonal in ell: the full (ell, ell) matrix, or only the diagonal
         # (shape (ell, 1, ...)) for the projections
@@ -5619,21 +6338,23 @@ class CovELLSpace(PolySpectra):
         else:
             gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn = 0, 0, 0
 
-        if self.mm:
+        def mmmm_terms(Cmm):
+            # Gaussian mmmm terms for the shear spectrum Cmm (the E- or
+            # the B-mode one); the shape noise is the same for both
             # Cov_sva(mm^ij mm^kl) = Cmm^ik Cmm^jl + Cmm^il Cmm^jk
-            gaussELLmmmm_sva = self.Cell_mm[:, :, None, :, None, :, None] \
-                * self.Cell_mm[:, None, :, None, :, None, :] \
-                + self.Cell_mm[:, :, None, :, None, None, :] \
-                * self.Cell_mm[:, None, :, None, :, :, None]
+            gaussELLmmmm_sva = Cmm[:, :, None, :, None, :, None] \
+                * Cmm[:, None, :, None, :, None, :] \
+                + Cmm[:, :, None, :, None, None, :] \
+                * Cmm[:, None, :, None, :, :, None]
             # Cov_mix(mm^ij mm^kl) = Cmm^ik noise_m^jl + Cmm^jl noise_m^ik
             #                      + Cmm^il noise_m^jk + Cmm^jk noise_m^il
-            gaussELLmmmm_mix = self.Cell_mm[:, :, :, None, :, None] \
+            gaussELLmmmm_mix = Cmm[:, :, :, None, :, None] \
                 * noise_kappa[None, None, None, :, None, :] \
-                + self.Cell_mm[:, :, None, :, None, :] \
+                + Cmm[:, :, None, :, None, :] \
                 * noise_kappa[None, None, :, None, :, None] \
-                + self.Cell_mm[:, :, :, None, None, :] \
+                + Cmm[:, :, :, None, None, :] \
                 * noise_kappa[None, None, None, :, :, None] \
-                + self.Cell_mm[:, :, None, :, :, None] \
+                + Cmm[:, :, None, :, :, None] \
                 * noise_kappa[None, None :, None, None, :]
             # Cov_sn(mm^ij mm^kl) = noise_m^ik noise_m^jl
             #                     + noise_m^il noise_m^jk
@@ -5673,7 +6394,14 @@ class CovELLSpace(PolySpectra):
                 gaussELLmmmm_sva = gaussELLmmmm_sva[:, :, :1, :1, :, :, :, :]
                 gaussELLmmmm_mix = gaussELLmmmm_mix[:, :, :1, :1, :, :, :, :]
                 gaussELLmmmm_sn = gaussELLmmmm_sn[:, :, :1, :1, :, :, :, :]
-                   
+            return gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn
+
+        # intrinsic B-modes: the same terms with C_BB (C_EB = 0, so there
+        # is no Gaussian EE-BB cross term)
+        if self.mm:
+            gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = mmmm_terms(self.Cell_mm)
+            if self.Cell_mmB is not None:
+                self.gaussELLmmmm_BB = list(mmmm_terms(self.Cell_mmB))
         else:
             gaussELLmmmm_sva, gaussELLmmmm_mix, gaussELLmmmm_sn = 0, 0, 0
 
@@ -5723,7 +6451,11 @@ class CovELLSpace(PolySpectra):
                                     if j_tomo < i_tomo or l_tomo < k_tomo:
                                         gaussELLmmmm_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
                                         gaussELLmmmm_mix[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
-            
+            if self.gaussELLmmmm_BB is not None:
+                unique = np.triu(np.ones((self.n_tomo_lens, self.n_tomo_lens)))
+                for term in self.gaussELLmmmm_BB[:2]:
+                    term *= unique[:, :, None, None]*unique[None, None, :, :]
+
 
         if self.est_shear != "C_ell" and self.gg:
             for i_sample in range(self.sample_dim):
@@ -5764,6 +6496,15 @@ class CovELLSpace(PolySpectra):
                                     if j_tomo < i_tomo:
                                         gaussELLgggm_sva[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
                                         gaussELLgggm_mix[:,:,i_sample, j_sample,i_tomo,j_tomo,k_tomo,l_tomo] = 0.0
+        if self.csmf_diagonal_lenses:
+            for probes, terms in (('gggg', (gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn)),
+                                  ('gggm', (gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn)),
+                                  ('ggmm', (gaussELLggmm_sva, gaussELLggmm_mix, gaussELLggmm_sn)),
+                                  ('gmgm', (gaussELLgmgm_sva, gaussELLgmgm_mix, gaussELLgmgm_sn)),
+                                  ('mmgm', (gaussELLmmgm_sva, gaussELLmmgm_mix, gaussELLmmgm_sn))):
+                for term in terms:
+                    if isinstance(term, np.ndarray) and np.ndim(term) == 8:
+                        term *= self._diagonal_lens_mask(probes)[None, None]
 
         return gaussELLgggg_sva, gaussELLgggg_mix, gaussELLgggg_sn, \
             gaussELLgggm_sva, gaussELLgggm_mix, gaussELLgggm_sn, \
@@ -5995,6 +6736,8 @@ class CovELLSpace(PolySpectra):
         if not self.cov_dict['nongauss']:
             return 0, 0, 0, 0, 0, 0
         print("Calculating non-Gaussian covariance in ell space")
+        # line-of-sight integrals over the range of all tracers
+        self.los_integration_chi = np.copy(self.los_integration_chi_full)
         splines_gggg = [[]for _ in range(self.sample_dim)]
         splines_gggm = [[]for _ in range(self.sample_dim)]
         splines_ggmm = [[]for _ in range(self.sample_dim)]
@@ -6072,68 +6815,41 @@ class CovELLSpace(PolySpectra):
         gmgm_z = np.array(gmgm_z)
         mmgm_z = np.array(mmgm_z)
         mmmm_z = np.array(mmmm_z)
+        log_k = np.log((self.ellrange[None, :] + 0.5)/self.los_integration_chi[:, None])
+        log_k_table = np.log(self.mass_func.k)
+
+        def log_tri_spline(trispec_z):
+            log_k_nodes, trispec_array = self._pad_log_trispectrum(
+                log_k_table, np.log(trispec_z), np.min(log_k), np.max(log_k))
+            return RegularGridInterpolator(
+                (chi_list, log_k_nodes, log_k_nodes), trispec_array, bounds_error=False, fill_value=None)
         for i_sample in range(self.sample_dim):
             for j_sample in range(self.sample_dim):
                 if self.gg:
-                    trispec_array = np.log(gggg_z[:,:,:,i_sample,j_sample])
-                    splines_gggg[i_sample].append(RegularGridInterpolator(
-                                (chi_list,np.log(self.mass_func.k), np.log(self.mass_func.k)), trispec_array,bounds_error= False, fill_value = None))
+                    splines_gggg[i_sample].append(log_tri_spline(gggg_z[:,:,:,i_sample,j_sample]))
                 if self.gg and self.gm and self.cross_terms:
-                    trispec_array = np.log(gggm_z[:,:,:,i_sample,j_sample])
-                    splines_gggm[i_sample].append(RegularGridInterpolator(
-                                (chi_list,np.log(self.mass_func.k), np.log(self.mass_func.k)), trispec_array,bounds_error= False, fill_value = None))
+                    splines_gggm[i_sample].append(log_tri_spline(gggm_z[:,:,:,i_sample,j_sample]))
                 if self.gg and self.mm and self.cross_terms:
-                    trispec_array = np.log(ggmm_z[:,:,:,i_sample,j_sample])
-                    splines_ggmm[i_sample].append(RegularGridInterpolator(
-                                (chi_list,np.log(self.mass_func.k), np.log(self.mass_func.k)), trispec_array,bounds_error= False, fill_value = None))
+                    splines_ggmm[i_sample].append(log_tri_spline(ggmm_z[:,:,:,i_sample,j_sample]))
                 if self.gm:
-                    trispec_array = np.log(gmgm_z[:,:,:,i_sample,j_sample])
-                    splines_gmgm[i_sample].append(RegularGridInterpolator(
-                                (chi_list,np.log(self.mass_func.k), np.log(self.mass_func.k)), trispec_array,bounds_error= False, fill_value = None))        
+                    splines_gmgm[i_sample].append(log_tri_spline(gmgm_z[:,:,:,i_sample,j_sample]))
                 if self.gm and self.mm and self.cross_terms:
-                    trispec_array = np.log(mmgm_z[:,:,:,i_sample,j_sample])
-                    splines_mmgm[i_sample].append(RegularGridInterpolator(
-                                (chi_list,np.log(self.mass_func.k), np.log(self.mass_func.k)), trispec_array,bounds_error= False, fill_value = None))     
+                    splines_mmgm[i_sample].append(log_tri_spline(mmgm_z[:,:,:,i_sample,j_sample]))
                 if self.mm:
-                    trispec_array = np.log(mmmm_z[:,:,:,i_sample,j_sample])
-                    splines_mmmm[i_sample].append(RegularGridInterpolator(
-                                (chi_list,np.log(self.mass_func.k), np.log(self.mass_func.k)), trispec_array,bounds_error= False, fill_value = None))
-        # (chi, log k_1, log k_2) for all chi and pairs of ell, chi varying slowest
-        log_k = np.log((self.ellrange[None, :] + 0.5)/self.los_integration_chi[:, None])
+                    splines_mmmm[i_sample].append(log_tri_spline(mmmm_z[:,:,:,i_sample,j_sample]))
         mesh_shape = (len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))
-        mesh_k = np.array([np.broadcast_to(self.los_integration_chi[:, None, None], mesh_shape).ravel(),
-                           np.broadcast_to(log_k[:, :, None], mesh_shape).ravel(),
-                           np.broadcast_to(log_k[:, None, :], mesh_shape).ravel()])
-        if self.gg:
-            trispec_integrand_gggg = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(self.sample_dim):
-                    trispec_integrand_gggg[:,:,:,i_sample,j_sample] = np.exp(splines_gggg[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
-        if self.gg and self.gm and self.cross_terms:
-            trispec_integrand_gggm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(self.sample_dim):
-                    trispec_integrand_gggm[:,:,:,i_sample,j_sample] = np.exp(splines_gggm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
-        if self.gg and self.mm and self.cross_terms:
-            trispec_integrand_ggmm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, 1))
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(1):
-                    trispec_integrand_ggmm[:,:,:,i_sample,j_sample] = np.exp(splines_ggmm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
-        if self.gm:
-            trispec_integrand_gmgm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), self.sample_dim, self.sample_dim))
-            for i_sample in range(self.sample_dim):
-                for j_sample in range(self.sample_dim):
-                    trispec_integrand_gmgm[:,:,:,i_sample,j_sample] = np.exp(splines_gmgm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
-        if self.gm and self.mm and self.cross_terms:
-            trispec_integrand_mmgm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), 1, self.sample_dim))
-            for i_sample in range(1):
-                for j_sample in range(self.sample_dim):
-                    trispec_integrand_mmgm[:,:,:,i_sample,j_sample] = np.exp(splines_mmgm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
-        if self.mm:
-            trispec_integrand_mmmm = np.zeros((len(self.los_integration_chi), len(self.ellrange),  len(self.ellrange), 1, 1))
-            for i_sample in range(1):
-                for j_sample in range(1):
-                    trispec_integrand_mmmm[:,:,:,i_sample,j_sample] = np.exp(splines_mmmm[i_sample][j_sample]((mesh_k[0,:],mesh_k[1,:],mesh_k[2,:])).reshape((len(self.los_integration_chi), len(self.ellrange), len(self.ellrange))))
+        integrand_cache = {}
+
+        def trispec_integrand(splines, i_sample, j_sample):
+            key = (id(splines), i_sample, j_sample)
+            if key not in integrand_cache:
+                integrand_cache.clear()
+                values = np.empty(mesh_shape)
+                for rows in self._blocks(mesh_shape[0], mesh_shape[1]*mesh_shape[2]):
+                    values[rows] = np.exp(self._trilinear_on_mesh(splines[i_sample][j_sample],
+                                                                  self.los_integration_chi[rows], log_k[rows]))
+                integrand_cache[key] = values
+            return integrand_cache[key]
         self.num_cores = self.num_cores_save
         nongaussELLgggg = None
         nongaussELLgggm = None
@@ -6142,11 +6858,10 @@ class CovELLSpace(PolySpectra):
         nongaussELLmmgm = None
         nongaussELLmmmm = None
         print('Line-of-sight integration for non-Gaussian components')
-        # n(z) and lensing weights on the line-of-sight grid, once per bin
         zclust_chi = [spline(self.los_integration_chi) for spline in getattr(self, 'spline_zclust', [])]
         lensweight_chi = [spline(self.los_integration_chi) for spline in getattr(self, 'spline_lensweight', [])]
         if self.gg:
-            nongaussELLgggg = self._ell_4pt_array(
+            nongaussELLgggg = self._ell_4pt_array('gggg',
                 (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust),
                 self.ellrange_photo is None, self.ellrange_photo is None, compact=covELLspacesettings['nglimber'])
             los_gggg = _LineOfSightIntegrals(nongaussELLgggg, self._los_weights)
@@ -6154,6 +6869,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim**2
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim**2
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
@@ -6177,7 +6895,7 @@ class CovELLSpace(PolySpectra):
                                     if chi_low >= chi_high or (self.clustering_z and (i_tomo >= 2 or k_tomo >= 2)):
                                         continue
                                     weight = 1/self.los_integration_chi**6.0*zclust_chi[i_tomo] * zclust_chi[j_tomo]*zclust_chi[k_tomo]*zclust_chi[l_tomo]
-                                    los_gggg.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand_gggg[:, :, :, i_sample, j_sample])        
+                                    los_gggg.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand(splines_gggg, i_sample, j_sample))        
                             tomos += 1
                             eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
                             print('\rProjection for nonGaussian term for the '
@@ -6194,7 +6912,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLgggg = 0
 
         if self.gg and self.gm and self.cross_terms:
-            nongaussELLgggm = self._ell_4pt_array(
+            nongaussELLgggm = self._ell_4pt_array('gggm',
                 (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens),
                 self.ellrange_photo is None, False)
             los_gggm = _LineOfSightIntegrals(nongaussELLgggm, self._los_weights)
@@ -6202,6 +6920,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim**2
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim**2
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
@@ -6222,7 +6943,7 @@ class CovELLSpace(PolySpectra):
                                     if chi_low >= chi_high:
                                         continue
                                     weight = 1/self.los_integration_chi**6.0*zclust_chi[i_tomo] * zclust_chi[j_tomo]*zclust_chi[k_tomo]*lensweight_chi[l_tomo]
-                                    los_gggm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand_gggm[:, :, :, i_sample, j_sample])                                    
+                                    los_gggm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand(splines_gggm, i_sample, j_sample))                                    
                             tomos += 1
                             eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
                             print('\rProjection for nonGaussian term for the '
@@ -6239,7 +6960,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLgggm = 0
 
         if self.gg and self.mm and self.cross_terms:
-            nongaussELLggmm = self._ell_4pt_array(
+            nongaussELLggmm = self._ell_4pt_array('ggmm',
                 (self.sample_dim, 1, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens),
                 self.ellrange_photo is None, True)
             
@@ -6248,6 +6969,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim
             for i_sample in range(self.sample_dim):
                 for j_sample in range(1):
                     for i_tomo in range(self.n_tomo_clust):
@@ -6266,7 +6990,7 @@ class CovELLSpace(PolySpectra):
                                     if chi_low >= chi_high:
                                         continue
                                     weight = 1/self.los_integration_chi**6.0*zclust_chi[i_tomo] * zclust_chi[j_tomo]*lensweight_chi[k_tomo]*lensweight_chi[l_tomo]
-                                    los_ggmm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand_ggmm[:, :, :, i_sample, j_sample])
+                                    los_ggmm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand(splines_ggmm, i_sample, j_sample))
                             tomos += 1
                             eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
                             print('\rProjection for nonGaussian term for the '
@@ -6282,7 +7006,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLggmm = 0
 
         if self.gm:
-            nongaussELLgmgm = self._ell_4pt_array(
+            nongaussELLgmgm = self._ell_4pt_array('gmgm',
                 (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
                 False, False)
             los_gmgm = _LineOfSightIntegrals(nongaussELLgmgm, self._los_weights)
@@ -6290,6 +7014,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = self.n_tomo_clust*(self.n_tomo_lens)*self.sample_dim**2
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_lens*self.sample_dim**2
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim**2*self.n_tomo_lens
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     for i_tomo in range(self.n_tomo_clust):
@@ -6307,7 +7034,7 @@ class CovELLSpace(PolySpectra):
                                     if chi_low >= chi_high:
                                         continue
                                     weight = 1/self.los_integration_chi**6.0*zclust_chi[i_tomo] * lensweight_chi[j_tomo]*zclust_chi[k_tomo]*lensweight_chi[l_tomo]
-                                    los_gmgm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand_gmgm[:, :, :, i_sample, j_sample])
+                                    los_gmgm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand(splines_gmgm, i_sample, j_sample))
                             tomos += 1
                             eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
                             print('\rProjection for nonGaussian term for the '
@@ -6318,7 +7045,8 @@ class CovELLSpace(PolySpectra):
             los_gmgm.flush()
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLgmgm *= self._pixel_weights(nongaussELLgmgm)
-            if self.est_shear == "C_ell":
+            if self.est_shear == "C_ell" and self.ellrange_photo is not None:
+                # otherwise added to the Gaussian term in calc_covELL
                 adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_gm[:, None, :, None, :,:, None, None]*self.Cell_gm[None, :, None, :, None, None, :, :])
                 nongaussELLgmgm[:, :, :, :, :, :, :, :] = nongaussELLgmgm[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
             print("")
@@ -6326,7 +7054,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLgmgm = 0
 
         if self.gm and self.mm and self.cross_terms:
-            nongaussELLmmgm = self._ell_4pt_array(
+            nongaussELLmmgm = self._ell_4pt_array('mmgm',
                 (1, self.sample_dim, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
                 True, False)
             los_mmgm = _LineOfSightIntegrals(nongaussELLmmgm, self._los_weights)
@@ -6341,7 +7069,7 @@ class CovELLSpace(PolySpectra):
                                     continue
                                 for l_tomo in range(self.n_tomo_lens):
                                     weight = 1/self.los_integration_chi**6.0*lensweight_chi[i_tomo] * lensweight_chi[j_tomo]*zclust_chi[k_tomo]*lensweight_chi[l_tomo]
-                                    los_mmgm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand_mmgm[:, :, :, i_sample, j_sample])
+                                    los_mmgm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand(splines_mmgm, i_sample, j_sample))
                             tomos += 1
                             eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
                             print('\rProjection for nonGaussian term for the '
@@ -6352,7 +7080,8 @@ class CovELLSpace(PolySpectra):
             los_mmgm.flush()
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLmmgm *= self._pixel_weights(nongaussELLmmgm)
-            if self.est_shear == "C_ell" and self.est_ggl == "C_ell":
+            if self.est_shear == "C_ell" and self.est_ggl == "C_ell" and self.ellrange_photo is not None:
+                # otherwise added to the Gaussian term in calc_covELL
                 adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_mm[:, None, :, None, :,:, None, None]*self.Cell_gm[None, :, None, :, None, None, :, :])
                 nongaussELLmmgm[:, :, 0, :, :, :, :, :] = nongaussELLmmgm[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
             print("")
@@ -6360,7 +7089,7 @@ class CovELLSpace(PolySpectra):
             nongaussELLmmgm = 0
 
         if self.mm:
-            nongaussELLmmmm = self._ell_4pt_array(
+            nongaussELLmmmm = self._ell_4pt_array('mmmm',
                 (1, 1, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens),
                 True, True)
             los_mmmm = _LineOfSightIntegrals(nongaussELLmmmm, self._los_weights)
@@ -6373,7 +7102,7 @@ class CovELLSpace(PolySpectra):
                             for k_tomo in range(self.n_tomo_lens):
                                 for l_tomo in range(k_tomo, self.n_tomo_lens):
                                     weight = 1./self.los_integration_chi**6.0*lensweight_chi[i_tomo] * lensweight_chi[j_tomo]*lensweight_chi[k_tomo]*lensweight_chi[l_tomo]
-                                    los_mmmm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand_mmmm[:, :, :, i_sample, j_sample])
+                                    los_mmmm.add((i_sample, j_sample, i_tomo, j_tomo, k_tomo, l_tomo), weight, trispec_integrand(splines_mmmm, i_sample, j_sample))
                                     
                             tomos += 1
                             eta = (time.time()-t0)/60 * (tomos_comb/tomos-1)
@@ -6386,7 +7115,8 @@ class CovELLSpace(PolySpectra):
             if covELLspacesettings['pixelised_cell']:
                 nongaussELLmmmm *= self._pixel_weights(nongaussELLmmmm)
             print("")
-            if self.est_shear == "C_ell":
+            if self.est_shear == "C_ell" and self.ellrange_photo is not None:
+                # otherwise added to the Gaussian term in calc_covELL
                 adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, :, :, :, :, :]*(self.Cell_mm[:, None, :, None, :,:, None, None]*self.Cell_mm[None, :, None, :, None, None, :, :])
                 nongaussELLmmmm[:, :, 0, 0, :, :, :, :] = nongaussELLmmmm[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
         else:
@@ -6475,6 +7205,8 @@ class CovELLSpace(PolySpectra):
         if not self.cov_dict['ssc']:
             return 0, 0, 0, 0, 0, 0
         print("Calculating the SSC terms in ell space.")
+        # line-of-sight integrals over the range of all tracers
+        self.los_integration_chi = np.copy(self.los_integration_chi_full)
         SSCELLgggg = None
         SSCELLgggm = None
         SSCELLggmm = None
@@ -6503,8 +7235,8 @@ class CovELLSpace(PolySpectra):
             flat_area_idx = 0
             for i_area in range(len(survey_params_dict['survey_area_clust'])):
                 for j_area in range(len(survey_params_dict['survey_area_clust'])):
-                    area = max(survey_params_dict['survey_area_clust'][i_area],survey_params_dict['survey_area_clust'][j_area])
-                    survey_variance_gggg[i_area, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(area**2/self.deg2torad2**2)
+                    # cross modes of the two footprints normalised by the product of their areas
+                    survey_variance_gggg[i_area, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(survey_params_dict['survey_area_clust'][i_area]*survey_params_dict['survey_area_clust'][j_area]/self.deg2torad2**2)
                     flat_area_idx += 1
 
         if self.mm:
@@ -6526,8 +7258,8 @@ class CovELLSpace(PolySpectra):
             flat_area_idx = 0
             for i_area in range(len(survey_params_dict['survey_area_ggl'])):
                 for j_area in range(len(survey_params_dict['survey_area_ggl'])):
-                    area = max(survey_params_dict['survey_area_ggl'][i_area],survey_params_dict['survey_area_ggl'][j_area])
-                    survey_variance_gmgm[i_area, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(area**2/self.deg2torad2**2)
+                    # cross modes of the two footprints normalised by the product of their areas
+                    survey_variance_gmgm[i_area, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(survey_params_dict['survey_area_ggl'][i_area]*survey_params_dict['survey_area_ggl'][j_area]/self.deg2torad2**2)
                     flat_area_idx += 1
 
         if self.gg and self.gm and self.cross_terms:
@@ -6540,8 +7272,8 @@ class CovELLSpace(PolySpectra):
             flat_area_idx = 0
             for i_area in range(len(survey_params_dict['survey_area_clust'])):
                 for j_area in range(len(survey_params_dict['survey_area_ggl'])):
-                    area = max(survey_params_dict['survey_area_clust'][i_area],survey_params_dict['survey_area_ggl'][j_area])
-                    survey_variance_gggm[i_area, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(area**2/self.deg2torad2**2)
+                    # cross modes of the two footprints normalised by the product of their areas
+                    survey_variance_gggm[i_area, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(survey_params_dict['survey_area_clust'][i_area]*survey_params_dict['survey_area_ggl'][j_area]/self.deg2torad2**2)
                     flat_area_idx += 1
             
         if self.gg and self.mm and self.cross_terms:
@@ -6553,8 +7285,8 @@ class CovELLSpace(PolySpectra):
             power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
             flat_area_idx = 0
             for i_area in range(len(survey_params_dict['survey_area_clust'])):
-                area = max(survey_params_dict['survey_area_clust'][i_area],survey_params_dict['survey_area_lens'][0])
-                survey_variance_ggmm[i_area, 0, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(area**2/self.deg2torad2**2)
+                # cross modes of the two footprints normalised by the product of their areas
+                survey_variance_ggmm[i_area, 0, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(survey_params_dict['survey_area_clust'][i_area]*survey_params_dict['survey_area_lens'][0]/self.deg2torad2**2)
                 flat_area_idx += 1
         
         if self.gm and self.mm and self.cross_terms:
@@ -6566,8 +7298,8 @@ class CovELLSpace(PolySpectra):
             power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
             flat_area_idx = 0
             for j_area in range(len(survey_params_dict['survey_area_ggl'])):
-                area = max(survey_params_dict['survey_area_lens'][0],survey_params_dict['survey_area_ggl'][j_area])
-                survey_variance_mmgm[0, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(area**2/self.deg2torad2**2)
+                # cross modes of the two footprints normalised by the product of their areas
+                survey_variance_mmgm[0, j_area, :] = np.sum(power * sum_m_a_lm[flat_area_idx],axis = 1)/(survey_params_dict['survey_area_lens'][0]*survey_params_dict['survey_area_ggl'][j_area]/self.deg2torad2**2)
                 flat_area_idx += 1
 
 
@@ -6676,7 +7408,10 @@ class CovELLSpace(PolySpectra):
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim**2
-            SSCELLgggg = self._ell_4pt_array(
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim**2
+            SSCELLgggg = self._ell_4pt_array('gggg',
                 (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust),
                 self.ellrange_photo is None, self.ellrange_photo is None, compact=covELLspacesettings['nglimber'])
             los_gggg = _LineOfSightIntegrals(SSCELLgggg, self._los_weights)
@@ -6736,7 +7471,7 @@ class CovELLSpace(PolySpectra):
 
         if self.gg and self.gm and self.cross_terms:
             print("At gggm contribution")
-            SSCELLgggm = self._ell_4pt_array(
+            SSCELLgggm = self._ell_4pt_array('gggm',
                 (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens),
                 self.ellrange_photo is None, False)
             los_gggm = _LineOfSightIntegrals(SSCELLgggm, self._los_weights)
@@ -6744,6 +7479,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim**2)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim**2
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim**2
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     if not self.redshift_dep_bias:
@@ -6797,7 +7535,7 @@ class CovELLSpace(PolySpectra):
 
         if self.gg and self.mm and self.cross_terms:
             print("At ggmm contribution")
-            SSCELLggmm = self._ell_4pt_array(
+            SSCELLggmm = self._ell_4pt_array('ggmm',
                 (self.sample_dim, 1, self.n_tomo_clust, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_lens),
                 self.ellrange_photo is None, True)
             los_ggmm = _LineOfSightIntegrals(SSCELLggmm, self._los_weights)
@@ -6805,6 +7543,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = int(self.n_tomo_clust*(self.n_tomo_clust + 1)/2*self.sample_dim)
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_clust*self.sample_dim
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim
             for i_sample in range(self.sample_dim):
                 for j_sample in range(1):
                     if not self.redshift_dep_bias:
@@ -6856,7 +7597,7 @@ class CovELLSpace(PolySpectra):
 
         if self.gm:
             print("At gmgm contribution")
-            SSCELLgmgm = self._ell_4pt_array(
+            SSCELLgmgm = self._ell_4pt_array('gmgm',
                 (self.sample_dim, self.sample_dim, self.n_tomo_clust, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
                 False, False)
             los_gmgm = _LineOfSightIntegrals(SSCELLgmgm, self._los_weights)
@@ -6864,6 +7605,9 @@ class CovELLSpace(PolySpectra):
             tomos_comb = self.n_tomo_clust*(self.n_tomo_lens)*self.sample_dim**2
             if self.ellrange_photo is not None:
                 tomos_comb = self.n_tomo_clust*self.n_tomo_lens*self.sample_dim**2
+            if self.csmf_diagonal_lenses:
+                # only sample i in clustering bin i
+                tomos_comb = self.sample_dim**2*self.n_tomo_lens
             for i_sample in range(self.sample_dim):
                 for j_sample in range(self.sample_dim):
                     if not self.redshift_dep_bias:
@@ -6914,7 +7658,7 @@ class CovELLSpace(PolySpectra):
 
         if self.gm and self.mm and self.cross_terms:
             print("At mmgm contribution")
-            SSCELLmmgm = self._ell_4pt_array(
+            SSCELLmmgm = self._ell_4pt_array('mmgm',
                 (1, self.sample_dim, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_clust, self.n_tomo_lens),
                 True, False)
             los_mmgm = _LineOfSightIntegrals(SSCELLmmgm, self._los_weights)
@@ -6971,7 +7715,7 @@ class CovELLSpace(PolySpectra):
 
         if self.mm:
             print("At mmmm contribution")
-            SSCELLmmmm = self._ell_4pt_array(
+            SSCELLmmmm = self._ell_4pt_array('mmmm',
                 (1, 1, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens, self.n_tomo_lens),
                 True, True)
             los_mmmm = _LineOfSightIntegrals(SSCELLmmmm, self._los_weights)
@@ -7019,13 +7763,33 @@ class CovELLSpace(PolySpectra):
             with shape (csmf_mass_bins, csmf_mass_bins, csmf_tomo_bins, csmf_tomo_bins)
         """
         amplitude = self.csmf_at_tomo_and_mass/(self.deltaM_csmf[:, None]*self.Vmax)*((np.log(10.0)*10**self.log10csmf_mass_bins)**2)[:, None]
-        return np.eye(len(self.log10csmf_mass_bins))[:,:, None, None]*np.eye(self.n_tomo_csmf)[None, None, :, :]*amplitude[:, None, :, None]
+        result = np.eye(len(self.log10csmf_mass_bins))[:,:, None, None]*np.eye(self.n_tomo_csmf)[None, None, :, :]*amplitude[:, None, :, None]
+        per_dex = np.log(10.0)*10**self.log10csmf_mass_bins
+        for i_overlap, (i_mass, j_mass, _, delta_overlap) in enumerate(self.csmf_bin_overlaps):
+            for i_tomo in range(self.n_tomo_csmf):
+                result[i_mass, j_mass, i_tomo, i_tomo] = per_dex[i_mass]*per_dex[j_mass]*self.csmf_overlap_mean[i_overlap, i_tomo]*delta_overlap \
+                    / (self.deltaM_csmf[i_mass]*self.deltaM_csmf[j_mass]*np.sqrt(self.Vmax[i_mass, i_tomo]*self.Vmax[j_mass, i_tomo]))
+                result[j_mass, i_mass, i_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, i_tomo]
+        return result
 
     def covELL_csmf_SSC(self,
+                        covELLspacesettings,
                         survey_params_dict):
         r"""
         Calculates the SSC component of the stellar mass function covariance matrix
-        
+        Cov[Phi_mu^i, Phi_nu^j] = int dchi p_mu^i(chi) p_nu^j(chi) Phi~_mu(chi) Phi~_nu(chi) sigma_b^2(chi)/chi^2,
+        with p_mu^i the line-of-sight distribution of the galaxies in stellar mass bin mu and
+        tomographic bin i (see __set_csmf_windows) and sigma_b^2 the survey variance.
+
+        Parameters
+        ----------
+        covELLspacesettings : dictionary
+            Specifies the exact details of the projection to ell space,
+            here the number of line-of-sight integration steps.
+        survey_params_dict : dictionary
+            Specifies all the information unique to a specific survey.
+            To be passed from the read_input method of the Input class.
+
         Returns
         -------
         smf_ssc : array
@@ -7037,32 +7801,63 @@ class CovELLSpace(PolySpectra):
             ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
             x_values = np.array(self._chi_ell_points(self.los_integration_chi, ell, log_k=False))
             power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-        
+
         survey_variance_mmmm = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust'][0]**2/self.deg2torad2**2)
         survey_variance_mmmm_spline = UnivariateSpline(
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
-        result = np.zeros((len(self.log10csmf_mass_bins), len(self.log10csmf_mass_bins), self.n_tomo_csmf, self.n_tomo_csmf))
-        
-
-        los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi)**2 > 0)[0]]
+        n_mass = len(self.log10csmf_mass_bins)
+        result = np.zeros((n_mass, n_mass, self.n_tomo_csmf, self.n_tomo_csmf))
+        per_dex = np.log(10)*10**self.log10csmf_mass_bins
         for i_tomo in range(self.n_tomo_csmf):
             for j_tomo in range(i_tomo, self.n_tomo_csmf):
-                integrand = self.spline_zcsmf[i_tomo](los_integration_chi_update)*self.spline_zcsmf[j_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)**2*los_integration_chi_update**2*survey_variance_mmmm_spline(los_integration_chi_update)
-                for i_mass in range(len(self.log10csmf_mass_bins)):
-                    for j_mass in range(i_mass, len(self.log10csmf_mass_bins)):
-                        phi_tilde_sq = self.phi_tilde_spline[i_mass](los_integration_chi_update)*self.phi_tilde_spline[j_mass](los_integration_chi_update)
-                        result[i_mass, j_mass, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*10**self.log10csmf_mass_bins[j_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]**2/self.deg2torad2**2*self.f_tomo[i_tomo]*self.f_tomo[j_tomo]/self.Vmax[i_mass, i_tomo]/self.Vmax[j_mass, j_tomo]*simpson(integrand*phi_tilde_sq, x = los_integration_chi_update)
-                        result[i_mass, j_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
+                for i_mass in range(n_mass):
+                    for j_mass in range(n_mass):
+                        if j_tomo == i_tomo and j_mass < i_mass:
+                            continue
+                        los_chi_csmf = self._csmf_los_chi(i_mass, i_tomo,
+                                                          self.csmf_window_chi_range[j_mass, j_tomo, 0],
+                                                          self.csmf_window_chi_range[j_mass, j_tomo, 1],
+                                                          covELLspacesettings)
+                        if los_chi_csmf is None:
+                            continue
+                        integrand = self._csmf_window(i_mass, i_tomo, los_chi_csmf)*self._csmf_window(j_mass, j_tomo, los_chi_csmf) \
+                            * self.phi_tilde_spline[i_mass](los_chi_csmf)*self.phi_tilde_spline[j_mass](los_chi_csmf) \
+                            * survey_variance_mmmm_spline(los_chi_csmf)/los_chi_csmf**2
+                        result[i_mass, j_mass, i_tomo, j_tomo] = per_dex[i_mass]*per_dex[j_mass]*simpson(integrand, x = los_chi_csmf)
                         result[j_mass, i_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
-                        result[j_mass, i_mass, i_tomo, j_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
         return result
 
-    
+
+    def _csmf_bispectrum_splines(self,
+                                 probe,
+                                 i_mass):
+        """
+        Splines in (log k, chi) of the logarithm of the count bispectrum
+        for the cross-covariance of stellar mass bin i_mass of the SMF with
+        the probe ('gg', 'gm' or 'mm'): one per galaxy sample for the
+        count-galaxy-galaxy and count-galaxy-matter bispectra, a single one
+        for the count-matter bispectrum (cosmic shear, or galaxies without
+        an HOD).
+        """
+        if probe == 'mm' or not getattr(self, 'csmf_galaxy_bispectra', False):
+            tables = [self.csmf_count_matter_bispectrum[:, :, i_mass]]
+        elif probe == 'gg':
+            tables = [self.csmf_count_galaxy_galaxy_bispectrum[:, :, i_mass, i_sample] for i_sample in range(self.sample_dim)]
+        else:
+            tables = [self.csmf_count_galaxy_matter_bispectrum[:, :, i_mass, i_sample] for i_sample in range(self.sample_dim)]
+        return [RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(np.maximum(table, np.finfo(float).tiny)),
+                                        bounds_error= False, fill_value = None) for table in tables]
+
     def covELL_csmf_cross_LSS_sva(self,
-                                  covELLspacesettings):
+                                  covELLspacesettings,
+                                  survey_params_dict,
+                                  compute=True):
         r"""
         Calculates the sample variance term for the stellar mass function cross LSS
-        covariance
+        covariance, Cov[Phi_mu^i, C_ab(ell)] = int dchi p_mu^i(chi) q_a(chi) q_b(chi)
+        nB_mu(ell/chi)/(A chi^4), with p_mu^i the line-of-sight distribution of the
+        galaxies in stellar mass bin mu and tomographic bin i (see __set_csmf_windows),
+        q_a,b the clustering or lensing kernels and nB_mu the count matter bispectrum.
 
         Parameters
         ----------
@@ -7070,84 +7865,108 @@ class CovELLSpace(PolySpectra):
             Specifies the exact details of the projection to ell space,
             e.g., ell_min/max and the number of ell-modes to be
             calculated.
+        survey_params_dict : dictionary
+            Specifies all the information unique to a specific survey.
+            Relevant value is the survey area of the clustering
+            measurement. To be passed from the read_input method of the
+            Input class.
+
+        compute : bool
+            if False, the arrays are returned with zeros (the term is not
+            requested)
 
         Returns
         -------
         covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm : list of arrays
-            with shapes (number of ell bins, number of smf bins, sample dims, n_tomo_smf, n_tomo_clust/lens, n_tomo_clust/lens) 
+            with shapes (number of ell bins, number of smf bins, sample dims, n_tomo_smf, n_tomo_clust/lens, n_tomo_clust/lens)
         """
+        area_smf = survey_params_dict['survey_area_clust'][0]/self.deg2torad2
+        area_factor = {}
+        for probe, key in (('gg', 'survey_area_clust'), ('gm', 'survey_area_ggl'), ('mm', 'survey_area_lens')):
+            area_probe = survey_params_dict[key][0]/self.deg2torad2 if survey_params_dict[key] is not None else area_smf
+            area_factor[probe] = min(area_smf, area_probe)/(area_smf*area_probe)
+        per_dex = np.log(10)*10**self.log10csmf_mass_bins
         if self.gg:
             covELL_smf_cross_gg = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-            if not self.csmf_auto_only:
+            if compute and not self.csmf_auto_only:
                 for i_mass in range(len(self.log10csmf_mass_bins)):
-                    spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
+                    splines = self._csmf_bispectrum_splines('gg', i_mass)
                     for i_smf_tomo in range(self.n_tomo_csmf):
                         for i_tomo in range(self.n_tomo_clust):
                             for j_tomo in range(i_tomo, self.n_tomo_clust):
+                                if self.csmf_diagonal_lenses and i_tomo != j_tomo:
+                                    continue
                                 chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo])
                                 chi_high = min(
                                     self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
-                                if chi_low >= chi_high:
+                                los_integration_chi_update = self._csmf_los_chi(i_mass, i_smf_tomo, chi_low, chi_high, covELLspacesettings)
+                                if los_integration_chi_update is None:
                                     continue
-                                chi_low = max(chi_low, self.los_integration_chi[0])
-                                chi_high = min(chi_high, self.los_integration_chi[-1])
-                                los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                    chi_low, chi_high, covELLspacesettings)
-                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self._csmf_window(i_mass, i_smf_tomo, los_integration_chi_update)/los_integration_chi_update**4
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
-                                spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
-                                covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_gg[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo]
+                                for i_spline, spline in enumerate(splines):
+                                    samples = slice(None) if len(splines) == 1 else i_spline
+                                    if self.csmf_diagonal_lenses and len(splines) > 1 and i_spline != i_tomo:
+                                        continue
+                                    spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                    value = per_dex[i_mass]*area_factor['gg']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gg[: ,i_mass, samples, i_smf_tomo, i_tomo, j_tomo] = value[:, None] if len(splines) == 1 else value
+                                    covELL_smf_cross_gg[: ,i_mass, samples, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_gg[: ,i_mass, samples, i_smf_tomo, i_tomo, j_tomo]
         else:
             covELL_smf_cross_gg = 0
-        
+
         if self.gm:
             covELL_smf_cross_gm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-            if not self.csmf_auto_only:
+            if compute and not self.csmf_auto_only:
                 for i_mass in range(len(self.log10csmf_mass_bins)):
-                    spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
+                    splines = self._csmf_bispectrum_splines('gm', i_mass)
                     for i_smf_tomo in range(self.n_tomo_csmf):
                         for i_tomo in range(self.n_tomo_clust):
                             for j_tomo in range(self.n_tomo_lens):
-                                chi_low = self.chi_min_clust[i_tomo]
-                                chi_high = self.chi_max_clust[i_tomo]
-                                chi_low = max(chi_low, self.los_integration_chi[0])
-                                chi_high = min(chi_high, self.los_integration_chi[-1])
-                                los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                    chi_low, chi_high, covELLspacesettings)
-                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                los_integration_chi_update = self._csmf_los_chi(i_mass, i_smf_tomo, self.chi_min_clust[i_tomo], self.chi_max_clust[i_tomo], covELLspacesettings)
+                                if los_integration_chi_update is None:
+                                    continue
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self._csmf_window(i_mass, i_smf_tomo, los_integration_chi_update)/los_integration_chi_update**4
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
-                                spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_gm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                                for i_spline, spline in enumerate(splines):
+                                    samples = slice(None) if len(splines) == 1 else i_spline
+                                    if self.csmf_diagonal_lenses and len(splines) > 1 and i_spline != i_tomo:
+                                        continue
+                                    spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
+                                    value = per_dex[i_mass]*area_factor['gm']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gm[: ,i_mass, samples, i_smf_tomo, i_tomo, j_tomo] = value[:, None] if len(splines) == 1 else value
         else:
             covELL_smf_cross_gm = 0
         if self.mm:
             covELL_smf_cross_mm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-            if not self.csmf_auto_only:
+            if compute and not self.csmf_auto_only:
                 for i_mass in range(len(self.log10csmf_mass_bins)):
-                    spline = RegularGridInterpolator((np.log(self.mass_func.k), self.los_chi), np.log(self.csmf_count_matter_bispectrum[:, :, i_mass]),bounds_error= False, fill_value = None)
+                    spline = self._csmf_bispectrum_splines('mm', i_mass)[0]
                     for i_smf_tomo in range(self.n_tomo_csmf):
+                        los_integration_chi_update = self._csmf_los_chi(i_mass, i_smf_tomo, 0, np.inf, covELLspacesettings)
                         for i_tomo in range(self.n_tomo_lens):
-                            for j_tomo in range(self.n_tomo_lens):
-                                los_integration_chi_update = self.los_integration_chi[np.where(self.spline_zcsmf_total(self.los_integration_chi)**2 > 0)[0]]
-                                weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                            for j_tomo in range(i_tomo, self.n_tomo_lens):
+                                weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self._csmf_window(i_mass, i_smf_tomo, los_integration_chi_update)/los_integration_chi_update**4
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
                                 spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*self.f_tomo[i_smf_tomo]/self.Vmax[i_mass, i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*area_factor['mm']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo]
         else:
             covELL_smf_cross_mm = 0
         return covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm
-    
+
 
     def covELL_csmf_cross_LSS_ssc(self,
                                   covELLspacesettings,
-                                  survey_params_dict):
+                                  survey_params_dict,
+                                  compute=True):
         r"""
         Calculates the super sample variance term for the stellar mass function cross LSS
-        covariance
+        covariance, Cov[Phi_mu^i, C_ab(ell)] = int dchi p_mu^i(chi) q_a(chi) q_b(chi)
+        Phi~_mu(chi) dP_ab(ell/chi)/ddelta_b sigma_b^2(chi)/chi^4, with p_mu^i the
+        line-of-sight distribution of the galaxies in stellar mass bin mu and tomographic
+        bin i (see __set_csmf_windows) and sigma_b^2 the survey variance.
 
         Parameters
         ----------
@@ -7162,15 +7981,19 @@ class CovELLSpace(PolySpectra):
             galaxy shapes. To be passed from the read_input method of the
             Input class.
 
+        compute : bool
+            if False, the arrays are returned with zeros (the term is not
+            requested)
+
         Returns
         -------
         covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm : list of arrays
-            with shapes (number of ell bins, number of smf bins, sample dims, n_tomo_smf, n_tomo_clust/lens, n_tomo_clust/lens) 
+            with shapes (number of ell bins, number of smf bins, sample dims, n_tomo_smf, n_tomo_clust/lens, n_tomo_clust/lens)
         """
-            
+        per_dex = np.log(10)*10**self.log10csmf_mass_bins
         if self.gg:
             covELL_smf_cross_gg = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-            if not self.csmf_auto_only:
+            if compute and not self.csmf_auto_only:
                 ell, sum_m_a_lm = \
                     self.calc_a_lm('gg', 'gg', survey_params_dict)
                 if ell is not None:
@@ -7183,97 +8006,97 @@ class CovELLSpace(PolySpectra):
                     for i_smf_tomo in range(self.n_tomo_csmf):
                         for i_tomo in range(self.n_tomo_clust):
                             for j_tomo in range(i_tomo, self.n_tomo_clust):
+                                if self.csmf_diagonal_lenses and i_tomo != j_tomo:
+                                    continue
                                 chi_low = max(
                                         self.chi_min_clust[i_tomo], self.chi_min_clust[j_tomo])
                                 chi_high = min(
                                     self.chi_max_clust[i_tomo], self.chi_max_clust[j_tomo])
-                                if chi_low >= chi_high:
+                                los_integration_chi_update = self._csmf_los_chi(i_mass, i_smf_tomo, chi_low, chi_high, covELLspacesettings)
+                                if los_integration_chi_update is None:
                                     continue
-                                chi_low = max(chi_low, self.los_integration_chi[0])
-                                chi_high = min(chi_high, self.los_integration_chi[-1])
-                                los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                    chi_low, chi_high, covELLspacesettings)
-                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)
-                                weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)/los_integration_chi_update**2
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_zclust[j_tomo](los_integration_chi_update)*self._csmf_window(i_mass, i_smf_tomo, los_integration_chi_update)
+                                weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)/los_integration_chi_update**4
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
                                 for i_sample in range(self.sample_dim):
+                                    if self.csmf_diagonal_lenses and i_sample != i_tomo:
+                                        continue
                                     if self.redshift_dep_bias:
                                         spline_response = self.spline_responsePgg_tomo[i_sample*self.n_tomo_clust**2 + i_tomo*self.n_tomo_clust + j_tomo]
                                     else:
                                         spline_response = self.spline_responsePgg[i_sample]
                                     spline_eval = spline_response((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo]
         else:
             covELL_smf_cross_gg = 0
 
         if self.gm:
             covELL_smf_cross_gm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-            if not self.csmf_auto_only:
+            if compute and not self.csmf_auto_only:
+                # SMF (clustering footprint) crossed with the ggl footprint
                 ell, sum_m_a_lm = \
-                    self.calc_a_lm('gm', 'gm', survey_params_dict)
+                    self.calc_a_lm('gg', 'gm', survey_params_dict)
                 if ell is not None:
                     ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
                     x_values = np.array(self._chi_ell_points(self.los_integration_chi, ell, log_k=False))
                     power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_ggl'][0]**2/self.deg2torad2**2)
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust'][0]*survey_params_dict['survey_area_ggl'][0]/self.deg2torad2**2)
                 survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
 
                 for i_mass in range(len(self.log10csmf_mass_bins)):
                     for i_smf_tomo in range(self.n_tomo_csmf):
                         for i_tomo in range(self.n_tomo_clust):
                             for j_tomo in range(self.n_tomo_lens):
-                                chi_low = self.chi_min_clust[i_tomo]
-                                chi_high =self.chi_max_clust[i_tomo]
-                                if chi_low >= chi_high:
+                                los_integration_chi_update = self._csmf_los_chi(i_mass, i_smf_tomo, self.chi_min_clust[i_tomo], self.chi_max_clust[i_tomo], covELLspacesettings)
+                                if los_integration_chi_update is None:
                                     continue
-                                chi_low = max(chi_low, self.los_integration_chi[0])
-                                chi_high = min(chi_high, self.los_integration_chi[-1])
-                                los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                    chi_low, chi_high, covELLspacesettings)
-                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                weight = self.spline_zclust[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self._csmf_window(i_mass, i_smf_tomo, los_integration_chi_update)/los_integration_chi_update**4
                                 weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
                                 for i_sample in range(self.sample_dim):
+                                    if self.csmf_diagonal_lenses and i_sample != i_tomo:
+                                        continue
                                     if self.redshift_dep_bias:
                                         spline_response = self.spline_responsePgm_tomo[i_sample*self.n_tomo_clust + i_tomo]
                                     else:
                                         spline_response = self.spline_responsePgm[i_sample]
                                     spline_eval = spline_response((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gm = 0
 
         if self.mm:
             covELL_smf_cross_mm = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-            if not self.csmf_auto_only:
+            if compute and not self.csmf_auto_only:
+                # SMF (clustering footprint) crossed with the lensing footprint
                 ell, sum_m_a_lm = \
-                    self.calc_a_lm('mm', 'mm', survey_params_dict)
+                    self.calc_a_lm('gg', 'mm', survey_params_dict)
                 if ell is not None:
                     ell, sum_m_a_lm = ell[0], sum_m_a_lm[0]
                     x_values = np.array(self._chi_ell_points(self.los_integration_chi, ell, log_k=False))
                     power = np.exp(self.power_mm_lin_spline((x_values[0,:],np.log(x_values[1,:])))).reshape((len(self.los_integration_chi),len(ell)))
-                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_lens'][0]**2/self.deg2torad2**2)
+                survey_variance = np.sum(power * sum_m_a_lm,axis = 1)/(survey_params_dict['survey_area_clust'][0]*survey_params_dict['survey_area_lens'][0]/self.deg2torad2**2)
                 survey_variance_spline = UnivariateSpline(self.los_integration_chi, survey_variance, k=1, s=0, ext=0)
 
                 for i_mass in range(len(self.log10csmf_mass_bins)):
                     for i_smf_tomo in range(self.n_tomo_csmf):
+                        los_integration_chi_update = self._csmf_los_chi(i_mass, i_smf_tomo, self.chimin, self.chimax, covELLspacesettings)
+                        if los_integration_chi_update is None:
+                            continue
                         for i_tomo in range(self.n_tomo_lens):
                             for j_tomo in range(i_tomo, self.n_tomo_lens):
-                                los_integration_chi_update = self.__get_updated_los_integration_chi(
-                                    self.chimin, self.chimax, covELLspacesettings)
-                                los_integration_chi_update = los_integration_chi_update[np.where(self.spline_zcsmf_total(los_integration_chi_update)**2 > 0)[0]]
-                                weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self.spline_zcsmf[i_smf_tomo](los_integration_chi_update)/self.spline_zcsmf_total(los_integration_chi_update)/los_integration_chi_update**2
+                                weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self._csmf_window(i_mass, i_smf_tomo, los_integration_chi_update)/los_integration_chi_update**4
                                 weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
                                 spline_eval = np.exp(self.spline_responsePmm((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = 10**self.log10csmf_mass_bins[i_mass]*np.log(10)*survey_params_dict['survey_area_clust'][0]/self.deg2torad2/self.Vmax[i_mass, i_smf_tomo]*self.f_tomo[i_smf_tomo]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo]
         else:
-            covELL_smf_cross_mm = 0        
+            covELL_smf_cross_mm = 0
         return covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm
-        
-        
+
+
 
     def covELL_non_gaussian_non_Limber(self,
                                        covELLspacesettings,

@@ -54,8 +54,6 @@ def cached_computation(cache_dir, name, inputs, compute):
     if cache_dir is None:
         return compute()
     digest = hashlib.sha256(name.encode())
-    # results depend on the compiled integration routines as well: a rebuilt
-    # levin extension does not reuse results of the previous build
     digest.update(_levin_build_hash().encode())
     _hash_inputs(digest, inputs)
     fname = path.join(cache_dir, name + '_' + digest.hexdigest()[:24] + '.npz')
@@ -277,33 +275,14 @@ class Setup:
         warnings or errors if they are incompatible. 
 
         """
-        zet_min, zet_max, n_tomo_clust, n_tomo_lens, n_tomo_csmf = None, None, None, None, None
-        try:
-            zet_min = min(self.zet_clust['z'][0], self.zet_lens['z'][0])
-            zet_max = max(self.zet_clust['z'][-1], self.zet_lens['z'][-1])
-            n_tomo_clust = len(self.zet_clust['nz'])
-            n_tomo_lens = len(self.zet_lens['photoz'])
-            n_tomo_csmf = len(self.zet_csmf['pz'])
-        except TypeError:
-            if self.zet_clust['z'] is not None:
-                zet_min = self.zet_clust['z'][0]
-                zet_max = self.zet_clust['z'][-1]
-                n_tomo_clust = len(self.zet_clust['nz'])
-            else:
-                n_tomo_clust = 0
-            if self.zet_lens['z'] is not None:
-                zet_min = self.zet_lens['z'][0]
-                zet_max = self.zet_lens['z'][-1]
-                n_tomo_lens = len(self.zet_lens['photoz'])
-            else:
-                n_tomo_lens = 0
-            if self.zet_csmf['z'] is not None:
-                zet_min = self.zet_csmf['z'][0]
-                zet_max = self.zet_csmf['z'][-1]
-                n_tomo_csmf = len(self.zet_csmf['pz'])
-            else:
-                n_tomo_csmf = 0
-                
+        # the redshift range covers the redshift distributions of all tracers
+        n_tomo_clust = len(self.zet_clust['nz']) if self.zet_clust['z'] is not None else 0
+        n_tomo_lens = len(self.zet_lens['photoz']) if self.zet_lens['z'] is not None else 0
+        n_tomo_csmf = len(self.zet_csmf['pz']) if self.zet_csmf['z'] is not None else 0
+        zets = [tab['z'] for tab in (self.zet_clust, self.zet_lens, self.zet_csmf) if tab['z'] is not None]
+        zet_min = min(zet[0] for zet in zets) if zets else None
+        zet_max = max(zet[-1] for zet in zets) if zets else None
+
         # check for power spectra look-up tables
         if self.Pxy_tab['z'] is not None:
             if self.Pxy_tab['z'][0] > 1e-4:
@@ -1074,18 +1053,17 @@ class Setup:
         """
         Sums the tabulated pair counts npairs (angular bins at theta_npair,
         the nominal centres of logarithmic bins) into the angular bins with
-        edges theta_ul_bins. Bins that the table does not fully cover get the
-        analytic pair counts (same shape as the result); covered bins without
-        any tabulated pairs are interpolated (in log theta) from the covered
-        bins with pairs.
+        edges theta_ul_bins. Bins that the table does not fully cover and
+        combinations without a file (NaN) get the analytic pair counts (same
+        shape as the result); covered bins without any tabulated pairs are
+        interpolated (in log theta) from the covered bins with pairs.
         """
         n_theta = len(theta_ul_bins) - 1
         pair_rebinned = np.zeros((n_theta,) + npairs.shape[1:])
         bin_index = np.searchsorted(theta_ul_bins, theta_npair, side='left') - 1
         inside = (bin_index >= 0) & (bin_index < n_theta)
         np.add.at(pair_rebinned, bin_index[inside], npairs[inside])
-        # range covered by the table (half a bin beyond the outermost centres,
-        # with half a bin of tolerance for rounding)
+        # range covered by the table (half a bin beyond the outermost centres, with half a bin of tolerance for rounding)
         dlog_lo = np.log(theta_npair[1]/theta_npair[0]) if len(theta_npair) > 1 else 0.0
         dlog_hi = np.log(theta_npair[-1]/theta_npair[-2]) if len(theta_npair) > 1 else 0.0
         covered = (np.log(theta_ul_bins[:-1]) >= np.log(theta_npair[0]) - dlog_lo) & \
@@ -1093,6 +1071,9 @@ class Setup:
         log_theta = np.log(theta_bins)
         for index in np.ndindex(npairs.shape[1:]):
             column = pair_rebinned[(slice(None),) + index]
+            if np.all(np.isnan(npairs[(slice(None),) + index])):
+                column[:] = analytic[(slice(None),) + index]
+                continue
             good = covered & (column > 0)
             holes = covered & ~(column > 0)
             if np.any(holes):
@@ -1109,126 +1090,87 @@ class Setup:
                   " (arcmin) fully, using the analytic number of pairs from the effective number density there.")
         return pair_rebinned
 
+    @staticmethod
+    def __dnpair_from_table(npair, theta_npair, theta_ul_bins, analytic, name):
+        """
+        The number of pairs per arcmin, dN_pair/dtheta, at theta_ul_bins
+        from the tabulated pair counts npair (angular bins at theta_npair,
+        then tomographic bin i, j and sample). Outside of the tabulated
+        range and for combinations without a file (NaN) the analytic
+        dN_pair/dtheta (same shape as the result) is used.
+        """
+        dnpair = (npair[1:] + npair[:-1])/2./(theta_npair[1:] - theta_npair[:-1])[:, None, None, None]
+        theta_mid = (theta_npair[1:] - theta_npair[:-1])/2 + theta_npair[:-1]
+        if theta_ul_bins[0] < theta_npair[0] or theta_ul_bins[-1] > theta_npair[-1]:
+            print("Warning: The provided file for the pair counts for the " + name + " has a smaller angular range than required. "
+                  "In particular we require theta between: " + str(theta_ul_bins[0]) + " and " + str(theta_ul_bins[-1]) + ", but "
+                  "the pair counts file only provides it from " + str(theta_npair[0]) + " to " + str(theta_npair[-1]) +
+                  ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
+                  "extending over the requested angular range.")
+        outside = (theta_ul_bins < theta_npair[0]) | (theta_ul_bins > theta_npair[-1])
+        result = np.copy(analytic)
+        for index in np.ndindex(dnpair.shape[1:]):
+            column = dnpair[(slice(None),) + index]
+            if np.all(np.isnan(column)):
+                continue
+            spline = interp1d(theta_mid, column, fill_value="extrapolate")
+            result[(~outside,) + index] = spline(theta_ul_bins[~outside])
+        return result
+
     def get_dnpair(self,
                    obsbool,
                    theta_ul_bins,
                    survey_params_dict,
                    npair_tab):
-        
+        """
+        The number of pairs per arcmin, dN_pair/dtheta, at theta_ul_bins for
+        clustering, galaxy-galaxy lensing and cosmic shear with shape
+        (theta, sample, tomographic bin i, j), from the pair count files if
+        given and from the effective number densities otherwise.
+        """
         gg, gm, mm = obsbool
-        if gg and npair_tab['npair_gg'] is not None:
-            dnpair_gg = (npair_tab['npair_gg'][1:,:,:,:] + npair_tab['npair_gg'][:-1,:,:,:])/2./(npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])[:,None,None,None]
-            theta_gg = (npair_tab['theta_gg'][1:] - npair_tab['theta_gg'][:-1])/2 + npair_tab['theta_gg'][:-1]
-            if theta_ul_bins[0] < npair_tab['theta_gg'][0] or theta_ul_bins[-1] > npair_tab['theta_gg'][-1]:
-                print("Warning: The provided file for the pair counts for the shot noise has a smaller angular range than required. " 
-                    "In particular we require theta between: " + str(theta_ul_bins[0]) + " and " + str(theta_ul_bins[-1]) + ", but " 
-                    "the pair counts file only provides it from " + str(npair_tab['theta_gg'][0]) + " to " + str(npair_tab['theta_gg'][-1]) +
-                    ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
-                    "extending over the requested angular range.")
-            dnpair_gg_aux = np.ones((len(theta_ul_bins), len(dnpair_gg[0, 0, :, 0]), len(dnpair_gg[0, :, 0, 0]), len(dnpair_gg[0, 0, 0, :])))
-            for i_sample in range(len(dnpair_gg[0, 0, 0, :])):
-                for i_tomo in range(len(dnpair_gg[0, :, 0, 0])):
-                    for j_tomo in range(i_tomo, len(dnpair_gg[0, 0, :, 0])):
-                        spline = interp1d(theta_gg, dnpair_gg[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
-                        dnpair_gg_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
-                        dnpair_gg_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0], i_tomo, j_tomo,i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gg'][0])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
-                                                                                                                * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
-                        dnpair_gg_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gg'][-1])[:,0]] * survey_params_dict['survey_area_clust'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
-                                                                                                            * survey_params_dict['n_eff_clust'][j_tomo, i_sample]
-                        dnpair_gg_aux[:, j_tomo, i_tomo, i_sample] = dnpair_gg_aux[:, i_tomo, j_tomo, i_sample]
-            dnpair_gg = dnpair_gg_aux
-            theta_gg = theta_ul_bins
-            dnpair_gg = dnpair_gg.transpose(0, 3, 1, 2)
-        elif gg:
-            print("Approximating the clustering real space shot noise " +
-                  "contribution with the effective number density.")
-            dnpair_gg = 2.0*np.pi*theta_ul_bins[:, None, None, None] \
-                * survey_params_dict['survey_area_clust'][0] * 60*60 \
+        ring = 2.0*np.pi*theta_ul_bins[:, None, None, None]*60*60
+        dnpair_gg, dnpair_gm, dnpair_mm = None, None, None
+        theta_gg, theta_gm, theta_mm = None, None, None
+        if gg:
+            analytic = ring*survey_params_dict['survey_area_clust'][0] \
                 * survey_params_dict['n_eff_clust'][None, :, None, :] \
                 * survey_params_dict['n_eff_clust'][None, None, :, :]
-            theta_gg = theta_ul_bins
+            if npair_tab['npair_gg'] is not None:
+                dnpair_gg = self.__dnpair_from_table(npair_tab['npair_gg'], npair_tab['theta_gg'], theta_ul_bins,
+                                                     analytic, 'shot noise')
+            else:
+                print("Approximating the clustering real space shot noise " +
+                      "contribution with the effective number density.")
+                dnpair_gg = analytic
             dnpair_gg = dnpair_gg.transpose(0, 3, 1, 2)
-        else:
-            dnpair_gg = None
-            theta_gg = None
-        
-        if gm and npair_tab['npair_gm'] is not None:
-            dnpair_gm = (npair_tab['npair_gm'][1:,:,:,:] + npair_tab['npair_gm'][:-1,:,:,:])/2./(npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])[:,None,None,None]    
-            theta_gm = (npair_tab['theta_gm'][1:] - npair_tab['theta_gm'][:-1])/2 + npair_tab['theta_gm'][:-1]
-            if theta_ul_bins[0] < npair_tab['theta_gm'][0] or theta_ul_bins[-1] > npair_tab['theta_gm'][-1]:
-                print("Warning: The provided file for the pair counts for the GGL noise has a smaller angular range than required. " 
-                    "In particular we require theta between: " + str(theta_ul_bins[0]) + " and " + str(theta_ul_bins[-1]) + ", but " 
-                    "the pair counts file only provides it from " + str(npair_tab['theta_gm'][0]) + " to " + str(npair_tab['theta_gm'][-1]) +
-                    ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
-                    "extending over the requested angular range.")
-            dnpair_gm_aux = np.ones((len(theta_ul_bins), len(dnpair_gm[0, :, 0, 0]), len(dnpair_gm[0, 0, :, 0]), len(dnpair_gm[0, 0, 0, :])))
-            for i_sample in range(len(dnpair_gm[0, 0, 0, :])):
-                for i_tomo in range(len(dnpair_gm[0, :, 0, 0])):
-                    for j_tomo in range(len(dnpair_gm[0, 0, :, 0])):
-                        spline = interp1d(theta_gm, dnpair_gm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
-                        dnpair_gm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
-                        dnpair_gm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_gm'][0])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-                        dnpair_gm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_gm'][-1])[:,0]] * survey_params_dict['survey_area_ggl'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_clust'][i_tomo, i_sample] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-            dnpair_gm = dnpair_gm_aux
-            theta_gm = theta_ul_bins
-            dnpair_gm =dnpair_gm.transpose(0, 3, 1, 2)
-        elif gm:
-            print("Approximating the ggl real space shot noise " +
-                  "contribution with the effective number density.")
-            dnpair_gm = 2.0*np.pi*theta_ul_bins[:,None, None, None] \
-                * survey_params_dict['survey_area_ggl'][0] * 60*60 \
+            theta_gg = theta_ul_bins
+        if gm:
+            analytic = ring*survey_params_dict['survey_area_ggl'][0] \
                 * survey_params_dict['n_eff_clust'][None, :, None, :] \
                 * survey_params_dict['n_eff_lens'][None, None, :, :]
-            theta_gm = theta_ul_bins
+            if npair_tab['npair_gm'] is not None:
+                dnpair_gm = self.__dnpair_from_table(npair_tab['npair_gm'], npair_tab['theta_gm'], theta_ul_bins,
+                                                     analytic, 'GGL noise')
+            else:
+                print("Approximating the ggl real space shot noise " +
+                      "contribution with the effective number density.")
+                dnpair_gm = analytic
             dnpair_gm = dnpair_gm.transpose(0, 3, 1, 2)
-        else:
-            dnpair_gm = None
-            theta_gm = None
-
-        
-        if mm and npair_tab['npair_mm'] is not None:
-            dnpair_mm = (npair_tab['npair_mm'][1:,:,:,:] + npair_tab['npair_mm'][:-1,:,:,:])/2./(npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])[:,None,None,None]  
-            theta_mm = (npair_tab['theta_mm'][1:] - npair_tab['theta_mm'][:-1])/2 + npair_tab['theta_mm'][:-1]
-            if theta_ul_bins[0] < npair_tab['theta_mm'][0] or theta_ul_bins[-1] > npair_tab['theta_mm'][-1]:
-                print("Warning: The provided file for the pair counts for the shape noise has a smaller angular range than required. " 
-                    "In particular we require theta between: " + str(theta_ul_bins[0]) + " and " + str(theta_ul_bins[-1]) + ", but " 
-                    "the pair counts file only provides it from " + str(npair_tab['theta_mm'][0]) + " to " + str(npair_tab['theta_mm'][-1]) +
-                    ". Will use the analytic formula over the extended range. This might cause unwanted behaviour. Please provide an npair file "
-                    "extending over the requested angular range.")
-            dnpair_mm_aux = np.ones((len(theta_ul_bins), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, :, 0, 0]), len(dnpair_mm[0, 0, 0, :])))
-            for i_sample in range(len(dnpair_mm[0, 0, 0, :])):
-                for i_tomo in range(len(dnpair_mm[0, :, 0, 0])):
-                    for j_tomo in range(i_tomo,len(dnpair_mm[0, 0, :, 0])):
-                        spline = interp1d(theta_mm, dnpair_mm[:,i_tomo, j_tomo, i_sample], fill_value="extrapolate")
-                        dnpair_mm_aux[:, i_tomo, j_tomo, i_sample] = spline(theta_ul_bins)
-                        dnpair_mm_aux[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins < npair_tab['theta_mm'][0])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-                        dnpair_mm_aux[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0], i_tomo, j_tomo, i_sample] = (2.0*np.pi*theta_ul_bins[np.argwhere(theta_ul_bins > npair_tab['theta_mm'][-1])[:,0]] * survey_params_dict['survey_area_lens'][0] * 60*60) \
-                                                                                                                * survey_params_dict['n_eff_lens'][i_tomo, i_sample] \
-                                                                                                                * survey_params_dict['n_eff_lens'][j_tomo, i_sample]
-                        dnpair_mm_aux[:, j_tomo, i_tomo, i_sample] = dnpair_mm_aux[:, i_tomo, j_tomo, i_sample]
-            dnpair_mm = dnpair_mm_aux
-            theta_mm = theta_ul_bins
-            dnpair_mm =dnpair_mm.transpose(0, 3, 1, 2)
-        elif mm:
-            print("Approximating the lensing real space shape noise " +
-                  "contribution with the effective number density.")
-            dnpair_mm = (2.0*np.pi*theta_ul_bins * survey_params_dict['survey_area_lens'][0] * 60*60) [:, None, None, None] \
+            theta_gm = theta_ul_bins
+        if mm:
+            analytic = ring*survey_params_dict['survey_area_lens'][0] \
                 * survey_params_dict['n_eff_lens'][None, :, None, :] \
                 * survey_params_dict['n_eff_lens'][None, None, :, :]
-            theta_mm = theta_ul_bins
+            if npair_tab['npair_mm'] is not None:
+                dnpair_mm = self.__dnpair_from_table(npair_tab['npair_mm'], npair_tab['theta_mm'], theta_ul_bins,
+                                                     analytic, 'shape noise')
+            else:
+                print("Approximating the lensing real space shape noise " +
+                      "contribution with the effective number density.")
+                dnpair_mm = analytic
             dnpair_mm = dnpair_mm.transpose(0, 3, 1, 2)
-        else:
-            dnpair_mm = None
-            theta_mm = None
-        
+            theta_mm = theta_ul_bins
         return dnpair_gg, dnpair_gm, dnpair_mm, theta_gg, theta_gm, theta_mm
 
     def get_npair(self,
@@ -1260,7 +1202,8 @@ class Setup:
             if len(npair_tab['theta_gg']) == len(theta_ul_bins)-1 and \
                (np.allclose(npair_tab['theta_gg'], theta_lin) or
                     np.allclose(npair_tab['theta_gg'], theta_log)):
-                npair_gg = npair_tab['npair_gg']
+                # combinations without a file: analytic number of pairs
+                npair_gg = np.where(np.isnan(npair_tab['npair_gg']), analytic_gg, npair_tab['npair_gg'])
             else:
                 print("Warning: The number of pairs for clustering is not " +
                       "given in the same angular bins / range as is queried " +
@@ -1290,7 +1233,8 @@ class Setup:
             if len(npair_tab['theta_gm']) == len(theta_ul_bins)-1 and \
                (np.allclose(npair_tab['theta_gm'], theta_lin) or
                     np.allclose(npair_tab['theta_gm'], theta_log)):
-                npair_gm = npair_tab['npair_gm']
+                # combinations without a file: analytic number of pairs
+                npair_gm = np.where(np.isnan(npair_tab['npair_gm']), analytic_gm, npair_tab['npair_gm'])
             else:
                 print("Warning: The number of pairs for galaxy-galaxy " +
                       "lensing is not given in the same angular bins / " +
@@ -1322,7 +1266,8 @@ class Setup:
             if len(npair_tab['theta_mm']) == len(theta_ul_bins)-1 and \
                (np.allclose(npair_tab['theta_mm'], theta_lin) or
                     np.allclose(npair_tab['theta_mm'], theta_log)):
-                npair_mm = npair_tab['npair_mm']
+                # combinations without a file: analytic number of pairs
+                npair_mm = np.where(np.isnan(npair_tab['npair_mm']), analytic_mm, npair_tab['npair_mm'])
             else:
                 print("Warning: The number of pairs for cosmic shear is not " +
                       "given in the same angular bins / range as is queried " +
@@ -1603,23 +1548,34 @@ class Setup:
             NPIX = healpy.nside2npix(NSIDE)
             for i in range(len(survey_params_dict['survey_area_'+est1])):
                 for j in range(len(survey_params_dict['survey_area_'+est2])):
-                    survey_area = max(survey_params_dict['survey_area_'+est1][i], survey_params_dict['survey_area_'+est2][j])
-                    survey_area_in_rad = survey_area*np.pi**2/(180**2)
-                    radius_mask = np.arccos(1 - survey_area_in_rad / (2 * np.pi))
-                    center_coord = healpy.ang2vec(0, 0)
-                    ipix_disc = healpy.query_disc(nside=NSIDE, vec=center_coord, radius=radius_mask)
-                    m = np.zeros(NPIX)
-                    m[ipix_disc] = 1
+                    areas = (survey_params_dict['survey_area_'+est1][i], survey_params_dict['survey_area_'+est2][j])
+                    alms = []
+                    for survey_area in areas:
+                        key = ('circle_alm', survey_area, NSIDE)
+                        if key not in self._mask_cl_cache:
+                            survey_area_in_rad = survey_area*np.pi**2/(180**2)
+                            radius_mask = np.arccos(1 - survey_area_in_rad / (2 * np.pi))
+                            center_coord = healpy.ang2vec(0, 0)
+                            ipix_disc = healpy.query_disc(nside=NSIDE, vec=center_coord, radius=radius_mask)
+                            m = np.zeros(NPIX)
+                            m[ipix_disc] = 1
+                            self._mask_cl_cache[key] = healpy.map2alm(m, use_weights=True)
+                        alms.append(self._mask_cl_cache[key])
                     ellmax = 3 * NSIDE - 1
                     aux_ell = np.arange(ellmax)
                     ell.append(aux_ell)
-                    # the survey modes of a circular mask only depend on its area, calculate them once per run
-                    key = ('circle', survey_area, NSIDE)
+                    key = ('circle', min(areas), max(areas), NSIDE)
                     if key not in self._mask_cl_cache:
-                        self._mask_cl_cache[key] = healpy.sphtfunc.anafast(m, use_weights=True)
+                        if areas[0] == areas[1]:
+                            self._mask_cl_cache[key] = healpy.alm2cl(alms[0])
+                        else:
+                            self._mask_cl_cache[key] = healpy.alm2cl(alms[0], alms[1])
                     C_ell = self._mask_cl_cache[key]
                     sum_m_a_lm.append((2 * aux_ell + 1) * C_ell[:ellmax])
-                    print("Assuming a circular mask with size",survey_area,"deg2 for",est1,"and",est2,".")   
+                    if areas[0] == areas[1]:
+                        print("Assuming a circular mask with size",areas[0],"deg2 for",est1,"and",est2,".")
+                    else:
+                        print("Assuming concentric circular masks with sizes",areas[0],"and",areas[1],"deg2 for",est1,"and",est2,".")
         return ell, sum_m_a_lm
 
 

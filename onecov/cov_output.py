@@ -58,6 +58,12 @@ class Output:
                   ssc)
     """
 
+    # labels of the C_ell covariance with intrinsic B-modes (E/B layout):
+    # E (B) is the E-mode (B-mode) shear spectrum
+    CELL_EB_LABELS = {'ggxip': 'ggmmE', 'ggxim': 'ggmmB',
+                      'gmxip': 'gmmmE', 'gmxim': 'gmmmB',
+                      'xipxip': 'mmEmmE', 'xipxim': 'mmEmmB', 'ximxim': 'mmBmmB'}
+
     def __init__(self, output_dict, projected_clust = None, projected_lens = None):
         self.filename = output_dict['file']
         self.__check_filetype()
@@ -303,6 +309,26 @@ class Output:
             new_matrix[i, :] = full_covariance[ii,indices_take_final]
         return new_matrix
 
+    def __split_off_csmf(self,
+                         gauss,
+                         nongauss,
+                         ssc,
+                         n_csmf):
+        """
+        Removes the covariance of the stellar mass function and its
+        cross-covariance with the LSS probes (the last n_csmf entries of the
+        Gaussian, non-Gaussian and super-sample terms) from the lists. The
+        sum is kept in self.conditional_stellar_mass_function_cov, the
+        three parts in self.csmf_split for the split output.
+        """
+        self.csmf_split = {'gauss': list(gauss[-n_csmf:]),
+                           'nongauss': list(nongauss[-n_csmf:]),
+                           'ssc': list(ssc[-n_csmf:])}
+        self.conditional_stellar_mass_function_cov = [
+            term_g + term_ng + term_ssc for term_g, term_ng, term_ssc
+            in zip(self.csmf_split['gauss'], self.csmf_split['nongauss'], self.csmf_split['ssc'])]
+        return gauss[:-n_csmf], nongauss[:-n_csmf], ssc[:-n_csmf]
+
     def write_arbitrary_cov(self,
                             cov_dict,
                             obs_dict,
@@ -359,7 +385,7 @@ class Output:
         self.has_gauss, self.has_nongauss, self.has_ssc = cov_dict['gauss'], cov_dict['nongauss'], cov_dict['ssc']
         self.has_csmf = obs_dict['observables']['csmf']
         gauss, nongauss, ssc = self.__none_to_zero(gauss, nongauss, ssc)
-        if obs_dict['ELLspace']['n_spec'] != 0:
+        if obs_dict['ELLspace']['n_spec'] is not None and obs_dict['ELLspace']['n_spec'] != 0:
             self.style = "matrix"
             self.filename = [s for s in self.filename if 'matrix' in s or 'mat' in s]
 
@@ -370,8 +396,7 @@ class Output:
         mult = 1
         self.conditional_stellar_mass_function_cov = []
         if self.has_csmf:
-            self.conditional_stellar_mass_function_cov = gauss[-5:]
-            gauss = gauss[:-5]
+            gauss, nongauss, ssc = self.__split_off_csmf(gauss, nongauss, ssc, 5)
         if len(gauss) == obslength:
             ...
         elif len(gauss) == obslength+3:
@@ -545,12 +570,7 @@ class Output:
         mult = 1
         self.conditional_stellar_mass_function_cov = []
         if self.has_csmf:
-            if self.is_cell:
-                self.conditional_stellar_mass_function_cov = gauss[-4:]
-                gauss = gauss[:-4]
-            else:
-                self.conditional_stellar_mass_function_cov = gauss[-5:]
-                gauss = gauss[:-5]
+            gauss, nongauss, ssc = self.__split_off_csmf(gauss, nongauss, ssc, 4 if self.is_cell else 5)
         if len(gauss) == obslength:
             ...
         elif len(gauss) == obslength+3:
@@ -653,15 +673,35 @@ class Output:
                                     gauss, nongauss, ssc, fct_args)
 
     @staticmethod
+    def _gm_first(obs, *labels):
+        """
+        Labels (x1, x2, s1, s2, t1, t2, t3, t4) of a list entry. The
+        cross-covariance of galaxy-galaxy lensing and cosmic shear of the
+        projected estimators ('gmxip', 'gmxim') is stored cosmic shear first;
+        its labels are reordered so that galaxy-galaxy lensing comes first,
+        as in the name (and as for 'ggxip', 'ggxim').
+        """
+        if obs in ('gmxip', 'gmxim'):
+            x1, x2, s1, s2, t1, t2, t3, t4 = labels
+            return x2, x1, s2, s1, t3, t4, t1, t2
+        return labels
+
+    @staticmethod
     def _has_negative_eigenvalues(covmatrix):
         """
-        Whether the (symmetric) covariance matrix has eigenvalues below
-        -1e-12 times the largest one, i.e. negative ones beyond rounding (an
-        exactly degenerate matrix has eigenvalues of order -1e-16 of the
-        largest one).
+        Whether the (symmetric) covariance matrix has negative eigenvalues
+        beyond rounding. The test uses the correlation matrix, so it does not
+        depend on the units of the observables (e.g. dimensionful COSEBIs and
+        Psi-stats differ by many orders of magnitude): eigenvalues below
+        -1e-12 (an exactly degenerate matrix has eigenvalues of order -1e-16).
+        A non-positive diagonal element is always flagged.
         """
-        eigenvalues = np.linalg.eigvalsh(covmatrix)
-        return bool(np.any(eigenvalues < -1e-12*np.max(np.abs(eigenvalues))))
+        diagonal = np.diag(covmatrix)
+        if np.any(diagonal <= 0):
+            return bool(np.any(diagonal < 0))
+        scale = 1/np.sqrt(diagonal)
+        eigenvalues = np.linalg.eigvalsh(covmatrix*scale[:, None]*scale[None, :])
+        return bool(np.any(eigenvalues < -1e-12))
 
     def plot_corrcoeff_matrix(self,
                               obs_dict,
@@ -746,20 +786,30 @@ class Output:
         labels_text = []
         position = 0
         old_position = 0
+        # with csmf_diagonal_lenses only sample i in clustering bin i (auto
+        # correlations only for clustering) enters the matrix
+        diagonal_lenses = bool(getattr(self, 'csmf_diagonal_lenses', False))
         if gg:
             if np.any(self.projected_clust):
                 proj_quant = self.projected_clust
             sub_position_tomo = 0
-            for sub_tomo in range(int(n_tomo_clust*(n_tomo_clust + 1)/2)):
-                sub_position_sample = sub_position_tomo
-                sub_position_tomo += len(proj_quant)*sampledim
-                ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
-                ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
-                for sub_sample in range(sampledim):
-                    sub_position_sample += len(proj_quant)
-                    ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
-                    ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
-            position += len(proj_quant)*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2
+            if diagonal_lenses:
+                for sub_tomo in range(int(n_tomo_clust)):
+                    sub_position_tomo += len(proj_quant)
+                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                position += len(proj_quant)*n_tomo_clust
+            else:
+                for sub_tomo in range(int(n_tomo_clust*(n_tomo_clust + 1)/2)):
+                    sub_position_sample = sub_position_tomo
+                    sub_position_tomo += len(proj_quant)*sampledim
+                    ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
+                    for sub_sample in range(sampledim):
+                        sub_position_sample += len(proj_quant)
+                        ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
+                        ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
+                position += len(proj_quant)*sampledim*n_tomo_clust*(n_tomo_clust + 1)/2
             old_position = position
             labels_position.append(position/2)
             labels_position_y.append(len(covmatrix) - position/2)
@@ -779,16 +829,18 @@ class Output:
             if np.any(self.projected_clust):
                 proj_quant = self.projected_clust
             sub_position_tomo = old_position
+            gm_sampledim = 1 if diagonal_lenses else sampledim
             for sub_tomo in range(int(n_tomo_clust*n_tomo_lens)):
                 sub_position_sample = sub_position_tomo
-                sub_position_tomo += len(proj_quant)*sampledim
+                sub_position_tomo += len(proj_quant)*gm_sampledim
                 ax.axhline(y=len(covmatrix)-sub_position_tomo, color='black', linewidth=.3, ls = "--")
                 ax.axvline(x=sub_position_tomo, color='black', linewidth=.3, ls = "--")
-                for sub_sample in range(sampledim):
-                    sub_position_sample += len(proj_quant)
-                    ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
-                    ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
-            position += len(proj_quant)*sampledim*n_tomo_clust*n_tomo_lens
+                if gm_sampledim > 1:
+                    for sub_sample in range(gm_sampledim):
+                        sub_position_sample += len(proj_quant)
+                        ax.axhline(y=len(covmatrix)-sub_position_sample, color='black', linewidth=.15, ls = ":")
+                        ax.axvline(x=sub_position_sample, color='black', linewidth=.15, ls = ":")
+            position += len(proj_quant)*gm_sampledim*n_tomo_clust*n_tomo_lens
             labels_position.append(old_position + (position- old_position)/2)
             labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
             
@@ -1243,6 +1295,108 @@ class Output:
 
     #print("Plotting correlation matrix")
 
+    @staticmethod
+    def _csmf_bin_values(obs_dict):
+        """
+        log10 of the stellar masses of the SMF bins (the centres of the bins
+        in stellar mass, as in the calculation).
+        """
+        observables = obs_dict['observables']
+        if observables['csmf_log10M_bins_upper'] is not None and observables['csmf_log10M_bins_lower'] is not None:
+            lower, upper = 10**np.asarray(observables['csmf_log10M_bins_lower']), 10**np.asarray(observables['csmf_log10M_bins_upper'])
+        else:
+            edges = 10**np.asarray(observables['csmf_log10M_bins'])
+            lower, upper = edges[:-1], edges[1:]
+        return np.log10(lower + (upper - lower)/2)
+
+    def _csmf_list_rows(self, cov_dict, obs_dict, ostr_format, x_csmf, x_clust, x_lens, arbitrary=False):
+        """
+        The rows of the list output for the stellar mass function (SMF): its
+        auto-covariance and its cross-covariance with clustering,
+        galaxy-galaxy lensing and cosmic shear, with all terms of the split
+        output (the Gaussian term of the SMF is its shot noise). The columns
+        are x1 = log10 of the stellar mass of the SMF bin and x2 = the
+        projected quantity of the LSS probe (theta, ell, mode; the indices
+        for arbitrary summaries), s1 = 1 (no sample for the SMF), s2 = the
+        galaxy sample, tomoi = tomoj = the tomographic bin of the SMF and
+        tomok, tomol = the bins of the LSS probe (only tomok <= tomol for
+        clustering and cosmic shear, and only sample i in clustering bin i
+        with csmf_diagonal_lenses).
+        """
+        terms = self.conditional_stellar_mass_function_cov
+        parts = getattr(self, 'csmf_split', None)
+        if getattr(self, 'is_cell', False):
+            names = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
+        elif obs_dict['observables']['est_shear'] == 'xi_pm' and not arbitrary:
+            names = ["csmfcsmf", "csmfgg", "csmfgm", "csmfxip", "csmfxim"]
+        else:
+            names = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmmE", "csmfmmB"]
+        diagonal_lenses = bool(obs_dict['observables'].get('csmf_diagonal_lenses'))
+        rows = []
+
+        def part(term, k, index):
+            if parts is None or not isinstance(parts[term][k], np.ndarray):
+                return 0.0
+            return parts[term][k][index]
+
+        def row(name, x1, x2, s2, tc1, tc2, t3, t4, k, index):
+            cov = terms[k][index]
+            gauss, nongauss, ssc = part('gauss', k, index), part('nongauss', k, index), part('ssc', k, index)
+            if cov_dict['split_gauss']:
+                values = (cov, 0.0, 0.0, gauss, nongauss, ssc)
+            else:
+                values = (cov, gauss, nongauss, ssc)
+            return ostr_format % ((name, x1, x2, 1, s2, tc1, tc2, t3, t4) + values)
+
+        for k, term in enumerate(terms):
+            if not isinstance(term, np.ndarray) or k >= len(names):
+                continue
+            if k == 0:
+                n_mass, n_tomo = term.shape[0], term.shape[2]
+                x_mass = np.arange(n_mass) if arbitrary or x_csmf is None else x_csmf
+                for tc1 in range(n_tomo):
+                    for tc2 in range(n_tomo):
+                        for mu1 in range(n_mass):
+                            for mu2 in range(n_mass):
+                                rows.append(row(names[k], x_mass[mu1], x_mass[mu2], 1, tc1 + 1, tc2 + 1, tc1 + 1, tc2 + 1,
+                                                k, (mu1, mu2, tc1, tc2)))
+                continue
+            n_r, n_mass, n_sample, n_tomo, n_t1, n_t2 = term.shape
+            x_mass = np.arange(n_mass) if arbitrary or x_csmf is None else x_csmf
+            x_probe = x_lens if k >= 3 else x_clust
+            if arbitrary or x_probe is None:
+                x_probe = np.arange(n_r)
+            symmetric = names[k] not in ("csmfgm",)
+            for tc in range(n_tomo):
+                for mu in range(n_mass):
+                    for i_sample in range(n_sample):
+                        for t1 in range(n_t1):
+                            for t2 in range(t1 if symmetric else 0, n_t2):
+                                if diagonal_lenses and k in (1, 2) and (t1 != i_sample or (k == 1 and t2 != i_sample)):
+                                    continue
+                                for i_r in range(n_r):
+                                    rows.append(row(names[k], x_mass[mu], x_probe[i_r], i_sample + 1, tc + 1, tc + 1, t1 + 1, t2 + 1,
+                                                    k, (i_r, mu, i_sample, tc, t1, t2)))
+        return rows
+
+    @staticmethod
+    def _diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+        """
+        Whether an entry (samples i_s1, i_s2, tomographic bins t1..t4) of the
+        list output of observable obs is measured with csmf_diagonal_lenses,
+        i.e. every galaxy sample is in the clustering bin of the same number
+        (both bins of a gg pair, the lens bin of a gm pair). The gm x shear
+        arrays (gmxip, gmxim, mmgm) have the shear pair first.
+        """
+        pairs = {'gggg': ('gg', 'gg'), 'gggm': ('gg', 'gm'), 'ggmm': ('gg', 'mm'),
+                 'ggxip': ('gg', 'mm'), 'ggxim': ('gg', 'mm'), 'gmgm': ('gm', 'gm'),
+                 'gmxip': ('mm', 'gm'), 'gmxim': ('mm', 'gm'), 'mmgm': ('mm', 'gm')}
+        first, second = pairs.get(obs, ('mm', 'mm'))
+        for kind, sample, ta, tb in ((first, i_s1, t1, t2), (second, i_s2, t3, t4)):
+            if kind != 'mm' and (ta != sample or (kind == 'gg' and tb != sample)):
+                return False
+        return True
+
     def __write_cov_list(self,
                          cov_dict,
                          obs_dict,
@@ -1255,6 +1409,10 @@ class Output:
                          ssc,
                          fct_args):
         obslist, obsbool = fct_args
+        # with csmf_diagonal_lenses only sample i in clustering bin i is
+        # measured: the other entries are not written
+        diagonal_lenses = bool(obs_dict['observables'].get('csmf_diagonal_lenses')) and \
+            (obs_dict['ELLspace']['n_spec'] is None or obs_dict['ELLspace']['n_spec'] == 0)
 
         proj_quant_str = 'x1\tx2\t'
 
@@ -1687,6 +1845,8 @@ class Output:
                     obs_copy = 'PsigmEmm'
                 if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'PsigmBmm'
+                if obs_dict['observables']['est_shear'] == 'C_ell' and obs in self.CELL_EB_LABELS:
+                    obs_copy = self.CELL_EB_LABELS[obs]
                 
                 
                 if not obsbool[oidx]:
@@ -1736,6 +1896,8 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[oidx][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
@@ -1765,6 +1927,8 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[oidx][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
@@ -1807,12 +1971,14 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[oidx][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  ri, rj, 
-                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,
+                                                            *self._gm_first(obs, ri, rj, i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                             cov, 
                                                             gauss[oidx][idxs],
                                                             nongauss[oidx][idxs],
@@ -1838,6 +2004,8 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[oidx][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
@@ -1896,6 +2064,8 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[splitidx][idxs] \
                                                             + gauss[splitidx+1][idxs] \
                                                             + gauss[splitidx+2][idxs] \
@@ -1926,6 +2096,8 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[splitidx][idxs] \
                                                             + gauss[splitidx+1][idxs] \
                                                             + gauss[splitidx+2][idxs] \
@@ -1970,14 +2142,16 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[splitidx][idxs] \
                                                             + gauss[splitidx+1][idxs] \
                                                             + gauss[splitidx+2][idxs] \
                                                             + nongauss[oidx][idxs] \
                                                             + ssc[oidx][idxs]
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  ri, rj, 
-                                                            i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,
+                                                            *self._gm_first(obs, ri, rj, i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                             cov, 
                                                             gauss[splitidx][idxs],
                                                             gauss[splitidx+1][idxs],
@@ -2005,6 +2179,8 @@ class Output:
                                                 for i_s1 in range(sampledim1):
                                                     for i_s2 in range(sampledim2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         cov = gauss[splitidx][idxs] \
                                                             + gauss[splitidx+1][idxs] \
                                                             + gauss[splitidx+2][idxs] \
@@ -2022,75 +2198,10 @@ class Output:
                                                         olist.append(ostr)
                     splitidx += 3
             
-            index = 0
             if self.has_csmf:
-                if self.is_cell:
-                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
-                else:
-                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmmE", "csmfmmB"]
-                for obs in self.conditional_stellar_mass_function_cov:
-                    csmf_auto = False
-                    if index == 0:
-                        csmf_auto = True
-                    if not isinstance(obs, np.ndarray):
-                        continue
-                    if csmf_auto:
-                        for i_r1 in range(len(obs[:, 0,0,0])):
-                            for i_r2 in range(len(obs[0, :, 0, 0])):
-                                for t1 in range(len(obs[0,0,:,0])):
-                                    for t2 in range(len(obs[0,0,0,:])):
-                                        ri = i_r1
-                                        rj = i_r2              
-                                        cov = obs[i_r1, i_r2, t1, t2]
-                                        if not cov_dict['split_gauss']:
-                                            ostr = ostr_format \
-                                                % (obs_copy[index],  ri, rj, 
-                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                                cov, 
-                                                0,
-                                                0,
-                                                0)
-                                        else:
-                                            ostr = ostr_format \
-                                                % (obs_copy[index], ri, rj,
-                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                                cov, 
-                                                0,
-                                                0,
-                                                0,
-                                                0,
-                                                0)
-                                        olist.append(ostr)
-                    else:
-                        for i_r1 in range(len(obs[:, 0,0,0,0,0])):
-                            for i_r2 in range(len(obs[0, :, 0, 0,0,0])):                
-                                for s1 in range(len(obs[0,0,:,0,0,0])):
-                                    for t1 in range(len(obs[0,0,0,:,0,0])):
-                                        for t2 in range(len(obs[0,0,0,0,:,0])):
-                                            for t3 in range(len(obs[0,0,0,0,0,:])):
-                                                ri = i_r1
-                                                rj = i_r2              
-                                                cov = obs[i_r1, i_r2, s1, t1, t2, t3]
-                                                if not cov_dict['split_gauss']:
-                                                    ostr = ostr_format \
-                                                        % (obs_copy[index],  ri, rj, 
-                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                        cov, 
-                                                        0,
-                                                        0,
-                                                        0)
-                                                else:
-                                                    ostr = ostr_format \
-                                                        % (obs_copy[index], ri, rj,
-                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                        cov, 
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0)
-                                                olist.append(ostr)
-                    index += 1
+                olist.extend(self._csmf_list_rows(cov_dict, obs_dict, ostr_format, self._csmf_bin_values(obs_dict),
+                                                  self.projected_clust if np.any(self.projected_clust) else proj_quant,
+                                                  self.projected_lens if np.any(self.projected_lens) else proj_quant))
             if not self.save_as_binary:
                 if 'terminal' in self.style:
                     print("Writing result to terminal. (Brace yourself...).'")
@@ -2116,6 +2227,10 @@ class Output:
                                         ssc,
                                         fct_args):
         obslist, obsbool = fct_args
+        # with csmf_diagonal_lenses only sample i in clustering bin i is
+        # measured: the other entries are not written
+        diagonal_lenses = bool(obs_dict['observables'].get('csmf_diagonal_lenses')) and \
+            (obs_dict['ELLspace']['n_spec'] is None or obs_dict['ELLspace']['n_spec'] == 0)
         proj_quant_str = 'x1\tx2\t'
 
         for observables in obs_dict['observables'].values():
@@ -2566,6 +2681,8 @@ class Output:
                     obs_copy = 'PsigmEmm'
                 if obs == 'gmxim' and obs_dict['observables']['est_ggl'] == 'cosebi' and obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
                     obs_copy = 'PsigmBmm'
+                if obs_dict['observables']['est_shear'] == 'C_ell' and obs in self.CELL_EB_LABELS:
+                    obs_copy = self.CELL_EB_LABELS[obs]
 
                 if not obsbool[oidx]:
                     splitidx += 3
@@ -2613,6 +2730,8 @@ class Output:
                                                                 ri = proj_quant[i_r1]
                                                                 rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
                                                         else:
@@ -2654,6 +2773,8 @@ class Output:
                                                             ri = proj_quant[i_r1]
                                                             rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
                                                         else:
@@ -2710,6 +2831,8 @@ class Output:
                                                             else:
                                                                 rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
                                                         else:
@@ -2724,8 +2847,8 @@ class Output:
                                                             ssc_aux = ssc[i_probe][idxs]    
                                                         cov = gauss_aux + nongauss_aux + ssc_aux 
                                                         ostr = ostr_format \
-                                                            % (obs_copy,  ri, rj, 
-                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,
+                                                            *self._gm_first(obs, ri, rj, i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                             cov, 
                                                             gauss_aux,
                                                             nongauss_aux,
@@ -2753,6 +2876,8 @@ class Output:
                                                         else:
                                                             ri = proj_quant[i_r1]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         if isinstance(gauss[i_probe], int):
                                                             gauss_aux = 0.0
                                                         else:
@@ -2802,6 +2927,8 @@ class Output:
                                                 for i_r1 in range(r1):
                                                     for i_r2 in range(r2):
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         if obs == 'gggg':
                                                             if np.any(self.projected_clust):
                                                                 ri = self.projected_clust[i_r1]
@@ -2873,6 +3000,8 @@ class Output:
                                                             ri = proj_quant[i_r1]
                                                             rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
                                                             gauss_sva = 0.0
@@ -2944,6 +3073,8 @@ class Output:
                                                             else:
                                                                 rj = proj_quant[i_r2]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
                                                             gauss_sva = 0.0
@@ -2971,8 +3102,8 @@ class Output:
                                                             + nongauss_aux \
                                                             + ssc_aux
                                                         ostr = ostr_format \
-                                                            % (obs_copy, ri, rj,
-                                                            i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                            % (obs_copy,
+                                                            *self._gm_first(obs, ri, rj, i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                             cov, 
                                                             gauss_sva,
                                                             gauss_mix,
@@ -3002,6 +3133,8 @@ class Output:
                                                         else:
                                                             ri = proj_quant[i_r1]
                                                         idxs = (i_r1, i_r2, i_s1, i_s2, t1, t2, t3, t4)
+                                                        if diagonal_lenses and not self._diagonal_lens_entry(obs, i_s1, i_s2, t1, t2, t3, t4):
+                                                            continue
                                                         gauss_sva = gauss[3*i_probe]
                                                         if isinstance(gauss[3*i_probe], int):
                                                             gauss_sva = 0.0
@@ -3040,75 +3173,10 @@ class Output:
                                                         olist.append(ostr)
                     splitidx += 3
             
-            index = 0
             if self.has_csmf:
-                if self.is_cell:
-                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
-                else:
-                    obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmmE", "csmfmmB"]
-                for obs in self.conditional_stellar_mass_function_cov:
-                    csmf_auto = False
-                    if index == 0:
-                        csmf_auto = True
-                    if not isinstance(obs, np.ndarray):
-                        continue
-                    if csmf_auto:
-                        for t1 in range(len(obs[0,0,:,0])):
-                            for t2 in range(len(obs[0,0,0,:])):
-                                for i_r1 in range(len(obs[:, 0,0,0])):
-                                    for i_r2 in range(len(obs[0, :, 0, 0])):
-                                        ri = i_r1
-                                        rj = i_r2              
-                                        cov = obs[i_r1, i_r2, t1, t2]
-                                        if not cov_dict['split_gauss']:
-                                            ostr = ostr_format \
-                                                % (obs_copy[index],  ri, rj, 
-                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                                cov, 
-                                                0,
-                                                0,
-                                                0)
-                                        else:
-                                            ostr = ostr_format \
-                                                % (obs_copy[index], ri, rj,
-                                                1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                                cov, 
-                                                0,
-                                                0,
-                                                0,
-                                                0,
-                                                0)
-                                        olist.append(ostr)
-                    else:
-                        for s1 in range(len(obs[0,0,:,0,0,0])):
-                            for t1 in range(len(obs[0,0,0,:,0,0])):
-                                for t2 in range(len(obs[0,0,0,0,:,0])):
-                                    for t3 in range(len(obs[0,0,0,0,0,:])):
-                                        for i_r1 in range(len(obs[:, 0,0,0,0,0])):
-                                            for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
-                                                ri = i_r1
-                                                rj = i_r2              
-                                                cov = obs[i_r1, i_r2, s1, t1, t2, t3]
-                                                if not cov_dict['split_gauss']:
-                                                    ostr = ostr_format \
-                                                        % (obs_copy[index],  ri, rj, 
-                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                        cov, 
-                                                        0,
-                                                        0,
-                                                        0)
-                                                else:
-                                                    ostr = ostr_format \
-                                                        % (obs_copy[index], ri, rj,
-                                                        s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                        cov, 
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0)
-                                                olist.append(ostr)
-                    index += 1
+                olist.extend(self._csmf_list_rows(cov_dict, obs_dict, ostr_format, self._csmf_bin_values(obs_dict),
+                                                  self.projected_clust if np.any(self.projected_clust) else proj_quant,
+                                                  self.projected_lens if np.any(self.projected_lens) else proj_quant))
 
             if not self.save_as_binary:
                 if 'terminal' in self.style:
@@ -3335,8 +3403,8 @@ class Output:
                                                         + nongauss[oidx][idxs] \
                                                         + ssc[oidx][idxs]
                                                     ostr = ostr_format \
-                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
-                                                        i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                        % (obs_copy,
+                                                        *self._gm_first(obs, int(ri + 1), int(rj + 1), i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                         cov, 
                                                         gauss[oidx][idxs],
                                                         nongauss[oidx][idxs],
@@ -3541,8 +3609,8 @@ class Output:
                                                         + nongauss[oidx][idxs] \
                                                         + ssc[oidx][idxs]
                                                     ostr = ostr_format \
-                                                        % (obs_copy, int(ri + 1), int(rj + 1), 
-                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        % (obs_copy,
+                                                        *self._gm_first(obs, int(ri + 1), int(rj + 1), i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                         cov, 
                                                         gauss[splitidx][idxs],
                                                         gauss[splitidx+1][idxs],
@@ -3579,72 +3647,8 @@ class Output:
                                                     olist.append(ostr)
                 splitidx += 3
         
-        index = 0
         if self.has_csmf:
-            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
-            for obs in self.conditional_stellar_mass_function_cov:
-                csmf_auto = False
-                if index == 0:
-                    csmf_auto = True
-                if not isinstance(obs, np.ndarray):
-                    continue
-                if csmf_auto:
-                    for i_r1 in range(len(obs[:, 0,0,0])):
-                        for i_r2 in range(len(obs[0, :, 0, 0])):
-                            for t1 in range(len(obs[0,0,:,0])):
-                                for t2 in range(len(obs[0,0,0,:])):
-                                    ri = i_r1
-                                    rj = i_r2              
-                                    cov = obs[i_r1, i_r2, t1, t2]
-                                    if not cov_dict['split_gauss']:
-                                        ostr = ostr_format \
-                                            % (obs_copy[index],  int(ri + 1), int(rj + 1), 
-                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                            cov, 
-                                            0,
-                                            0,
-                                            0)
-                                    else:
-                                        ostr = ostr_format \
-                                            % (obs_copy[index], int(ri + 1), int(rj + 1),
-                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                            cov, 
-                                            0,
-                                            0,
-                                            0,
-                                            0,
-                                            0)
-                                    olist.append(ostr)
-                else:
-                    for i_r1 in range(len(obs[:, 0,0,0,0,0])):
-                        for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
-                            for s1 in range(len(obs[0,0,:,0,0,0])):
-                                for t1 in range(len(obs[0,0,0,:,0,0])):
-                                    for t2 in range(len(obs[0,0,0,0,:,0])):
-                                        for t3 in range(len(obs[0,0,0,0,0,:])):
-                                            ri = i_r1
-                                            rj = i_r2              
-                                            cov = obs[i_r1, i_r2, s1, t1, t2, t3]
-                                            if not cov_dict['split_gauss']:
-                                                ostr = ostr_format \
-                                                    % (obs_copy[index], int(ri + 1), int(rj + 1), 
-                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                    cov, 
-                                                    0,
-                                                    0,
-                                                    0)
-                                            else:
-                                                ostr = ostr_format \
-                                                    % (obs_copy[index], int(ri + 1), int(rj + 1),
-                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                    cov, 
-                                                    0,
-                                                    0,
-                                                    0,
-                                                    0,
-                                                    0)
-                                            olist.append(ostr)
-                index += 1
+            olist.extend(self._csmf_list_rows(cov_dict, obs_dict, ostr_format, None, None, None, arbitrary=True))
         if not self.save_as_binary:
             if 'terminal' in self.style:
                 print("Writing result to terminal. (Brace yourself...).'")
@@ -4007,8 +4011,8 @@ class Output:
                                                         + nongauss[oidx][idxs] \
                                                         + ssc[oidx][idxs]
                                                     ostr = ostr_format \
-                                                        % (obs_copy,  int(ri + 1), int(rj + 1), 
-                                                        i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1, 
+                                                        % (obs_copy,
+                                                        *self._gm_first(obs, int(ri + 1), int(rj + 1), i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                         cov, 
                                                         gauss[oidx][idxs],
                                                         nongauss[oidx][idxs],
@@ -4415,8 +4419,8 @@ class Output:
                                                         + nongauss[oidx][idxs] \
                                                         + ssc[oidx][idxs]
                                                     ostr = ostr_format \
-                                                        % (obs_copy,  int(ri + 1), int(rj + 1),
-                                                        i_s1+1, i_s2+1, t1+1, t2+1, t3+1, t4+1, 
+                                                        % (obs_copy,
+                                                        *self._gm_first(obs, int(ri + 1), int(rj + 1), i_s1 + 1, i_s2 + 1, t1+1, t2+1, t3+1, t4+1),
                                                         cov, 
                                                         gauss[splitidx][idxs],
                                                         gauss[splitidx+1][idxs],
@@ -4520,72 +4524,8 @@ class Output:
                                                         ssc[oidx][idxs])
                                                     olist.append(ostr)
                 splitidx += 3
-        index = 0
         if self.has_csmf:
-            obs_copy = ["csmfcsmf", "csmfgg", "csmfgm", "csmfmm"]
-            for obs in self.conditional_stellar_mass_function_cov:
-                csmf_auto = False
-                if index == 0:
-                    csmf_auto = True
-                if not isinstance(obs, np.ndarray):
-                    continue
-                if csmf_auto:
-                    for t1 in range(len(obs[0,0,:,0])):
-                        for t2 in range(len(obs[0,0,0,:])):
-                            for i_r1 in range(len(obs[:, 0,0,0])):
-                                for i_r2 in range(len(obs[0, :, 0, 0])):
-                                    ri = i_r1
-                                    rj = i_r2              
-                                    cov = obs[i_r1, i_r2, t1, t2]
-                                    if not cov_dict['split_gauss']:
-                                        ostr = ostr_format \
-                                            % (obs_copy[index],  ri, rj, 
-                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                            cov, 
-                                            0,
-                                            0,
-                                            0)
-                                    else:
-                                        ostr = ostr_format \
-                                            % (obs_copy[index], ri, rj,
-                                            1, 1, t1+1, t2+1, t1+1, t2+1, 
-                                            cov, 
-                                            0,
-                                            0,
-                                            0,
-                                            0,
-                                            0)
-                                    olist.append(ostr)
-                else:
-                    for s1 in range(len(obs[0,0,:,0,0,0])):
-                        for t1 in range(len(obs[0,0,0,:,0,0])):
-                            for t2 in range(len(obs[0,0,0,0,:,0])):
-                                for t3 in range(len(obs[0,0,0,0,0,:])):
-                                    for i_r1 in range(len(obs[:, 0,0,0,0,0])):
-                                        for i_r2 in range(len(obs[0, :, 0, 0,0,0])):
-                                            ri = i_r1
-                                            rj = i_r2              
-                                            cov = obs[i_r1, i_r2, s1, t1, t2, t3]
-                                            if not cov_dict['split_gauss']:
-                                                ostr = ostr_format \
-                                                    % (obs_copy[index],  int(ri + 1), int(rj + 1),
-                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                    cov, 
-                                                    0,
-                                                    0,
-                                                    0)
-                                            else:
-                                                ostr = ostr_format \
-                                                    % (obs_copy[index], int(ri + 1), int(rj + 1),
-                                                    s1 + 1, s1 + 1, t1+1, t1+1, t2+1, t3+1, 
-                                                    cov, 
-                                                    0,
-                                                    0,
-                                                    0,
-                                                    0,
-                                                    0)
-                                            olist.append(ostr)
-                index += 1
+            olist.extend(self._csmf_list_rows(cov_dict, obs_dict, ostr_format, None, None, None, arbitrary=True))
         
         if not self.save_as_binary:
             if 'terminal' in self.style:
@@ -4752,6 +4692,9 @@ class Output:
                 data_size_mn = int(len(covlist[0,:,0,0,0,0]))
                 covariance = np.zeros((data_size_ij,data_size_mn))
                 for i_tomo in range(len(covlist[0,0,0,0,:,0])):
+                    # galaxy sample i_tomo in clustering bin i_tomo for ggl,
+                    # a single sample for cosmic shear
+                    i_sample = 0 if is_ij_lensing else i_tomo
                     j_start = 0
                     if is_ij_lensing:
                         j_start = i_tomo
@@ -4759,7 +4702,7 @@ class Output:
                         for i_theta in range(len(covlist[:,0,0,0,0,0])):
                             j = 0
                             for i_mass_tomo in range(number_tomo_bins):
-                                covariance[i,j] = covlist[i_theta, i_mass_tomo, 0, i_mass_tomo, i_tomo, j_tomo]
+                                covariance[i,j] = covlist[i_theta, i_mass_tomo, i_sample, i_mass_tomo, i_tomo, j_tomo]
                                 j += 1
                             i += 1
             else:
@@ -4767,6 +4710,9 @@ class Output:
                 data_size_mn = int(len(covlist[0,:,0,0,0,0])*len(covlist[0,0,0,:,0,0]))
                 covariance = np.zeros((data_size_ij,data_size_mn))
                 for i_tomo in range(len(covlist[0,0,0,0,:,0])):
+                    # galaxy sample i_tomo in clustering bin i_tomo for ggl,
+                    # a single sample for cosmic shear
+                    i_sample = 0 if is_ij_lensing else i_tomo
                     j_start = 0
                     if is_ij_lensing:
                         j_start = i_tomo
@@ -4775,7 +4721,7 @@ class Output:
                             j = 0
                             for i_mass_tomo in range(number_tomo_bins):
                                 for i_mass in range(number_m_bins):    
-                                    covariance[i,j] = covlist[i_theta, i_mass, 0, i_mass_tomo, i_tomo, j_tomo]
+                                    covariance[i,j] = covlist[i_theta, i_mass, i_sample, i_mass_tomo, i_tomo, j_tomo]
                                     j += 1
                             i += 1
         return covariance
@@ -5121,6 +5067,70 @@ class Output:
                 result = np.block([[covp1p1, covp1p2]])
         return result
     
+    def __csmf_matrix_blocks(self,
+                             csmf_cov,
+                             obs_dict,
+                             gg,
+                             gm,
+                             mm,
+                             second_mm,
+                             summary=None):
+        """
+        Matrices of the covariance of the stellar mass function and of its
+        cross-covariance with the LSS probes (in the order of the LSS
+        probes) from the list csmf_cov (auto-covariance, cross-covariance
+        with gg, gm, the first and, if second_mm, the second cosmic shear
+        statistic), for arbitrary summary statistics if summary is given.
+
+        Returns
+        -------
+        covariance_csmf, csmf_block : arrays
+        """
+        diagonal = obs_dict['observables']['csmf_diagonal']
+        covariance_csmf = self.__create_matrix_csmf(csmf_cov[0], diagonal)
+
+        def cross(idx, probe, flag, lensing=False):
+            if summary is None:
+                if self.csmf_diagonal_lenses:
+                    return self.__create_matrix_csmf_cross_LSS_diagonal_clustering(csmf_cov[idx], flag and not lensing, diagonal, is_ij_lensing=lensing)
+                return self.__create_matrix_csmf_cross_LSS(csmf_cov[idx], flag, diagonal)
+            if self.csmf_diagonal_lenses:
+                return self.__create_matrix_csmf_cross_LSS_diagonal_clustering_arbitrary(csmf_cov[idx], probe, summary, flag, want_diagonal_csmf=diagonal, is_ij_lensing=lensing)
+            return self.__create_matrix_csmf_cross_LSS_arbitrary(csmf_cov[idx], probe, summary, flag, diagonal)
+
+        blocks = []
+        if gg:
+            blocks.append(cross(1, 'gg', True))
+        if gm:
+            blocks.append(cross(2, 'gm', False))
+        if mm:
+            for idx in ([3, 4] if second_mm else [3]):
+                if idx < len(csmf_cov) and isinstance(csmf_cov[idx], np.ndarray):
+                    blocks.append(cross(idx, 'mm', True, lensing=True))
+                else:
+                    # not calculated (e.g. B-modes)
+                    blocks.append(np.zeros_like(blocks[-1]))
+        return covariance_csmf, np.block([[block] for block in blocks])
+
+    def __add_csmf_rows(self,
+                        cov2d,
+                        term,
+                        obs_dict,
+                        gg,
+                        gm,
+                        mm,
+                        second_mm,
+                        summary=None):
+        """
+        Adds the rows and columns of the stellar mass function to the
+        covariance matrix cov2d of the LSS probes, for the term 'total',
+        'gauss', 'nongauss' or 'ssc'.
+        """
+        csmf_cov = self.conditional_stellar_mass_function_cov if term == 'total' else self.csmf_split[term]
+        covariance_csmf, csmf_block = self.__csmf_matrix_blocks(csmf_cov, obs_dict, gg, gm, mm, second_mm, summary)
+        return np.block([[cov2d, csmf_block],
+                         [csmf_block.T, covariance_csmf]])
+
     def __write_cov_matrix_new(self,
                                 obs_dict,
                                 cov_dict,
@@ -5155,7 +5165,7 @@ class Output:
                         gauss[24]+gauss[25]+gauss[26], 
                         gauss[27]+gauss[28]+gauss[29]]
 
-            if obs_dict['observables']['est_shear'] == 'cosebi' and obs_dict['observables']['cosmic_shear'] == True:
+            if obs_dict['observables']['est_shear'] in ('cosebi', 'C_ell') and obs_dict['observables']['cosmic_shear'] == True:
                 xipm = True
                 ximm = True
                 xipp = True
@@ -5185,7 +5195,15 @@ class Output:
                     else:
                         covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[3], True, obs_dict['observables']['csmf_diagonal'])
                 if obslength == 10:
-                    covariange_csmfmmB = np.zeros_like(covariange_csmfmmE)
+                    # second cosmic shear block (e.g. xi_minus), zero if it is
+                    # not calculated (B-modes)
+                    if len(self.conditional_stellar_mass_function_cov) > 4 and isinstance(self.conditional_stellar_mass_function_cov[4], np.ndarray):
+                        if self.csmf_diagonal_lenses:
+                            covariange_csmfmmB = self.__create_matrix_csmf_cross_LSS_diagonal_clustering(self.conditional_stellar_mass_function_cov[4], False, obs_dict['observables']['csmf_diagonal'], is_ij_lensing=True)
+                        else:
+                            covariange_csmfmmB = self.__create_matrix_csmf_cross_LSS(self.conditional_stellar_mass_function_cov[4], True, obs_dict['observables']['csmf_diagonal'])
+                    else:
+                        covariange_csmfmmB = np.zeros_like(covariange_csmfmmE)
             if obslength == 6:
                 # 'gggg', 'gggm', 'ggmm', 'gmgm', 'mmgm', 'mmmm'
                 if self.has_csmf:
@@ -5359,9 +5377,7 @@ class Output:
                     cov2d = covariance_xipxim
             
             if self.has_csmf:
-                cov_diag.append(covariange_csmf)
-                cov2d = np.block([[cov2d, csmf_block],
-                                [csmf_block.T, covariange_csmf]])
+                cov2d = self.__add_csmf_rows(cov2d, 'total', obs_dict, gg, gm, mm, obslength == 10)
             cov2d_total = np.copy(cov2d)
             if cov_dict['split_gauss']:
                 cov = [gauss[idx] for idx in range(obslength)]
@@ -5504,9 +5520,7 @@ class Output:
                         covariance_xipxim = self.__create_matrix(cov[8],True,True,True,True)
                         cov2d = covariance_xipxim
                 if self.has_csmf:
-                    cov_diag.append(covariange_csmf)
-                    cov2d = np.block([[cov2d, csmf_block],
-                                      [csmf_block.T, covariange_csmf]])
+                    cov2d = self.__add_csmf_rows(cov2d, 'gauss', obs_dict, gg, gm, mm, obslength == 10)
 
                 cov2d_gauss = np.copy(cov2d)
                 if self.has_nongauss:
@@ -5650,6 +5664,8 @@ class Output:
                             covariance_xipxim = self.__create_matrix(cov[8],True,True,True,True)
                             cov2d = covariance_xipxim
 
+                    if self.has_csmf:
+                        cov2d = self.__add_csmf_rows(cov2d, 'nongauss', obs_dict, gg, gm, mm, obslength == 10)
                     cov2d_nongauss = np.copy(cov2d)
 
                 if self.has_ssc:
@@ -5793,6 +5809,8 @@ class Output:
                             covariance_xipxim = self.__create_matrix(cov[8],True,True,True,True)
                             cov2d = covariance_xipxim
 
+                    if self.has_csmf:
+                        cov2d = self.__add_csmf_rows(cov2d, 'ssc', obs_dict, gg, gm, mm, obslength == 10)
                     cov2d_ssc = np.copy(cov2d)
                 
 
@@ -6582,7 +6600,14 @@ class Output:
                 else:
                     covariange_csmfmmE = self.__create_matrix_csmf_cross_LSS_arbitrary(self.conditional_stellar_mass_function_cov[3],"mm", summary, True, obs_dict['observables']['csmf_diagonal'])
             if ximm:
-                covariange_csmfmmB = np.zeros_like(covariange_csmfmmE)
+                # second set of cosmic shear summaries, zero if it is not calculated
+                if len(self.conditional_stellar_mass_function_cov) > 4 and isinstance(self.conditional_stellar_mass_function_cov[4], np.ndarray):
+                    if self.csmf_diagonal_lenses:
+                        covariange_csmfmmB = self.__create_matrix_csmf_cross_LSS_diagonal_clustering_arbitrary(self.conditional_stellar_mass_function_cov[4],"mm", summary, True, want_diagonal_csmf=obs_dict['observables']['csmf_diagonal'],is_ij_lensing=True)
+                    else:
+                        covariange_csmfmmB = self.__create_matrix_csmf_cross_LSS_arbitrary(self.conditional_stellar_mass_function_cov[4],"mm", summary, True, obs_dict['observables']['csmf_diagonal'])
+                else:
+                    covariange_csmfmmB = np.zeros_like(covariange_csmfmmE)
             if covariange_csmfgg is not None:
                 csmf_block = np.block([[covariange_csmfgg]])
                 if covariange_csmfgm is not None:
@@ -6702,9 +6727,7 @@ class Output:
             cov2d = covariance_xipxim
         
         if self.has_csmf:
-            cov_diag.append(covariange_csmf)
-            cov2d = np.block([[cov2d, csmf_block],
-                            [csmf_block.T, covariange_csmf]])
+            cov2d = self.__add_csmf_rows(cov2d, 'total', obs_dict, gg, gm, mm, ximm, summary)
 
         
         cov2d_total = np.copy(cov2d)
@@ -6809,9 +6832,7 @@ class Output:
                 covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                 cov2d = covariance_xipxim
             if self.has_csmf:
-                cov_diag.append(covariange_csmf)
-                cov2d = np.block([[cov2d, csmf_block],
-                                [csmf_block.T, covariange_csmf]])
+                cov2d = self.__add_csmf_rows(cov2d, 'gauss', obs_dict, gg, gm, mm, ximm, summary)
             cov2d_gauss = np.copy(cov2d)
 
             if self.has_ssc:
@@ -6913,6 +6934,8 @@ class Output:
                 elif xipm:
                     covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxim
+                if self.has_csmf:
+                    cov2d = self.__add_csmf_rows(cov2d, 'ssc', obs_dict, gg, gm, mm, ximm, summary)
                 cov2d_ssc = np.copy(cov2d)
             else:
                 cov2d_ssc = np.zeros_like(cov2d_gauss)
@@ -7016,7 +7039,9 @@ class Output:
                 elif xipm:
                     covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
                     cov2d = covariance_xipxim
-                cov2d_nongauss = np.copy(cov2d)    
+                if self.has_csmf:
+                    cov2d = self.__add_csmf_rows(cov2d, 'nongauss', obs_dict, gg, gm, mm, ximm, summary)
+                cov2d_nongauss = np.copy(cov2d)
             else:
                 cov2d_nongauss = np.zeros_like(cov2d_gauss)
 
@@ -7202,7 +7227,8 @@ class Output:
                 xipp = obs_dict['THETAspace']['xi_pp']
                 xipm = obs_dict['THETAspace']['xi_pm']
                 ximm = obs_dict['THETAspace']['xi_mm']
-                if obs_dict['observables']['est_shear'] == "cosebi":
+                if obs_dict['observables']['est_shear'] in ("cosebi", "C_ell"):
+                    # E- and B-modes (C_ell: with intrinsic B-modes)
                     xipp = True
                     xipm = True
                     ximm = True
@@ -7563,7 +7589,9 @@ class Output:
                     n_tomo_lens,
                     Cells):
 
-        Cell_gg, Cell_gm, Cell_mm = Cells
+        Cell_gg, Cell_gm, Cell_mm = Cells[:3]
+        # the (tabulated) intrinsic B-mode spectrum of cosmic shear, if any
+        Cell_mmB = Cells[3] if len(Cells) > 3 else None
 
         if Cell_gg is not None and type(Cell_gg) is not int:
             sampledim = Cell_gg.shape[1]
@@ -7634,6 +7662,21 @@ class Output:
             with open(fname, 'w') as file:
                 print("Writing '" + fname + "'.")
                 for ostr in olist_mm:
+                    file.write("%s\n" % ostr)
+
+        if Cell_mmB is not None and type(Cell_mmB) is not int:
+            ostr_format = '%.10e\t%i\t\t%i\t\t'
+            olist_mmB = ["#ell\t\ttomo_i\ttomo_j\tCell_kappakappa_BB"]
+            for ellidx, ell in enumerate(ellrange):
+                for ti in range(n_tomo_lens):
+                    for tj in range(n_tomo_lens):
+                        ostr = ostr_format % (ell, ti+1, tj+1)
+                        ostr += '%10e\t\t\t' % Cell_mmB[ellidx, 0, ti, tj]
+                        olist_mmB.append(ostr)
+            fname = self.__add_string_to_filename('kappakappa_BB', self.Cellfile)
+            with open(fname, 'w') as file:
+                print("Writing '" + fname + "'.")
+                for ostr in olist_mmB:
                     file.write("%s\n" % ostr)
 
         return True

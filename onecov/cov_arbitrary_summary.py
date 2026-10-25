@@ -161,7 +161,7 @@ class CovARBsummary(CovELLSpace):
             save_n_eff_lens = survey_params_dict['n_eff_lens']
         if self.sample_dim > 1:
             if self.gg or self.gm:
-                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+                survey_params_dict['n_eff_clust'] = self._n_eff_clust_per_sample(survey_params_dict)
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
         else:
@@ -255,6 +255,12 @@ class CovARBsummary(CovELLSpace):
                         'in ' + str(round(eta, 1)) + 'min', end="")
                 tcomb += 1
             print(" ")
+            if self.mmBB_filters:
+                # contribution of the intrinsic B-modes
+                for summary, signal in (('E', self.arbE_mm), ('B', self.arbB_mm)):
+                    signal += self._Cell_mmB_projected(self.levin_int_fourier, self.ell_limits,
+                                                       [self._mmBB_weight(mode, summary) for mode in range(self.mmE_summaries)],
+                                                       [1 / 2 / np.pi]*self.mmE_summaries)
 
         if self.gm:
             t0, tcomb = time.time(), 1
@@ -401,7 +407,7 @@ class CovARBsummary(CovELLSpace):
             save_n_eff_lens = survey_params_dict['n_eff_lens']
         if self.sample_dim > 1:
             if self.gg or self.gm:
-                survey_params_dict['n_eff_clust'] = self.Ngal.T/self.arcmin2torad2
+                survey_params_dict['n_eff_clust'] = self._n_eff_clust_per_sample(survey_params_dict)
             if self.mm or self.gm:
                 survey_params_dict['n_eff_lens'] = survey_params_dict['n_eff_lens'][:, None]
         else:
@@ -493,6 +499,7 @@ class CovARBsummary(CovELLSpace):
         self.gm_summaries = 0
         self.mmE_summaries = 0
         self.mmB_summaries = 0
+        self.mmBB_filters = False
         if self.gg:
             self.fourier_ell_gg = []
             self.fourier_weights_gg = []
@@ -562,6 +569,14 @@ class CovARBsummary(CovELLSpace):
             self.fourier_ell_mmB = longest_ell
             self.fourier_weights_mmB = aux_fourier_weights
 
+            # filters mapping the intrinsic B-mode spectrum C_BB to the E-
+            # and B-mode summaries (only with intrinsic B-modes)
+            self.mmBB_filters = self.Cell_mmB is not None and arb_summary_tables.get('WL_mmE_BB') is not None
+            if self.mmBB_filters:
+                self.fourier_ell_mmBB, self.fourier_weights_mmE_BB, self.fourier_weights_mmB_BB = \
+                    self.__common_ell_filters(arb_summary_tables['ell_mmE_BB'] + arb_summary_tables['ell_mmB_BB'],
+                                              arb_summary_tables['WL_mmE_BB'] + arb_summary_tables['WL_mmB_BB'],
+                                              self.mmE_summaries)
 
         self.ell_fourier_integral = np.zeros(2)
         self.WXY_stack = []
@@ -576,6 +591,8 @@ class CovARBsummary(CovELLSpace):
                 self.ell_fourier_integral = self.fourier_ell_mmE
             if len(self.ell_fourier_integral) < len(self.fourier_ell_mmB):
                 self.ell_fourier_integral = self.fourier_ell_mmB
+            if self.mmBB_filters and len(self.ell_fourier_integral) < len(self.fourier_ell_mmBB):
+                self.ell_fourier_integral = self.fourier_ell_mmBB
         if self.gg:
             for i_summaries in range(self.gg_summaries):
                 self.WXY_stack.append(np.interp(self.ell_fourier_integral,self.fourier_ell_gg, self.fourier_weights_gg[i_summaries], left=0,right=0))
@@ -587,8 +604,35 @@ class CovARBsummary(CovELLSpace):
                 self.WXY_stack.append(np.interp(self.ell_fourier_integral,self.fourier_ell_mmE,self.fourier_weights_mmE[i_summaries], left=0,right=0))
             for i_summaries in range(self.mmB_summaries):
                 self.WXY_stack.append(np.interp(self.ell_fourier_integral,self.fourier_ell_mmB,self.fourier_weights_mmB[i_summaries], left=0,right=0))
+            if self.mmBB_filters:
+                # weights gg, gm, mmE, mmB, then C_BB -> E and C_BB -> B
+                for weights in (self.fourier_weights_mmE_BB, self.fourier_weights_mmB_BB):
+                    for i_summaries in range(self.mmE_summaries):
+                        self.WXY_stack.append(np.interp(self.ell_fourier_integral, self.fourier_ell_mmBB, weights[i_summaries], left=0, right=0))
         self.WXY_stack = np.array(self.WXY_stack)
         return True
+
+    @staticmethod
+    def __common_ell_filters(ells, filters, number):
+        """
+        Interpolates the filters (given at the multipoles ells) onto the
+        longest of the multipole arrays and splits them into the E-mode
+        (first 'number') and B-mode summaries.
+        """
+        if len(filters) != 2*number:
+            raise Exception("ConfigError: The number of Fourier filters for the intrinsic B-mode " +
+                            "spectrum does not match the number of E-mode filters for lensing.")
+        longest_ell = max(ells, key=len)
+        weights = np.array([np.interp(longest_ell, ell, W, left=0, right=0) for ell, W in zip(ells, filters)])
+        return longest_ell, weights[:number], weights[number:]
+
+    def _mmBB_weight(self, mode, summary):
+        """
+        Index of the weight mapping the intrinsic B-mode spectrum to the
+        E- ('E') or B-mode ('B') summary 'mode' of cosmic shear.
+        """
+        first = self.gg_summaries + self.gm_summaries + self.mmE_summaries + self.mmB_summaries
+        return first + mode + (self.mmE_summaries if summary == 'B' else 0)
     
     def __get_real_weights(self,
                            arb_summary_tables):
@@ -980,7 +1024,7 @@ class CovARBsummary(CovELLSpace):
                                     prec,
                                     read_in_tables['tri'])
 
-        return list(gauss), list(nongauss), list(ssc)
+        return self._split_csmf_terms(list(gauss), list(nongauss), list(ssc))
 
     def covarbsummary_gaussian(self,
                                obs_dict,
@@ -1270,7 +1314,7 @@ class CovARBsummary(CovELLSpace):
                                                                             * kron_delta_tomo_clust[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_clust[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_clust[None, None, None, :, :, None]) \
-                                                                            * kron_delta_mass_bins[:, :, None, None, None, None]*self.SN_integral_gggg[m_mode, n_mode, None, :, :, : ,None, None] 
+                                                                            * self._sample_overlap_sn(self.SN_integral_gggg[m_mode, n_mode], True)[:, :, :, :, None, None]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rArbitrary summary covariance calculation for the Gaussian '
@@ -1383,8 +1427,7 @@ class CovARBsummary(CovELLSpace):
                             
                     gauss_ASgmgm_sn[m_mode - self.gg_summaries, n_mode - self.gg_summaries, :, :, :, :, :, :] = (kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_lens[None, None, None, :, None, :]) \
-                                                                            * kron_delta_mass_bins[:,:, None, None, None, None] \
-                                                                            * self.SN_integral_gmgm[m_mode - self.gg_summaries, n_mode - self.gg_summaries, None, :, :, : ,None, None] 
+                                                                            * self._sample_overlap_sn(self.SN_integral_gmgm[m_mode - self.gg_summaries, n_mode - self.gg_summaries], False)[:, :, :, :, None, None]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rArbitrary summary covariance calculation for the Gaussian '
@@ -1504,6 +1547,30 @@ class CovARBsummary(CovELLSpace):
                             'in ' + str(round(eta, 1)) + 'min', end="")
                     tcomb += 1
             self._project_gauss_jobs(self.levin_int_fourier, self._gauss_todo(gaussELL_sva_flat, gaussELL_mix_flat, sva_jobs, mix_jobs), original_shape, 'arbitrary summary covariance  term')
+            if self.mmBB_filters and self.gaussELLmmmm_BB is not None and not self.cov_dict['sn_only']:
+                # intrinsic B-modes: the B-mode spectrum enters the E- and
+                # B-mode summaries with their own filters (the second column
+                # of the cosmic shear block of W_L in Eq. 51 of
+                # arXiv:2410.06962), there is no Gaussian E-B cross term
+                BB_sva_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[0], flat_length)
+                BB_mix_flat = self._ell_cov_flat(self.gaussELLmmmm_BB[1], flat_length)
+                prefac = 1.0 / (2.0 * np.pi * survey_params_dict['survey_area_lens'] / self.deg2torad2)
+                BB_sva_jobs, BB_mix_jobs = [], []
+                for m_mode in range(self.mmE_summaries):
+                    for n_mode in range(self.mmE_summaries):
+                        blocks = [('E', 'B', gauss_ASEBmmmm_sva, gauss_ASEBmmmm_mix, None)]
+                        if n_mode >= m_mode:
+                            blocks += [('E', 'E', gauss_ASEEmmmm_sva, gauss_ASEEmmmm_mix, (n_mode, m_mode)),
+                                       ('B', 'B', gauss_ASBBmmmm_sva, gauss_ASBBmmmm_mix, (n_mode, m_mode))]
+                        for summary_m, summary_n, target_sva, target_mix, mirror_index in blocks:
+                            w_m, w_n = self._mmBB_weight(m_mode, summary_m), self._mmBB_weight(n_mode, summary_n)
+                            limits = self._ell_limits_double(self.ell_limits, w_m, w_n)
+                            mirror = () if mirror_index is None else (mirror_index,)
+                            BB_sva_jobs.append((limits, w_m, w_n, target_sva, (m_mode, n_mode), prefac) + mirror)
+                            BB_mix_jobs.append((limits, w_m, w_n, target_mix, (m_mode, n_mode), prefac) + mirror)
+                if not self.cov_dict['split_gauss']:
+                    BB_mix_jobs = []
+                self._project_gauss_jobs_added(self.levin_int_fourier, self._gauss_todo(BB_sva_flat, BB_mix_flat, BB_sva_jobs, BB_mix_jobs), original_shape, 'arbitrary summary covariance term (intrinsic B-modes)')
             gauss_ASEBmmmm_sn = 0
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbB_mm[:, None, :, None, :, :, None, None]*self.arbB_mm[None, :, None, :, None, None, :, :])
             gauss_ASBBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_ASBBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
@@ -1518,45 +1585,55 @@ class CovARBsummary(CovELLSpace):
             gauss_ASEBmmmm_sva, gauss_ASEBmmmm_mix, gauss_ASEBmmmm_sn = 0, 0, 0
 
         if self.csmf:
-            if self.gg:
-                csmf_ASgg = np.zeros((self.gg_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gg[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
-                    csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.gg_summaries):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                        csmf_ASgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-            else:
-                csmf_ASgg = 0
-            if self.gm:
-                csmf_ASgm = np.zeros((self.gm_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_gm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
-                    csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                        csmf_ASgm[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-            else:
-                csmf_ASgm = 0
+            # the projections of the cross-covariance with the SMF and, for
+            # the split output, of its super-sample part (see _split_csmf_terms)
+            csmf_cross_parts = [(csmf_gg, csmf_gm, csmf_mm)]
+            if self.cov_dict['ssc'] and getattr(self, 'csmf_parts', None) is not None:
+                csmf_cross_parts.append(tuple(self.csmf_parts['cross_ssc']))
+            csmf_projected = []
+            for csmf_gg, csmf_gm, csmf_mm in csmf_cross_parts:
+                if self.gg:
+                    csmf_ASgg = np.zeros((self.gg_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gg[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
+                        csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.gg_summaries):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
+                            csmf_ASgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                else:
+                    csmf_ASgg = 0
+                if self.gm:
+                    csmf_ASgm = np.zeros((self.gm_summaries, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_gm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
+                        csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
+                            csmf_ASgm[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                else:
+                    csmf_ASgm = 0
             
-            if self.mm:
-                csmf_ASmmE = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                csmf_ASmmB = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
-                if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                    original_shape = csmf_mm[0, :, :, :, :, :].shape
-                    flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
-                    csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                    for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
-                        local_ell_limit = self.ell_limits[m_mode][:]
-                        self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat, True, True)
-                        csmf_ASmmE[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-                        csmf_ASmmB[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.mmE_summaries)),original_shape)            
-            else:
-                csmf_ASmmE, csmf_ASmmB = 0, 0
+                if self.mm:
+                    csmf_ASmmE = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    csmf_ASmmB = np.zeros((self.mmE_summaries, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
+                    if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
+                        original_shape = csmf_mm[0, :, :, :, :, :].shape
+                        flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
+                        csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
+                        for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
+                            local_ell_limit = self.ell_limits[m_mode][:]
+                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
+                            csmf_ASmmE[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                            csmf_ASmmB[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.mmE_summaries)),original_shape)            
+                else:
+                    csmf_ASmmE, csmf_ASmmB = 0, 0
+                csmf_projected.append((csmf_ASgg, csmf_ASgm, csmf_ASmmE, csmf_ASmmB))
+            csmf_ASgg, csmf_ASgm, csmf_ASmmE, csmf_ASmmB = csmf_projected[0]
+            self.csmf_projected_ssc = list(csmf_projected[1]) if len(csmf_projected) > 1 else None
 
         print("\nWrapping up all Gaussian arbitrary summary covariance contributions.")
 
