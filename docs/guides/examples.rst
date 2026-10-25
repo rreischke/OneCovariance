@@ -652,7 +652,7 @@ You can then include the settings in the following section
 
 In this case we use 30 bins from :math:`10^7\,h^{-1}M_\odot` to :math:`10^{12.5}\,h^{-1}M_\odot`, logarithmically spaced. Alternatively, you can use ``csmf_log10M_bins`` to define the boundaries of the bins
 if they are non-overlapping, or directly provide the upper and lower limits via ``csmf_log10M_bins_upper`` and ``csmf_log10M_bins_lower`` respectively. Since the stellar mass function uses the
-:math:`V_\mathrm{max}` estimator, :math:`\Phi = N/(\Delta M_\star V_\mathrm{max})`, you need to specify a file with :math:`V_\mathrm{max}` (in :math:`(h^{-1}\mathrm{Mpc})^3`) for each stellar mass bin
+:math:`V_\mathrm{max}` estimator per dex, :math:`\Phi = N/(\Delta \log_{10} M_\star V_\mathrm{max})`, you need to specify a file with :math:`V_\mathrm{max}` (in :math:`(h^{-1}\mathrm{Mpc})^3`) for each stellar mass bin
 and each tomographic bin of the SMF, which is usually estimated directly from the data. ``csmf_diagonal = True`` only keeps the combinations of the i-th stellar mass bin with the i-th tomographic bin of the SMF
 (this requires as many tomographic bins as stellar mass bins), and ``csmf_auto_only = True`` sets the cross-covariance between the SMF and the 2-point functions to zero.
 
@@ -705,7 +705,7 @@ Running this config file will calculate the previously calculated :math:`3\times
 .. image:: corr_smf.png
    :width: 790
 
-It should be noted that the SMF is given per dex, i.e. it is rescaled with the stellar mass and :math:`\ln(10)`. Stellar masses are often expressed in units of :math:`h^{-2}M_\odot`, while the
+It should be noted that the SMF is given per dex, :math:`\Phi = \mathrm{d}n/\mathrm{d}\log_{10} M_\star`, averaged over each stellar mass bin, i.e. :math:`\Phi_\mu = \int_\mu \mathrm{d}M_\star\, \mathrm{d}n/\mathrm{d}M_\star / \Delta \log_{10} M_\star`. All terms of its covariance (shot noise, SSC and the cross-covariance with the 2-point functions) are averaged over the bins in the same way, so wide bins in a steep part of the SMF (e.g. at the high-mass end, or for cluster counts) are treated correctly. Stellar masses are often expressed in units of :math:`h^{-2}M_\odot`, while the
 OneCovariance uses :math:`h^{-1}M_\odot` throughout (also for the HoD parameters), so remember to convert on input and output.
 
 A real-space version of this analysis is given in ``config_3x2pt_rcf_SMF.ini``: cosmic shear (:math:`\xi_\pm`), galaxy-galaxy lensing (:math:`\gamma_\mathrm{t}`) and clustering (:math:`w`) for
@@ -734,3 +734,22 @@ Each lens sample has its own redshift distribution (one column per sample in ``K
 The redshift distribution of the galaxies in each SMF stellar mass bin is passed via ``zcsmf_mass_file`` and the corresponding volumes via ``V_max_KiDS_bright.asc`` (both in the ``input`` directory).
 With ``csmf_diagonal_lenses = True`` only the measured combinations (sample :math:`i` in clustering bin :math:`i`) are calculated and written, and measured pair counts for the shot noise
 are only needed for them (see the commented ``npair`` entries in the ``tabulated inputs files``).
+
+Galaxy clusters and 3x2pt
+-------------------------
+The file ``config_3x2pt_rcf_clusters.ini`` is a first check of the cross-covariance between galaxy clusters (number counts and cluster lensing) and the real-space
+:math:`3\times 2` pt statistics, for an SPT-like cluster sample on a DES-Y3-like survey, in the spirit of the halo-model covariance test of
+`Bocquet et al. (2024) <https://arxiv.org/abs/2412.07765>`_. Clusters are treated as central galaxies whose observable (a mass proxy with a lognormal scatter) takes the
+role of the stellar mass:
+
+* the cluster number counts in bins of observable and redshift are the SMF (``cstellar_mf = True``), with :math:`V_\mathrm{max}` the comoving volume of each redshift bin;
+* cluster lensing is galaxy-galaxy lensing with the clusters as lens samples (bins of the observable in the ``bias section``);
+* the HoD is central-only (satellites switched off), and the :math:`3\times 2` pt lens galaxies are a further sample of the same HoD at lower values of the observable.
+
+The output contains all combinations; the data vector (e.g. :math:`w` of the lens galaxies only, cluster lensing on small scales) is selected afterwards. The limitations of this first check are:
+
+* the mass-observable relation does not evolve with redshift;
+* the selection is a simple cut in a lognormal mass proxy, not a realistic cluster selection (e.g. in SZ detection significance or richness);
+* there is a single HoD for all samples, so the lens galaxies have no satellites (their one-halo term is not realistic, which matters little after the usual scale cuts);
+* there are no one-halo terms between cluster member galaxies and the lens galaxies;
+* projection effects, miscentring and the scatter of the cluster profiles are not included.

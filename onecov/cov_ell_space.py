@@ -9,6 +9,7 @@ import numpy as np
 from camb import model
 from scipy.integrate import cumulative_trapezoid, simpson
 from scipy.interpolate import Akima1DInterpolator, RegularGridInterpolator, UnivariateSpline, interp1d
+from scipy.linalg import block_diag
 
 DEG2TORAD2 = (180 / np.pi) ** 2
 ARCMIN2TORAD2 = (60 * 60) * DEG2TORAD2
@@ -31,6 +32,11 @@ CAMB_KMAX_NONLINEAR = 100.
 # such arrays exist at a time), so that the memory does not grow with the
 # number of tomographic bins or of the estimator modes
 PROJECTION_BLOCK_SIZE = 4_000_000
+# Gauss-Legendre nodes (in log10 M*) for the averages over the stellar mass
+# bins of the stellar mass function: CSMF_MIN_NODES plus CSMF_NODES_PER_DEX
+# per dex of bin width (the SMF falls exponentially at the high-mass end)
+CSMF_MIN_NODES = 3
+CSMF_NODES_PER_DEX = 40
 
 
 class EllCovColumns(np.ndarray):
@@ -1409,28 +1415,35 @@ class CovELLSpace(PolySpectra):
         self.csmf_auto_only = False
         if self.csmf:
             if obs_dict['observables']['csmf_log10M_bins_upper'] is not None and obs_dict['observables']['csmf_log10M_bins_lower'] is not None:
-                self.deltaM_csmf = 10**obs_dict['observables']['csmf_log10M_bins_upper'] - 10**obs_dict['observables']['csmf_log10M_bins_lower']
-                self.log10csmf_mass_bins = np.log10(10**obs_dict['observables']['csmf_log10M_bins_lower'] + self.deltaM_csmf/2.)
+                csmf_lower = np.asarray(obs_dict['observables']['csmf_log10M_bins_lower'], dtype=float)
+                csmf_upper = np.asarray(obs_dict['observables']['csmf_log10M_bins_upper'], dtype=float)
             else:
-                self.deltaM_csmf = 10**obs_dict['observables']['csmf_log10M_bins'][1:] - 10**obs_dict['observables']['csmf_log10M_bins'][:-1]
-                self.log10csmf_mass_bins = np.log10(10**obs_dict['observables']['csmf_log10M_bins'][:-1] + self.deltaM_csmf/2)
+                csmf_lower = np.asarray(obs_dict['observables']['csmf_log10M_bins'][:-1], dtype=float)
+                csmf_upper = np.asarray(obs_dict['observables']['csmf_log10M_bins'][1:], dtype=float)
+            # centres of the bins in stellar mass (only used as labels)
+            self.log10csmf_mass_bins = np.log10((10**csmf_lower + 10**csmf_upper)/2)
+            # the SMF is measured per dex, Phi_mu = N_mu/(Delta log10 M*_mu V_max):
+            # all quantities linear in the SMF are averaged over the bins with
+            # the quadrature of _csmf_bin_quadrature
+            self.deltalog10M_csmf = csmf_upper - csmf_lower
+            self.csmf_quad_nodes, self.csmf_quad_weights = \
+                self._csmf_bin_quadrature(csmf_lower, csmf_upper, per_dex=True)
             self.Vmax = read_in_tables['csmf']['V_max']
             self.csmf_V_max_zmin = read_in_tables['csmf']['V_max_zmin']
             # overlapping stellar mass bins of the SMF (bins given via
-            # csmf_log10M_bins_lower/upper) share galaxies: (bin 1, bin 2,
-            # log10 of the centre of the overlap, width of the overlap)
-            if obs_dict['observables']['csmf_log10M_bins_upper'] is not None and obs_dict['observables']['csmf_log10M_bins_lower'] is not None:
-                csmf_lower = 10**obs_dict['observables']['csmf_log10M_bins_lower']
-                csmf_upper = 10**obs_dict['observables']['csmf_log10M_bins_upper']
-            else:
-                csmf_lower = 10**obs_dict['observables']['csmf_log10M_bins'][:-1]
-                csmf_upper = 10**obs_dict['observables']['csmf_log10M_bins'][1:]
+            # csmf_log10M_bins_lower/upper) share galaxies: (bin 1, bin 2),
+            # with the quadrature of the integral over the overlap
             self.csmf_bin_overlaps = []
+            overlap_lower, overlap_upper = [], []
             for i_mass in range(len(csmf_lower)):
                 for j_mass in range(i_mass + 1, len(csmf_lower)):
                     low, high = max(csmf_lower[i_mass], csmf_lower[j_mass]), min(csmf_upper[i_mass], csmf_upper[j_mass])
                     if high > low:
-                        self.csmf_bin_overlaps.append((i_mass, j_mass, np.log10(low + (high - low)/2), high - low))
+                        self.csmf_bin_overlaps.append((i_mass, j_mass))
+                        overlap_lower.append(low)
+                        overlap_upper.append(high)
+            self.csmf_overlap_nodes, self.csmf_overlap_weights = \
+                self._csmf_bin_quadrature(overlap_lower, overlap_upper, per_dex=False)
             self.csmf_number_mass_bins = len(self.log10csmf_mass_bins)
             self.csmf_diagonal = obs_dict['observables']['csmf_diagonal']
             self.csmf_auto_only = obs_dict['observables']['csmf_auto_only']
@@ -1891,7 +1904,7 @@ class CovELLSpace(PolySpectra):
         r"""
         Sets the normalised line-of-sight distributions p_mu^i(chi) of the
         galaxies which enter stellar mass bin mu and tomographic bin i of
-        the stellar mass function (SMF), Phi_mu^i = N_mu^i/(Delta M V_max).
+        the stellar mass function (SMF) per dex, Phi_mu^i = N_mu^i/(Delta log10 M*_mu V_max).
         They are either read in per stellar mass bin ('zcsmf_mass_file'),
         or they are top-hats in comoving volume defined by V_max,
         p_mu^i(chi) = 3 chi^2 / (chi_u^3 - chi_l^3) for chi_l < chi < chi_u,
@@ -1974,6 +1987,44 @@ class CovELLSpace(PolySpectra):
         """
         zet = np.linspace(0, 10, 10000)
         return np.interp(chi, self.cosmology.comoving_distance(zet).value*self.cosmology.h, zet)
+
+    @staticmethod
+    def _csmf_bin_quadrature(log10_lower,
+                             log10_upper,
+                             per_dex=True):
+        """
+        Gauss-Legendre quadrature in log10 M* over stellar mass bins,
+        sum_n weights[mu, n] f(10**nodes[n]) = int_mu dM* f(M*), divided by
+        the width of bin mu in dex if per_dex. Applied to the SMF dn/dM*,
+        this is the SMF per dex averaged over the bin, N_mu/(Delta log10 M*
+        V), and in the same way for everything linear in the SMF (Phi~, the
+        count bispectra). The number of nodes grows with the width of the
+        bin (CSMF_MIN_NODES, CSMF_NODES_PER_DEX).
+
+        Parameters
+        ----------
+        log10_lower, log10_upper : arrays
+            log10 of the lower and upper bounds of the bins
+
+        Returns
+        -------
+        nodes : array
+            log10 M* of the nodes of all bins, shape (nodes,)
+        weights : array
+            with shape (bins, nodes)
+        """
+        nodes, weights = [], []
+        for low, high in zip(log10_lower, log10_upper):
+            x, w = np.polynomial.legendre.leggauss(
+                CSMF_MIN_NODES + int(np.ceil((high - low)*CSMF_NODES_PER_DEX)))
+            log10M = low + (x + 1)*(high - low)/2
+            # dM* = ln(10) M* dlog10 M*
+            weight = w*(high - low)/2*np.log(10)*10**log10M
+            nodes.append(log10M)
+            weights.append(weight/(high - low) if per_dex else weight)
+        if not nodes:
+            return np.zeros(0), np.zeros((0, 0))
+        return np.concatenate(nodes), block_diag(*[w[None, :] for w in weights])
 
     def _csmf_window(self,
                      i_mass,
@@ -2782,15 +2833,20 @@ class CovELLSpace(PolySpectra):
             eta = (time.time()-t0) * \
                 (self.los_interpolation_sampling/(zet+1)-1)
             if self.csmf:
-                aux_stellar_mass_func[zet,:] = self.galaxy_smf_c(10**self.log10csmf_mass_bins)  + self.galaxy_smf_s(10**self.log10csmf_mass_bins)
-                aux_stellar_mass_func_bias[zet,:] = self.galaxy_smf_bias_c(10**self.log10csmf_mass_bins)  + self.galaxy_smf_bias_s(10**self.log10csmf_mass_bins)
-                for i_overlap, overlap in enumerate(self.csmf_bin_overlaps):
-                    aux_stellar_mass_func_overlap[zet, i_overlap] = self.galaxy_smf_c(10**overlap[2]) + self.galaxy_smf_s(10**overlap[2])
+                # SMF, Phi~ and count bispectra per dex, averaged over the stellar mass bins
+                nodes = 10**self.csmf_quad_nodes
+                aux_stellar_mass_func[zet,:] = self.csmf_quad_weights @ (self.galaxy_smf_c(nodes) + self.galaxy_smf_s(nodes))
+                aux_stellar_mass_func_bias[zet,:] = self.csmf_quad_weights @ (self.galaxy_smf_bias_c(nodes) + self.galaxy_smf_bias_s(nodes))
+                if self.csmf_bin_overlaps:
+                    nodes_overlap = 10**self.csmf_overlap_nodes
+                    aux_stellar_mass_func_overlap[zet, :] = self.csmf_overlap_weights @ (self.galaxy_smf_c(nodes_overlap) + self.galaxy_smf_s(nodes_overlap))
                 if not self.csmf_auto_only:
-                    self.csmf_count_matter_bispectrum[:, zet,:] = self.get_count_matter_bispectrum(bias_dict, hod_dict, prec['hm'], self.log10csmf_mass_bins)
+                    self.csmf_count_matter_bispectrum[:, zet,:] = \
+                        self.get_count_matter_bispectrum(bias_dict, hod_dict, prec['hm'], self.csmf_quad_nodes) @ self.csmf_quad_weights.T
                     if self.csmf_galaxy_bispectra:
-                        self.csmf_count_galaxy_galaxy_bispectrum[:, zet], self.csmf_count_galaxy_matter_bispectrum[:, zet] = \
-                            self.get_count_galaxy_bispectra(bias_dict, hod_dict, prec['hm'], self.log10csmf_mass_bins)
+                        bispec_cgg, bispec_cgm = self.get_count_galaxy_bispectra(bias_dict, hod_dict, prec['hm'], self.csmf_quad_nodes)
+                        self.csmf_count_galaxy_galaxy_bispectrum[:, zet] = np.einsum('kns,mn->kms', bispec_cgg, self.csmf_quad_weights)
+                        self.csmf_count_galaxy_matter_bispectrum[:, zet] = np.einsum('kns,mn->kms', bispec_cgm, self.csmf_quad_weights)
                     aux_response_gg[zet, :, :], aux_response_gm[zet, :, :], aux_response_mm[zet, :, :] = self.powspec_responses(bias_dict, hod_dict, prec['hm'])
                     if self.redshift_dep_bias:
                         bias_at_chi = np.array([self.bias_of_zet[t](self.los_z[zet]) for t in range(self.n_tomo_clust)])
@@ -2848,7 +2904,7 @@ class CovELLSpace(PolySpectra):
                     self.csmf_at_tomo_and_mass[i_smf_m_bins, i_tomo] = simpson(
                         self._csmf_window(i_smf_m_bins, i_tomo, los_chi_csmf) * aux_csmf_spline(los_chi_csmf), x=los_chi_csmf)
             self.csmf_overlap_mean = np.zeros((len(self.csmf_bin_overlaps), self.n_tomo_csmf))
-            for i_overlap, (i_mass, j_mass, _, _) in enumerate(self.csmf_bin_overlaps):
+            for i_overlap, (i_mass, j_mass) in enumerate(self.csmf_bin_overlaps):
                 aux_csmf_spline = UnivariateSpline(self.los_chi, aux_stellar_mass_func_overlap[:, i_overlap], k=2, s=0, ext=0)
                 for i_tomo in range(self.n_tomo_csmf):
                     chi_low = min(self.csmf_window_chi_range[i_mass, i_tomo, 0], self.csmf_window_chi_range[j_mass, i_tomo, 0])
@@ -4154,7 +4210,8 @@ class CovELLSpace(PolySpectra):
         print("Stellar mass function (SMF): " + str(len(self.log10csmf_mass_bins)) + " stellar mass bins with " +
               "log10(M*) from " + str(round(float(np.min(self.log10csmf_mass_bins)), 3)) + " to " +
               str(round(float(np.max(self.log10csmf_mass_bins)), 3)) + " (bin centres) in " + str(self.n_tomo_csmf) +
-              " tomographic bin(s)" + (", with overlapping bins" if len(self.csmf_bin_overlaps) else "") + ".")
+              " tomographic bin(s)" + (", with overlapping bins" if len(self.csmf_bin_overlaps) else "") +
+              ", per dex and averaged over the bins (" + str(len(self.csmf_quad_nodes)) + " quadrature nodes).")
         if read_in_tables['zcsmf']['pz_mass'] is not None:
             print("SMF line-of-sight windows: redshift distribution per stellar mass bin (zcsmf_mass_file).")
         else:
@@ -7755,20 +7812,23 @@ class CovELLSpace(PolySpectra):
 
     def covELL_csmf_SN(self):
         r"""
-        Calculates the shot noise component of the stellar mass function covariance matrix
-        
+        Calculates the shot noise component of the stellar mass function covariance matrix,
+        Cov[Phi_mu^i, Phi_nu^i] = N_mu,nu^i/(Delta log10 M*_mu Delta log10 M*_nu V_mu V_nu)
+        for the SMF per dex, Phi_mu^i = N_mu^i/(Delta log10 M*_mu V_mu), with N_mu,nu^i the
+        number of galaxies the bins share (N_mu^i for mu = nu, galaxies in the overlap of
+        overlapping bins, with the geometric mean of the two volumes).
+
         Returns
         -------
         smf_sn : array
             with shape (csmf_mass_bins, csmf_mass_bins, csmf_tomo_bins, csmf_tomo_bins)
         """
-        amplitude = self.csmf_at_tomo_and_mass/(self.deltaM_csmf[:, None]*self.Vmax)*((np.log(10.0)*10**self.log10csmf_mass_bins)**2)[:, None]
+        amplitude = self.csmf_at_tomo_and_mass/(self.deltalog10M_csmf[:, None]*self.Vmax)
         result = np.eye(len(self.log10csmf_mass_bins))[:,:, None, None]*np.eye(self.n_tomo_csmf)[None, None, :, :]*amplitude[:, None, :, None]
-        per_dex = np.log(10.0)*10**self.log10csmf_mass_bins
-        for i_overlap, (i_mass, j_mass, _, delta_overlap) in enumerate(self.csmf_bin_overlaps):
+        for i_overlap, (i_mass, j_mass) in enumerate(self.csmf_bin_overlaps):
             for i_tomo in range(self.n_tomo_csmf):
-                result[i_mass, j_mass, i_tomo, i_tomo] = per_dex[i_mass]*per_dex[j_mass]*self.csmf_overlap_mean[i_overlap, i_tomo]*delta_overlap \
-                    / (self.deltaM_csmf[i_mass]*self.deltaM_csmf[j_mass]*np.sqrt(self.Vmax[i_mass, i_tomo]*self.Vmax[j_mass, i_tomo]))
+                result[i_mass, j_mass, i_tomo, i_tomo] = self.csmf_overlap_mean[i_overlap, i_tomo] \
+                    / (self.deltalog10M_csmf[i_mass]*self.deltalog10M_csmf[j_mass]*np.sqrt(self.Vmax[i_mass, i_tomo]*self.Vmax[j_mass, i_tomo]))
                 result[j_mass, i_mass, i_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, i_tomo]
         return result
 
@@ -7779,7 +7839,8 @@ class CovELLSpace(PolySpectra):
         Calculates the SSC component of the stellar mass function covariance matrix
         Cov[Phi_mu^i, Phi_nu^j] = int dchi p_mu^i(chi) p_nu^j(chi) Phi~_mu(chi) Phi~_nu(chi) sigma_b^2(chi)/chi^2,
         with p_mu^i the line-of-sight distribution of the galaxies in stellar mass bin mu and
-        tomographic bin i (see __set_csmf_windows) and sigma_b^2 the survey variance.
+        tomographic bin i (see __set_csmf_windows), sigma_b^2 the survey variance and Phi~_mu
+        the bias-weighted SMF per dex averaged over the bin (see _csmf_bin_quadrature).
 
         Parameters
         ----------
@@ -7807,7 +7868,6 @@ class CovELLSpace(PolySpectra):
                 self.los_integration_chi, survey_variance_mmmm, k=1, s=0, ext=0)
         n_mass = len(self.log10csmf_mass_bins)
         result = np.zeros((n_mass, n_mass, self.n_tomo_csmf, self.n_tomo_csmf))
-        per_dex = np.log(10)*10**self.log10csmf_mass_bins
         for i_tomo in range(self.n_tomo_csmf):
             for j_tomo in range(i_tomo, self.n_tomo_csmf):
                 for i_mass in range(n_mass):
@@ -7823,7 +7883,7 @@ class CovELLSpace(PolySpectra):
                         integrand = self._csmf_window(i_mass, i_tomo, los_chi_csmf)*self._csmf_window(j_mass, j_tomo, los_chi_csmf) \
                             * self.phi_tilde_spline[i_mass](los_chi_csmf)*self.phi_tilde_spline[j_mass](los_chi_csmf) \
                             * survey_variance_mmmm_spline(los_chi_csmf)/los_chi_csmf**2
-                        result[i_mass, j_mass, i_tomo, j_tomo] = per_dex[i_mass]*per_dex[j_mass]*simpson(integrand, x = los_chi_csmf)
+                        result[i_mass, j_mass, i_tomo, j_tomo] = simpson(integrand, x = los_chi_csmf)
                         result[j_mass, i_mass, j_tomo, i_tomo] = result[i_mass, j_mass, i_tomo, j_tomo]
         return result
 
@@ -7885,7 +7945,6 @@ class CovELLSpace(PolySpectra):
         for probe, key in (('gg', 'survey_area_clust'), ('gm', 'survey_area_ggl'), ('mm', 'survey_area_lens')):
             area_probe = survey_params_dict[key][0]/self.deg2torad2 if survey_params_dict[key] is not None else area_smf
             area_factor[probe] = min(area_smf, area_probe)/(area_smf*area_probe)
-        per_dex = np.log(10)*10**self.log10csmf_mass_bins
         if self.gg:
             covELL_smf_cross_gg = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
             if compute and not self.csmf_auto_only:
@@ -7910,7 +7969,7 @@ class CovELLSpace(PolySpectra):
                                     if self.csmf_diagonal_lenses and len(splines) > 1 and i_spline != i_tomo:
                                         continue
                                     spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    value = per_dex[i_mass]*area_factor['gg']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    value = area_factor['gg']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
                                     covELL_smf_cross_gg[: ,i_mass, samples, i_smf_tomo, i_tomo, j_tomo] = value[:, None] if len(splines) == 1 else value
                                     covELL_smf_cross_gg[: ,i_mass, samples, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_gg[: ,i_mass, samples, i_smf_tomo, i_tomo, j_tomo]
         else:
@@ -7934,7 +7993,7 @@ class CovELLSpace(PolySpectra):
                                     if self.csmf_diagonal_lenses and len(splines) > 1 and i_spline != i_tomo:
                                         continue
                                     spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    value = per_dex[i_mass]*area_factor['gm']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    value = area_factor['gm']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
                                     covELL_smf_cross_gm[: ,i_mass, samples, i_smf_tomo, i_tomo, j_tomo] = value[:, None] if len(splines) == 1 else value
         else:
             covELL_smf_cross_gm = 0
@@ -7950,7 +8009,7 @@ class CovELLSpace(PolySpectra):
                                 weight = self.spline_lensweight[i_tomo](los_integration_chi_update)*self.spline_lensweight[j_tomo](los_integration_chi_update)*self._csmf_window(i_mass, i_smf_tomo, los_integration_chi_update)/los_integration_chi_update**4
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
                                 spline_eval = np.exp(spline((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*area_factor['mm']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo] = area_factor['mm']*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
                                 covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_mm[: ,i_mass, 0, i_smf_tomo, i_tomo, j_tomo]
         else:
             covELL_smf_cross_mm = 0
@@ -7990,7 +8049,6 @@ class CovELLSpace(PolySpectra):
         covELL_smf_cross_gg, covELL_smf_cross_gm, covELL_smf_cross_mm : list of arrays
             with shapes (number of ell bins, number of smf bins, sample dims, n_tomo_smf, n_tomo_clust/lens, n_tomo_clust/lens)
         """
-        per_dex = np.log(10)*10**self.log10csmf_mass_bins
         if self.gg:
             covELL_smf_cross_gg = np.zeros((len(self.ellrange), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
             if compute and not self.csmf_auto_only:
@@ -8026,7 +8084,7 @@ class CovELLSpace(PolySpectra):
                                     else:
                                         spline_response = self.spline_responsePgg[i_sample]
                                     spline_eval = spline_response((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
                                     covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_gg[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo]
         else:
             covELL_smf_cross_gg = 0
@@ -8062,7 +8120,7 @@ class CovELLSpace(PolySpectra):
                                     else:
                                         spline_response = self.spline_responsePgm[i_sample]
                                     spline_eval = spline_response((x_values[0,:],x_values[1,:])).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                    covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
+                                    covELL_smf_cross_gm[: ,i_mass, i_sample, i_smf_tomo, i_tomo, j_tomo] = simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)
         else:
             covELL_smf_cross_gm = 0
 
@@ -8090,7 +8148,7 @@ class CovELLSpace(PolySpectra):
                                 weight *= survey_variance_spline(los_integration_chi_update)*self.phi_tilde_spline[i_mass](los_integration_chi_update)
                                 x_values = np.array(self._chi_ell_points(los_integration_chi_update, self.ellrange)[::-1])
                                 spline_eval = np.exp(self.spline_responsePmm((x_values[0,:],x_values[1,:]))).reshape((len(los_integration_chi_update),len(self.ellrange)))
-                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = per_dex[i_mass]*simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
+                                covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo] = simpson(spline_eval*weight[:, None],x = los_integration_chi_update, axis = 0)[:, None]
                                 covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, j_tomo, i_tomo] = covELL_smf_cross_mm[: ,i_mass, :, i_smf_tomo, i_tomo, j_tomo]
         else:
             covELL_smf_cross_mm = 0

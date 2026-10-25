@@ -237,17 +237,30 @@ class HaloModel(Setup):
         self.nsat = self.nbar_sat(hod_dict)
         self.effective_bias = self.calc_effective_bias(
             bias_dict, hod_dict, prec['hm'])
+        self.set_splines_galaxy_stellar_mf(hod_dict, bias_dict, prec['hm'])
+        self.zet= zet
+
+    def set_splines_galaxy_stellar_mf(self,
+                                      hod_dict,
+                                      bias_dict,
+                                      hm_prec):
+        """
+        Sets the splines of the stellar mass function and of the
+        bias-weighted stellar mass function (centrals and satellites) in
+        stellar mass. If the bins of the SMF extend beyond the stellar mass
+        bins of the galaxy samples, the stellar mass grid of the HOD is
+        extended for the splines only, so that they are not extrapolated.
+        """
         if self.hod.mass_bins_disagree:
             saved_bins = self.__widen_mass_bins(bias_dict)
-            self.hod.hod_update(bias_dict, prec['hm'], self.mass_func.m)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
             self.set_spline_galaxy_stellar_mf(hod_dict)
-            self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
+            self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, hm_prec)
             self.__restore_mass_bins(bias_dict, saved_bins)
-            self.hod.hod_update(bias_dict, prec['hm'], self.mass_func.m)
+            self.hod.hod_update(bias_dict, hm_prec, self.mass_func.m)
         else:
             self.set_spline_galaxy_stellar_mf(hod_dict)
-            self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
-        self.zet= zet
+            self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, hm_prec)
 
     @staticmethod
     def __widen_mass_bins(bias_dict):

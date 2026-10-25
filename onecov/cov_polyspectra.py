@@ -333,8 +333,7 @@ class PolySpectra(HaloModel):
                                             np.log(self.mass_func.power),
                                             k=2, s=0, ext=0)
         if bias_dict['has_csmf']:
-            self.set_spline_galaxy_stellar_mf(hod_dict)
-            self.set_spline_galaxy_stellar_mf_bias(hod_dict, bias_dict, prec['hm'])
+            self.set_splines_galaxy_stellar_mf(hod_dict, bias_dict, prec['hm'])
         return True
 
     def __P_xy_1h(self,
