@@ -20,6 +20,7 @@ Contents
     guides/running
     guides/crash
     guides/examples
+    guides/theta_to_obs
 
 .. toctree::
     :maxdepth: 1

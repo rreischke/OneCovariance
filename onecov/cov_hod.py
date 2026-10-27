@@ -26,7 +26,8 @@ class HOD:
         logarithmically spaced masses in the range 
         [hm_prec['log10M_min'], hm_prec['log10M_max']]
     Mbins : array
-        with unit M_sun/h
+        stellar masses, in the units of the stellar mass parameters
+        (dpow_logM0_cen, never converted)
         with shape (sample_dims, self.N_stellar_mass)
         logarithmically spaced masses in the range 
         [bias_dict['logmass_bins'][:-1], bias_dict['logmass_bins'][1:]],
@@ -215,10 +216,11 @@ class HOD:
         Returns
         -------
         Mobs : array
-            with unit M_sun/h
+            log10 of the stellar mass, in the units of dpow_logM0_pop
+            (the halo masses are in M_sun/h)
             with shape (M_bins)
         """
-        mrange = self.Mrange / 10**hod_dict['dpow_logM1_'+pop]
+        mrange =self.Mrange / 10**hod_dict['dpow_logM1_'+pop]
         Mobs = \
               np.log10(hod_dict['dpow_norm_'+pop]) \
             + hod_dict['dpow_logM0_'+pop] \

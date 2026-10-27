@@ -54,6 +54,11 @@ Full Documentation
     :undoc-members:
     :show-inheritance:
 
+.. automodule:: cov_theta_to_obs
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. automodule:: cov_output
     :members:
     :undoc-members:

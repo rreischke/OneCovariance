@@ -650,7 +650,7 @@ You can then include the settings in the following section
    csmf_diagonal = False
    csmf_auto_only = False
 
-In this case we use 30 bins from :math:`10^7\,h^{-1}M_\odot` to :math:`10^{12.5}\,h^{-1}M_\odot`, logarithmically spaced. Alternatively, you can use ``csmf_log10M_bins`` to define the boundaries of the bins
+In this case we use 30 logarithmically spaced bins in :math:`\log_{10} M_\star` from 7 to 12.5 (in the units of the stellar mass parameters of the HoD, see below). Alternatively, you can use ``csmf_log10M_bins`` to define the boundaries of the bins
 if they are non-overlapping, or directly provide the upper and lower limits via ``csmf_log10M_bins_upper`` and ``csmf_log10M_bins_lower`` respectively. Since the stellar mass function uses the
 :math:`V_\mathrm{max}` estimator per dex, :math:`\Phi = N/(\Delta \log_{10} M_\star V_\mathrm{max})`, you need to specify a file with :math:`V_\mathrm{max}` (in :math:`(h^{-1}\mathrm{Mpc})^3`) for each stellar mass bin
 and each tomographic bin of the SMF, which is usually estimated directly from the data. ``csmf_diagonal = True`` only keeps the combinations of the i-th stellar mass bin with the i-th tomographic bin of the SMF
@@ -705,8 +705,19 @@ Running this config file will calculate the previously calculated :math:`3\times
 .. image:: corr_smf.png
    :width: 790
 
-It should be noted that the SMF is given per dex, :math:`\Phi = \mathrm{d}n/\mathrm{d}\log_{10} M_\star`, averaged over each stellar mass bin, i.e. :math:`\Phi_\mu = \int_\mu \mathrm{d}M_\star\, \mathrm{d}n/\mathrm{d}M_\star / \Delta \log_{10} M_\star`. All terms of its covariance (shot noise, SSC and the cross-covariance with the 2-point functions) are averaged over the bins in the same way, so wide bins in a steep part of the SMF (e.g. at the high-mass end, or for cluster counts) are treated correctly. Stellar masses are often expressed in units of :math:`h^{-2}M_\odot`, while the
-OneCovariance uses :math:`h^{-1}M_\odot` throughout (also for the HoD parameters), so remember to convert on input and output.
+It should be noted that the SMF is given per dex, :math:`\Phi = \mathrm{d}n/\mathrm{d}\log_{10} M_\star`, averaged over each stellar mass bin, i.e. :math:`\Phi_\mu = \int_\mu \mathrm{d}M_\star\, \mathrm{d}n/\mathrm{d}M_\star / \Delta \log_{10} M_\star`. All terms of its covariance (shot noise, SSC and the cross-covariance with the 2-point functions) are averaged over the bins in the same way, so wide bins in a steep part of the SMF (e.g. at the high-mass end, or for cluster counts) are treated correctly. The SMF is therefore in units of :math:`h^3\,\mathrm{Mpc}^{-3}\,\mathrm{dex}^{-1}` (with :math:`V_\mathrm{max}` in :math:`(h^{-1}\mathrm{Mpc})^3`), as in Dvornik et al. (2023), its
+auto-covariance in :math:`(h^3\,\mathrm{Mpc}^{-3}\,\mathrm{dex}^{-1})^2` and its cross-covariance with a 2-point statistic in :math:`h^3\,\mathrm{Mpc}^{-3}\,\mathrm{dex}^{-1}` times the units of that statistic.
+
+The code never converts stellar masses: all stellar masses (``csmf_log10M_bins...``, ``log10mass_bins...`` and the first column of the :math:`V_\mathrm{max}` file) are in the units of the
+stellar mass parameters of the HoD, i.e. the normalisation ``dpow_logm0_cen`` of the stellar-to-halo mass relation, whatever their :math:`h` scaling is. Halo masses (e.g. ``dpow_logm1_cen``,
+``modsch_logmref_sat``, ``log10m_min``) are always in :math:`h^{-1}M_\odot`. Since the SMF is per dex, it does not depend on the units of the stellar masses.
+
+In the matrix output, the SMF comes last, ordered by the tomographic bin of the SMF (slowest) and the stellar mass bin (fastest), see the header of the file. In the list output its rows are
+labelled ``csmfcsmf`` (auto-covariance), ``csmfgg``, ``csmfgm`` and ``csmfmm``/``csmfxip``/``csmfxim``/``csmfmmE``/``csmfmmB`` (cross-covariances, the SMF always first). In these rows the first
+spatial column is :math:`\log_{10}` of the centre of the stellar mass bin (also the second one for ``csmfcsmf``; it is only a label, as the SMF is averaged over the bin), ``s1 = 1``, ``s2`` is
+the galaxy sample of the 2-point statistic, ``tomoi = tomoj`` is the tomographic bin of the SMF and ``tomok``, ``tomol`` are the tomographic bins of the 2-point statistic. For ``csmfcsmf``,
+``tomoi`` and ``tomoj`` (repeated in ``tomok`` and ``tomol``) are the tomographic bins of the two SMF entries. For arbitrary summary statistics, the spatial columns are the indices of the bins.
+The Gaussian (shot noise) column of ``csmfcsmf`` also contains the sample variance of the SMF (its super-sample term) if ``ssc = False``, otherwise that term is in the SSC column.
 
 A real-space version of this analysis is given in ``config_3x2pt_rcf_SMF.ini``: cosmic shear (:math:`\xi_\pm`), galaxy-galaxy lensing (:math:`\gamma_\mathrm{t}`) and clustering (:math:`w`) for
 the five KiDS-1000 source bins and six KiDS-Bright-like volume-limited stellar mass samples as lenses, plus the SMF in 10 stellar mass bins, similar to Dvornik et al. (2023). The relevant settings are

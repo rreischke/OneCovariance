@@ -3,6 +3,7 @@ import time
 import levin
 import numpy as np
 from scipy.signal import argrelextrema
+from scipy.special import jv
 
 try:
     from onecov.cov_setup import cached_computation
@@ -10,6 +11,68 @@ try:
 except:
     from cov_setup import cached_computation
     from cov_theta_space import CovTHETASpace
+
+
+def hann_window(theta, theta_lo, theta_up, delta_ln_theta):
+    """
+    Hann apodisation T(theta) of the bandpowers: 1 between
+    theta_lo exp(delta_ln_theta/2) and theta_up exp(-delta_ln_theta/2),
+    cos^2 tapers of logarithmic width delta_ln_theta centred on theta_lo
+    and theta_up, and 0 outside (any angular unit, the same for all
+    arguments).
+    """
+    x = np.log(np.atleast_1d(np.asarray(theta, dtype=float)))
+    xlo = np.log(theta_lo)
+    xup = np.log(theta_up)
+    T = np.ones_like(x)
+    lower = x < xlo + delta_ln_theta/2.0
+    upper = x >= xup - delta_ln_theta/2.0
+    T[lower] = np.cos(np.pi/2.*((x[lower] - (xlo + delta_ln_theta/2.))/delta_ln_theta))**2.0
+    T[upper] = np.cos(np.pi/2.*((x[upper] - (xup - delta_ln_theta/2.))/delta_ln_theta))**2.0
+    T[(x < xlo - delta_ln_theta/2.0) | (x > xup + delta_ln_theta/2.0)] = 0.0
+    return T
+
+
+def bandpower_real_filters(theta, ell_lo, ell_up):
+    """
+    The real-space bandpower functions (Schneider et al. 2002) for a band
+    [ell_lo, ell_up] at theta (in radians), without the apodisation and
+    normalisation:
+        g_+(theta) = [x J_1(x)]_lo^up / theta^2,
+        g_-(theta) = [(x - 8/x) J_1(x) - 8 J_2(x)]_lo^up / theta^2,
+        h(theta) = -[x J_1(x) + 2 J_0(x)]_lo^up / theta^2,
+    with x = ell theta. With the Hann window T(theta) and
+    N = ln(ell_up/ell_lo), the bandpowers of CovBandPowers are
+        C_E/B = pi/N int dtheta theta T [g_+ xi_+ +/- g_- xi_-],
+        C_nE = 2 pi/N int dtheta theta T h gamma_t,
+        C_nn = 2 pi/N int dtheta theta T g_+ w,
+    i.e. 1/N int dell ell S(ell) C(ell) for a band S (for all three
+    approximately the average of ell^2 C_ell over ln ell in the band).
+
+    Returns
+    -------
+    g_plus, g_minus, h : arrays
+        with the shape of theta
+    """
+    theta = np.asarray(theta, dtype=float)
+    result = []
+    for kind in ('plus', 'minus', 'h'):
+        value = np.zeros_like(theta)
+        for ell, sign in ((ell_up, 1.0), (ell_lo, -1.0)):
+            x = ell*theta
+            if kind == 'plus':
+                value += sign*x*jv(1, x)
+            elif kind == 'minus':
+                value += sign*((x - 8./x)*jv(1, x) - 8.*jv(2, x))
+            else:
+                value -= sign*(x*jv(1, x) + 2.*jv(0, x))
+        result.append(value/theta**2)
+    return tuple(result)
+
+
+# maximum multipole of the bandpower weights (and of the projections)
+BANDPOWER_ELL_MAX = 1e5
+
 
 class CovBandPowers(CovTHETASpace):
     """
@@ -369,6 +432,15 @@ class CovBandPowers(CovTHETASpace):
             self.ell_bins_lensing = ell_bins_lensing
             self.ell_ul_bins_lensing = ell_ul_bins_lensing
         self.ell_fourier_integral = np.geomspace(self.ellrange[0]-1, self.ellrange[-1]+1,10000)
+        if self.ell_fourier_integral[-1] < BANDPOWER_ELL_MAX:
+            # the weights of bandpowers with apodisation at small angles extend beyond the
+            # ell range of the C_ell covariance (e.g. 0.7 per cent of the highest band for
+            # theta_lo = 0.5 arcmin and ell_max = 1e4), the C_ell are extrapolated there as
+            # for the real-space correlation functions; the tail is smooth (it comes from the
+            # apodisation at theta_min)
+            self.ell_fourier_integral = np.concatenate(
+                (self.ell_fourier_integral,
+                 np.geomspace(self.ell_fourier_integral[-1], BANDPOWER_ELL_MAX, 201)[1:]))
     
     def __get_Hann_window(self,
                            obs_dict):
@@ -510,9 +582,12 @@ class CovBandPowers(CovTHETASpace):
         if self.gg or self.gm:
             weights = self.__get_bandpower_weights(self.ell_fourier_integral, self.ell_ul_bins_clustering,
                                                    self.thetabins/60/180*np.pi, self.T_of_theta_clustering,
-                                                   ['EE', 'nE'], 'clustering')
-            Wl_EE_clust, Wl_nE = weights['EE'], weights['nE']
-        if self.mm or self.gm:
+                                                   ['EE', 'EB', 'nE'], 'clustering')
+            # clustering: C_nn = 2 pi/N int dtheta theta T w g_+ = 1/N int dell ell W_nn C_gg with
+            # W_nn = int dtheta theta T J_0 g_+ = (W_EE + W_EB)/2, the J_0 part of W_EE
+            # (the definition of the band powers, Eq. 123 of arXiv:2410.06962)
+            Wl_EE_clust, Wl_nE = (weights['EE'] + weights['EB'])/2, weights['nE']
+        if self.mm:
             weights = self.__get_bandpower_weights(self.ell_fourier_integral, self.ell_ul_bins_lensing,
                                                    self.thetabins/60/180*np.pi, self.T_of_theta_lensing,
                                                    ['EE', 'EB'], 'lensing')
@@ -1135,7 +1210,8 @@ class CovBandPowers(CovTHETASpace):
                             if n_mode >= m_mode:
                                 sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode), m_mode, n_mode, gauss_BPgggg_sva, (m_mode, n_mode), 2.0 * np.pi / self.N_ell_clustering[m_mode] / self.N_ell_clustering[n_mode] / (survey_params_dict['survey_area_clust'] / self.deg2torad2), (n_mode, m_mode)))
                         
-                    gauss_BPgggg_sn[n_mode, m_mode, :, :, :, :, :, :] = np.pi**2/self.N_ell_clustering[m_mode]/self.N_ell_clustering[n_mode]*(kron_delta_tomo_clust[None, None, :, None, :, None]
+                    # real-space filter 2 pi/N T g_+ (as 2 pi/N T h for ggl)
+                    gauss_BPgggg_sn[n_mode, m_mode, :, :, :, :, :, :] = 4*np.pi**2/self.N_ell_clustering[m_mode]/self.N_ell_clustering[n_mode]*(kron_delta_tomo_clust[None, None, :, None, :, None]
                                                                             * kron_delta_tomo_clust[None, None, None, :, None, :]
                                                                             + kron_delta_tomo_clust[None, None, :, None, None, :]
                                                                             * kron_delta_tomo_clust[None, None, None, :, :, None]) \

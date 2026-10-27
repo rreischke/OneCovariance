@@ -54,6 +54,7 @@ class Input:
         self.cross_terms = None
         self.clustering_z = None
         self.unbiased_clustering = None
+        self.theta_to_obs = None
 
         # Conditional stellar mass function
         self.cstellar_mf = None
@@ -148,6 +149,12 @@ class Input:
         self.xi_pm = None
         self.xi_mm = None
         self.theta_list = None
+        self.theta_to_obs_bins = None
+        self.theta_to_obs_bins_clustering = None
+        self.theta_to_obs_bins_lensing = None
+        self.theta_to_obs_type = None
+        self.theta_to_obs_type_clustering = None
+        self.theta_to_obs_type_lensing = None
         self.theta_acc = None
         self.bin_averaging = None
         self.integration_intervals = None
@@ -484,6 +491,10 @@ class Input:
                 self.unbiased_clustering = config['observables'].getboolean('unbiased_clustering')
             else:
                 self.unbiased_clustering = False
+            if 'theta_to_obs' in config['observables']:
+                self.theta_to_obs = config['observables'].getboolean('theta_to_obs')
+            else:
+                self.theta_to_obs = False
             if 'est_shear' in config['observables']:
                 self.est_shear = config['observables']['est_shear']
             if 'ggl' in config['observables']:
@@ -1036,6 +1047,12 @@ class Input:
                 self.theta_type_lensing = \
                     config['covTHETAspace settings']['theta_type_lensing']
 
+            for key in ['theta_to_obs_bins', 'theta_to_obs_bins_clustering', 'theta_to_obs_bins_lensing']:
+                if key in config['covTHETAspace settings']:
+                    setattr(self, key, int(config['covTHETAspace settings'][key]))
+            for key in ['theta_to_obs_type', 'theta_to_obs_type_clustering', 'theta_to_obs_type_lensing']:
+                if key in config['covTHETAspace settings']:
+                    setattr(self, key, config['covTHETAspace settings'][key].strip())
             if 'theta_list' in config['covTHETAspace settings'] and self.theta_type == 'list':
                 self.theta_list = np.array(
                     config['covTHETAspace settings']['theta_list'].split(','))
@@ -1213,6 +1230,22 @@ class Input:
                     self.theta_bins = self.theta_bins_clustering
                 if self.cosmicshear and (self.clustering  or self.ggl):  
                     self.theta_bins = max(self.theta_bins_clustering, self.theta_bins_lensing)
+            # the same fall-back values as for cosmic shear (needed without it)
+            if self.theta_acc is None:
+                self.theta_acc = 1e-5
+                print("The accuracy for the theta space covariance " +
+                      "[covTHETAspace settings]: 'theta_accuracy' is set to  " +
+                      str(self.theta_acc))
+            if self.bin_averaging is None:
+                self.bin_averaging = True
+                print("The bin averaging for the theta space covariance " +
+                      "[covTHETAspace settings]: 'bin_averaging' is set to  " +
+                      str(self.bin_averaging))
+            if self.integration_intervals is None:
+                self.integration_intervals = 40
+                print("The number of integration intervals for the theta space covariance " +
+                      "[covTHETAspace settings]: 'integration_intervals' is set to  " +
+                      str(self.integration_intervals))
         if self.cosmicshear and self.est_shear == 'xi_pm':
             if self.theta_min is None:
                 if self.theta_min_lensing is None:
@@ -3704,18 +3737,20 @@ class Input:
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
                 'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal", "csmf_auto_only","csmf_diagonal_lenses", 'csmf_log10M_bins_upper', 'csmf_log10M_bins_lower',
                 'combinations_clustering',
-                'combinations_ggl','combinations_lensing']
+                'combinations_ggl','combinations_lensing', 'theta_to_obs']
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
                   self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal, self.csmf_auto_only,
                   bool(self.csmf_diagonal_lenses) and (self.sampledim or 1) > 1, self.csmf_log10M_bins_upper, self.csmf_log10M_bins_lower,
-                  self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
+                  self.combinations_clustering, self.combinations_ggl, self.combinations_lensing,
+                  bool(self.theta_to_obs)]
         self.observables = dict(zip(keys, values))
         
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
                   self.cstellar_mf, None, None, None, None, None, None,
-                  self.combinations_clustering, self.combinations_ggl, self.combinations_lensing]
+                  self.combinations_clustering, self.combinations_ggl, self.combinations_lensing,
+                  self.theta_to_obs]
         
         if not self.sn_only:
             values = [self.gauss, self.split_gauss, self.nongauss, self.ssc, None]
@@ -3809,7 +3844,9 @@ class Input:
                 'mix_term_isspherical', 'mix_term_target_patchsize', 'mix_term_do_overlap',
                 'mix_term_do_mix_for', 'mix_term_nbins_phi', 'mix_term_nmax',
                 'mix_term_do_ec', 'mix_term_subsample', 'mix_term_nsubr', 'mix_term_file_path_save_triplets',
-                'mix_term_file_path_load_triplets']
+                'mix_term_file_path_load_triplets', 'theta_to_obs_bins', 'theta_to_obs_bins_clustering',
+                'theta_to_obs_bins_lensing', 'theta_to_obs_type', 'theta_to_obs_type_clustering',
+                'theta_to_obs_type_lensing']
         values = [self.theta_min, self.theta_max, self.theta_bins, self.theta_type,
                   self.theta_min_clustering, self.theta_max_clustering, self.theta_bins_clustering, self.theta_type_clustering,
                   self.theta_min_lensing, self.theta_max_lensing, self.theta_bins_lensing, self.theta_type_lensing,
@@ -3819,7 +3856,9 @@ class Input:
                   self.mix_term_isspherical, self.mix_term_target_patchsize, self.mix_term_do_overlap,
                   self.mix_term_do_mix_for, self.mix_term_nbins_phi, self.mix_term_nmax,
                   self.mix_term_do_ec, self.mix_term_subsample, self.mix_term_nsubr, 
-                  self.mix_term_file_path_save_triplets, self.mix_term_file_path_load_triplets]
+                  self.mix_term_file_path_save_triplets, self.mix_term_file_path_load_triplets,
+                  self.theta_to_obs_bins, self.theta_to_obs_bins_clustering, self.theta_to_obs_bins_lensing,
+                  self.theta_to_obs_type, self.theta_to_obs_type_clustering, self.theta_to_obs_type_lensing]
         self.covTHETAspace_settings = dict(zip(keys, values))
         self.covTHETAspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
@@ -4775,6 +4814,8 @@ class FileInput:
                 self.do_arbitrary_obs = config['arbitrary_summary'].getboolean('do_arbitrary_obs')
             else:
                 self.do_arbitrary_obs = False
+        self.theta_to_obs = 'observables' in config and 'theta_to_obs' in config['observables'] \
+            and config['observables'].getboolean('theta_to_obs')
         if 'arbitrary_kernel' in config:
             if 'do_arbitrary_radial_weight' in config['arbitrary_kernel']:
                 self.do_arbitrary_radial_weight = config['arbitrary_kernel'].getboolean('do_arbitrary_radial_weight')
@@ -7507,6 +7548,17 @@ class FileInput:
                     config['tabulated inputs files']['input_directory']
             else:
                 self.arbitrary_summary_dir = ''
+            if self.theta_to_obs:
+                # the covariance from the real-space covariance (theta_to_obs)
+                # only needs the real-space filters: without Fourier filters
+                # the summaries are counted and named from the real-space
+                # files (their Fourier tables are then not used)
+                files = config['tabulated inputs files']
+                for fourier, real in (('arb_fourier_filter_gg_file', 'arb_real_filter_gg_file'),
+                                      ('arb_fourier_filter_gm_file', 'arb_real_filter_gm_file'),
+                                      ('arb_fourier_filter_mmE_file', 'arb_real_filter_mm_p_file')):
+                    if fourier not in files and real in files:
+                        files[fourier] = files[real]
             if self.clustering:
                 if 'arb_fourier_filter_gg_file' in config['tabulated inputs files']:
                     self.arb_fourier_filter_gg_file =(config['tabulated inputs files']

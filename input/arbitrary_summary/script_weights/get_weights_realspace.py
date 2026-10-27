@@ -156,7 +156,10 @@ def main():
         else:
             filename_gg = "./../rcf/fourier_weight_realspace_cf_gg_" + str(i_theta+1) + ".table"
         np.savetxt(filename_gg,np.array([fourier_ell,K_gg]).T, header = hdr_str_gg_fourier)
-        R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
+        # pair-weighted average over the bin (the same estimator as the Fourier filter above):
+        # int dtheta theta R(theta) xi(theta) with R = 2/(theta_u^2 - theta_l^2) on the bin (in 1/rad^2)
+        R = np.where((real_theta >= theta_ul_bins[i_theta]) & (real_theta <= theta_ul_bins[i_theta+1]),
+                     2/(theta_u**2 - theta_l**2), 0.0)
         if i_theta+1 < 10:
             filename = "./../rcf/real_weight_realspace_cf_gg_0" + str(i_theta+1) + ".table"
         else:
@@ -179,7 +182,10 @@ def main():
         else:
             filename_gm = "./../rcf/fourier_weight_realspace_cf_gm_" + str(i_theta+1) + ".table"
         np.savetxt(filename_gm,np.array([fourier_ell,K_gm]).T, header = hdr_str_gm_fourier)
-        R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
+        # pair-weighted average over the bin (the same estimator as the Fourier filter above):
+        # int dtheta theta R(theta) xi(theta) with R = 2/(theta_u^2 - theta_l^2) on the bin (in 1/rad^2)
+        R = np.where((real_theta >= theta_ul_bins[i_theta]) & (real_theta <= theta_ul_bins[i_theta+1]),
+                     2/(theta_u**2 - theta_l**2), 0.0)
         if i_theta+1 < 10:
             filename = "./../rcf/real_weight_realspace_cf_gm_0" + str(i_theta+1) + ".table"
         else:
@@ -208,7 +214,10 @@ def main():
         else:
             filename_mm = "./../rcf/fourier_weight_realspace_cf_mm_m_" + str(i_theta+1) + ".table"
         np.savetxt(filename_mm,np.array([fourier_ell,K_mm]).T, header = hdr_str_mm_minus_fourier)
-        R = top_hat(real_theta, theta_bins[i_theta] - theta_ul_bins[i_theta], theta_ul_bins[i_theta+1] - theta_bins[i_theta],  theta_bins[i_theta])/(real_theta)* (60*180/np.pi)**2/np.sqrt(2)
+        # pair-weighted average over the bin (the same estimator as the Fourier filter above):
+        # int dtheta theta R(theta) xi(theta) with R = 2/(theta_u^2 - theta_l^2) on the bin (in 1/rad^2)
+        R = np.where((real_theta >= theta_ul_bins[i_theta]) & (real_theta <= theta_ul_bins[i_theta+1]),
+                     2/(theta_u**2 - theta_l**2), 0.0)
         if i_theta+1 < 10:
             filename = "./../rcf/real_weight_realspace_cf_mm_p_0" + str(i_theta+1) + ".table"
         else:

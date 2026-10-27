@@ -901,12 +901,8 @@ class Output:
                 ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
 
         if self.has_csmf:
-            position += self.N_stellar_mass_bins
-            labels_position_y.append(len(covmatrix) - old_position - (position- old_position)/2)
-            labels_text.append(r'$\Phi(M_\star^\mu)M_\star^\mu\ln(10)$')
-            labels_position.append(old_position + (position- old_position)/2)
+            self._plot_csmf_block(ax, covmatrix, position, labels_position, labels_position_y, labels_text)
 
-        
         ax.xaxis.tick_top()
 
         plt.yticks(labels_position_y, labels_text)
@@ -917,6 +913,32 @@ class Output:
 
         #print("Plotting correlation matrix")
    
+
+    def _plot_csmf_block(self,
+                         ax,
+                         covmatrix,
+                         start,
+                         labels_position,
+                         labels_position_y,
+                         labels_text):
+        """
+        Labels the block of the stellar mass function (SMF) at the end of the
+        correlation matrix, which starts at row start. It has one row per
+        stellar mass bin and tomographic bin of the SMF (tomographic bin
+        outer, mass bin inner; one row per stellar mass bin with
+        csmf_diagonal), the tomographic bins are separated by dashed lines.
+        The SMF is the bin-averaged SMF per dex, Phi_mu^i = N_mu^i/(Delta
+        log10 M*_mu V_max) (as Phi_mu^i in Dvornik et al. 2023).
+        """
+        start, end = int(round(start)), len(covmatrix)
+        n_tomo = (end - start)//self.N_stellar_mass_bins
+        for sub_tomo in range(1, n_tomo):
+            sub_position = start + sub_tomo*self.N_stellar_mass_bins
+            ax.axhline(y=end - sub_position, color='black', linewidth=.3, ls = "--")
+            ax.axvline(x=sub_position, color='black', linewidth=.3, ls = "--")
+        labels_position.append(start + (end - start)/2)
+        labels_position_y.append(end - start - (end - start)/2)
+        labels_text.append(r'$\Phi^i_\mu$' if n_tomo > 1 else r'$\Phi_\mu$')
 
     def plot_corrcoeff_matrix_arbitrary(self,
                                         obs_dict,
@@ -1103,6 +1125,8 @@ class Output:
                 old_position = position
                 ax.axhline(y=len(covmatrix)-position, color='black', linewidth=.5, ls = "-")
                 ax.axvline(x=position, color='black', linewidth=.5, ls = "-")
+        if self.has_csmf:
+            self._plot_csmf_block(ax, covmatrix, position, labels_position, labels_position_y, labels_text)
         ax.xaxis.tick_top()
 
         plt.yticks(labels_position_y, labels_text)
@@ -1299,7 +1323,9 @@ class Output:
     def _csmf_bin_values(obs_dict):
         """
         log10 of the stellar masses of the SMF bins (the centres of the bins
-        in stellar mass, as in the calculation).
+        in stellar mass), only used as labels: the SMF is averaged over each
+        bin. The stellar masses have the units of the stellar mass parameters
+        of the HoD (e.g. dpow_logm0_cen).
         """
         observables = obs_dict['observables']
         if observables['csmf_log10M_bins_upper'] is not None and observables['csmf_log10M_bins_lower'] is not None:
@@ -1308,6 +1334,68 @@ class Output:
             edges = 10**np.asarray(observables['csmf_log10M_bins'])
             lower, upper = edges[:-1], edges[1:]
         return np.log10(lower + (upper - lower)/2)
+
+    @staticmethod
+    def _block_order(probe, n_spatial, n_tomo_1, n_tomo_2, sampledim=None,
+                     unique=False, diagonal=False):
+        """
+        One line of the matrix output header listing the order of the
+        entries of a 2-point block, as written by __create_matrix (and its
+        diagonal-clustering variant): tomographic bin pair outer, sample
+        (sampledim None: no sample index, cosmic shear) in the middle,
+        spatial bin inner. unique: only pairs t1 <= t2; diagonal: sample i
+        only in lens bin i (csmf_diagonal_lenses), so t1 is the sample and
+        for unique pairs only the auto pairs t1 = t2 are kept.
+        """
+        entries = []
+        for t1 in range(1, n_tomo_1 + 1):
+            for t2 in range(t1 if unique else 1, n_tomo_2 + 1):
+                if diagonal and sampledim is not None:
+                    if not unique or t1 == t2:
+                        entries.append((t1, t1, t2))
+                else:
+                    for s in range(1, (sampledim or 1) + 1):
+                        entries.append((s if sampledim else None, t1, t2))
+
+        def label(entry, spatial):
+            s, t1, t2 = entry
+            sample = '' if s is None else '^{' + str(s) + '}'
+            return probe + sample + '_{' + str(t1) + str(t2) + '}(' + str(spatial) + ')'
+
+        # first entry, rest of the first pair, rest of the first row of
+        # pairs, everything else
+        first_pair = [e for e in entries[1:] if e[1:] == entries[0][1:]]
+        first_row = [e for e in entries[1 + len(first_pair):] if e[1] == entries[0][1]]
+        rest = entries[1 + len(first_pair) + len(first_row):]
+        groups = [entries[:1], first_pair, first_row, rest]
+        return ' '.join(label(g[0], 1) + ' ... ' + label(g[-1], n_spatial)
+                        for g in groups if g) + '\n'
+
+    def _csmf_header(self, obs_dict):
+        """
+        The lines of the matrix output header for the stellar mass function
+        (SMF): its description with units, its notation and the order of its
+        entries (tomographic bin outer, stellar mass bin inner; only stellar
+        mass bin i in tomographic bin i with csmf_diagonal).
+        """
+        n_mass = self.N_stellar_mass_bins
+        n_tomo = self.conditional_stellar_mass_function_cov[0].shape[2]
+        diagonal = obs_dict['observables']['csmf_diagonal']
+        description = 'stellar mass function per dex, averaged over the stellar mass bins, ' \
+            'phi^i_mu = N^i_mu/(Delta log10 M*_mu V^i_max,mu) in h^3 Mpc^-3 dex^-1 (V_max in (Mpc/h)^3), with ' \
+            + str(n_mass) + ' stellar mass bins and ' + str(n_tomo) + (' tomographic bin' if n_tomo == 1 else ' tomographic bins') \
+            + (' (only stellar mass bin i in tomographic bin i).\n' if diagonal else '.\n') \
+            + 'The SMF auto-covariance is in (h^3 Mpc^-3 dex^-1)^2, its cross-covariance with a 2-point ' \
+            'statistic in h^3 Mpc^-3 dex^-1 times the units of that statistic.\n'
+        notation = 'stellar mass function: phi^{tomographic bin i}_{stellar mass bin mu}\n'
+        if diagonal:
+            order = 'phi^{1}_{1} phi^{2}_{2} ... phi^{' + str(n_mass) + '}_{' + str(n_mass) + '}\n'
+        elif n_tomo == 1:
+            order = 'phi^{1}_{1} ... phi^{1}_{' + str(n_mass) + '}\n'
+        else:
+            order = 'phi^{1}_{1} ... phi^{1}_{' + str(n_mass) + '} phi^{2}_{1} ... phi^{' + str(n_tomo) \
+                + '}_{' + str(n_mass) + '}\n'
+        return description, notation, order
 
     def _csmf_list_rows(self, cov_dict, obs_dict, ostr_format, x_csmf, x_clust, x_lens, arbitrary=False):
         """
@@ -1321,8 +1409,13 @@ class Output:
         galaxy sample, tomoi = tomoj = the tomographic bin of the SMF and
         tomok, tomol = the bins of the LSS probe (only tomok <= tomol for
         clustering and cosmic shear, and only sample i in clustering bin i
-        with csmf_diagonal_lenses).
+        with csmf_diagonal_lenses). The SMF is per dex and averaged over the
+        stellar mass bins (in h^3 Mpc^-3 dex^-1), x1 (and x2 for csmfcsmf)
+        is written with more digits than the other spatial indices, since
+        neighbouring narrow bins could not be told apart otherwise.
         """
+        mass_format = ostr_format.replace('%.2e', '%.4e', 1)
+        mass_mass_format = mass_format.replace('%.2e', '%.4e', 1)
         terms = self.conditional_stellar_mass_function_cov
         parts = getattr(self, 'csmf_split', None)
         if getattr(self, 'is_cell', False):
@@ -1346,7 +1439,8 @@ class Output:
                 values = (cov, 0.0, 0.0, gauss, nongauss, ssc)
             else:
                 values = (cov, gauss, nongauss, ssc)
-            return ostr_format % ((name, x1, x2, 1, s2, tc1, tc2, t3, t4) + values)
+            row_format = mass_mass_format if name == "csmfcsmf" else mass_format
+            return row_format % ((name, x1, x2, 1, s2, tc1, tc2, t3, t4) + values)
 
         for k, term in enumerate(terms):
             if not isinstance(term, np.ndarray) or k >= len(names):
@@ -5370,7 +5464,7 @@ class Output:
                                             [covariance_xipxim.T, covariance_ximxim]])
                 elif ximm:
                     covariance_ximxim = self.__create_matrix(cov[9],True,True,True,True)
-                    cov2d = covariance_xipxip
+                    cov2d = covariance_ximxim
                     cov_diag.append(covariance_ximxim)
                 elif xipm:
                     covariance_xipxim = self.__create_matrix(cov[8],True,True,True,True)
@@ -5514,7 +5608,7 @@ class Output:
                                                 [covariance_xipxim.T, covariance_ximxim]])
                     elif ximm:
                         covariance_ximxim = self.__create_matrix(cov[9],True,True,True,True)
-                        cov2d = covariance_xipxip
+                        cov2d = covariance_ximxim
                         cov_diag.append(covariance_ximxim)
                     elif xipm:
                         covariance_xipxim = self.__create_matrix(cov[8],True,True,True,True)
@@ -5658,7 +5752,7 @@ class Output:
                                                     [covariance_xipxim.T, covariance_ximxim]])
                         elif ximm:
                             covariance_ximxim = self.__create_matrix(cov[9],True,True,True,True)
-                            cov2d = covariance_xipxip
+                            cov2d = covariance_ximxim
                             cov_diag.append(covariance_ximxim)
                         elif xipm:
                             covariance_xipxim = self.__create_matrix(cov[8],True,True,True,True)
@@ -5803,7 +5897,7 @@ class Output:
                                                     [covariance_xipxim.T, covariance_ximxim]])
                         elif ximm:
                             covariance_ximxim = self.__create_matrix(cov[9],True,True,True,True)
-                            cov2d = covariance_xipxip
+                            cov2d = covariance_ximxim
                             cov_diag.append(covariance_ximxim)
                         elif xipm:
                             covariance_xipxim = self.__create_matrix(cov[8],True,True,True,True)
@@ -5843,13 +5937,14 @@ class Output:
             
             hdr_str = 'Covariance matrix for the following probes (in this order) :\n'
             if gg:
-                hdr_str += 'galaxy clustering with ' + str(n_tomo_clust) + ' tomographic bins (only the unique bin combinations) and ' + str(len(self.projected_clust)) + ' spatial bins and' + str(sampledim) + ' stellar mass bins. \n'
+                hdr_str += 'galaxy clustering with ' + str(n_tomo_clust) + ' tomographic bins (only the unique bin combinations) and ' + str(len(self.projected_clust)) + ' spatial bins and ' + str(sampledim) + ' stellar mass bins. \n'
             if gm:  
-                hdr_str += 'galaxy galaxy lensing ' + str(n_tomo_clust) + ' tomographic lens bins and ' + str(n_tomo_lens) + ' tomographic source bins (all bin combinations) and ' + str(len(self.projected_clust)) + ' spatial bins and' + str(sampledim) + ' stellar mass bins.\n'
+                hdr_str += 'galaxy galaxy lensing ' + str(n_tomo_clust) + ' tomographic lens bins and ' + str(n_tomo_lens) + ' tomographic source bins (all bin combinations) and ' + str(len(self.projected_clust)) + ' spatial bins and ' + str(sampledim) + ' stellar mass bins.\n'
             if mm:
                 hdr_str += 'cosmic shear with ' + str(n_tomo_lens) + ' tomographic bins (only the unique bin combinations) and ' + str(len(self.projected_lens)) + ' spatial bins.\n'
             if self.has_csmf:
-                hdr_str += 'stellar mass function with ' + str(self.N_stellar_mass_bins) + ' stellar mass bins.\n'
+                csmf_description, csmf_notation, csmf_order = self._csmf_header(obs_dict)
+                hdr_str += csmf_description
 
             hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
             if gg:
@@ -5859,27 +5954,26 @@ class Output:
             if mm:
                 hdr_str += "cosmic shear: mm_{tomographic bin i tomographic bin j}(spatial bin k)\n"
             if self.has_csmf:
-                hdr_str += "stellar mass function: phi_(mass index k))\n"
+                hdr_str += csmf_notation
             if gg:
-                hdr_str += "gg^{1}_{11}(1) ... gg^{1}_{11}(" + str(len(self.projected_clust))+ ") gg^{2}_{11}(1) ... gg^{" +str(sampledim) + "}_{11}(" + str(len(self.projected_clust))+ ")"
-                hdr_str += " gg^{1}_{12}(1) ... gg^{" +str(sampledim) + "}_{1"+ str(n_tomo_clust) + "}(" + str(len(self.projected_clust))+ ")"
-                hdr_str += " gg^{1}_{22}(1) ... gg^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_clust) + "}(" + str(len(self.projected_clust))+ ")"
-                hdr_str += "\n"
+                hdr_str += self._block_order('gg', len(self.projected_clust), n_tomo_clust, n_tomo_clust,
+                                             sampledim, unique=True, diagonal=self.csmf_diagonal_lenses)
             if gm:
-                hdr_str += "gm^{1}_{11}(1) ... gm^{1}_{11}(" + str(len(self.projected_clust))+ ") gm^{2}_{11}(1) ... gm^{" +str(sampledim) + "}_{11}(" + str(len(self.projected_clust))+ ")"
-                hdr_str += " gm^{1}_{12}(1) ... gm^{" +str(sampledim) + "}_{1"+ str(n_tomo_lens) + "}(" + str(len(self.projected_clust))+ ")"
-                hdr_str += " gm^{1}_{21}(1) ... gm^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_lens) + "}(" + str(len(self.projected_clust))+ ")"
-                hdr_str += "\n"
+                hdr_str += self._block_order('gm', len(self.projected_clust), n_tomo_clust, n_tomo_lens,
+                                             sampledim, diagonal=self.csmf_diagonal_lenses)
             if mm:
-                hdr_str += "mm_{11}(1) ... mm_{11}(" + str(len(self.projected_lens))+ ") mm_{11}(1) ... mm_{11}(" + str(len(self.projected_lens))+ ")"
-                hdr_str += " mm_{12}(1) ... mm_{1"+ str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
-                hdr_str += " mm_{22}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
-                hdr_str += "Bmm_{11}(1) ... Bmm_{11}(" + str(len(self.projected_lens))+ ") Bmm_{11}(1) ... Bmm_{11}(" + str(len(self.projected_lens))+ ")"
-                hdr_str += " Bmm_{12}(1) ... Bmm_{1"+ str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
-                hdr_str += " Bmm_{22}(1) ... Bmm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(len(self.projected_lens))+ ")"
-                hdr_str += "\n"
+                mm_order = self._block_order('mm', len(self.projected_lens), n_tomo_lens, n_tomo_lens, unique=True)
+                hdr_str += mm_order
+                # the matrix only contains a second cosmic shear block
+                # (xi_minus or B-modes) if both auto blocks were assembled
+                if obslength == 10 and xipp and ximm:
+                    if obs_dict['observables']['est_shear'] == 'xi_pm':
+                        hdr_str += "Followed by the second mm summary (xi_minus)\n"
+                    else:
+                        hdr_str += "Followed by the second mm summary (B-modes)\n"
+                    hdr_str += mm_order
             if self.has_csmf:
-                hdr_str += "phi_(1) ... phi(" + str(self.N_stellar_mass_bins)+ ")\n"
+                hdr_str += csmf_order
 
             if 'matrix' in self.style:
                 if not cov_dict['split_gauss']:
@@ -6720,7 +6814,7 @@ class Output:
                                     [covariance_xipxim.T, covariance_ximxim]])
         elif ximm:
             covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
-            cov2d = covariance_xipxip
+            cov2d = covariance_ximxim
             cov_diag.append(covariance_ximxim)
         elif xipm:
             covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
@@ -6826,7 +6920,7 @@ class Output:
                                         [covariance_xipxim.T, covariance_ximxim]])
             elif ximm:
                 covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
-                cov2d = covariance_xipxip
+                cov2d = covariance_ximxim
                 cov_diag.append(covariance_ximxim)
             elif xipm:
                 covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
@@ -6929,7 +7023,7 @@ class Output:
                                             [covariance_xipxim.T, covariance_ximxim]])
                 elif ximm:
                     covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
-                    cov2d = covariance_xipxip
+                    cov2d = covariance_ximxim
                     cov_diag.append(covariance_ximxim)
                 elif xipm:
                     covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
@@ -7034,7 +7128,7 @@ class Output:
                                             [covariance_xipxim.T, covariance_ximxim]])
                 elif ximm:
                     covariance_ximxim = self.__create_matrix_arbitrary(cov[9],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
-                    cov2d = covariance_xipxip
+                    cov2d = covariance_ximxim
                     cov_diag.append(covariance_ximxim)
                 elif xipm:
                     covariance_xipxim = self.__create_matrix_arbitrary(cov[8],True,True, 'mm', 'mm', summary, is_ij_lensing=True, is_mn_lensing=True)
@@ -7103,12 +7197,14 @@ class Output:
             if two_gm:
                 hdr_str += str(spatial_second_probe_gm) + " for the second probe and "
             hdr_str += str(sampledim) + ' stellar mass bins. \n'
-        if mm:  
-            hdr_str += 'cosmic shear with ' + str(n_tomo_lens) + ' tomographic bins (only the unique bin combinations) and ' + str(spatial_first_probe_mm) + ' spatial bins for the first probe and '
+        if mm:
+            hdr_str += 'cosmic shear with ' + str(n_tomo_lens) + ' tomographic bins (only the unique bin combinations) and ' + str(spatial_first_probe_mm) + ' spatial bins for the first probe'
             if two_mm:
-                hdr_str += str(spatial_second_probe_mm) + " for the second probe and "
+                hdr_str += " and " + str(spatial_second_probe_mm) + " for the second probe"
+            hdr_str += '.\n'
         if self.has_csmf:
-            hdr_str += 'stellar mass function with ' + str(self.N_stellar_mass_bins) + ' stellar mass bins.\n'
+            csmf_description, csmf_notation, csmf_order = self._csmf_header(obs_dict)
+            hdr_str += csmf_description
 
         hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
         if gg:
@@ -7118,46 +7214,30 @@ class Output:
         if mm:
             hdr_str += "cosmic shear: mm_{tomographic bin i tomographic bin j}(spatial bin k)\n"
         if self.has_csmf:
-            hdr_str += "stellar mass function: phi_(mass index k))\n"
+            hdr_str += csmf_notation
+        diagonal = bool(getattr(self, 'csmf_diagonal_lenses', False))
         if gg:
-            hdr_str += "gg^{1}_{11}(1) ... gg^{1}_{11}(" + str(spatial_first_probe_gg)+ ") gg^{2}_{11}(1) ... gg^{" +str(sampledim) + "}_{11}(" + str(spatial_first_probe_gg)+ ")"
-            hdr_str += " gg^{1}_{12}(1) ... gg^{" +str(sampledim) + "}_{1"+ str(n_tomo_clust) + "}(" + str(spatial_first_probe_gg)+ ")"
-            hdr_str += " gg^{1}_{22}(1) ... gg^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_clust) + "}(" + str(spatial_first_probe_gg)+ ")"
+            hdr_str += self._block_order('gg', spatial_first_probe_gg, n_tomo_clust, n_tomo_clust,
+                                         sampledim, unique=True, diagonal=diagonal)
             if two_gg:
-                hdr_str += "\n"
-                hdr_str += "Followed by the second gg summary"
-                hdr_str += "\n"
-                hdr_str += "gg^{1}_{11}(1) ... gg^{1}_{11}(" + str(spatial_second_probe_gg)+ ") gg^{2}_{11}(1) ... gg^{" +str(sampledim) + "}_{11}(" + str(spatial_second_probe_gg)+ ")"
-                hdr_str += " gg^{1}_{12}(1) ... gg^{" +str(sampledim) + "}_{1"+ str(n_tomo_clust) + "}(" + str(spatial_second_probe_gg)+ ")"
-                hdr_str += " gg^{1}_{22}(1) ... gg^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_clust) + "}(" + str(spatial_second_probe_gg)+ ")"
-            hdr_str += "\n"
+                hdr_str += "Followed by the second gg summary\n"
+                hdr_str += self._block_order('gg', spatial_second_probe_gg, n_tomo_clust, n_tomo_clust,
+                                             sampledim, unique=True, diagonal=diagonal)
         if gm:
-            hdr_str += "gm^{1}_{11}(1) ... gm^{1}_{11}(" + str(spatial_first_probe_gm)+ ") gm^{2}_{11}(1) ... gm^{" +str(sampledim) + "}_{11}(" + str(spatial_first_probe_gm)+ ")"
-            hdr_str += " gm^{1}_{12}(1) ... gm^{" +str(sampledim) + "}_{1"+ str(n_tomo_lens) + "}(" + str(spatial_first_probe_gm)+ ")"
-            hdr_str += " gm^{1}_{21}(1) ... gm^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_lens) + "}(" + str(spatial_first_probe_gm)+ ")"
+            hdr_str += self._block_order('gm', spatial_first_probe_gm, n_tomo_clust, n_tomo_lens,
+                                         sampledim, diagonal=diagonal)
             if two_gm:
-                hdr_str += "\n"
-                hdr_str += "Followed by the second gm summary"
-                hdr_str += "\n"
-                hdr_str += "gm^{1}_{11}(1) ... gm^{1}_{11}(" + str(spatial_second_probe_gm)+ ") gm^{2}_{11}(1) ... gm^{" +str(sampledim) + "}_{11}(" + str(spatial_second_probe_gm)+ ")"
-                hdr_str += " gm^{1}_{12}(1) ... gm^{" +str(sampledim) + "}_{1"+ str(n_tomo_lens) + "}(" + str(spatial_second_probe_gm)+ ")"
-                hdr_str += " gm^{1}_{21}(1) ... gm^{" +str(sampledim) + "}_{"+ str(n_tomo_clust) + str(n_tomo_lens) + "}(" + str(spatial_second_probe_gm)+ ")"
-            hdr_str += "\n"
+                hdr_str += "Followed by the second gm summary\n"
+                hdr_str += self._block_order('gm', spatial_second_probe_gm, n_tomo_clust, n_tomo_lens,
+                                             sampledim, diagonal=diagonal)
         if mm:
-            hdr_str += "mm_{11}(1) ... mm_{11}(" + str(spatial_first_probe_mm)+ ") mm_{11}(1) ... mm_{11}(" + str(spatial_first_probe_mm)+ ")"
-            hdr_str += " mm_{12}(1) ... mm_{1"+ str(n_tomo_lens) + "}(" + str(spatial_first_probe_mm)+ ")"
-            hdr_str += " mm_{21}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(spatial_first_probe_mm)+ ")"
+            hdr_str += self._block_order('mm', spatial_first_probe_mm, n_tomo_lens, n_tomo_lens, unique=True)
             if two_mm:
-                hdr_str += "\n"
-                hdr_str += "Followed by the second mm summary"
-                hdr_str += "\n"
-                hdr_str += "mm_{11}(1) ... mm_{11}(" + str(spatial_second_probe_mm)+ ") mm_{11}(1) ... mm_{11}(" + str(spatial_second_probe_mm)+ ")"
-                hdr_str += " mm_{12}(1) ... mm_{1"+ str(n_tomo_lens) + "}(" + str(spatial_second_probe_mm)+ ")"
-                hdr_str += " mm_{21}(1) ... mm_{"+ str(n_tomo_lens) + str(n_tomo_lens) + "}(" + str(spatial_second_probe_mm)+ ")"
-            hdr_str += "\n"
+                hdr_str += "Followed by the second mm summary\n"
+                hdr_str += self._block_order('mm', spatial_second_probe_mm, n_tomo_lens, n_tomo_lens, unique=True)
             hdr_str += "The same block is then repeated for the second component summaries of mm.\n"
         if self.has_csmf:
-            hdr_str += "phi_(1) ... phi(" + str(self.N_stellar_mass_bins)+ ")\n"
+            hdr_str += csmf_order
 
 
         if 'matrix' in self.style:

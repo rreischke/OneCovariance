@@ -320,8 +320,12 @@ class CovARBsummary(CovELLSpace):
         realspace_counts_gg = 0
         for i in range(len(self.RXY_stack[:,0])):
             index = np.where(self.RXY_stack[i,:] != 0)[0]
+            # top-hats of real-space bins: R ~ 1/theta (uniform in theta) or
+            # R = const (pair-weighted, 2/(theta_u^2 - theta_l^2))
             test_array = ((self.RXY_stack[i,index]*self.theta_real_integral[index])[self.RXY_stack[i,index]*self.theta_real_integral[index]!=0])[1:-1]
-            if np.all(np.round(test_array/test_array[0],4) == 1.):
+            test_array_pairs = self.RXY_stack[i,index][1:-1]
+            if len(test_array) > 0 and (np.all(np.round(test_array/test_array[0],4) == 1.)
+                                        or np.all(np.round(test_array_pairs/test_array_pairs[0],4) == 1.)):
                 if i < self.gg_summaries_real + self.gm_summaries_real + self.mmE_summaries_real:
                     if i >= self.gg_summaries_real + self.gm_summaries_real:
                         self.index_realspace_lensing.append(i)

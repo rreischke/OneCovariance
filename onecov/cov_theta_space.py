@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor
 from math import factorial
 
 import levin
@@ -10,11 +11,11 @@ from scipy.special import jv
 try:
     from onecov.cov_discrete import *
     from onecov.cov_discrete_utils import *
-    from onecov.cov_ell_space import CovELLSpace
+    from onecov.cov_ell_space import CovELLSpace, LazyWeightsLevin
 except:
     from cov_discrete import *
     from cov_discrete_utils import *
-    from cov_ell_space import CovELLSpace
+    from cov_ell_space import CovELLSpace, LazyWeightsLevin
 
 
 class CovTHETASpace(CovELLSpace):
@@ -226,7 +227,8 @@ class CovTHETASpace(CovELLSpace):
                     limits_at_mode_append[0] = self.ellrange[0]
                     limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
                     self.ell_limits.append(limits_at_mode_append)
-                self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
+                # the weights are only passed to levin if a cquad integral needs them
+                self.levin_int_fourier = LazyWeightsLevin(levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores))
                 self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
                 self._register_projection_weights(self.levin_int_fourier, self.ell_fourier_integral, self.WXY_stack,
                                                   obs_dict['THETAspace']['theta_acc'])
@@ -268,6 +270,11 @@ class CovTHETASpace(CovELLSpace):
                     covTHETAspacesettings['theta_bins_clustering'] + 1)
                 self.theta_bins_clustering = np.exp(.5 * (np.log(self.theta_ul_bins_clustering[1:])
                                         + np.log(self.theta_ul_bins_clustering[:-1])))
+            if covTHETAspacesettings['theta_type_clustering'] == 'list':
+                # bin edges given explicitly (e.g. the fine bins of CovTHETAtoOBS)
+                self.theta_ul_bins_clustering = np.array(covTHETAspacesettings['theta_list_clustering'], dtype=float)
+                self.theta_bins_clustering = np.exp(.5 * (np.log(self.theta_ul_bins_clustering[1:])
+                                        + np.log(self.theta_ul_bins_clustering[:-1])))
         if self.mm:
             if covTHETAspacesettings['theta_type_lensing'] == 'lin':
                 self.theta_ul_bins_lensing = np.linspace(
@@ -280,6 +287,10 @@ class CovTHETASpace(CovELLSpace):
                     covTHETAspacesettings['theta_min_lensing'],
                     covTHETAspacesettings['theta_max_lensing'],
                     covTHETAspacesettings['theta_bins_lensing'] + 1)
+                self.theta_bins_lensing = np.exp(.5 * (np.log(self.theta_ul_bins_lensing[1:])
+                                        + np.log(self.theta_ul_bins_lensing[:-1])))
+            if covTHETAspacesettings['theta_type_lensing'] == 'list':
+                self.theta_ul_bins_lensing = np.array(covTHETAspacesettings['theta_list_lensing'], dtype=float)
                 self.theta_bins_lensing = np.exp(.5 * (np.log(self.theta_ul_bins_lensing[1:])
                                         + np.log(self.theta_ul_bins_lensing[:-1])))
 
@@ -327,14 +338,12 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.sample_dim**2*self.n_tomo_clust**2
             Cell_gg_flat = np.reshape(
                 self.Cell_gg, (len(self.ellrange), flat_length))
-            w_signal_at_thetai_flat = np.zeros(flat_length)
+            integrand = Cell_gg_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+            projected = self._project_single(self.levin_int_fourier, self.ell_limits,
+                                             list(range(len(self.theta_bins_clustering))), integrand)
             for i_theta in range(len(self.theta_bins_clustering)):
-                integrand = Cell_gg_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
-                self.levin_int_fourier.init_integral(
-                    self.ellrange, integrand, True, True)
-                w_signal_at_thetai_flat = self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta],i_theta)
                 w_signal[i_theta, :, :, :, :] = np.reshape(
-                    w_signal_at_thetai_flat, original_shape)/2.0/np.pi
+                    projected[i_theta], original_shape)/2.0/np.pi
             self.w_gg = w_signal
         if self.gm:
             self.data_vector_length += len(self.theta_bins_clustering)*self.n_tomo_clust*self.n_tomo_lens
@@ -346,14 +355,13 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens
             Cell_gm_flat = np.reshape(
                 self.Cell_gm, (len(self.ellrange), flat_length))
-            gt_signal_at_thetai_flat = np.zeros(flat_length)
+            integrand = Cell_gm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+            projected = self._project_single(self.levin_int_fourier, self.ell_limits,
+                                             [i_theta + self.gg_summaries for i_theta in range(len(self.theta_bins_clustering))],
+                                             integrand)
             for i_theta in range(len(self.theta_bins_clustering)):
-                integrand = Cell_gm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
-                self.levin_int_fourier.init_integral(
-                    self.ellrange, integrand, True, True)
-                gt_signal_at_thetai_flat = self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries],i_theta + self.gg_summaries)
                 gt_signal[i_theta, :, :, :] = np.reshape(
-                    gt_signal_at_thetai_flat, original_shape)/2.0/np.pi
+                    projected[i_theta], original_shape)/2.0/np.pi
             self.gt = gt_signal
         if self.mm:
             self.data_vector_length += len(self.theta_bins_lensing)*self.n_tomo_lens*(self.n_tomo_lens +1)/2
@@ -367,12 +375,16 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.n_tomo_lens*self.n_tomo_lens
             Cell_mm_flat = np.reshape(
                 self.Cell_mm, (len(self.ellrange), flat_length))
-            for i_theta in range(len(self.theta_bins_lensing)):
-                integrand = Cell_mm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
-                self.levin_int_fourier.init_integral(
-                    self.ellrange, integrand, True, True)
-                xip_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries],i_theta + self.gg_summaries + self.gm_summaries),original_shape)/2.0/np.pi
-                xim_signal[i_theta, :, : ,:] = np.reshape(self.levin_int_fourier.cquad_integrate_single_well(self.ell_limits[i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries],i_theta + self.gg_summaries + self.gm_summaries + self.mmE_summaries),original_shape)/2.0/np.pi
+            integrand = Cell_mm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+            n_theta = len(self.theta_bins_lensing)
+            first = self.gg_summaries + self.gm_summaries
+            projected = self._project_single(self.levin_int_fourier, self.ell_limits,
+                                             [first + i for i in range(n_theta)]
+                                             + [first + self.mmE_summaries + i for i in range(n_theta)],
+                                             integrand)
+            for i_theta in range(n_theta):
+                xip_signal[i_theta, :, : ,:] = np.reshape(projected[i_theta], original_shape)/2.0/np.pi
+                xim_signal[i_theta, :, : ,:] = np.reshape(projected[n_theta + i_theta], original_shape)/2.0/np.pi
             if self.Cell_mmB is not None:
                 # intrinsic B-modes: xi_+ = int J_0 (C_EE + C_BB),
                 # xi_- = int J_4 (C_EE - C_BB)
@@ -467,84 +479,94 @@ class CovTHETASpace(CovELLSpace):
                             flat_idx += 1
         
     @staticmethod
-    def __int_x_jn(x, n):
+    def __int_x_jn(x, n, j1=None):
         """
         Returns int_0^x t J_n(t) dt for n = 2 or 4, the antiderivative needed
         for the bin-averaged J_2 and J_4 weights. The closed form suffers from
         catastrophic cancellation for small x (the result goes like x^(n+2)),
-        so the power series is used for x < 2.
+        so the power series is used for x < 2. j1 = J_1(x) can be passed if
+        it is known already.
         """
+        if j1 is None:
+            j1 = jv(1, x)
         if n == 2:
-            closed = -x*jv(1,x) - 2*jv(0,x) + 2
+            result = -x*j1 - 2*jv(0,x) + 2
         elif n == 4:
-            closed = (x - 8/x)*jv(1,x) - 8*jv(2,x) + 4
+            result = (x - 8/x)*j1 - 8*jv(2,x) + 4
         else:
             raise ValueError("only implemented for n = 2, 4")
-        x_series = np.minimum(x, 2.0)
-        series = np.zeros_like(x_series)
-        for k in range(15):
-            series += (-1)**k * x_series**(2*k + n + 2) \
-                / float(2**(2*k + n) * factorial(k) * factorial(k + n) * (2*k + n + 2))
-        return np.where(x < 2, series, closed)
+        small = x < 2
+        if np.any(small):
+            x_series = x[small]
+            series = np.zeros_like(x_series)
+            for k in range(15):
+                series += (-1)**k * x_series**(2*k + n + 2) \
+                    / float(2**(2*k + n) * factorial(k) * factorial(k + n) * (2*k + n + 2))
+            result[small] = series
+        return result
 
     def __get_weights(self):
+        """
+        Sets the (bin-averaged) Bessel kernels of all real-space bins,
+        self.WXY_stack with shape (gg, gm, mm_+ and mm_- bins,
+        len(self.ell_fourier_integral)). The kernels are written directly
+        into the stack, which is the only copy (it is large for many bins).
+        With bin averaging, the antiderivatives int_0^x t J_n(t) dt are
+        evaluated once per bin edge (neighbouring bins share them).
+        """
         N_fourier = int(1e5)
-        self.K_gg = []
-        self.K_gm = []
-        self.K_mmE = []
-        self.K_mmB = []
         self.gg_summaries = 0
         self.gm_summaries = 0
         self.mmE_summaries = 0
         self.ell_fourier_integral = np.geomspace(1,1e5,N_fourier)
-        if self.gg or self.gm:
-            for i_theta in range(len(self.theta_bins_clustering)):
-                if self.bin_averaging:
-                    theta_u = self.theta_ul_bins_clustering[i_theta+1]/60/180*np.pi
-                    theta_l = self.theta_ul_bins_clustering[i_theta]/60/180*np.pi
-                    xu = self.ell_fourier_integral*theta_u
-                    xl = self.ell_fourier_integral*theta_l
-                    self.K_gg.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
-                    self.K_gm.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 2) - self.__int_x_jn(xl, 2)))
-                else:
-                    # at the bin centre (theta in arcmin)
-                    theta = self.theta_bins_clustering[i_theta]/60/180*np.pi
-                    self.K_gg.append(jv(0, self.ell_fourier_integral*theta))
-                    self.K_gm.append(jv(2, self.ell_fourier_integral*theta))
-        if self.mm:
-            for i_theta in range(len(self.theta_bins_lensing)):
-                if self.bin_averaging:
-                    theta_u = self.theta_ul_bins_lensing[i_theta+1]/60/180*np.pi
-                    theta_l = self.theta_ul_bins_lensing[i_theta]/60/180*np.pi
-                    xu = self.ell_fourier_integral*theta_u
-                    xl = self.ell_fourier_integral*theta_l
-                    self.K_mmE.append(2/(xu**2 - xl**2)*(xu*jv(1,xu) - xl*jv(1,xl)))
-                    self.K_mmB.append(2/(xu**2 - xl**2)*(self.__int_x_jn(xu, 4) - self.__int_x_jn(xl, 4)))
-                else:
-                    # at the bin centre (theta in arcmin)
-                    theta = self.theta_bins_lensing[i_theta]/60/180*np.pi
-                    self.K_mmE.append(jv(0, self.ell_fourier_integral*theta))
-                    self.K_mmB.append(jv(4, self.ell_fourier_integral*theta))
-        self.K_gg = np.array(self.K_gg)
-        self.K_gm = np.array(self.K_gm)
-        self.K_mmE = np.array(self.K_mmE)
-        self.K_mmB = np.array(self.K_mmB)
-        self.WXY_stack = []
         if self.gg:
-            for i_theta in range(len(self.theta_bins_clustering)):
-                self.WXY_stack.append(self.K_gg[i_theta,:])
             self.gg_summaries = len(self.theta_bins_clustering)
         if self.gm:
-            for i_theta in range(len(self.theta_bins_clustering)):
-                self.WXY_stack.append(self.K_gm[i_theta,:])
             self.gm_summaries = len(self.theta_bins_clustering)
         if self.mm:
             self.mmE_summaries = len(self.theta_bins_lensing)
-            for i_theta in range(len(self.theta_bins_lensing)):
-                self.WXY_stack.append(self.K_mmE[i_theta,:])
-            for i_theta in range(len(self.theta_bins_lensing)):
-                self.WXY_stack.append(self.K_mmB[i_theta,:])
-        self.WXY_stack = np.array(self.WXY_stack)
+        self.WXY_stack = np.zeros((self.gg_summaries + self.gm_summaries + 2*self.mmE_summaries,
+                                   N_fourier))
+        # (Bessel order, first row) of the kernels of the clustering and the lensing bins
+        groups = []
+        if self.gg or self.gm:
+            blocks = []
+            if self.gg:
+                blocks.append((0, 0))
+            if self.gm:
+                blocks.append((2, self.gg_summaries))
+            groups.append((self.theta_ul_bins_clustering, self.theta_bins_clustering, blocks))
+        if self.mm:
+            first = self.gg_summaries + self.gm_summaries
+            groups.append((self.theta_ul_bins_lensing, self.theta_bins_lensing,
+                           [(0, first), (4, first + self.mmE_summaries)]))
+        for theta_ul_bins, theta_bins, blocks in groups:
+            if not self.bin_averaging:
+                # at the bin centres (theta in arcmin)
+                for i_theta in range(len(theta_bins)):
+                    x = self.ell_fourier_integral*theta_bins[i_theta]/60/180*np.pi
+                    for n, row in blocks:
+                        self.WXY_stack[row + i_theta] = jv(n, x)
+                continue
+            def at_edge(edge, blocks=blocks):
+                x = self.ell_fourier_integral*edge/60/180*np.pi
+                j1 = jv(1, x)
+                return x, {n: x*j1 if n == 0 else self.__int_x_jn(x, n, j1) for n, _ in blocks}
+
+            # the Bessel functions of the edges in parallel (numpy/scipy ufuncs
+            # release the GIL, no OpenMP involved), in chunks to bound the memory
+            n_workers = max(1, int(getattr(self, 'num_cores', 1)))
+            previous = None
+            with ThreadPoolExecutor(max_workers=n_workers) as pool:
+                for start in range(0, len(theta_ul_bins), 4*n_workers):
+                    chunk = theta_ul_bins[start:start + 4*n_workers]
+                    for i_edge, (x, antiderivative) in enumerate(pool.map(at_edge, chunk), start=start):
+                        if previous is not None:
+                            x_lower, antiderivative_lower = previous
+                            norm = 2/(x**2 - x_lower**2)
+                            for n, row in blocks:
+                                self.WXY_stack[row + i_edge - 1] = norm*(antiderivative[n] - antiderivative_lower[n])
+                        previous = (x, antiderivative)
 
     def __project_gauss(self,
                         sva_flat,
@@ -696,6 +718,65 @@ class CovTHETASpace(CovELLSpace):
             plt.xticks(labels_position, labels_text)
             print("Plotting Signal")
         
+    def _theta_target(self,
+                      name,
+                      shape):
+        """
+        The array for a block of the real-space covariance ('ww', 'wgt',
+        ..., see _theta_block) with shape (theta bins, theta bins, ...),
+        which the projections fill entry by entry, block[(i, j)] = value.
+        Here a new zero array; subclasses can return an object that maps the
+        entries elsewhere as they are set (CovTHETAtoOBS).
+        """
+        return np.zeros(shape)
+
+    def _theta_diagonal(self,
+                        name,
+                        diagonal):
+        """
+        A block of the real-space covariance which is diagonal in the
+        angular bins (shot noise) from its diagonal with shape
+        (theta bins, ...).
+        """
+        return diagonal[:, None] \
+            * np.eye(len(diagonal))[(slice(None), slice(None)) + (None,)*(diagonal.ndim - 1)]
+
+    def _theta_add_product(self,
+                           block,
+                           matrix,
+                           left,
+                           right):
+        """
+        block + matrix x left(theta_1) x right(theta_2), the contribution of
+        the multiplicative shear bias, with matrix of shape (sample bins,
+        sample bins, tomo, tomo, tomo, tomo) and the signals left and right
+        with shape (theta bins, sample bins, tomo, tomo).
+        """
+        return block + matrix[None, None]*(left[:, None, :, None, :, :, None, None]*right[None, :, None, :, None, None, :, :])
+
+    def _theta_block(self,
+                     name,
+                     block):
+        """
+        Called with every block of the real-space covariance as soon as it
+        is complete (all terms that are added to it included), returns what
+        is kept in its place. Here the block itself. Subclasses can replace
+        or modify terms here, or map the block to other summary statistics
+        (CovTHETAtoOBS) so that the blocks in many real-space bins are not
+        kept.
+
+        Parameters
+        ----------
+        name : string
+            'ww', 'wgt', 'wxip', 'wxim', 'gtgt', 'xipgt', 'ximgt', 'xipxip',
+            'xipxim' or 'ximxim'
+        block : array or 0
+            with shape (theta bins, theta bins, sample bins, sample bins,
+                        n_tomo_clust/lens, n_tomo_clust/lens,
+                        n_tomo_clust/lens, n_tomo_clust/lens)
+        """
+        return block
+
     def calc_covTHETA(self,
                       obs_dict,
                       output_dict,
@@ -976,9 +1057,13 @@ class CovTHETASpace(CovELLSpace):
         if self.theta_space_dict['mix_term_do_mix_for'] is not None:
             print("")
             print('\rDoing mixed term', end="")
-            gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix = \
-            self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict,
-                                        gauss_xipxip_mix,gauss_xipxim_mix,gauss_ximxim_mix)
+            mix_terms = (gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix)
+            replaced = self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict, *mix_terms)
+            if replaced is not None:
+                # the mixed terms from the triplet counts are blocks in the real-space bins
+                gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix = [
+                    term if term is old else self._theta_block(name, term)
+                    for name, term, old in zip(('xipxip', 'xipxim', 'ximxim'), replaced, mix_terms)]
         
         if self.csmf:
             if not self.cov_dict['split_gauss']:
@@ -1127,8 +1212,8 @@ class CovTHETASpace(CovELLSpace):
                                self.sample_dim, self.sample_dim,
                                self.n_tomo_clust, self.n_tomo_clust,
                                self.n_tomo_clust, self.n_tomo_clust)
-            gauss_ww_sva = np.zeros(covww_shape_sva)
-            gauss_ww_mix = np.zeros(covww_shape_sva)
+            gauss_ww_sva = self._theta_target('ww', covww_shape_sva)
+            gauss_ww_mix = self._theta_target('ww', covww_shape_sva)
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**4
             gaussELLgggg_sva_flat = self._ell_cov_flat(gaussELLgggg_sva, flat_length)
             gaussELLgggg_mix_flat = self._ell_cov_flat(gaussELLgggg_mix, flat_length)
@@ -1146,9 +1231,10 @@ class CovTHETASpace(CovELLSpace):
                  + kron_delta_tomo_clust[None, None, None, :, None, None, :]
                  * kron_delta_tomo_clust[None, None, None, None, :, :, None]) \
                  * self._sample_overlap_sn(1.0/self.npair_gg, True)[:, :, :, :, :, None, None]
-            gauss_ww_sn = \
-                gauss_ww_sn[:, None, :, :, :, :, :, :] \
-                * np.eye(len(self.theta_bins_clustering))[:, :, None, None, None, None, None, None]
+            gauss_ww_sn = self._theta_diagonal('ww', gauss_ww_sn)
+            gauss_ww_sva = self._theta_block('ww', gauss_ww_sva)
+            gauss_ww_mix = self._theta_block('ww', gauss_ww_mix)
+            gauss_ww_sn = self._theta_block('ww', gauss_ww_sn)
         else:
             gauss_ww_sva, gauss_ww_mix, gauss_ww_sn = 0, 0 , 0
 
@@ -1159,8 +1245,8 @@ class CovTHETASpace(CovELLSpace):
                                 self.sample_dim, self.sample_dim,
                                 self.n_tomo_clust, self.n_tomo_clust,
                                 self.n_tomo_clust, self.n_tomo_lens)
-            gauss_wgt_sva = np.zeros(covwgt_shape_sva)
-            gauss_wgt_mix = np.zeros(covwgt_shape_sva)
+            gauss_wgt_sva = self._theta_target('wgt', covwgt_shape_sva)
+            gauss_wgt_mix = self._theta_target('wgt', covwgt_shape_sva)
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_lens*self.n_tomo_clust**3
             gaussELLgggm_sva_flat = self._ell_cov_flat(gaussELLgggm_sva, flat_length)
             gaussELLgggm_mix_flat = self._ell_cov_flat(gaussELLgggm_mix, flat_length)
@@ -1173,6 +1259,8 @@ class CovTHETASpace(CovELLSpace):
                         sva_jobs.append((m_mode, n_mode, gauss_wgt_sva, idx))
                         mix_jobs.append((m_mode, n_mode, gauss_wgt_mix, idx))
                 self.__project_gauss(gaussELLgggm_sva_flat, gaussELLgggm_mix_flat, sva_jobs, mix_jobs, 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl'])/self.deg2torad2), original_shape, 'wgt')
+            gauss_wgt_sva = self._theta_block('wgt', gauss_wgt_sva)
+            gauss_wgt_mix = self._theta_block('wgt', gauss_wgt_mix)
         else:
             gauss_wgt_sva, gauss_wgt_mix = 0, 0
 
@@ -1183,8 +1271,8 @@ class CovTHETASpace(CovELLSpace):
                                   self.sample_dim, 1,
                                   self.n_tomo_clust, self.n_tomo_clust,
                                   self.n_tomo_lens, self.n_tomo_lens)
-            gauss_wxip_sva = np.zeros(covwxipm_shape_sva) if self.xi_pp else 0
-            gauss_wxim_sva = np.zeros(covwxipm_shape_sva) if self.xi_mm else 0
+            gauss_wxip_sva = self._theta_target('wxip', covwxipm_shape_sva) if self.xi_pp else 0
+            gauss_wxim_sva = self._theta_target('wxim', covwxipm_shape_sva) if self.xi_mm else 0
             flat_length = self.sample_dim*self.n_tomo_lens**2*self.n_tomo_clust**2
             gaussELLggmm_sva_flat = self._ell_cov_flat(gaussELLggmm_sva, flat_length)
             if not self.cov_dict['sn_only']:
@@ -1197,6 +1285,8 @@ class CovTHETASpace(CovELLSpace):
                         if self.xi_mm:
                             sva_jobs.append((m_mode, n_mode + self.mmE_summaries, gauss_wxim_sva, idx))
                 self.__project_gauss(gaussELLggmm_sva_flat, None, sva_jobs, [], 1./(2.*np.pi*max(survey_params_dict['survey_area_clust'], survey_params_dict['survey_area_lens'])/self.deg2torad2), original_shape, 'wxipm')
+            gauss_wxip_sva = self._theta_block('wxip', gauss_wxip_sva)
+            gauss_wxim_sva = self._theta_block('wxim', gauss_wxim_sva)
         else:
             gauss_wxip_sva, gauss_wxim_sva = 0, 0
 
@@ -1207,8 +1297,8 @@ class CovTHETASpace(CovELLSpace):
                                  self.sample_dim, self.sample_dim,
                                  self.n_tomo_clust, self.n_tomo_lens,
                                  self.n_tomo_clust, self.n_tomo_lens)
-            gauss_gtgt_sva = np.zeros(covgtgt_shape_sva)
-            gauss_gtgt_mix = np.zeros(covgtgt_shape_sva)
+            gauss_gtgt_sva = self._theta_target('gtgt', covgtgt_shape_sva)
+            gauss_gtgt_mix = self._theta_target('gtgt', covgtgt_shape_sva)
             flat_length = self.sample_dim*self.sample_dim*self.n_tomo_clust**2*self.n_tomo_lens**2
             gaussELLgmgm_sva_flat = self._ell_cov_flat(gaussELLgmgm_sva, flat_length)
             gaussELLgmgm_mix_flat = self._ell_cov_flat(gaussELLgmgm_mix, flat_length)
@@ -1221,16 +1311,15 @@ class CovTHETASpace(CovELLSpace):
                         sva_jobs.append((m_mode, n_mode, gauss_gtgt_sva, idx, mirror))
                         mix_jobs.append((m_mode, n_mode, gauss_gtgt_mix, idx, mirror))
                 self.__project_gauss(gaussELLgmgm_sva_flat, gaussELLgmgm_mix_flat, sva_jobs, mix_jobs, 1./(2.*np.pi*survey_params_dict['survey_area_ggl']/self.deg2torad2), original_shape, 'gtgt')
-                adding = self.gaussELLgmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.gt[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
-                gauss_gtgt_sva[:, :, :, :, :, :, :, :] = gauss_gtgt_sva[:, :, :, :, :, :, :, :] + adding[:, :, :, :, :, :, :, :]
+                gauss_gtgt_sva = self._theta_add_product(gauss_gtgt_sva, self.gaussELLgmgm_sva_mult_shear_bias, self.gt, self.gt)
             gauss_gtgt_sn = \
                 kron_delta_tomo_clust[None, None, None, :, None, :, None] \
                 * kron_delta_tomo_lens[None, None, None, None, :, None, :] \
                 * self._sample_overlap_sn(1.0/self.npair_gm, False)[:, :, :, :, :, None, None]
-            gauss_gtgt_sn = \
-                gauss_gtgt_sn[:, None, :, :, :, :, :, :] \
-                * np.eye(len(self.theta_bins_clustering))[:, :, None, None, None, None, None, None]
-            
+            gauss_gtgt_sn = self._theta_diagonal('gtgt', gauss_gtgt_sn)
+            gauss_gtgt_sva = self._theta_block('gtgt', gauss_gtgt_sva)
+            gauss_gtgt_mix = self._theta_block('gtgt', gauss_gtgt_mix)
+            gauss_gtgt_sn = self._theta_block('gtgt', gauss_gtgt_sn)
         else:
             gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn = 0, 0, 0
 
@@ -1242,13 +1331,13 @@ class CovTHETASpace(CovELLSpace):
                                    self.n_tomo_lens, self.n_tomo_lens,
                                    self.n_tomo_clust, self.n_tomo_lens)
             gauss_xipgt_sva = \
-                np.zeros(covxipmgt_shape_sva) if self.xi_pp else 0
+                self._theta_target('xipgt', covxipmgt_shape_sva) if self.xi_pp else 0
             gauss_ximgt_sva = \
-                np.zeros(covxipmgt_shape_sva) if self.xi_mm else 0
+                self._theta_target('ximgt', covxipmgt_shape_sva) if self.xi_mm else 0
             gauss_xipgt_mix = \
-                np.zeros(covxipmgt_shape_sva) if self.xi_pp else 0
+                self._theta_target('xipgt', covxipmgt_shape_sva) if self.xi_pp else 0
             gauss_ximgt_mix = \
-                np.zeros(covxipmgt_shape_sva) if self.xi_mm else 0
+                self._theta_target('ximgt', covxipmgt_shape_sva) if self.xi_mm else 0
             flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens**3
             gaussELLmmgm_sva_flat = self._ell_cov_flat(gaussELLmmgm_sva, flat_length)
             gaussELLmmgm_mix_flat = self._ell_cov_flat(gaussELLmmgm_mix, flat_length)
@@ -1265,10 +1354,14 @@ class CovTHETASpace(CovELLSpace):
                             sva_jobs.append((m_mode + self.mmE_summaries, n_mode, gauss_ximgt_sva, idx))
                             mix_jobs.append((m_mode + self.mmE_summaries, n_mode, gauss_ximgt_mix, idx))
                 self.__project_gauss(gaussELLmmgm_sva_flat, gaussELLmmgm_mix_flat, sva_jobs, mix_jobs, 1./(2.*np.pi*max(survey_params_dict['survey_area_lens'],survey_params_dict['survey_area_ggl'])/self.deg2torad2), original_shape, 'xipmgt')
-                adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
-                gauss_ximgt_sva[:, :, 0, :, :, :, :, :] = gauss_ximgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
-                adding = self.gaussELLmmgm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.gt[None, :, None, :, None, None, :, :])
-                gauss_xipgt_sva[:, :, 0, :, :, :, :, :] = gauss_xipgt_sva[:, :, 0, :, :, :, :, :] + adding[:, :, 0, :, :, :, :, :]
+                if self.xi_mm:
+                    gauss_ximgt_sva = self._theta_add_product(gauss_ximgt_sva, self.gaussELLmmgm_sva_mult_shear_bias, self.xi_minus, self.gt)
+                if self.xi_pp:
+                    gauss_xipgt_sva = self._theta_add_product(gauss_xipgt_sva, self.gaussELLmmgm_sva_mult_shear_bias, self.xi_plus, self.gt)
+            gauss_xipgt_sva = self._theta_block('xipgt', gauss_xipgt_sva)
+            gauss_xipgt_mix = self._theta_block('xipgt', gauss_xipgt_mix)
+            gauss_ximgt_sva = self._theta_block('ximgt', gauss_ximgt_sva)
+            gauss_ximgt_mix = self._theta_block('ximgt', gauss_ximgt_mix)
         else:
             gauss_xipgt_sva, gauss_ximgt_sva, gauss_xipgt_mix, gauss_ximgt_mix = 0, 0, 0 ,0
 
@@ -1279,12 +1372,12 @@ class CovTHETASpace(CovELLSpace):
                                  1, 1,
                                  self.n_tomo_lens, self.n_tomo_lens,
                                  self.n_tomo_lens, self.n_tomo_lens)
-            gauss_xipxip_sva = np.zeros(covxipm_shape_sva) if self.xi_pp else 0
-            gauss_xipxim_sva = np.zeros(covxipm_shape_sva) if self.xi_pm else 0
-            gauss_ximxim_sva = np.zeros(covxipm_shape_sva) if self.xi_mm else 0
-            gauss_xipxip_mix = np.zeros(covxipm_shape_sva) if self.xi_pp else 0
-            gauss_xipxim_mix = np.zeros(covxipm_shape_sva) if self.xi_pm else 0
-            gauss_ximxim_mix = np.zeros(covxipm_shape_sva) if self.xi_mm else 0
+            gauss_xipxip_sva = self._theta_target('xipxip', covxipm_shape_sva) if self.xi_pp else 0
+            gauss_xipxim_sva = self._theta_target('xipxim', covxipm_shape_sva) if self.xi_pm else 0
+            gauss_ximxim_sva = self._theta_target('ximxim', covxipm_shape_sva) if self.xi_mm else 0
+            gauss_xipxip_mix = self._theta_target('xipxip', covxipm_shape_sva) if self.xi_pp else 0
+            gauss_xipxim_mix = self._theta_target('xipxim', covxipm_shape_sva) if self.xi_pm else 0
+            gauss_ximxim_mix = self._theta_target('ximxim', covxipm_shape_sva) if self.xi_mm else 0
             flat_length = self.n_tomo_lens**4
             gaussELLmmmm_sva_flat = self._ell_cov_flat(gaussELLmmmm_sva, flat_length)
             gaussELLmmmm_mix_flat = self._ell_cov_flat(gaussELLmmmm_mix, flat_length)
@@ -1302,7 +1395,7 @@ class CovTHETASpace(CovELLSpace):
                             if n_mode >= m_mode:
                                 sva_jobs.append((m_mode + self.mmE_summaries, n_mode + self.mmE_summaries, gauss_ximxim_sva, idx, mirror))
                                 mix_jobs.append((m_mode + self.mmE_summaries, n_mode + self.mmE_summaries, gauss_ximxim_mix, idx, mirror))
-                            if self.cross_terms:
+                            if self.cross_terms and self.xi_pm:
                                 sva_jobs.append((m_mode, n_mode + self.mmE_summaries, gauss_xipxim_sva, idx))
                                 mix_jobs.append((m_mode, n_mode + self.mmE_summaries, gauss_xipxim_mix, idx))
                 self.__project_gauss(gaussELLmmmm_sva_flat, gaussELLmmmm_mix_flat, sva_jobs, mix_jobs, 1./(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2), original_shape, 'xipmxipm')
@@ -1320,23 +1413,31 @@ class CovTHETASpace(CovELLSpace):
                                              [job for job in mix_jobs if (id(job[2]) in negative) == (sign < 0)],
                                              sign/(2.*np.pi*survey_params_dict['survey_area_lens']/self.deg2torad2),
                                              original_shape, 'xipmxipm (intrinsic B-modes)', added=True)
-                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_minus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
-                gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] = gauss_ximxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
-                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_minus[None, :, None, :, None, None, :, :])
-                gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxim_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
-                adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.xi_plus[:, None, :, None, :, :, None, None]*self.xi_plus[None, :, None, :, None, None, :, :])
-                gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] = gauss_xipxip_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
+                if self.xi_mm:
+                    gauss_ximxim_sva = self._theta_add_product(gauss_ximxim_sva, self.gaussELLmmmm_sva_mult_shear_bias, self.xi_minus, self.xi_minus)
+                if self.xi_pm:
+                    gauss_xipxim_sva = self._theta_add_product(gauss_xipxim_sva, self.gaussELLmmmm_sva_mult_shear_bias, self.xi_plus, self.xi_minus)
+                if self.xi_pp:
+                    gauss_xipxip_sva = self._theta_add_product(gauss_xipxip_sva, self.gaussELLmmmm_sva_mult_shear_bias, self.xi_plus, self.xi_plus)
             gauss_xipm_sn = \
                 (kron_delta_tomo_lens[None, None, None, :, None, :, None]
                  * kron_delta_tomo_lens[None, None, None, None, :, None, :]
                  + kron_delta_tomo_lens[None, None, None, :, None, None, :]
                  * kron_delta_tomo_lens[None, None, None, None, :, :, None]) \
                 / self.npair_mm[:, :, None, :, :, None, None] / 0.5
-            gauss_xipm_sn = \
-                gauss_xipm_sn[:, None, :, :, :, :, :, :] \
-                * np.eye(len(self.theta_bins_lensing))[:, :, None, None, None, None, None, None]
+            # the shot noise of xi_+ xi_+ and xi_- xi_- is the same, as blocks they are separate
+            gauss_xipxip_sn = self._theta_block('xipxip', self._theta_diagonal('xipxip', gauss_xipm_sn))
+            gauss_ximxim_sn = self._theta_block('ximxim', self._theta_diagonal('ximxim', gauss_xipm_sn))
+            del gauss_xipm_sn
+            gauss_xipxip_sva = self._theta_block('xipxip', gauss_xipxip_sva)
+            gauss_xipxip_mix = self._theta_block('xipxip', gauss_xipxip_mix)
+            gauss_xipxim_sva = self._theta_block('xipxim', gauss_xipxim_sva)
+            gauss_xipxim_mix = self._theta_block('xipxim', gauss_xipxim_mix)
+            gauss_ximxim_sva = self._theta_block('ximxim', gauss_ximxim_sva)
+            gauss_ximxim_mix = self._theta_block('ximxim', gauss_ximxim_mix)
         else:
-            gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, gauss_xipm_sn = 0, 0, 0, 0, 0, 0, 0
+            gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix = 0, 0, 0, 0, 0, 0
+            gauss_xipxip_sn, gauss_ximxim_sn = 0, 0
 
         if self.csmf:
             # the projections of the cross-covariance with the SMF and, for
@@ -1352,10 +1453,11 @@ class CovTHETASpace(CovELLSpace):
                         original_shape = csmf_gg[0, :, :, :, :, :].shape
                         flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
                         csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                        for m_mode in range(self.gg_summaries):
-                            local_ell_limit = self.ell_limits[m_mode][:]
-                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
-                            csmf_w[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                        modes = list(range(self.gg_summaries))
+                        projected = self._project_single(self.levin_int_fourier, self.ell_limits, modes,
+                                                         csmf_AS_flat*self.ellrange[:, None])
+                        for i, m_mode in enumerate(modes):
+                            csmf_w[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[i], original_shape)
                 else:
                     csmf_w = 0
                 if self.gm:
@@ -1364,10 +1466,11 @@ class CovTHETASpace(CovELLSpace):
                         original_shape = csmf_gm[0, :, :, :, :, :].shape
                         flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
                         csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                        for m_mode in range(self.gg_summaries, self.gm_summaries + self.gg_summaries):
-                            local_ell_limit = self.ell_limits[m_mode][:]
-                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
-                            csmf_gt[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                        modes = list(range(self.gg_summaries, self.gm_summaries + self.gg_summaries))
+                        projected = self._project_single(self.levin_int_fourier, self.ell_limits, modes,
+                                                         csmf_AS_flat*self.ellrange[:, None])
+                        for i, m_mode in enumerate(modes):
+                            csmf_gt[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[i], original_shape)
                 else:
                     csmf_gt = 0
             
@@ -1378,11 +1481,14 @@ class CovTHETASpace(CovELLSpace):
                         original_shape = csmf_mm[0, :, :, :, :, :].shape
                         flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
                         csmf_AS_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                        for m_mode in range(self.gg_summaries + self.gm_summaries, self.gm_summaries + self.gg_summaries + self.mmE_summaries):
-                            local_ell_limit = self.ell_limits[m_mode][:]
-                            self.levin_int_fourier.init_integral(self.ellrange, csmf_AS_flat*self.ellrange[:, None], True, True)
-                            csmf_xip[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
-                            csmf_xim[m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int_fourier.cquad_integrate_single_well(local_ell_limit, m_mode + self.mmE_summaries)),original_shape)            
+                        first = self.gg_summaries + self.gm_summaries
+                        modes = list(range(first, first + self.mmE_summaries))
+                        projected = self._project_single(self.levin_int_fourier, self.ell_limits,
+                                                         modes + [m_mode + self.mmE_summaries for m_mode in modes],
+                                                         csmf_AS_flat*self.ellrange[:, None])
+                        for i, m_mode in enumerate(modes):
+                            csmf_xip[m_mode - first, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[i], original_shape)
+                            csmf_xim[m_mode - first, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[len(modes) + i], original_shape)
 
                 else:
                     csmf_xip, csmf_xim = 0, 0
@@ -1408,9 +1514,9 @@ class CovTHETASpace(CovELLSpace):
                 gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn, \
                 gauss_xipgt_sva, gauss_xipgt_mix, gauss_xipgt_sn, \
                 gauss_ximgt_sva, gauss_ximgt_mix, gauss_ximgt_sn, \
-                gauss_xipxip_sva, gauss_xipxip_mix, gauss_xipm_sn, \
+                gauss_xipxip_sva, gauss_xipxip_mix, gauss_xipxip_sn, \
                 gauss_xipxim_sva, gauss_xipxim_mix, gauss_xipxim_sn, \
-                gauss_ximxim_sva, gauss_ximxim_mix, gauss_xipm_sn, \
+                gauss_ximxim_sva, gauss_ximxim_mix, gauss_ximxim_sn, \
                 csmf_auto, csmf_w, csmf_gt, csmf_xip, csmf_xim
         else:
             return gauss_ww_sva, gauss_ww_mix, gauss_ww_sn, \
@@ -1420,9 +1526,9 @@ class CovTHETASpace(CovELLSpace):
                 gauss_gtgt_sva, gauss_gtgt_mix, gauss_gtgt_sn, \
                 gauss_xipgt_sva, gauss_xipgt_mix, gauss_xipgt_sn, \
                 gauss_ximgt_sva, gauss_ximgt_mix, gauss_ximgt_sn, \
-                gauss_xipxip_sva, gauss_xipxip_mix, gauss_xipm_sn, \
+                gauss_xipxip_sva, gauss_xipxip_mix, gauss_xipxip_sn, \
                 gauss_xipxim_sva, gauss_xipxim_mix, gauss_xipxim_sn, \
-                gauss_ximxim_sva, gauss_ximxim_mix, gauss_xipm_sn
+                gauss_ximxim_sva, gauss_ximxim_mix, gauss_ximxim_sn
 
 
     def covTHETA_non_gaussian(self,
@@ -1708,7 +1814,7 @@ class CovTHETASpace(CovELLSpace):
         if self.gg:
             print("")
             original_shape = self._tomo_shape(nongaussELLgggg)
-            nongauss_ww = np.zeros((len(self.theta_bins_clustering), len(self.theta_bins_clustering),
+            nongauss_ww = self._theta_target('ww', (len(self.theta_bins_clustering), len(self.theta_bins_clustering),
                                     self.sample_dim, self.sample_dim,
                                     self.n_tomo_clust, self.n_tomo_clust,
                                     self.n_tomo_clust, self.n_tomo_clust))
@@ -1717,12 +1823,13 @@ class CovTHETASpace(CovELLSpace):
             self.__project_4pt(nongaussELLgggg, jobs,
                                (survey_params_dict['survey_area_clust'] / self.deg2torad2) if connected else None,
                                original_shape, 'ww')
+            nongauss_ww = self._theta_block('ww', nongauss_ww)
 
         if self.gg and self.gm and self.cross_terms:
             print("")
             # cov_NG(w^ij(theta1) gt^kl(theta2))
             original_shape = self._tomo_shape(nongaussELLgggm)
-            nongauss_wgt = np.zeros((len(self.theta_bins_clustering), len(self.theta_bins_clustering),
+            nongauss_wgt = self._theta_target('wgt', (len(self.theta_bins_clustering), len(self.theta_bins_clustering),
                                      self.sample_dim, self.sample_dim,
                                      self.n_tomo_clust, self.n_tomo_clust,
                                      self.n_tomo_clust, self.n_tomo_lens))
@@ -1731,6 +1838,7 @@ class CovTHETASpace(CovELLSpace):
             self.__project_4pt(nongaussELLgggm, jobs,
                                (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_ggl']) / self.deg2torad2) if connected else None,
                                original_shape, 'wgt')
+            nongauss_wgt = self._theta_block('wgt', nongauss_wgt)
 
         if self.gg and self.mm and self.cross_terms:
             print("")
@@ -1739,8 +1847,8 @@ class CovTHETASpace(CovELLSpace):
                                        self.sample_dim, 1,
                                        self.n_tomo_clust, self.n_tomo_clust,
                                        self.n_tomo_lens, self.n_tomo_lens)
-            nongauss_wxip = np.zeros(covwxipm_shape_nongauss)
-            nongauss_wxim = np.zeros(covwxipm_shape_nongauss)
+            nongauss_wxip = self._theta_target('wxip', covwxipm_shape_nongauss)
+            nongauss_wxim = self._theta_target('wxim', covwxipm_shape_nongauss)
             jobs = []
             for m_mode in range(self.gg_summaries):
                 for n_mode in range(self.gg_summaries + self.gm_summaries, self.gg_summaries + self.gm_summaries + self.mmE_summaries):
@@ -1751,11 +1859,13 @@ class CovTHETASpace(CovELLSpace):
             self.__project_4pt(nongaussELLggmm, jobs,
                                (max(survey_params_dict['survey_area_clust'],survey_params_dict['survey_area_lens']) / self.deg2torad2) if connected else None,
                                original_shape, 'wxipm')
+            nongauss_wxip = self._theta_block('wxip', nongauss_wxip)
+            nongauss_wxim = self._theta_block('wxim', nongauss_wxim)
 
         if self.gm:
             print("")
             original_shape = self._tomo_shape(nongaussELLgmgm)
-            nongauss_gtgt = np.zeros((len(self.theta_bins_clustering), len(self.theta_bins_clustering),
+            nongauss_gtgt = self._theta_target('gtgt', (len(self.theta_bins_clustering), len(self.theta_bins_clustering),
                                       self.sample_dim, self.sample_dim,
                                       self.n_tomo_clust, self.n_tomo_lens,
                                       self.n_tomo_clust, self.n_tomo_lens))
@@ -1764,6 +1874,7 @@ class CovTHETASpace(CovELLSpace):
             self.__project_4pt(nongaussELLgmgm, jobs,
                                (survey_params_dict['survey_area_ggl']) / self.deg2torad2 if connected else None,
                                original_shape, 'gtgt')
+            nongauss_gtgt = self._theta_block('gtgt', nongauss_gtgt)
 
         if self.mm and self.gm and self.cross_terms:
             print("")
@@ -1772,8 +1883,8 @@ class CovTHETASpace(CovELLSpace):
                                         1, self.sample_dim,
                                         self.n_tomo_lens, self.n_tomo_lens,
                                         self.n_tomo_clust, self.n_tomo_lens)
-            nongauss_xipgt = np.zeros(covxipmgt_shape_nongauss)
-            nongauss_ximgt = np.zeros(covxipmgt_shape_nongauss)
+            nongauss_xipgt = self._theta_target('xipgt', covxipmgt_shape_nongauss)
+            nongauss_ximgt = self._theta_target('ximgt', covxipmgt_shape_nongauss)
             jobs = []
             for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
                 for n_mode in range(self.gg_summaries, self.gg_summaries + self.gm_summaries):
@@ -1784,6 +1895,8 @@ class CovTHETASpace(CovELLSpace):
             self.__project_4pt(nongaussELLmmgm, jobs,
                                (max(survey_params_dict['survey_area_ggl'],survey_params_dict['survey_area_lens']) / self.deg2torad2) if connected else None,
                                original_shape, 'xipmgt')
+            nongauss_xipgt = self._theta_block('xipgt', nongauss_xipgt)
+            nongauss_ximgt = self._theta_block('ximgt', nongauss_ximgt)
 
         if self.mm:
             print("")
@@ -1792,9 +1905,9 @@ class CovTHETASpace(CovELLSpace):
                                       1, 1,
                                       self.n_tomo_lens, self.n_tomo_lens,
                                       self.n_tomo_lens, self.n_tomo_lens)
-            nongauss_xipxip = np.zeros(covxipm_shape_nongauss)
-            nongauss_xipxim = np.zeros(covxipm_shape_nongauss)
-            nongauss_ximxim = np.zeros(covxipm_shape_nongauss)
+            nongauss_xipxip = self._theta_target('xipxip', covxipm_shape_nongauss)
+            nongauss_xipxim = self._theta_target('xipxim', covxipm_shape_nongauss)
+            nongauss_ximxim = self._theta_target('ximxim', covxipm_shape_nongauss)
             jobs = []
             for m_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
                 for n_mode in range(self.gg_summaries + self.gm_summaries, self.mmE_summaries + self.gg_summaries + self.gm_summaries):
@@ -1806,5 +1919,8 @@ class CovTHETASpace(CovELLSpace):
             self.__project_4pt(nongaussELLmmmm, jobs,
                                (survey_params_dict['survey_area_lens'] / self.deg2torad2) if connected else None,
                                original_shape, 'xipmxipm')
+            nongauss_xipxip = self._theta_block('xipxip', nongauss_xipxip)
+            nongauss_xipxim = self._theta_block('xipxim', nongauss_xipxim)
+            nongauss_ximxim = self._theta_block('ximxim', nongauss_ximxim)
         print("")
         return nongauss_ww, nongauss_wgt, nongauss_wxip, nongauss_wxim, nongauss_gtgt, nongauss_xipgt, nongauss_ximgt, nongauss_xipxip, nongauss_xipxim, nongauss_ximxim

@@ -9,6 +9,7 @@ from onecov.cov_ell_space import CovELLSpace
 from onecov.cov_input import FileInput, Input
 from onecov.cov_output import Output
 from onecov.cov_theta_space import CovTHETASpace
+from onecov.cov_theta_to_obs import CovTHETAtoOBS
 
 if len(platform.mac_ver()[0]) > 0 and (platform.processor() == 'arm' or int(platform.mac_ver()[0][:(platform.mac_ver()[0]).find(".")]) > 13):
     os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -30,7 +31,28 @@ else:
 safe_gauss = covterms['gauss']
 covterms['gauss'] = True
 
-if not observables['arbitrary_summary']['do_arbitrary_summary']:
+if observables['observables'].get('theta_to_obs'):
+    print("CALCULATING COVARIANCE FROM THE REAL SPACE COVARIANCE IN FINE ANGULAR BINS")
+    print("##########################################################################")
+    covobs = CovTHETAtoOBS(covterms, observables, output,
+                           cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
+    covariance_obs = covobs.calc_covTHETAtoOBS(observables, output, bias, hod, survey_params, prec, read_in_tables)
+    covterms['gauss'] = safe_gauss
+    if observables['arbitrary_summary']['do_arbitrary_summary']:
+        out = Output(output)
+        out.write_arbitrary_cov(covterms, observables, covobs.n_tomo_clust,
+                    covobs.n_tomo_lens, read_in_tables,
+                    covariance_obs[0],
+                    covariance_obs[1],
+                    covariance_obs[2])
+    else:
+        out = Output(output, covobs.obs_bins_clustering, covobs.obs_bins_lensing)
+        out.write_cov(covterms, observables, covobs.n_tomo_clust,
+                    covobs.n_tomo_lens, covobs.obs_proj_quant,
+                    covariance_obs[0],
+                    covariance_obs[1],
+                    covariance_obs[2])
+elif not observables['arbitrary_summary']['do_arbitrary_summary']:
     if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
         print("CALCULATING COVARIANCE FOR ANGULAR POWER SPECTRA")
         print("################################################")    

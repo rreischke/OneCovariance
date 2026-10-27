@@ -17,6 +17,180 @@ except:
     from cov_setup import cached_computation
 
 
+def cosebi_J(k, j, zmax):
+    """
+    int_0^zmax dz z^j exp(k z) for the COSEBI orthonormalisation
+    (Schneider, Eifler & Krause 2010).
+    """
+    J = mp.gamma(j+1) - mp.gammainc(j+1,-k*zmax)
+    k_power = mp.power(-k,j+1.)
+    J = mp.fdiv(J,k_power)
+    return J
+
+
+def cosebi_coefficients(tmin, tmax, Nmax, dimensionless=False):
+    """
+    Normalisations N_n and roots r_n of the logarithmic COSEBI filters
+    T_+n(theta) = N_n prod_i (z - r_ni), z = ln(theta/tmin), for
+    n = 1, ..., Nmax (Schneider, Eifler & Krause 2010).
+
+    Parameters
+    ----------
+    tmin, tmax : float
+        angular range of the COSEBIs in radians
+    Nmax : int
+        number of modes
+    dimensionless : bool
+        normalisation of the dimensionless COSEBIs
+
+    Returns
+    -------
+    Nn, rn : lists
+        of length Nmax with the normalisations and the roots (mpmath)
+    """
+    mp.dps = 160
+    zmax = mp.log(tmax/tmin)
+    coeff_j = mp.matrix(Nmax+1,Nmax+2)
+    for i in range(Nmax+1):
+        coeff_j[i,i+1] = mp.mpf(1.)
+    nn = 1
+    aa = [cosebi_J(2,0,zmax),cosebi_J(2,1,zmax)],[cosebi_J(4,0,zmax),cosebi_J(4,1,zmax)]
+    bb = [-cosebi_J(2,nn+1,zmax),-cosebi_J(4,nn+1,zmax)]
+    coeff_j_ini = mp.lu_solve(aa,bb)
+    coeff_j[1,0] = coeff_j_ini[0]
+    coeff_j[1,1] = coeff_j_ini[1]
+    for nn in np.arange(2,Nmax+1):
+        aa = mp.matrix(int(nn+1))
+        bb = mp.matrix(int(nn+1),1)
+        for m in np.arange(1,nn):
+            for j in range(0,nn+1):
+                for i in range(0,m+2):
+                    if dimensionless:
+                        aa[m-1,j] += cosebi_J(2,i+j,zmax)*coeff_j[m,i]
+                    else:
+                        aa[m-1,j] += cosebi_J(1,i+j,zmax)*coeff_j[m,i]
+            for i in range(0,m+2):
+                if dimensionless:
+                    bb[int(m-1)] -= cosebi_J(2,i+nn+1,zmax)*coeff_j[m,i]
+                else:
+                    bb[int(m-1)] -= cosebi_J(1,i+nn+1,zmax)*coeff_j[m,i]
+        for j in range(nn+1):
+            aa[nn-1,j] = cosebi_J(2,j,zmax)
+            aa[nn,j]   = cosebi_J(4,j,zmax)
+            bb[int(nn-1)] = -cosebi_J(2,nn+1,zmax)
+            bb[int(nn)]   = -cosebi_J(4,nn+1,zmax)
+        temp_coeff = mp.lu_solve(aa,bb)
+        coeff_j[nn,:len(temp_coeff)] = temp_coeff[:,0].T
+    coeff_j = coeff_j[1:,:]
+    Nn = []
+    for nn in np.arange(1,Nmax+1):
+        temp_sum = mp.mpf(0)
+        for i in range(nn+2):
+            for j in range(nn+2):
+                if dimensionless:
+                    temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*cosebi_J(2,i+j,zmax)
+                else:
+                    temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*cosebi_J(1,i+j,zmax)
+        if dimensionless:
+            tbar = (tmax + tmin)/2
+            BB = (tmax - tmin)/(tmax + tmin)
+            temp_Nn = 1/(temp_sum)
+            temp_Nn = mp.sqrt(mp.fabs(temp_Nn))*np.sqrt(tbar**2*BB/tmin**2)
+        else:
+            temp_Nn = (mp.expm1(zmax))/(temp_sum)
+            temp_Nn = mp.sqrt(mp.fabs(temp_Nn))
+        Nn.append(temp_Nn)
+    rn = []
+    for nn in range(1,Nmax+1):
+        rn.append(mpmath.polyroots(coeff_j[nn-1,:nn+2][::-1],maxsteps=500,extraprec=100))
+    return Nn, rn
+
+
+def cosebi_tplus(tmin, tmax, n, norm, root, ntheta):
+    """
+    T_+n on ntheta logarithmically spaced angles between tmin and tmax,
+    returned as an array with shape (ntheta, 2) (theta, T_+n).
+    """
+    theta=np.logspace(np.log10(tmin),np.log10(tmax),ntheta)
+    tplus=np.zeros((ntheta,2))
+    tplus[:,0]=theta
+    z=np.log(theta/tmin)
+    result=1.
+    for r in range(n+1):
+        result*=(z-root[r])
+    result*=norm
+    tplus[:,1]=result
+    return tplus
+
+
+def cosebi_tminus(tmin, tp, theta):
+    """
+    Calculates T_-(theta) from T_+(theta) (tp, as returned by
+    cosebi_tplus) on the same theta grid,
+    T_-(z) = T_+(z) + 4 int_0^z dy T_+(y) [exp(2(y-z)) - 3 exp(4(y-z))]
+    with z = ln(theta/tmin). The integrals are cumulative integrals of
+    T_+(y) exp(k y), done with Simpson's rule on the theta grid of T_+.
+    """
+    z = np.log(theta/tmin)
+    tplus = tp[:,1]
+    int_2 = cumulative_simpson(tplus*np.exp(2*z), x=z, initial=0)
+    int_4 = cumulative_simpson(tplus*np.exp(4*z), x=z, initial=0)
+    rtminus = np.zeros_like(tp)
+    rtminus[:,0] = tp[:,0]
+    rtminus[:,1] = tplus + 4*(int_2*np.exp(-2*z) - 3*int_4*np.exp(-4*z))
+    return rtminus
+
+
+def cosebi_filters(tmin, tmax, Nmax, dimensionless=False, ntheta=10000):
+    """
+    The COSEBI filters T_+n and T_-n, n = 1, ..., Nmax, such that
+    E_n/B_n = 1/2 int dtheta theta [T_+n xi_+ +/- T_-n xi_-].
+
+    Parameters
+    ----------
+    tmin, tmax : float
+        angular range in radians
+
+    Returns
+    -------
+    theta : array
+        with shape (ntheta), logarithmically spaced in radians
+    Tp, Tm : arrays
+        with shape (Nmax, ntheta)
+    """
+    Nn, rn = cosebi_coefficients(tmin, tmax, Nmax, dimensionless)
+    Tp = np.zeros((Nmax, ntheta))
+    Tm = np.zeros((Nmax, ntheta))
+    for n in range(Nmax):
+        tpn = cosebi_tplus(tmin, tmax, n + 1, Nn[n], rn[n], ntheta)
+        theta = tpn[:,0]
+        Tp[n] = tpn[:,1]
+        Tm[n] = cosebi_tminus(tmin, tpn, theta)[:,1]
+    return theta, Tp, Tm
+
+
+def psi_Un(tmin, tmax, theta, Nmax):
+    """
+    Filters U_n(theta) of the Psi statistics, Psi_gg = int dtheta theta
+    U_n w(theta) (Legendre polynomials on [tmin, tmax], all in radians).
+    """
+    delta_theta = tmax - tmin
+    bart = (tmin + tmax)/2
+    result = np.zeros((Nmax,len(theta)))
+    result[0, :] = (12*bart/delta_theta**2*(theta-bart) - 1)/np.sqrt(2*(1+12*bart**2/delta_theta**2))/delta_theta**2
+    for i in range(1,Nmax):
+        result[i, :] = 1/delta_theta**2*np.sqrt((2*(i+1)+1)/2)*eval_legendre(i+1,2*(theta-bart)/delta_theta)
+    return result
+
+
+def psi_Qn(Un, theta):
+    """
+    Q_n(theta) = 2/theta^2 int_tmin^theta dtheta' theta' U_n(theta') - U_n(theta),
+    the filters of Psi_gm = int dtheta theta Q_n gamma_t(theta).
+    """
+    return 2/theta**2*cumulative_simpson(theta[None, :]*Un, x=theta, axis=1, initial=0) - Un
+
+
 class CovCOSEBI(CovELLSpace):
     """
     This class calculates the covariance for COSEBI estimator of the
@@ -257,38 +431,13 @@ class CovCOSEBI(CovELLSpace):
                 cosebi_tabs['wn_gg']
     
     def __J(self, k,j,zmax):
-        J = mp.gamma(j+1) - mp.gammainc(j+1,-k*zmax)
-        k_power = mp.power(-k,j+1.)
-        J = mp.fdiv(J,k_power)
-        return J
+        return cosebi_J(k, j, zmax)
 
     def __tplus(self, tmin,tmax,n,norm,root,ntheta):
-        theta=np.logspace(np.log10(tmin),np.log10(tmax),ntheta)
-        tplus=np.zeros((ntheta,2))
-        tplus[:,0]=theta
-        z=np.log(theta/tmin)
-        result=1.
-        for r in range(n+1):
-            result*=(z-root[r])
-        result*=norm
-        tplus[:,1]=result
-        return tplus
+        return cosebi_tplus(tmin, tmax, n, norm, root, ntheta)
 
     def __tminus(self, tmin,tmax,n,norm,root,tp,theta,ntheta=10000):
-        """
-        Calculates T_-(theta) from T_+(theta) on the same theta grid,
-        T_-(z) = T_+(z) + 4 int_0^z dy T_+(y) [exp(2(y-z)) - 3 exp(4(y-z))]
-        with z = ln(theta/tmin). The integrals are cumulative integrals of
-        T_+(y) exp(k y), done with Simpson's rule on the theta grid of T_+.
-        """
-        z = np.log(theta/tmin)
-        tplus = tp[:,1]
-        int_2 = cumulative_simpson(tplus*np.exp(2*z), x=z, initial=0)
-        int_4 = cumulative_simpson(tplus*np.exp(4*z), x=z, initial=0)
-        rtminus = np.zeros_like(tp)
-        rtminus[:,0] = tp[:,0]
-        rtminus[:,1] = tplus + 4*(int_2*np.exp(-2*z) - 3*int_4*np.exp(-4*z))
-        return rtminus
+        return cosebi_tminus(tmin, tp, theta)
 
     def __get_W_ell(self, theta, tp, ell):
         # independent of cosmology: reused from the cache if the inputs are the same
@@ -303,19 +452,10 @@ class CovCOSEBI(CovELLSpace):
         return lev_w.single_bessel_many_args(ell,0,theta[0],theta[-1])
 
     def __get_Un(self, tmax, tmin, theta, Nmax):
-        delta_theta = tmax - tmin
-        bart = (tmin + tmax)/2
-        result = np.zeros((Nmax,len(theta)))
-        result[0, :] = (12*bart/delta_theta**2*(theta-bart) - 1)/np.sqrt(2*(1+12*bart**2/delta_theta**2))/delta_theta**2
-        for i in range(1,Nmax):
-            result[i, :] = 1/delta_theta**2*np.sqrt((2*(i+1)+1)/2)*eval_legendre(i+1,2*(theta-bart)/delta_theta)
-        return result
-        
+        return psi_Un(tmin, tmax, theta, Nmax)
+
     def __get_Qn(self, Un, theta, Nmax):
-        """
-        Q_n(theta) = 2/theta^2 int_tmin^theta dtheta' theta' U_n(theta') - U_n(theta)
-        """
-        return 2/theta**2*cumulative_simpson(theta[None, :]*Un, x=theta, axis=1, initial=0) - Un
+        return psi_Qn(Un, theta)
 
     def __get_Wpsi_ell(self, n, Un, theta, ell):
         # independent of cosmology: reused from the cache if the inputs are the same
@@ -493,62 +633,10 @@ class CovCOSEBI(CovELLSpace):
         if self.mm:
             self.total_modes += Nmax_mm
             self.En_modes = Nmax_mm
-        zmax = mp.log(tmax_mm/tmin_mm)
         self.wn_ells = np.geomspace(ell_min, ell_max, N_ell)
         if Nmax_mm > 0:
-            coeff_j = mp.matrix(Nmax_mm+1,Nmax_mm+2)
-            for i in range(Nmax_mm+1):
-                coeff_j[i,i+1] = mp.mpf(1.)
-            nn = 1
-            aa = [self.__J(2,0,zmax),self.__J(2,1,zmax)],[self.__J(4,0,zmax),self.__J(4,1,zmax)]
-            bb = [-self.__J(2,nn+1,zmax),-self.__J(4,nn+1,zmax)]
-            coeff_j_ini = mp.lu_solve(aa,bb)
-            coeff_j[1,0] = coeff_j_ini[0]
-            coeff_j[1,1] = coeff_j_ini[1]
-            for nn in np.arange(2,Nmax_mm+1):
-                aa = mp.matrix(int(nn+1))
-                bb = mp.matrix(int(nn+1),1)
-                for m in np.arange(1,nn): 
-                    for j in range(0,nn+1):           
-                        for i in range(0,m+2):
-                            if obs_dict['COSEBIs']['dimensionless_cosebi']:
-                                aa[m-1,j] += self.__J(2,i+j,zmax)*coeff_j[m,i]    
-                            else:
-                                aa[m-1,j] += self.__J(1,i+j,zmax)*coeff_j[m,i]        
-                    for i in range(0,m+2):
-                        if obs_dict['COSEBIs']['dimensionless_cosebi']:
-                            bb[int(m-1)] -= self.__J(2,i+nn+1,zmax)*coeff_j[m,i]
-                        else:    
-                            bb[int(m-1)] -= self.__J(1,i+nn+1,zmax)*coeff_j[m,i]
-                for j in range(nn+1):
-                    aa[nn-1,j] = self.__J(2,j,zmax) 
-                    aa[nn,j]   = self.__J(4,j,zmax) 
-                    bb[int(nn-1)] = -self.__J(2,nn+1,zmax)
-                    bb[int(nn)]   = -self.__J(4,nn+1,zmax)
-                temp_coeff = mp.lu_solve(aa,bb)
-                coeff_j[nn,:len(temp_coeff)] = temp_coeff[:,0].T
-            coeff_j = coeff_j[1:,:]
-            Nn = []
-            for nn in np.arange(1,Nmax_mm+1):
-                temp_sum = mp.mpf(0)
-                for i in range(nn+2):
-                    for j in range(nn+2):
-                        if obs_dict['COSEBIs']['dimensionless_cosebi']:
-                            temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*self.__J(2,i+j,zmax)
-                        else:
-                            temp_sum += coeff_j[nn-1,i]*coeff_j[nn-1,j]*self.__J(1,i+j,zmax)
-                if obs_dict['COSEBIs']['dimensionless_cosebi']:
-                    tbar = (tmax_mm + tmin_mm)/2
-                    BB = (tmax_mm - tmin_mm)/(tmax_mm + tmin_mm)
-                    temp_Nn = 1/(temp_sum)
-                    temp_Nn = mp.sqrt(mp.fabs(temp_Nn))*np.sqrt(tbar**2*BB/tmin_mm**2)
-                else:
-                    temp_Nn = (mp.expm1(zmax))/(temp_sum)
-                    temp_Nn = mp.sqrt(mp.fabs(temp_Nn))
-                Nn.append(temp_Nn)
-            rn = []
-            for nn in range(1,Nmax_mm+1):
-                rn.append(mpmath.polyroots(coeff_j[nn-1,:nn+2][::-1],maxsteps=500,extraprec=100))
+            Nn, rn = cosebi_coefficients(tmin_mm, tmax_mm, Nmax_mm,
+                                         obs_dict['COSEBIs']['dimensionless_cosebi'])
         self.wn_kernels = np.zeros((self.total_modes, len(self.wn_ells)))
         self.Tn_p = []
         self.Tn_m = []

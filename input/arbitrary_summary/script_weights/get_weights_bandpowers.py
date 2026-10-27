@@ -41,7 +41,10 @@ def main():
     num_cores = args.nthread
     N_fourier = args.nfourier # at how many ells should the Bessel functions be evaluated
     n_theta_bins = args.ntheta # How many theta bins used for evaluation
-    fourier_ell = np.geomspace(1,1e4,N_fourier) 
+    fourier_ell = np.geomspace(1,1e4,N_fourier)
+    # the weights of bandpowers with apodisation at small angles extend beyond ell = 1e4
+    # (0.7 per cent of the highest band for theta_lo = 0.5 arcmin); the tail is smooth
+    fourier_ell = np.concatenate((fourier_ell, np.geomspace(1e4, 1e5, 201)[1:])) 
 
     delta_ln_theta_mm = args.delta_ln_theta_mm
     theta_lo_mm = args.theta_lo_mm
@@ -248,7 +251,8 @@ def main():
             if type == 'mm':
                 np.savetxt(filename_mm,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T, header=hdr_str_mm_plus_real)
             if type == 'gg':
-                np.savetxt(filename_gg,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*np.pi/Norm[i_ell]]).T, header=hdr_str_gg_real)
+                # C_nn = 2 pi/N int dtheta theta T g_+ w
+                np.savetxt(filename_gg,np.array([thetabins,g_plus[i_ell, :]*T_of_theta*2*np.pi/Norm[i_ell]]).T, header=hdr_str_gg_real)
             if type == 'gm':
                 np.savetxt(filename_gm,np.array([thetabins,h_ell[i_ell, :]*T_of_theta*2*np.pi/Norm[i_ell]]).T, header=hdr_str_gm_real)
             if i_ell+1 < 10:
@@ -289,7 +293,7 @@ def main():
             result_WEE +=8.0/ell_lo*np.nan_to_num(lev.double_bessel_many_args(
                 ells, ell_lo, 4, 1, theta_range[0], theta_range[-1]))
 
-        if type == "mm":
+        if type == "mm" or type == "gg":
             lev.init_integral(theta_range, T_of_theta[:,None]*np.ones(num_cores)[None,:], True, False)
             result_WEB = ell_up*np.nan_to_num(lev.double_bessel_many_args(
                 ells, ell_up, 0, 1, theta_range[0], theta_range[-1]))
@@ -356,13 +360,14 @@ def main():
             else:
                 filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmE_" + str(i_ell+1) + ".table"
                 filename_gm = "./../bandpowers/fourier_weight_bandpowers_gm_" + str(i_ell+1) + ".table"
-                filename_gg = "./../bandpowers/fourier_weight_bandpowers_gg_" + str(i_ell+1) + "table"
+                filename_gg = "./../bandpowers/fourier_weight_bandpowers_gg_" + str(i_ell+1) + ".table"
             if type == "mm":
                 np.savetxt(filename_mm,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi/Norm[i_ell]]).T, header=hdr_str_mm_plus_fourier)
             if type == "gm":
                 np.savetxt(filename_gm,np.array([ell_fourier_integral,Wl_nE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T, header=hdr_str_gm_fourier)
             if type == "gg":
-                np.savetxt(filename_gg,np.array([ell_fourier_integral,Wl_EE[i_ell, :]*np.pi*2.0/Norm[i_ell]]).T, header=hdr_str_gg_fourier)
+                # C_nn = 1/N int dell ell W_nn C_gg with W_nn = (W_EE + W_EB)/2 = int dtheta theta T J_0 g_+
+                np.savetxt(filename_gg,np.array([ell_fourier_integral,(Wl_EE[i_ell, :] + Wl_EB[i_ell, :])/2*np.pi*2.0/Norm[i_ell]]).T, header=hdr_str_gg_fourier)
             
             if i_ell+1 < 10:
                 filename_mm = "./../bandpowers/fourier_weight_bandpowers_mmB_0" + str(i_ell+1) + ".table"
