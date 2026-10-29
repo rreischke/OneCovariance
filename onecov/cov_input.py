@@ -4789,6 +4789,9 @@ class FileInput:
                     np.array(config['bias']['log10mass_bins'].split(','))
                 logmass_bins = logmass_bins.astype(float)
                 self.sampledim = len(logmass_bins) - 1
+            elif 'log10mass_bins_upper' in config['bias'] and 'log10mass_bins_lower' in config['bias']:
+                self.sampledim = \
+                    len(config['bias']['log10mass_bins_upper'].split(','))
             else:
                 self.sampledim = 1
         else:
@@ -5565,7 +5568,7 @@ class FileInput:
         else:
             pass
 
-        n_sample = max(len(self.bias_dict['logmass_bins']) - 1, 1)
+        n_sample = max(self.sampledim, 1)
         # with csmf_diagonal_lenses only sample i in clustering bin i is
         # measured, so only these pair counts are needed
         diagonal_lenses = self.diagonal_lenses
@@ -5574,7 +5577,7 @@ class FileInput:
                 # files per sample i (in bin i): the name contains the
                 # number i once, twice (bin_i, bin_i) or three times
                 combos = [(smp + 1, smp + 1, smp + 1) for smp in range(n_sample)]
-                name_combos = {1: [c[:1] for c in combos], 2: [c[:2] for c in combos], 3: combos}
+                name_combos = [(smp + 1, smp + 1) for smp in range(n_sample)]
             else:
                 # files per (bin_i, bin_j[, sample]), bin_i <= bin_j
                 combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
@@ -5592,7 +5595,8 @@ class FileInput:
                 # contains (i, j) or (i, j, i)
                 combos = [(smp + 1, b2 + 1, smp + 1) for smp in range(n_sample)
                           for b2 in range(self.n_tomo_lens)]
-                name_combos = {2: [c[:2] for c in combos], 3: combos}
+                name_combos = [(smp + 1, b2 + 1) for smp in range(n_sample)
+                               for b2 in range(self.n_tomo_lens)]
             else:
                 # files per (lens bin, source bin[, sample])
                 combos = [(b1 + 1, b2 + 1, smp + 1) for smp in range(n_sample)
@@ -8748,7 +8752,7 @@ class FileInput:
         self.__read_config_for_consistency_checks(config, config_name)
         # with csmf_diagonal_lenses only galaxy sample i in clustering bin i
         # is measured, which reduces the tabulated inputs
-        self.diagonal_lenses = max(len(self.bias_dict['logmass_bins']) - 1, 1) > 1 and \
+        self.diagonal_lenses = max(self.sampledim, 1) > 1 and \
             'csmf settings' in config and \
             config['csmf settings'].getboolean('csmf_diagonal_lenses', fallback=False)
         self.__read_in_z_files(config, config_name)
