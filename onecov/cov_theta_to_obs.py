@@ -355,6 +355,33 @@ class _ContractedBlock:
             self.out[k] += np.reshape(weights @ values, self.out.shape[1:])
         self.rows, self.cols, self.values = [], [], []
 
+    def set_many(self, indices, values, inverse=None):
+        """
+        Sets the entries block[indices[e]] = values[e] at once (each
+        mapped right away, no buffer), with values of shape (len(indices),
+        ...) or, if inverse is given, the unique columns: block[indices[e]] =
+        values[e, inverse] (reshaped), which are mapped before expanding them.
+        """
+        self.last = (None, 0)
+        if len(indices) == 0:
+            return
+        rows = np.fromiter((index[0] for index in indices), dtype=int, count=len(indices))
+        cols = np.fromiter((index[1] for index in indices), dtype=int, count=len(indices))
+        values = np.reshape(values, (len(indices), -1))
+        for k, (A_L, A_R) in enumerate(self.pairs):
+            if A_L is None or A_R is None:
+                continue
+            # in blocks of entries, the weights of a block within the buffer size
+            step = max(1, CONTRACTION_BUFFER_SIZE//(len(A_L)*len(A_R)))
+            part = 0
+            for start in range(0, len(rows), step):
+                block = slice(start, start + step)
+                weights = (A_L[:, rows[block]][:, None, :]*A_R[:, cols[block]][None, :, :]).reshape(-1, len(rows[block]))
+                part = part + weights @ values[block]
+            if inverse is not None:
+                part = part[:, inverse]
+            self.out[k] += np.reshape(part, self.out.shape[1:])
+
     def add_diagonal(self, diagonal):
         """
         Adds a block which is diagonal in the fine bins, given its diagonal

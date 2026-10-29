@@ -117,12 +117,85 @@ class Output:
 
         return fname
     
+    def _selected_tomo_combinations(self,
+                                    obs_dict,
+                                    n_tomo_clust,
+                                    n_tomo_lens):
+        """
+        Returns, per probe (gg, gm, mm), the list of all tomographic bin
+        combinations in the order of the covariance matrix and the list of
+        the combinations selected in the config file. Probes that are not
+        calculated get empty lists. With csmf_diagonal_lenses the clustering
+        block only contains the combinations (i, i).
+        """
+        obs = obs_dict['observables']
+        all_gg = [[i, j] for i in range(n_tomo_clust)
+                  for j in range(i, n_tomo_clust)]
+        if getattr(self, 'csmf_diagonal_lenses', False):
+            all_gg = [[i, i] for i in range(n_tomo_clust)]
+        all_gm = [[i, j] for i in range(n_tomo_clust)
+                  for j in range(n_tomo_lens)]
+        all_mm = [[i, j] for i in range(n_tomo_lens)
+                  for j in range(i, n_tomo_lens)]
+        probes = []
+        for flag, key, all_comb in (('clustering', 'combinations_clustering', all_gg),
+                                    ('ggl', 'combinations_ggl', all_gm),
+                                    ('cosmic_shear', 'combinations_lensing', all_mm)):
+            if not obs[flag]:
+                probes.append(([], []))
+            elif obs[key] is None:
+                probes.append((all_comb, all_comb))
+            else:
+                probes.append((all_comb, obs[key]))
+        return probes
+
+    def _sample_factor(self,
+                       sampledim):
+        """
+        Number of stellar mass samples stored per tomographic combination
+        (and spatial bin) in the gg and gm blocks. The samples are tied to
+        the tomographic bins in the diagonal lens setup.
+        """
+        if getattr(self, 'csmf_diagonal_lenses', False) or sampledim is None:
+            return 1
+        return sampledim
+
+    @staticmethod
+    def _reduce_covariance(blocks,
+                           full_covariance):
+        """
+        Cuts the selected tomographic bin combinations out of the full matrix.
+        blocks lists the consecutive blocks of the matrix as tuples
+        (all combinations, selected combinations, entries per summary and
+        combination). Within a block the summaries follow each other, each of
+        them ordered as (tomographic combination, stellar mass sample, spatial
+        bin).
+        """
+        indices = []
+        offset = 0
+        for all_comb, selected, n_spatial in blocks:
+            for n_spat in n_spatial:
+                for select in selected:
+                    if select in all_comb:
+                        start = offset + all_comb.index(select)*n_spat
+                        indices.extend(range(start, start + n_spat))
+                offset += len(all_comb)*n_spat
+        return full_covariance[np.ix_(indices, indices)]
+
     def select_tomographic_bins(self,
                                 obs_dict,
                                 proj_quant,
                                 n_tomo_clust,
                                 n_tomo_lens,
-                                full_covariance):
+                                full_covariance,
+                                second_shear = False,
+                                sampledim = 1):
+        """
+        Reduced covariance with the tomographic bin combinations of the
+        config file. second_shear states that the matrix contains a second
+        cosmic shear block (xi_minus or B-modes) after the first one, which
+        is reduced in the same way.
+        """
         n_spatial_clustering = len(proj_quant)
         n_spatial_ggl = len(proj_quant)
         n_spatial_shear = len(proj_quant)
@@ -131,183 +204,47 @@ class Output:
             n_spatial_ggl = len(self.projected_clust)
         if np.any(self.projected_lens):
             n_spatial_shear = len(self.projected_lens)
-        if n_spatial_clustering is None:
-            n_spatial_clustering = 0
-        if n_spatial_ggl is None:
-            n_spatial_ggl = 0
-        if n_spatial_shear is None:
-            n_spatial_shear = 0
 
-        length_clustering = int(n_tomo_clust*(n_tomo_clust + 1)/2)
-        length_ggl = int(n_tomo_clust*n_tomo_lens)
-        length_shear = int(n_tomo_lens*(n_tomo_lens + 1)/2)
-        full_length_clustering = int(n_spatial_clustering*n_tomo_clust*(n_tomo_clust + 1)/2)
-        full_length_shear = int(n_spatial_shear*n_tomo_lens*(n_tomo_lens + 1)/2)
-        full_length_ggl = int(n_spatial_ggl*n_tomo_clust*n_tomo_lens)
-        index_matrix = []
-        for i_tomo in range(n_tomo_clust):
-            for j_tomo in range(i_tomo, n_tomo_clust):
-                index_matrix.append([i_tomo,j_tomo])
-        for i_tomo in range(n_tomo_clust):
-            for j_tomo in range(n_tomo_lens):
-                index_matrix.append([i_tomo,j_tomo])
-        for i_tomo in range(n_tomo_lens):
-            for j_tomo in range(i_tomo,n_tomo_lens):
-                index_matrix.append([i_tomo,j_tomo])
-        
-        combinations_clustering = [] 
-        combinations_ggl = [] 
-        combinations_shear = []
-        
-        if obs_dict['observables']['clustering']:
-            if obs_dict['observables']['combinations_clustering'] is None:
-                for i_tomo in range(n_tomo_clust):
-                    for j_tomo in range(i_tomo, n_tomo_clust):
-                        combinations_clustering.append([i_tomo,j_tomo])
-            else:
-                combinations_clustering = obs_dict['observables']['combinations_clustering']
-        if obs_dict['observables']['ggl']:
-            if obs_dict['observables']['combinations_ggl'] is None:
-                for i_tomo in range(n_tomo_clust):
-                    for j_tomo in range(n_tomo_lens):
-                        combinations_ggl.append([i_tomo,j_tomo])
-            else:
-                combinations_ggl = obs_dict['observables']['combinations_ggl']
-        if obs_dict['observables']['cosmic_shear']:
-            if obs_dict['observables']['combinations_lensing'] is None:
-                for i_tomo in range(n_tomo_lens):
-                    for j_tomo in range(i_tomo, n_tomo_lens):
-                        combinations_shear.append([i_tomo,j_tomo])
-            else:
-                combinations_ggl = obs_dict['observables']['combinations_lensing']
-
-        indices_take = []
-        new_data_size = len(combinations_clustering)*n_spatial_clustering + len(combinations_ggl)*n_spatial_ggl  + len(combinations_shear)*n_spatial_shear 
-
-        for select in combinations_clustering:
-            for i_data in range(length_clustering):
-                if select == index_matrix[i_data]:
-                    indices_take.append(i_data)
-        for select in combinations_ggl:
-            for i_data in range(length_clustering, length_ggl + length_clustering):
-                if select == index_matrix[i_data]:
-                    indices_take.append(i_data)
-        for select in combinations_shear:
-            for i_data in range(length_clustering + length_ggl, length_ggl + length_clustering + length_shear):
-                if select == index_matrix[i_data]:
-                    indices_take.append(i_data)
-        indices_take_final = []
-        for i_take in range(len(combinations_clustering)):
-            for i in range(n_spatial_clustering):
-                indices_take_final.append(indices_take[i_take]*n_spatial_clustering + i)
-
-        for i_take in range(len(combinations_clustering), len(combinations_clustering) + len(combinations_ggl)):
-            for i in range(n_spatial_ggl):
-                indices_take_final.append(full_length_clustering + (indices_take[i_take] -length_clustering)*n_spatial_ggl + i)
-
-        for i_take in range(len(combinations_clustering) + len(combinations_ggl), len(combinations_clustering) + len(combinations_ggl) + len(combinations_shear)):
-            for i in range(n_spatial_shear):
-                indices_take_final.append(full_length_clustering + full_length_ggl + (indices_take[i_take] -length_clustering - length_ggl)*n_spatial_shear + i)
-
-        new_matrix = np.zeros((new_data_size,new_data_size))
-        for i, ii in enumerate(indices_take_final):
-            new_matrix[i, :] = full_covariance[ii,indices_take_final]
-        return new_matrix
-    
+        (all_gg, sel_gg), (all_gm, sel_gm), (all_mm, sel_mm) = \
+            self._selected_tomo_combinations(obs_dict, n_tomo_clust, n_tomo_lens)
+        n_sample = self._sample_factor(sampledim)
+        blocks = [(all_gg, sel_gg, [n_spatial_clustering*n_sample]),
+                  (all_gm, sel_gm, [n_spatial_ggl*n_sample]),
+                  (all_mm, sel_mm, [n_spatial_shear])]
+        if second_shear:
+            blocks.append((all_mm, sel_mm, [n_spatial_shear]))
+        return self._reduce_covariance(blocks, full_covariance)
 
     def select_tomographic_bins_arbitrary(self,
                                           obs_dict,
                                           summary,
                                           n_tomo_clust,
                                           n_tomo_lens,
-                                          full_covariance):
-        if summary['WL_gg'] is not None:
-            n_spatial_clustering = len(summary['WL_gg'])
-        else:
-            n_spatial_clustering = 0
-        if summary['WL_gm'] is not None:
-            n_spatial_ggl = len(summary['WL_gm'])
-        else:
-            n_spatial_ggl = 0
-        if summary['WL_mmE'] is not None:
-            n_spatial_shear = len(summary['WL_mmE'])
-        else:
-            n_spatial_shear = 0
-        length_clustering = int(n_tomo_clust*(n_tomo_clust + 1)/2)
-        length_ggl = int(n_tomo_clust*n_tomo_lens)
-        length_shear = int(n_tomo_lens*(n_tomo_lens + 1)/2)
-        full_length_clustering = int(n_spatial_clustering*n_tomo_clust*(n_tomo_clust + 1)/2)
-        full_length_shear = int(n_spatial_shear*n_tomo_lens*(n_tomo_lens + 1)/2)
-        full_length_ggl = int(n_spatial_ggl*n_tomo_clust*n_tomo_lens)
-        index_matrix = []
-        for i_tomo in range(n_tomo_clust):
-            for j_tomo in range(i_tomo, n_tomo_clust):
-                index_matrix.append([i_tomo,j_tomo])
-        for i_tomo in range(n_tomo_clust):
-            for j_tomo in range(n_tomo_lens):
-                index_matrix.append([i_tomo,j_tomo])
-        for i_tomo in range(n_tomo_lens):
-            for j_tomo in range(i_tomo,n_tomo_lens):
-                index_matrix.append([i_tomo,j_tomo])
-        
-        combinations_clustering = [] 
-        combinations_ggl = [] 
-        combinations_shear = []
-        
-        if obs_dict['observables']['clustering']:
-            if obs_dict['observables']['combinations_clustering'] is None:
-                for i_tomo in range(n_tomo_clust):
-                    for j_tomo in range(i_tomo, n_tomo_clust):
-                        combinations_clustering.append([i_tomo,j_tomo])
-            else:
-                combinations_clustering = obs_dict['observables']['combinations_clustering']
-        if obs_dict['observables']['ggl']:
-            if obs_dict['observables']['combinations_ggl'] is None:
-                for i_tomo in range(n_tomo_clust):
-                    for j_tomo in range(n_tomo_lens):
-                        combinations_ggl.append([i_tomo,j_tomo])
-            else:
-                combinations_ggl = obs_dict['observables']['combinations_ggl']
-        if obs_dict['observables']['cosmic_shear']:
-            if obs_dict['observables']['combinations_lensing'] is None:
-                for i_tomo in range(n_tomo_lens):
-                    for j_tomo in range(i_tomo, n_tomo_lens):
-                        combinations_shear.append([i_tomo,j_tomo])
-            else:
-                combinations_ggl = obs_dict['observables']['combinations_lensing']
+                                          full_covariance,
+                                          sampledim = 1):
+        """
+        Reduced covariance for arbitrary summary statistics. The matrix holds
+        gg, gm, the first and the second component of mm (E/B); a probe with
+        two summaries has them one after the other.
+        """
+        n_sample = self._sample_factor(sampledim)
 
-        indices_take = []
-        new_data_size = len(combinations_clustering)*n_spatial_clustering + len(combinations_ggl)*n_spatial_ggl  + len(combinations_shear)*n_spatial_shear 
+        def spatial_bins(probe, weights, n_sample=1):
+            if weights is None:
+                return []
+            n_first = summary['arb_number_first_summary_' + probe]
+            if summary['number_summary_' + probe] > 1:
+                return [n_first*n_sample, (len(weights) - n_first)*n_sample]
+            return [len(weights)*n_sample]
 
-        for select in combinations_clustering:
-            for i_data in range(length_clustering):
-                if select == index_matrix[i_data]:
-                    indices_take.append(i_data)
-        for select in combinations_ggl:
-            for i_data in range(length_clustering, length_ggl + length_clustering):
-                if select == index_matrix[i_data]:
-                    indices_take.append(i_data)
-        for select in combinations_shear:
-            for i_data in range(length_clustering + length_ggl, length_ggl + length_clustering + length_shear):
-                if select == index_matrix[i_data]:
-                    indices_take.append(i_data)
-        indices_take_final = []
-        for i_take in range(len(combinations_clustering)):
-            for i in range(n_spatial_clustering):
-                indices_take_final.append(indices_take[i_take]*n_spatial_clustering + i)
-
-        for i_take in range(len(combinations_clustering), len(combinations_clustering) + len(combinations_ggl)):
-            for i in range(n_spatial_ggl):
-                indices_take_final.append(full_length_clustering + (indices_take[i_take] -length_clustering)*n_spatial_ggl + i)
-
-        for i_take in range(len(combinations_clustering) + len(combinations_ggl), len(combinations_clustering) + len(combinations_ggl) + len(combinations_shear)):
-            for i in range(n_spatial_shear):
-                indices_take_final.append(full_length_clustering + full_length_ggl + (indices_take[i_take] -length_clustering - length_ggl)*n_spatial_shear + i)
-
-        new_matrix = np.zeros((new_data_size,new_data_size))
-        for i, ii in enumerate(indices_take_final):
-            new_matrix[i, :] = full_covariance[ii,indices_take_final]
-        return new_matrix
+        (all_gg, sel_gg), (all_gm, sel_gm), (all_mm, sel_mm) = \
+            self._selected_tomo_combinations(obs_dict, n_tomo_clust, n_tomo_lens)
+        n_mm = spatial_bins('mm', summary['WL_mmE'])
+        blocks = [(all_gg, sel_gg, spatial_bins('gg', summary['WL_gg'], n_sample)),
+                  (all_gm, sel_gm, spatial_bins('gm', summary['WL_gm'], n_sample)),
+                  (all_mm, sel_mm, n_mm),
+                  (all_mm, sel_mm, n_mm)]
+        return self._reduce_covariance(blocks, full_covariance)
 
     def __split_off_csmf(self,
                          gauss,
@@ -6017,7 +5954,9 @@ class Output:
                             np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
                                     newline='\n', header=hdr_str, comments='# ')
                 if obs_dict['observables']['combinations_clustering'] is not None or obs_dict['observables']['combinations_ggl'] is not None or obs_dict['observables']['combinations_lensing'] is not None:
-                    cov2d_total_reduced = self.select_tomographic_bins(obs_dict, proj_quant, n_tomo_clust, n_tomo_lens, cov2d_total)
+                    cov2d_total_reduced = self.select_tomographic_bins(obs_dict, proj_quant, n_tomo_clust, n_tomo_lens, cov2d_total,
+                                                                    obslength == 10 and xipp and ximm,
+                                                                    sampledim)
                     fn = self.filename[self.style.index('matrix')]
                     name, extension = os.path.splitext(fn)
                     fn_reduced = name + "_reduced" + extension
@@ -7281,7 +7220,8 @@ class Output:
                         np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
                                 newline='\n', header=hdr_str, comments='# ')
             if obs_dict['observables']['combinations_clustering'] is not None or obs_dict['observables']['combinations_ggl'] is not None or obs_dict['observables']['combinations_lensing'] is not None:
-                cov2d_total_reduced = self.select_tomographic_bins_arbitrary(obs_dict, summary, n_tomo_clust, n_tomo_lens, cov2d_total)
+                cov2d_total_reduced = self.select_tomographic_bins_arbitrary(obs_dict, summary, n_tomo_clust, n_tomo_lens, cov2d_total,
+                                                                              sampledim)
                 fn = self.filename[self.style.index('matrix')]
                 name, extension = os.path.splitext(fn)
                 fn_reduced = name + "_reduced" + extension

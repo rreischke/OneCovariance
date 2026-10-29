@@ -223,6 +223,7 @@ class PolySpectra(HaloModel):
         self.gm = obs_dict['observables']['ggl']
         self.gg = obs_dict['observables']['clustering']
         self.unbiased_clustering = obs_dict['observables']['unbiased_clustering']
+        self.magnification = bool(obs_dict['observables'].get('magnification', False))
         if read_in_tables['zet_dep_bias'] is not None and not self.unbiased_clustering and (self.gg or self.gm):
             self.unbiased_clustering = True
             self.redshift_dep_bias = True

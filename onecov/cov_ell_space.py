@@ -7,9 +7,11 @@ import healpy as hp
 import levin
 import numpy as np
 from camb import model
+from scipy.fft import fht, fhtoffset
 from scipy.integrate import cumulative_trapezoid, simpson
 from scipy.interpolate import Akima1DInterpolator, RegularGridInterpolator, UnivariateSpline, interp1d
 from scipy.linalg import block_diag
+from scipy.special import spherical_jn
 from scipy.sparse import csr_matrix
 
 DEG2TORAD2 = (180 / np.pi) ** 2
@@ -38,6 +40,20 @@ PROJECTION_BLOCK_SIZE = 4_000_000
 # per dex of bin width (the SMF falls exponentially at the high-mass end)
 CSMF_MIN_NODES = 3
 CSMF_NODES_PER_DEX = 40
+# non-Limber C_ell (_NonLimberProjector): log-uniform comoving distance grid
+# (Mpc/h) of the FFTLog transforms, its size and the FFTLog bias for Bessel
+# orders >= 2 (negative: stable at low k); lensing-type kernels are
+# tapered below NONLIMBER_TAPER_CHI. The correction is computed for
+# increasing ell until it stays below NONLIMBER_TOL (relative to
+# sqrt(C_aa C_bb)) for NONLIMBER_N_CONVERGED multipoles, at most up to
+# NONLIMBER_ELL_MAX.
+NONLIMBER_CHI_RANGE = (0.05, 2.0e4)
+NONLIMBER_N_CHI = 2**16
+NONLIMBER_BIAS = -1.0
+NONLIMBER_TAPER_CHI = 5.0
+NONLIMBER_TOL = 1e-4
+NONLIMBER_N_CONVERGED = 3
+NONLIMBER_ELL_MAX = 1000
 
 
 class LazyWeightsLevin:
@@ -168,6 +184,89 @@ class _FactorisedLineOfSightIntegrals(_LineOfSightIntegrals):
             for index, value in zip(self.indices[rows], values):
                 self._store(index, value)
         self.integrand, self.indices, self.weights = None, [], []
+
+
+class _NonLimberProjector:
+    """
+    Exact (non-Limber) and Limber angular power spectra of linear fields
+    with separable growth, P(k, chi_1, chi_2) = D(chi_1) D(chi_2) P_ref(k):
+    C_ab(ell) = 2/pi int dk k^2 P_ref(k) I_a(k) I_b(k) with
+    I_a(k) = int dchi f_a(chi) j_ell(k chi) for density-like kernels and
+    I_a(k) = int dchi f_a(chi) j_ell(k chi)/(k chi)^2 for lensing-like
+    kernels (the growth D and all ell-dependent prefactors are part of the
+    kernels or applied by the caller). The Bessel integrals are FFTLog
+    Hankel transforms (scipy.fft.fht) of all kernels at once on a
+    log-uniform chi grid; k is the reciprocal log-uniform grid (the same
+    for all ell), on which the k integral is a trapezoidal sum in ln k.
+    Lensing kernels use j_ell(x)/x^2 = j_{ell-2}/((2ell-1)(2ell+1))
+    + j_ell [1/((2ell-1)(2ell+1)) + 1/((2ell+1)(2ell+3))]
+    + j_{ell+2}/((2ell+1)(2ell+3)), dividing by (k chi)^2 directly would
+    amplify the FFTLog errors at low k.
+    """
+
+    def __init__(self, P_ref, chi_range=NONLIMBER_CHI_RANGE,
+                 n_chi=NONLIMBER_N_CHI, bias=NONLIMBER_BIAS):
+        self.P_ref = P_ref
+        self.chi = np.geomspace(chi_range[0], chi_range[1], n_chi)
+        self.dln = np.log(self.chi[1]/self.chi[0])
+        self.bias = bias
+        self.k = self.chi/(self.chi[0]*self.chi[-1])
+        self.weights = np.full(n_chi, self.dln)
+        self.weights[[0, -1]] *= 0.5
+
+    @staticmethod
+    def _x_low(order):
+        """
+        Largest x below which |j_order| < 1e-12 max|j_order|: I(k)
+        vanishes for k chi_max < x_low (chi_max the end of the support).
+        """
+        x = np.geomspace(1e-6, order + 10, 4000)
+        j = np.abs(spherical_jn(int(order), x))
+        return x[np.argmax(j > 1e-12*j.max())]
+
+    def _bessel(self, f, order):
+        """
+        int dchi f(chi) j_order(k chi) for the kernels f (n, n_chi). Below
+        the k where j_order is negligible on the whole support of a kernel
+        I is set to zero (FFTLog has a small absolute error there).
+        """
+        bias = 0.0 if order <= 1 else self.bias
+        I = np.sqrt(np.pi/2)*self.k**-1.5*fht(f/np.sqrt(self.chi), self.dln,
+                                               order + 0.5, bias=bias)
+        nonzero = np.abs(f) > 1e-12*np.max(np.abs(f), axis=1, keepdims=True)
+        chi_max = np.where(nonzero.any(axis=1),
+                           self.chi[len(self.chi) - 1 - np.argmax(nonzero[:, ::-1], axis=1)],
+                           self.chi[-1])
+        I[self.k[None, :] < self._x_low(order)/chi_max[:, None]] = 0.0
+        return I
+
+    def transform(self, f, ell, lensing=False):
+        """
+        I_a(k) of the kernels f (shape (n, n_chi), on self.chi), returns
+        the k grid and I with shape (n, n_chi). Lensing kernels need
+        ell >= 2 (zero otherwise).
+        """
+        f = np.atleast_2d(f)
+        ell = int(round(ell))
+        if not lensing:
+            return self.k, self._bessel(f, ell)
+        if ell < 2:
+            return self.k, np.zeros_like(f)
+        lower = 1/((2*ell - 1)*(2*ell + 1))
+        upper = 1/((2*ell + 1)*(2*ell + 3))
+        return self.k, lower*self._bessel(f, ell - 2) \
+            + (lower + upper)*self._bessel(f, ell) + upper*self._bessel(f, ell + 2)
+
+    def exact(self, I_a, I_b, k):
+        return (I_a*(2/np.pi*k**3*self.P_ref(k)*self.weights)) @ I_b.T
+
+    def limber(self, K_a, K_b, ell):
+        """
+        int dchi/chi^2 K_a K_b P_ref((ell + 1/2)/chi) for kernels K
+        (shape (n, n_chi), including the growth and the ell factors).
+        """
+        weight = self.P_ref((ell + 0.5)/self.chi)/self.chi*self.weights
+        return (K_a*weight) @ K_b.T
 
 
 class CovELLSpace(PolySpectra):
@@ -462,8 +561,9 @@ class CovELLSpace(PolySpectra):
         if getattr(self, 'projection_method', 'quadrature') != 'quadrature':
             return
         ell = np.array(ell, dtype=float)
-        # no copy of the (possibly large) weights, they are not modified
-        weights = np.asarray(weights, dtype=float)
+        # no copy of the (possibly large) weights, they are not modified (C
+        # order for levin.gauss_hermite_projection, usually the case already)
+        weights = np.ascontiguousarray(weights, dtype=float)
         tol = max(min(0.1*accuracy, 1e-5), 1e-10)
         for _ in range(6):
             error = self._weight_quadrature_error(ell, weights)
@@ -545,16 +645,30 @@ class CovELLSpace(PolySpectra):
         Nodes of the weight grid within [lo, hi] (including the end points)
         and the weights of mode_list there (Akima interpolated at the ends).
         """
-        ell_w, W = self._projection_weights_of[id(levin_int)][:2]
-        sel = (ell_w > lo) & (ell_w < hi)
-        x = np.concatenate(([lo], ell_w[sel], [hi]))
-        W = W[mode_list]
-        ends = []
-        for end in (lo, hi):
-            i = np.searchsorted(ell_w, end)
-            window = slice(max(i - 6, 0), min(i + 6, len(ell_w)))
-            ends.append(Akima1DInterpolator(ell_w[window], W[:, window], axis=1)([end]))
-        return x, np.concatenate((ends[0], W[:, sel], ends[1]), axis=1)
+        x, inner, W_lo, W_hi = self._weight_nodes(levin_int, lo, hi)
+        W = self._projection_weights_of[id(levin_int)][1]
+        mode_list = np.asarray(mode_list, dtype=int)
+        return x, np.concatenate((W_lo[mode_list, None], W[mode_list, inner], W_hi[mode_list, None]), axis=1)
+
+    def _weight_nodes(self, levin_int, lo, hi):
+        """
+        The nodes x of the weight grid within [lo, hi] (including the end
+        points), the slice of the registered weight nodes strictly inside
+        and the weights of all modes at lo and hi (Akima interpolated),
+        cached per (lo, hi) with the registered weights.
+        """
+        ell_w, W, _, _, cache = self._projection_weights_of[id(levin_int)]
+        if (lo, hi) not in cache:
+            # ell_w is ascending, the nodes inside are a slice
+            inner = slice(np.searchsorted(ell_w, lo, side='right'), np.searchsorted(ell_w, hi, side='left'))
+            x = np.concatenate(([lo], ell_w[inner], [hi]))
+            ends = []
+            for end in (lo, hi):
+                i = np.searchsorted(ell_w, end)
+                window = slice(max(i - 6, 0), min(i + 6, len(ell_w)))
+                ends.append(Akima1DInterpolator(ell_w[window], W[:, window], axis=1)([end])[:, 0])
+            cache[(lo, hi)] = (x, inner) + tuple(ends)
+        return cache[(lo, hi)]
 
     def _project_gauss_quadrature(self, levin_int, integrand, keys, lo, hi):
         """
@@ -563,12 +677,13 @@ class CovELLSpace(PolySpectra):
         The keys are split into groups with at most about 8
         PROJECTION_BLOCK_SIZE/(number of weight nodes) distinct weights each,
         so that the copies of the weights on their nodes stay bounded for
-        many weights (e.g. fine real-space bins).
+        many weights (e.g. fine real-space bins). Not with
+        levin.gauss_hermite_projection, which makes no copies.
         """
         modes = sorted(set(m for key in keys for m in key))
         n_nodes = len(self._projection_weights_of[id(levin_int)][0])
         half_block = max(4, 4*PROJECTION_BLOCK_SIZE//max(n_nodes, 1))
-        if len(modes) <= 2*half_block:
+        if len(modes) <= 2*half_block or hasattr(levin, 'gauss_hermite_projection'):
             return self._project_gauss_quadrature_keys(levin_int, integrand, keys, lo, hi)
         block_of = {mode: i//half_block for i, mode in enumerate(modes)}
         groups = {}
@@ -593,11 +708,15 @@ class CovELLSpace(PolySpectra):
         """
         modes = sorted(set(m for key in keys for m in key))
         position = {mode: i for i, mode in enumerate(modes)}
-        x, Wx = self._weights_on_nodes(levin_int, modes, lo, hi)
-        w = self._simpson_weights_nonuniform(x)
+        kernel = hasattr(levin, 'gauss_hermite_projection')
+        if kernel:
+            # the kernel reads the registered weights, no copies on the nodes
+            x = self._weight_nodes(levin_int, lo, hi)[0]
+        else:
+            x, Wx = self._weights_on_nodes(levin_int, modes, lo, hi)
+            w = self._simpson_weights_nonuniform(x)
         first = np.array([position[m] for m, _ in keys], dtype=int)
         second = np.array([position[n] for _, n in keys], dtype=int)
-        result = np.empty((len(keys), integrand.shape[1]))
         tol = 0.01*self._projection_weights_of[id(levin_int)][3]
         grids, level = [], np.full(integrand.shape[1], -1)
         todo = np.arange(integrand.shape[1])
@@ -608,17 +727,35 @@ class CovELLSpace(PolySpectra):
             todo = todo[~ok]
             if len(todo) == 0:
                 break
-        best, cost_best = None, (len(keys) + 400)*len(x)*integrand.shape[1]
-        for i_grid, grid in enumerate(grids):
-            n_ok = np.sum((level >= 0) & (level <= i_grid))
-            cost = (20*len(keys)*len(x) + (len(keys) + 1200)*len(grid)*n_ok
-                    + (len(keys) + 400)*len(x)*(integrand.shape[1] - n_ok))
-            if cost < cost_best:
-                best, cost_best = i_grid, cost
+        n_col = integrand.shape[1]
+        if kernel:
+            # per key: the moments on the nodes and the contraction per segment
+            # and column (on the nodes for the columns evaluated directly)
+            best, cost_best = None, 4*len(x)*(n_col + 1)
+            for i_grid, grid in enumerate(grids):
+                n_ok = np.sum((level >= 0) & (level <= i_grid))
+                cost = 4*len(x) + 4*len(grid)*n_ok + (4*len(x)*(n_col - n_ok + 1) if n_ok < n_col else 0)
+                if cost < cost_best:
+                    best, cost_best = i_grid, cost
+        else:
+            best, cost_best = None, (len(keys) + 400)*len(x)*n_col
+            for i_grid, grid in enumerate(grids):
+                n_ok = np.sum((level >= 0) & (level <= i_grid))
+                cost = (20*len(keys)*len(x) + (len(keys) + 1200)*len(grid)*n_ok
+                        + (len(keys) + 400)*len(x)*(n_col - n_ok))
+                if cost < cost_best:
+                    best, cost_best = i_grid, cost
         first_modes, first = np.unique(first, return_inverse=True)
         second_modes, second = np.unique(second, return_inverse=True)
         pair = first*len(second_modes) + second
+        if kernel:
+            columns = np.nonzero((level >= 0) & (level <= best))[0] if best is not None else np.arange(0)
+            todo = np.setdiff1d(np.arange(n_col), columns)
+            modes = np.array(modes, dtype=np.int64)
+            return self._project_gauss_kernel(levin_int, integrand, lo, hi, grids[best] if best is not None else None,
+                                              columns, todo, modes[first_modes], modes[second_modes], pair)
         W_first, W_second = Wx[first_modes], Wx[second_modes]*w
+        result = np.empty((len(keys), integrand.shape[1]))
         todo = np.arange(integrand.shape[1])
         if best is not None:
             grid = grids[best]
@@ -658,6 +795,48 @@ class CovELLSpace(PolySpectra):
                 for nodes in self._blocks(len(x), len(second_modes)):
                     gram += W_first[:, nodes] @ (W_second[:, nodes]*F[nodes, j]).T
                 result[:, column] = gram.ravel()[pair]
+        return result
+
+    def _project_gauss_kernel(self, levin_int, integrand, lo, hi, grid, columns, todo, first_modes, second_modes,
+                              pair):
+        """
+        The projections of _project_gauss_quadrature_keys with
+        levin.gauss_hermite_projection (num_cores threads, reading the
+        registered weights without copies): the columns of the integrand on
+        their piecewise cubic Hermite representation on grid, the columns
+        todo on the nodes of the weights directly (segments of one node). The
+        keys are the pairs (first_modes[i], second_modes[l]) with pair =
+        i*len(second_modes) + l.
+        """
+        x, inner, W_lo, W_hi = self._weight_nodes(levin_int, lo, hi)
+        W = self._projection_weights_of[id(levin_int)][1][:, inner]
+        w = self._simpson_weights_nonuniform(x)
+        row_of = np.full(len(first_modes)*len(second_modes), -1, dtype=np.int64)
+        row_of[pair] = np.arange(len(pair))
+        n_threads = int(getattr(self, 'num_cores', 1))
+        result = np.empty((len(pair), integrand.shape[1]))
+
+        def project(coefficients, starts, stops, k, values, d_right, d_left):
+            return levin.gauss_hermite_projection(W, W_lo, W_hi, w, first_modes, second_modes, row_of, len(pair),
+                                                  coefficients, starts, stops, k, values, d_right, d_left, n_threads)
+
+        # at most 256 columns per call (bounded accumulators of the threads)
+        if len(columns):
+            k, coefficients = self._hermite_coefficients(grid, x)
+            starts = np.flatnonzero(np.diff(k, prepend=-1))
+            stops = np.append(starts[1:], len(x))
+            for cols in self._blocks(len(columns), max(3*len(grid), PROJECTION_BLOCK_SIZE//256)):
+                values, d_right, d_left = self._integrand_at(self.ellrange, integrand[:, columns[cols]], grid, True,
+                                                             derivative=True)
+                result[:, columns[cols]] = project(coefficients, starts, stops, k[starts], values, d_right, d_left)
+        if len(todo):
+            nodes = np.arange(len(x))
+            coefficients = np.zeros((4, len(x)))
+            coefficients[0] = 1.0
+            for cols in self._blocks(len(todo), max(len(x), PROJECTION_BLOCK_SIZE//256)):
+                F = self._integrand_at(self.ellrange, integrand[:, todo[cols]], x)
+                F = np.concatenate((F, np.zeros((1, F.shape[1]))))
+                result[:, todo[cols]] = project(coefficients, nodes, nodes + 1, nodes, F, F, F)
         return result
 
     @staticmethod
@@ -1313,12 +1492,7 @@ class CovELLSpace(PolySpectra):
                 unique_idx, inverse = self._unique_columns(integrand)
                 for (lo, hi), keys in by_range.items():
                     results = self._project_gauss_quadrature(levin_int, integrand[:, unique_idx], keys, lo, hi)
-                    for key, result in zip(keys, results):
-                        result = np.reshape(result[inverse], original_shape)
-                        for job in live[key]:
-                            job[3][job[4]] = job[5] * result
-                            if len(job) > 6:
-                                job[3][job[6]] = job[3][job[4]]
+                    self._assign_gauss_results(live, keys, results, inverse, original_shape)
                 continue
             levin_int.init_integral(self.ellrange, integrand, True, True)
             unique_idx, inverse = self._unique_columns(integrand)
@@ -1326,14 +1500,56 @@ class CovELLSpace(PolySpectra):
             results = levin_int.cquad_integrate_double_well_subset(
                 [job[0] for job in representatives], [job[1] for job in representatives],
                 [job[2] for job in representatives], unique_idx)
-            for key_jobs, result in zip(live.values(), results):
-                result = np.reshape(np.array(result)[inverse], original_shape)
-                for job in key_jobs:
-                    job[3][job[4]] = job[5] * result
-                    if len(job) > 6:
-                        job[3][job[6]] = job[3][job[4]]
+            self._assign_gauss_results(live, list(live.keys()), np.array(results), inverse, original_shape)
         print('\rProjection of the Gaussian term for the ' + name + ' done in ' +
               str(round((time.time()-t0)/60, 1)) + 'min', end="")
+
+    @staticmethod
+    def _assign_gauss_results(live, keys, results, inverse, original_shape):
+        """
+        target_array[target_index] = prefac*result (and at mirror_index) for
+        the jobs of _project_gauss_jobs, with results[i] the unique columns
+        (expanded with inverse) for keys[i]. Targets with set_many
+        (CovTHETAtoOBS) get all their entries at once, in blocks (mirror
+        entries only if they differ from the index; an entry set again right
+        after it is overwritten, as with item assignment).
+        """
+        batched, scalar = {}, {}
+        for i, key in enumerate(keys):
+            result = None
+            for job in live[key]:
+                target = job[3]
+                entry = batched.get(id(target))
+                if entry is None:
+                    entry = batched[id(target)] = (target, [], [], []) if hasattr(target, 'set_many') else False
+                # (prefactors are numbers or arrays of size one, e.g. 1/area)
+                prefac = scalar.get(id(job[5])) if entry else None
+                if entry and prefac is None and np.size(job[5]) == 1:
+                    prefac = scalar[id(job[5])] = float(np.reshape(job[5], -1)[0])
+                if prefac is not None:
+                    rows, indices, prefacs = entry[1:]
+                    for index in ((job[4], job[6]) if len(job) > 6 and job[6] != job[4] else (job[4],)):
+                        if indices and indices[-1] == index:
+                            rows[-1], prefacs[-1] = i, prefac
+                            continue
+                        rows.append(i)
+                        indices.append(index)
+                        prefacs.append(prefac)
+                    continue
+                if result is None:
+                    result = np.reshape(results[i][inverse], original_shape)
+                target[job[4]] = job[5] * result
+                if len(job) > 6:
+                    target[job[6]] = target[job[4]]
+        for entry in batched.values():
+            if not entry or not entry[1]:
+                continue
+            target, rows, indices, prefacs = entry
+            rows, prefacs = np.array(rows), np.array(prefacs, dtype=float)
+            step = max(1, PROJECTION_BLOCK_SIZE//max(results.shape[1], 1))
+            for start in range(0, len(rows), step):
+                part = slice(start, start + step)
+                target.set_many(indices[part], prefacs[part, None]*results[rows[part]], inverse)
 
     def _project_gauss_jobs_added(self,
                                   levin_int,
@@ -1445,8 +1661,23 @@ class CovELLSpace(PolySpectra):
                 continue
             mean = 0.5*(a + b_t)
             final[i], final[j] = mean, np.transpose(mean, (1, 0, 4, 5, 2, 3))
+        # targets with set_many (CovTHETAtoOBS) get all their entries at once,
+        # in blocks (an entry set again right after it is overwritten)
+        batched = {}
         for job, value in zip(live, final):
-            job[2][job[3]] = value
+            if not (hasattr(job[2], 'set_many') and isinstance(value, np.ndarray)):
+                job[2][job[3]] = value
+                continue
+            indices, values = batched.setdefault(id(job[2]), (job[2], [], []))[1:]
+            if indices and indices[-1] == job[3]:
+                values[-1] = value
+                continue
+            indices.append(job[3])
+            values.append(value)
+        for target, indices, values in batched.values():
+            step = max(1, PROJECTION_BLOCK_SIZE//max(values[0].size, 1))
+            for start in range(0, len(values), step):
+                target.set_many(indices[start:start + step], np.array(values[start:start + step]))
 
     def _project_4pt_jobs(self,
                           levin_int,
@@ -1908,7 +2139,19 @@ class CovELLSpace(PolySpectra):
         # narrow self.los_integration_chi to the range of each bin pair)
         self.los_integration_chi_full = np.copy(self.los_integration_chi)
 
+        arb_gg = read_in_tables['arb_radial']['do_arbitrary_radial_weights'] and \
+            read_in_tables['arb_radial']['number_radial_weights_gg'] is not None and \
+            not read_in_tables['arb_radial']['add_to_galaxy']
+        self.magnification_active = bool(self.magnification) and (self.gg or self.gm) \
+            and 's' in self.zet_clust and not arb_gg
+        if self.magnification and not self.magnification_active and (self.gg or self.gm):
+            print("ConfigWarning: [magnification] is ignored: no s(z) given or the clustering kernels " +
+                  "are replaced by arbitrary radial weights.")
         self.spline_zclust = []
+        # clustering kernels without the redshift dependent bias and the
+        # slope of the number counts, for the magnification bias
+        self.spline_zclust_unbiased = []
+        self.spline_mag_s = []
         self.spline_zlens = []
         self.spline_zcsmf = []
         self.chi_min_clust = np.zeros(self.n_tomo_clust)
@@ -1960,6 +2203,13 @@ class CovELLSpace(PolySpectra):
                     else:
                         self.chi_max_clust[tomo] = self.los_integration_chi[-1]
                     break
+            self.spline_zclust_unbiased.append(self.spline_zclust[tomo])
+            if self.magnification_active:
+                chi_of_z = self.cosmology.comoving_distance(self.zet_clust['z']).value \
+                    * self.cosmology.h
+                self.spline_mag_s.append(interp1d(
+                    chi_of_z, self.zet_clust['s'][tomo], bounds_error=False,
+                    fill_value=(self.zet_clust['s'][tomo][0], self.zet_clust['s'][tomo][-1])))
             if self.redshift_dep_bias:
                 self.spline_zclust[tomo] = UnivariateSpline(
                     self.cosmology.comoving_distance(self.zet_clust['z']).value
@@ -2265,6 +2515,9 @@ class CovELLSpace(PolySpectra):
         """
         linear_growth_factor = np.interp(self.los_integration_chi,self.los_chi,(self.power_mm_lin_z[:,int(len(self.mass_func.k)/2)]/self.power_mm_lin_z[0,int(len(self.mass_func.k)/2)])**0.5)
         self.spline_lensweight = []
+        # intrinsic alignment part of spline_lensweight (for the non-Limber
+        # projection, where it has a different ell dependence)
+        self.spline_lensweight_IA = []
         for tomo in range(self.n_tomo_lens - self.number_radial_weights_mm):
             norm = simpson(self.spline_zlens[tomo](
                 self.los_integration_chi), x = self.los_integration_chi)
@@ -2288,16 +2541,24 @@ class CovELLSpace(PolySpectra):
             self.spline_lensweight.append(UnivariateSpline(self.los_integration_chi,
                                                            aux_integral + aux_W_iA,
                                                            k=1, s=0, ext=0))
+            self.spline_lensweight_IA.append(UnivariateSpline(self.los_integration_chi,
+                                                              aux_W_iA, k=1, s=0, ext=0))
         if self.add_to_matter:
             for tomo in range(self.number_radial_weights_mm):
                 self.spline_lensweight.append(self.aux_spline_lensweight[tomo])
 
 
-    def __set_lensweight_splines_mu(self,
-                                    covELLspacesettings):
+    def __set_magweight_splines(self,
+                                covELLspacesettings):
         r"""
-        Calculates and splines the lensing weight for later integration
-        along the line-of-sight.
+        Calculates and splines the magnification kernel of each clustering
+        bin for the line-of-sight integration,
+        q_mu^i(chi) = 3/2 Om (H0/c)^2 chi/a(chi)
+                      int_chi^chimax dchi' p_i(chi') (5 s_i(chi') - 2) (chi' - chi)/chi',
+        with p_i the clustering redshift distribution without the redshift
+        dependent bias and s_i the slope of the number counts. The
+        magnification contribution to the galaxy overdensity is then the
+        convergence-like field with kernel q_mu^i.
 
         Parameters
         ----------
@@ -2305,29 +2566,113 @@ class CovELLSpace(PolySpectra):
             Specifies the redshift spacing used for the line-of-sight
             integration.
         """
-        self.spline_lensweight_mu = []
+        self.spline_magweight = []
+        prefactor = 3/2 / self.cosmology.hubble_distance.value**2 \
+            / self.cosmology.h**2 * self.cosmology.Om0 \
+            * self.los_integration_chi \
+            / self.cosmology.scale_factor(
+                self.spline_z_of_chi(self.los_integration_chi))
         for tomo in range(self.n_tomo_clust):
-            norm = simpson(self.spline_zclust[tomo](
-                self.los_integration_chi), x = self.los_integration_chi)
+            if tomo >= len(self.spline_zclust_unbiased):
+                # additional arbitrary radial weights are not magnified
+                self.spline_magweight.append(UnivariateSpline(
+                    self.los_integration_chi, np.zeros_like(self.los_integration_chi),
+                    k=1, s=0, ext=1))
+                continue
+            p_chi = self.spline_zclust_unbiased[tomo]
+            s_chi = self.spline_mag_s[tomo]
+            norm = simpson(p_chi(self.los_integration_chi), x=self.los_integration_chi)
             aux_integral = np.zeros_like(self.los_integration_chi)
             for zetidx in range(covELLspacesettings['integration_steps']):
                 aux_chi = self.los_integration_chi[zetidx]
                 chi = np.geomspace(
                     aux_chi, self.chimax, covELLspacesettings['integration_steps'])
-                aux_integral[zetidx] = simpson(self.spline_zclust[tomo](chi)
-                                                * (chi - aux_chi)/chi,
-                                                x = chi)/norm
-            aux_integral = aux_integral * 3/2 \
-                / self.cosmology.hubble_distance.value**2 \
-                / self.cosmology.h**2 \
-                * self.cosmology.Om0 \
-                * self.los_integration_chi \
-                / self.cosmology.scale_factor(
-                    self.spline_z_of_chi(self.los_integration_chi))
-            self.spline_lensweight_mu.append(UnivariateSpline(self.los_integration_chi,
-                                                           aux_integral,
-                                                           k=1, s=0, ext=0))
-        
+                aux_integral[zetidx] = simpson(
+                    p_chi(chi) * (5*s_chi(chi) - 2) * (chi - aux_chi)/chi,
+                    x=chi)/norm
+            self.spline_magweight.append(UnivariateSpline(
+                self.los_integration_chi, aux_integral*prefactor, k=1, s=0, ext=0))
+
+    def __magnification_Cells(self,
+                              spline_Pgm,
+                              spline_Pmm,
+                              covELLspacesettings):
+        r"""
+        Magnification contributions to the Limber angular power spectra,
+        on the full line-of-sight range (the lensing kernel of the
+        magnification is not compact),
+        dC_gg^ij = int dchi/chi^2 [W_i q_j P_gm + q_i W_j P_gm + q_i q_j P_mm],
+        dC_gm^ij = sqrt(fijl) int dchi/chi^2 q_i L_j P_mm,
+        with W the clustering kernels, q the magnification kernels and L the
+        lensing efficiencies.
+
+        Parameters
+        ----------
+        spline_Pgm : list
+            Splines of log10 P_gm for each galaxy sample.
+        spline_Pmm : RegularGridInterpolator
+            Spline of log10 P_mm.
+        covELLspacesettings : dictionary
+            Specifies the number of line-of-sight integration steps.
+
+        Returns
+        ----------
+        dCell_gg : array of shape (n_ell, sample_dim, sample_dim, n_tomo_clust, n_tomo_clust)
+        dCell_gm : array of shape (n_ell, sample_dim, n_tomo_clust, n_tomo_lens), or
+            None if no lensing kernels exist.
+        """
+        n_ell = len(self.ellrange)
+        n_t = self.n_tomo_clust
+
+        def power_grid(chi):
+            chi_grid, ell_grid = np.meshgrid(chi, self.ellrange, indexing='ij')
+            return np.stack([chi_grid.ravel(),
+                             np.log10((ell_grid.ravel() + 0.5) / chi_grid.ravel())]).T
+
+        # magnification kernels are not compact: matter-matter terms on the
+        # full range
+        chi = self.los_integration_chi_full
+        x_values = power_grid(chi)
+        P_mm = 10**spline_Pmm(x_values).reshape((len(chi), n_ell))
+        q = np.array([self.spline_magweight[t](chi) for t in range(n_t)])
+        auto = np.zeros((n_t, n_t, n_ell))
+        for tomo_i in range(n_t):
+            for tomo_j in range(tomo_i, n_t):
+                auto[tomo_i, tomo_j] = simpson(
+                    P_mm*(q[tomo_i]*q[tomo_j]/chi**2)[:, None], x=chi, axis=0)
+                auto[tomo_j, tomo_i] = auto[tomo_i, tomo_j]
+        # galaxy-magnification terms W_i q_j P_gm: the support of W_i is
+        # compact, integrate over the range of clustering bin i
+        cross = np.zeros((self.sample_dim, n_t, n_t, n_ell))
+        for tomo_i in range(n_t):
+            if not self.chi_max_clust[tomo_i] > self.chi_min_clust[tomo_i]:
+                continue
+            chi_i = self.__get_updated_los_integration_chi(
+                self.chi_min_clust[tomo_i], self.chi_max_clust[tomo_i], covELLspacesettings)
+            x_i = power_grid(chi_i)
+            W_i = self.spline_zclust[tomo_i](chi_i)
+            for i_sample in range(self.sample_dim):
+                P_gm = 10**spline_Pgm[i_sample](x_i).reshape((len(chi_i), n_ell))
+                for tomo_j in range(n_t):
+                    cross[i_sample, tomo_i, tomo_j] = simpson(
+                        P_gm*(W_i*self.spline_magweight[tomo_j](chi_i)/chi_i**2)[:, None],
+                        x=chi_i, axis=0)
+        dCell_gg = np.zeros((n_ell, self.sample_dim, self.sample_dim, n_t, n_t))
+        for i_sample in range(self.sample_dim):
+            for j_sample in range(self.sample_dim):
+                dCell_gg[:, i_sample, j_sample] = np.moveaxis(
+                    cross[i_sample] + np.swapaxes(cross[j_sample], 0, 1) + auto, -1, 0)
+        dCell_gm = None
+        if self.n_tomo_lens > 0 and hasattr(self, 'spline_lensweight') \
+                and len(self.spline_lensweight) > 0:
+            dCell_gm = np.zeros((n_ell, self.sample_dim, n_t, self.n_tomo_lens))
+            for tomo_i in range(n_t):
+                for tomo_j in range(self.n_tomo_lens):
+                    dCell_gm[:, :, tomo_i, tomo_j] = np.sqrt(self.fijl)[:, None] * simpson(
+                        P_mm*(q[tomo_i]*self.spline_lensweight[tomo_j](chi)/chi**2)[:, None],
+                        x=chi, axis=0)[:, None]
+        return dCell_gg, dCell_gm
+
     def __check_for_tabulated_Cells(self,
                                     Cxy_tab):
         r"""
@@ -2701,9 +3046,11 @@ class CovELLSpace(PolySpectra):
                              covELLspacesettings,
                              Cxy_tab):
         r"""
-        Calculates the non-Limber projection of the power spectrum for all
-        tracers and tomographic bin combinations over the ell range
-        specified in covELLspacesettings
+        Replaces the Limber angular power spectra at low multipoles by
+        their non-Limber version.  The correction of each block (gg, gm, mm) 
+        is added for increasing ell until it is below NONLIMBER_TOL relative
+        to sqrt(C_aa C_bb) for NONLIMBER_N_CONVERGED multipoles in a row 
+        (at most up to NONLIMBER_ELL_MAX); tabulated C_ell are not changed.
 
         Parameters
         ----------
@@ -2717,150 +3064,113 @@ class CovELLSpace(PolySpectra):
         Returns
         ----------
         None :
-            Sets the private variables self.Cell_xx to the non-Limber version
-            for multipoles below 2000
+            Adds the non-Limber correction to self.Cell_gg, self.Cell_gm and
+            self.Cell_mm and sets self.ell_max_nonlimber ({'gg', 'gm', 'mm':
+            the largest multipole that was corrected}).
         """
+        self.ell_max_nonlimber = None
+        do_gg = (self.gg or self.gm) and not self.tab_bools[0] \
+            and isinstance(self.Cell_gg, np.ndarray)
+        do_gm = (self.gm or (self.gg and self.mm and self.cross_terms)) \
+            and not self.tab_bools[1] and isinstance(self.Cell_gm, np.ndarray)
+        do_mm = (self.mm or self.gm) and not self.tab_bools[2] \
+            and isinstance(self.Cell_mm, np.ndarray)
+        if not (do_gg or do_gm or do_mm):
+            return
+        if self.do_arbitrary_radial_gg or self.do_arbitrary_radial_mm:
+            print("ConfigWarning: The non-Limber angular power spectra are not available " +
+                  "with arbitrary radial weights, the Limber ones are used.")
+            return
+        print("Calculating the non-Limber correction of the angular power spectra (C_ell's).")
+        chi_0 = self.los_chi[0]
 
-        if self.Cells is not None:
-            if ((self.gg and self.tab_bools[0]) or not self.gg) and \
-               ((self.mm and self.tab_bools[2]) or not self.mm) and \
-               ((self.gm and np.all(self.tab_bools)) or not self.gm):
-                return self.Cells[0], self.Cells[1], self.Cells[2]
+        def P_ref(k):
+            return np.exp(self.power_mm_lin_spline(
+                np.stack([np.full_like(k, chi_0), np.log(k)], axis=-1)))
 
-        print("Calculating non-limber angular power spectra (C_ell's).")
-        n_tomo_clust_copy = np.copy(self.n_tomo_clust)
-        ellmax = 100
-        if self.clustering_z:
-            self.n_tomo_clust = 1
-            ellmax = 1000
-        
-        inner_integral_gg = None
-        inner_integral_gm_clust = None
-        inner_integral_gm_lens= None
-        inner_integral_mm = None
-        if (self.gg or self.gm) and not self.tab_bools[0]:
-            lev = levin.Levin(1, 16, 32, 1e-4, 50, self.num_cores)
-            for eidx, ell in enumerate(self.ellrange):
-                if (int(ell) < ellmax):
-                    if ell < 100:
-                        kmax = 50*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    if ell < 10:
-                        kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 1000)
-                    inner_integral_gg = np.zeros((len(k_nonlimber),self.sample_dim,self.sample_dim,self.n_tomo_clust))
+        proj = _NonLimberProjector(P_ref)
+        chi = proj.chi
+        chi_eval = np.clip(chi, self.los_chi[0], self.los_chi[-1])
+        k_ref = min(max(0.01, 2*self.mass_func.k[0]), 0.5*self.mass_func.k[-1])
+        lnP_lin = self.power_mm_lin_spline(
+            np.stack([chi_eval, np.full_like(chi, np.log(k_ref))], axis=-1))
+        growth = np.exp(0.5*(lnP_lin - np.log(P_ref(np.array([k_ref]))[0])))
+        in_los = (chi >= self.chimin) & (chi <= self.chimax)
+        taper = (1 - np.exp(-(chi/NONLIMBER_TAPER_CHI)**4))*in_los
 
-                    for tomo_i in range(self.n_tomo_clust):
-                        chi_low = self.chi_min_clust[tomo_i]
-                        chi_high = self.chi_max_clust[tomo_i]
-                        los_chi = np.geomspace(chi_low, chi_high, 1000)
-                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
-                        for i_sample in range(self.sample_dim):
-                            for j_sample in range(i_sample,self.sample_dim): 
-                                power = 10**self.spline_Pgg[i_sample*self.sample_dim +j_sample]((xg, yg))
-                                integrand = np.sqrt(power)*self.spline_zclust[tomo_i](
-                                    los_chi)[:, None]
-                                lev.init_integral(
-                                    los_chi, integrand, True, True)
-                                inner_integral_gg[:,i_sample, j_sample, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
-                                        k_nonlimber,
-                                        int(ell),
-                                        los_chi[0],
-                                        los_chi[-1]))*k_nonlimber
-                    self.Cell_gg[eidx, :,:, :, :] = simpson(
-                        inner_integral_gg[:, :, :, :, None]*inner_integral_gg[:, :, :, None, :],
-                        x = k_nonlimber, axis = 0)*2.0/np.pi
-                    self.Cell_gg[eidx, j_sample, i_sample, :,:] = self.Cell_gg[eidx, i_sample, j_sample, :, :]
-        if (self.gm or (self.gg and self.mm and self.cross_terms)) and \
-           not self.tab_bools[1]:
-            lev = levin.Levin(1, 16, 32, 1e-4, 50, self.num_cores)
-            for eidx, ell in enumerate(self.ellrange):
-                if (int(ell) < ellmax):
-                    if ell < 100:
-                        kmax = 50*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    if ell < 10:
-                        kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 1000)
-                    inner_integral_gm_clust = np.zeros((len(k_nonlimber), self.sample_dim,self.n_tomo_clust))
-                    inner_integral_gm_lens = np.zeros((len(k_nonlimber), self.sample_dim,self.n_tomo_lens))
-                    for tomo_i in range(self.n_tomo_lens):
-                        chi_low = self.los_integration_chi[0] 
-                        chi_high = self.los_integration_chi[-1]
-                        los_chi = np.geomspace(chi_low, chi_high, 1000)
-                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
-                        for i_sample in range(self.sample_dim):
-                            power = 10**self.spline_Pgm[i_sample*self.sample_dim +j_sample]((xg, yg))
-                            integrand = np.sqrt(power)*self.spline_lensweight[tomo_i](
-                                los_chi)[:, None]
-                            lev.init_integral(
-                                los_chi, integrand, True, True)
-                            inner_integral_gm_lens[:,i_sample, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
-                                    k_nonlimber,
-                                    int(ell),
-                                    los_chi[0],
-                                    los_chi[-1]))*k_nonlimber
-                    for tomo_i in range(self.n_tomo_clust):
-                        chi_low = self.chi_min_clust[tomo_i]
-                        chi_high = self.chi_max_clust[tomo_i]
-                        los_chi = np.geomspace(chi_low, chi_high, 1000)
-                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
-                        for i_sample in range(self.sample_dim):
-                            power = 10**self.spline_Pgm[i_sample]((xg, yg))
-                            integrand = np.sqrt(power)*self.spline_zclust[tomo_i](
-                                los_chi)[:, None]
-                            lev.init_integral(
-                                los_chi, integrand, True, True)
-                            inner_integral_gm_clust[:,i_sample, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
-                                    k_nonlimber,
-                                    int(ell),
-                                    los_chi[0],
-                                    los_chi[-1]))*k_nonlimber
-                    self.Cell_gm[eidx,:, :, :] = np.sqrt(self.fijl[eidx])*simpson(
-                        inner_integral_gm_clust[:, :, :, None]*inner_integral_gm_lens[:, :, None, :],
-                        x = k_nonlimber, axis = 0)*2.0/np.pi
-        if (self.mm or self.gm) and not self.tab_bools[2]:
-            lev = levin.Levin(1, 16, 32, 1e-4, 50, self.num_cores)
-            ellmax = 50
-            for eidx, ell in enumerate(self.ellrange):
-                if (int(ell) < ellmax):
-                    if ell < 100:
-                        kmax = 50*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    if ell < 10:
-                        kmax = 100*(ell + 0.5)/np.min(self.chi_min_clust)
-                        kmin = 0.05*(ell + 0.5)/np.max(self.chi_min_clust)
-                    k_nonlimber = np.geomspace(max(kmin,self.mass_func.k[0]), min(kmax,self.mass_func.k[-1]), 1000)
-                    inner_integral_mm = np.zeros((len(k_nonlimber), self.n_tomo_lens))
+        def on_grid(spline, lo, hi):
+            values = np.zeros_like(chi)
+            inside = (chi >= lo) & (chi <= hi)
+            values[inside] = spline(chi[inside])
+            return values
 
-                    for tomo_i in range(self.n_tomo_clust):
-                        chi_low = self.chi_min_clust[tomo_i]
-                        chi_high = self.chi_max_clust[tomo_i]
-                        los_chi = np.geomspace(chi_low, chi_high, 1000)
-                        xg, yg = np.meshgrid(los_chi, np.log10(k_nonlimber), indexing='ij')
-                        for i_sample in range(self.sample_dim):
-                            for j_sample in range(i_sample,self.sample_dim): 
-                                power = 10**self.spline_Pmm((xg, yg))
-                                integrand = np.sqrt(power)*self.spline_lensweight[tomo_i](
-                                    los_chi)[:, None]
-                                lev.init_integral(
-                                    los_chi, integrand, True, True)
-                                inner_integral_mm[:, tomo_i] = np.array(lev.single_bessel_many_args_diagonal(
-                                        k_nonlimber,
-                                        int(ell),
-                                        los_chi[0],
-                                        los_chi[-1]))*k_nonlimber
-                    self.Cell_mm[eidx, :, :] = simpson(
-                        inner_integral_mm[:, :, None]*inner_integral_mm[:, None, :],
-                        x = k_nonlimber, axis = 0)*2.0/np.pi*self.fijl[eidx]
+        n_chi = len(chi)
+        mag = self.magnification_active and (do_gg or do_gm)
+        if do_gg or do_gm:
+            # linear bias of each sample from the power spectra at k_ref
+            bias = np.array([np.sqrt(10**self.spline_Pgg[i_sample*self.sample_dim + i_sample](
+                np.stack([chi_eval, np.full_like(chi, np.log10(k_ref))], axis=-1)) / np.exp(lnP_lin))
+                for i_sample in range(self.sample_dim)])
+            W = np.array([on_grid(self.spline_zclust[tomo], self.chi_min_clust[tomo], self.chi_max_clust[tomo])
+                          for tomo in range(self.n_tomo_clust)])
+            # legs ordered (sample, tomographic bin)
+            gal_density = (bias[:, None, :]*W[None, :, :]*growth).reshape((-1, n_chi))
+            if mag:
+                gal_kappa = np.array([self.spline_magweight[tomo](chi) for tomo in range(self.n_tomo_clust)]) \
+                    * growth*taper
+        if do_gm or do_mm:
+            L_IA = np.array([on_grid(self.spline_lensweight_IA[tomo], self.chimin, self.chimax)
+                             for tomo in range(self.n_tomo_lens)])*growth
+            L_lens = np.array([self.spline_lensweight[tomo](chi) for tomo in range(self.n_tomo_lens)]) \
+                * growth*taper - L_IA*taper
+        n_t, n_s = self.n_tomo_clust, self.sample_dim
+        # each block is corrected until its own correction has converged
+        n_converged = {'gg': 0 if do_gg else NONLIMBER_N_CONVERGED,
+                       'gm': 0 if do_gm else NONLIMBER_N_CONVERGED,
+                       'mm': 0 if do_mm else NONLIMBER_N_CONVERGED}
+        self.ell_max_nonlimber = {}
+        for eidx, ell in enumerate(self.ellrange):
+            active = [key for key, n in n_converged.items() if n < NONLIMBER_N_CONVERGED]
+            if ell > NONLIMBER_ELL_MAX or not active:
+                break
+            do_gg, do_gm, do_mm = ('gg' in active), ('gm' in active), ('mm' in active)
+            if do_gg or do_gm:
+                k, I_gal = proj.transform(gal_density, ell)
+                K_gal = gal_density
+                if mag:
+                    _, I_kappa = proj.transform(gal_kappa, ell, lensing=True)
+                    I_gal = I_gal + ell*(ell + 1)*np.tile(I_kappa, (n_s, 1))
+                    K_gal = K_gal + np.tile(gal_kappa, (n_s, 1))
+                limber_gal = np.diag(proj.limber(K_gal, K_gal, ell))
+            if do_gm or do_mm:
+                sqrt_factorial = np.sqrt(max((ell + 2)*(ell + 1)*ell*(ell - 1), 0.0))
+                k, I_lens = proj.transform(L_lens, ell, lensing=True)
+                _, I_IA = proj.transform(L_IA, ell)
+                I_shear = sqrt_factorial*(I_lens + I_IA/(ell + 0.5)**2)
+                K_shear = np.sqrt(self.fijl[eidx])*(L_lens + L_IA)
+                limber_shear = np.diag(proj.limber(K_shear, K_shear, ell))
 
+            def correction(I_a, I_b, K_a, K_b, norm_a, norm_b):
+                delta = proj.exact(I_a, I_b, k) - proj.limber(K_a, K_b, ell)
+                norm = np.sqrt(np.abs(np.outer(norm_a, norm_b)))
+                return delta, np.max(np.abs(delta)[norm > 0]/norm[norm > 0], initial=0.0)
 
-            
-        if self.clustering_z:
-            self.n_tomo_clust = n_tomo_clust_copy
-        
+            relative = {}
+            if do_gg:
+                delta, relative['gg'] = correction(I_gal, I_gal, K_gal, K_gal, limber_gal, limber_gal)
+                self.Cell_gg[eidx] += delta.reshape((n_s, n_t, n_s, n_t)).transpose(0, 2, 1, 3)
+            if do_gm and ell >= 2:
+                delta, relative['gm'] = correction(I_gal, I_shear, K_gal, K_shear, limber_gal, limber_shear)
+                self.Cell_gm[eidx] += delta.reshape((n_s, n_t, self.n_tomo_lens))
+            if do_mm and ell >= 2:
+                delta, relative['mm'] = correction(I_shear, I_shear, K_shear, K_shear, limber_shear, limber_shear)
+                self.Cell_mm[eidx] += delta.reshape(self.Cell_mm[eidx].shape)
+            for key, rel in relative.items():
+                self.ell_max_nonlimber[key] = ell
+                n_converged[key] = n_converged[key] + 1 if rel < NONLIMBER_TOL else 0
+        print("Non-Limber correction applied up to ell = " +
+              ", ".join(key + ": " + str(int(ell)) for key, ell in self.ell_max_nonlimber.items()) + ".")
+
     def calc_Cells_Limber(self,
                           covELLspacesettings,
                           bias_dict,
@@ -2934,7 +3244,8 @@ class CovELLSpace(PolySpectra):
                                    for i in range(len(grid)) for j in range(len(grid)) if i != j)
         if self.samples_overlap:
             aux_ngal_overlap = np.zeros((self.los_interpolation_sampling, self.sample_dim, self.sample_dim))
-        if (self.mm or self.gm or self.unbiased_clustering) and prec['hm']['transfer_model'] == 'CAMB' and self.Pxy_tab['mm'] is None:
+        mag = self.magnification_active
+        if (self.mm or self.gm or self.unbiased_clustering or mag) and prec['hm']['transfer_model'] == 'CAMB' and self.Pxy_tab['mm'] is None:
             self.camb_pars_new.set_matter_power(redshifts = self.los_z[::-1], kmax=min(self.mass_func.k[-1], CAMB_KMAX_NONLINEAR))
             self.camb_pars_new.NonLinear = model.NonLinear_pk
             if prec['powspec']['nl_model'] == "mead2020_feedback":
@@ -3004,7 +3315,7 @@ class CovELLSpace(PolySpectra):
                             aux_gg[zet, :, i_sample, j_sample] = self.Pgg[:, i_sample, j_sample]
                     if self.unbiased_clustering:
                         aux_gm[zet, :, i_sample] = aux_mm[zet,:]
-                    elif self.gm or (self.gg and self.mm):
+                    elif self.gm or (self.gg and self.mm) or mag:
                         aux_gm[zet, :, i_sample] = self.Pgm[:, i_sample]
             if prec['hm']['transfer_model'] != 'CAMB' or self.Pxy_tab['mm'] is not None :
                 aux_mm[zet, :] = self.Pmm[:, 0]
@@ -3119,18 +3430,24 @@ class CovELLSpace(PolySpectra):
                 for j_sample in range(self.sample_dim):
                     self.spline_Pgg.append(RegularGridInterpolator((self.los_chi, np.log10(self.mass_func.k)),
                                             np.log10(aux_gg[:, :, i_sample, j_sample]),bounds_error= False, fill_value = None))
-                if self.gm or self.mm:
+                if self.gm or self.mm or mag:
                     spline_Pgm.append(RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_gm[:, :, i_sample]),bounds_error= False, fill_value = None))
-            if self.gm or self.mm:
+            if self.gm or self.mm or mag:
                 self.spline_Pgg = self.spline_Pgg
                 self.spline_Pgm = spline_Pgm
     
-        if (self.mm or self.gm) and not self.tab_bools[2]:
+        if ((self.mm or self.gm) and not self.tab_bools[2]) or mag:
             spline_Pmm = RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_mm[:, :]),bounds_error= False, fill_value = None)
             self.spline_Pmm = spline_Pmm
 
         if not self.do_arbitrary_radial_mm or self.add_to_matter:
             self.__set_lensweight_splines(covELLspacesettings, iA_dict)
+        self.Cell_gg_mag, self.Cell_gm_mag = None, None
+        if mag:
+            self.__set_magweight_splines(covELLspacesettings)
+            if self.Cells is not None and (self.tab_bools[0] or self.tab_bools[1]):
+                print("ConfigWarning: Tabulated C_ell (gg, gm) are used as given, the magnification " +
+                      "bias is NOT added to them.")
         if self.Cells is not None:
             if ((self.gg and self.tab_bools[0]) or not self.gg) and ((self.mm and self.tab_bools[2]) or not self.mm) and ((self.gm and np.all(self.tab_bools)) or not self.gm):
                 return self.Cells[0], self.Cells[1], self.Cells[2]
@@ -3206,6 +3523,17 @@ class CovELLSpace(PolySpectra):
             Cell_mm = self.Cells[2]
         else:
             Cell_mm = 0
+
+        if mag:
+            print("Adding the magnification bias to the Limber C_ell (gg, gm).")
+            dCell_gg, dCell_gm = self.__magnification_Cells(spline_Pgm, spline_Pmm, covELLspacesettings)
+            if (self.gg or self.gm) and not self.tab_bools[0]:
+                Cell_gg = Cell_gg + dCell_gg
+                self.Cell_gg_mag = dCell_gg
+            if dCell_gm is not None and not self.tab_bools[1] and \
+                    (self.gm or (self.gg and self.mm and self.cross_terms)):
+                Cell_gm = Cell_gm + dCell_gm
+                self.Cell_gm_mag = dCell_gm
 
         return Cell_gg, Cell_gm, Cell_mm
 
@@ -6988,6 +7316,9 @@ class CovELLSpace(PolySpectra):
         if not self.cov_dict['nongauss']:
             return 0, 0, 0, 0, 0, 0
         print("Calculating non-Gaussian covariance in ell space")
+        if getattr(self, 'magnification_active', False):
+            print("ConfigWarning: The non-Gaussian covariance does NOT contain the magnification bias " +
+                  "(only the C_ell and the Gaussian covariance do).")
         # line-of-sight integrals over the range of all tracers
         self.los_integration_chi = np.copy(self.los_integration_chi_full)
         splines_gggg = [[]for _ in range(self.sample_dim)]
@@ -7457,6 +7788,9 @@ class CovELLSpace(PolySpectra):
         if not self.cov_dict['ssc']:
             return 0, 0, 0, 0, 0, 0
         print("Calculating the SSC terms in ell space.")
+        if getattr(self, 'magnification_active', False):
+            print("ConfigWarning: The SSC covariance does NOT contain the magnification bias " +
+                  "(only the C_ell and the Gaussian covariance do).")
         # line-of-sight integrals over the range of all tracers
         self.los_integration_chi = np.copy(self.los_integration_chi_full)
         SSCELLgggg = None

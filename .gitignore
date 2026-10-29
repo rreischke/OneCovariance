@@ -32,3 +32,4 @@ levin.egg-info
 test.ipynb
 CLAUDE.md
 /cache/
+/tests/*

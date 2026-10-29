@@ -1,5 +1,8 @@
 import configparser
+import fnmatch
+import functools
 import os
+import sys
 from os import path, walk
 
 import numpy as np
@@ -126,8 +129,6 @@ class Input:
         self.ell_bins_clustering = None
         self.ell_type_clustering = None
         self.magnification_bias = None
-        self.magnification_bias_s = None
-        self.magnification_bias_z = None
         
 
         # for cosmic shear in projected real space
@@ -980,8 +981,6 @@ class Input:
                 self.magnification_bias = config['magnification'].getboolean('magnification')
             else:
                 self.magnification_bias = False
-            if self.magnification_bias:
-                self.magnification_bias_z = config['magnification']['magnification']
         else:
             self.magnification_bias = False
         
@@ -3737,20 +3736,20 @@ class Input:
         keys = ['cosmic_shear', 'est_shear', 'ggl', 'est_ggl', 'clustering',
                 'est_clust', 'cross_terms', 'clustering_z', 'unbiased_clustering', 'csmf', 'csmf_log10M_bins', "is_cell", "csmf_diagonal", "csmf_auto_only","csmf_diagonal_lenses", 'csmf_log10M_bins_upper', 'csmf_log10M_bins_lower',
                 'combinations_clustering',
-                'combinations_ggl','combinations_lensing', 'theta_to_obs']
+                'combinations_ggl','combinations_lensing', 'theta_to_obs', 'magnification']
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
                   self.cstellar_mf, self.csmf_log10M_bins, False, self.csmf_diagonal, self.csmf_auto_only,
                   bool(self.csmf_diagonal_lenses) and (self.sampledim or 1) > 1, self.csmf_log10M_bins_upper, self.csmf_log10M_bins_lower,
                   self.combinations_clustering, self.combinations_ggl, self.combinations_lensing,
-                  bool(self.theta_to_obs)]
+                  bool(self.theta_to_obs), bool(self.magnification_bias)]
         self.observables = dict(zip(keys, values))
         
         values = [self.cosmicshear, self.est_shear, self.ggl, self.est_ggl,
                   self.clustering, self.est_clust, self.cross_terms, self.clustering_z, self.unbiased_clustering,
                   self.cstellar_mf, None, None, None, None, None, None,
                   self.combinations_clustering, self.combinations_ggl, self.combinations_lensing,
-                  self.theta_to_obs]
+                  self.theta_to_obs, self.magnification_bias]
         
         if not self.sn_only:
             values = [self.gauss, self.split_gauss, self.nongauss, self.ssc, None]
@@ -4403,6 +4402,42 @@ class Input:
 # inp = Input()
 
 
+
+class _ReadFileTracker:
+    """
+    Context manager that records the base names of all files successfully
+    opened by the table readers (astropy's ascii.read and fits.open,
+    numpy's loadtxt) while it is active. Used to find the files given in
+    the configuration file that were never read.
+    """
+
+    def __init__(self):
+        self.read_files = set()
+        self._patched = []
+
+    def _wrap(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            if len(args) > 0 and isinstance(args[0], (str, os.PathLike)):
+                self.read_files.add(path.basename(os.fspath(args[0])))
+            return result
+        return wrapper
+
+    def __enter__(self):
+        for module, name in ((ascii, 'read'), (fits, 'open'), (np, 'loadtxt')):
+            original = getattr(module, name)
+            self._patched.append((module, name, original))
+            setattr(module, name, self._wrap(original))
+        return self
+
+    def __exit__(self, *exc):
+        for module, name, original in self._patched:
+            setattr(module, name, original)
+        self._patched = []
+        return False
+
+
 class FileInput:
     """
     Provides methods to read-in look-up tables listed in a configuration 
@@ -4439,6 +4474,8 @@ class FileInput:
         self.zet_clust_ext = None
         self.value_loc_in_clustbin = None
         self.zet_clust_z = None
+        self.magnification = False
+        self.mag_s = None
         self.zet_clust_nz = None
         self.n_tomo_clust = None
 
@@ -4476,6 +4513,9 @@ class FileInput:
         self.npair = dict()
         self.npair_dir = None
         self.npair_column = None
+        self.npair_gg_column_name = None
+        self.npair_gm_column_name = None
+        self.npair_mm_column_name = None
         self.npair_gg_file = None
         self.theta_npair_gg = None
         self.npair_gg = None
@@ -5393,7 +5433,8 @@ class FileInput:
 
 
     def __read_in_npair_files(self,
-                              nfile):
+                              nfile,
+                              column_name = None):
         """
         Reads in the number of galaxy pairs per angular bin for an 
         accurate calculation of the shot noise. If no npair file is  
@@ -5404,6 +5445,10 @@ class FileInput:
         ----------
         nfile : string
             Name of the number of galaxy pairs file.
+        column_name : string
+            Name of the column holding N_pairs (npair_XX_column_name). If
+            None, the generic 'npair_column' is used, and if that is not
+            given either, the last column.
 
         File structure :
         --------------
@@ -5412,8 +5457,9 @@ class FileInput:
         The first column must be the angular bins. By default, N_pairs is
         taken from the last column (as in the treecorr output, or just a
         2 column file). If N_pairs is in a different column, set the
-        column name via 'npair_column'. If that name is not found in the
-        file, the last column is used.
+        column name via 'npair_XX_column_name' (or 'npair_column' for all
+        probes). If that name is not found in the file, the last column is
+        used.
         # theta  ...  N_pairs
         0.5      ...  100
         0.6      ...  300
@@ -5444,13 +5490,15 @@ class FileInput:
 
         theta_npair = np.array(data[data.colnames[0]])
 
-        if self.npair_column in data.colnames:
-            npair = np.array(data[self.npair_column])
+        if column_name is None:
+            column_name = self.npair_column
+        if column_name in data.colnames:
+            npair = np.array(data[column_name])
         else:
             npair = np.array(data[data.colnames[-1]])
-            if self.npair_column is not None:
-                print("InputWarning: The column '" + self.npair_column +
-                      "' in keyword 'npair_column' was not found in file " +
+            if column_name is not None:
+                print("InputWarning: The column '" + column_name +
+                      "' in keyword 'npair_XX_column_name' was not found in file " +
                       path.join(self.npair_dir, nfile) + ". The last column " +
                       "will be used as the number of galaxy pairs.")
 
@@ -5488,7 +5536,7 @@ class FileInput:
         return [''.join(part + str(number) for part, number in zip(parts, combo)) + parts[-1]
                 for combo in combos]
 
-    def __read_npair_set(self, files, combos, shape, symmetric):
+    def __read_npair_set(self, files, combos, shape, symmetric, column_name=None):
         """
         Reads one npair file per bin combination into an array with the
         angular bins first and then shape (tomographic bin i, j, sample);
@@ -5499,7 +5547,7 @@ class FileInput:
         """
         theta_ref, npair = None, None
         for nfile, combo in zip(files, combos):
-            theta, values = self.__read_in_npair_files(nfile)
+            theta, values = self.__read_in_npair_files(nfile, column_name)
             if type(values) == bool:
                 return None, None
             if theta_ref is not None and (len(theta) != len(theta_ref) or
@@ -5547,16 +5595,31 @@ class FileInput:
                 self.npair_column = config['tabulated inputs files']['npair_column']
                 if self.npair_column == '':
                     self.npair_column = None
+            if 'npair_gg_column_name' in config['tabulated inputs files']:
+                self.npair_gg_column_name = \
+                    config['tabulated inputs files']['npair_gg_column_name'].strip()
+                if self.npair_gg_column_name == '':
+                    self.npair_gg_column_name = None
             if 'npair_gg_file' in config['tabulated inputs files']:
                 self.npair_gg_file = (config['tabulated inputs files']
                                       ['npair_gg_file'].replace(" ", "")).split(',')
                 if self.npair_gg_file[0] == '':
                     self.npair_gg_file = None
+            if 'npair_gm_column_name' in config['tabulated inputs files']:
+                self.npair_gm_column_name = \
+                    config['tabulated inputs files']['npair_gm_column_name'].strip()
+                if self.npair_gm_column_name == '':
+                    self.npair_gm_column_name = None
             if 'npair_gm_file' in config['tabulated inputs files']:
                 self.npair_gm_file = (config['tabulated inputs files']
                                       ['npair_gm_file'].replace(" ", "")).split(',')
                 if self.npair_gm_file[0] == '':
                     self.npair_gm_file = None
+            if 'npair_mm_column_name' in config['tabulated inputs files']:
+                self.npair_mm_column_name = \
+                    config['tabulated inputs files']['npair_mm_column_name'].strip()
+                if self.npair_mm_column_name == '':
+                    self.npair_mm_column_name = None
             if 'npair_mm_file' in config['tabulated inputs files']:
                 self.npair_mm_file = (config['tabulated inputs files']
                                       ['npair_mm_file'].replace(" ", "")).split(',')
@@ -5584,7 +5647,8 @@ class FileInput:
                 name_combos = combos
             files = self.__expand_npair_filenames(self.npair_gg_file, name_combos, 'npair_gg_file')
             self.theta_npair_gg, self.npair_gg = self.__read_npair_set(
-                files, combos, (self.n_tomo_clust, self.n_tomo_clust, n_sample), True)
+                files, combos, (self.n_tomo_clust, self.n_tomo_clust, n_sample), True,
+                self.npair_gg_column_name)
 
         if self.ggl and self.npair_gm_file is not None:
             if diagonal_lenses:
@@ -5602,7 +5666,8 @@ class FileInput:
                 name_combos = combos
             files = self.__expand_npair_filenames(self.npair_gm_file, name_combos, 'npair_gm_file')
             self.theta_npair_gm, self.npair_gm = self.__read_npair_set(
-                files, combos, (self.n_tomo_clust, self.n_tomo_lens, n_sample), False)
+                files, combos, (self.n_tomo_clust, self.n_tomo_lens, n_sample), False,
+                self.npair_gm_column_name)
 
         if self.cosmicshear and self.npair_mm_file is not None:
             # files per (bin_i, bin_j), bin_i <= bin_j; auto-generated names
@@ -5616,7 +5681,8 @@ class FileInput:
                     name_combos = [(b2, b1) for b1, b2 in combos]
             files = self.__expand_npair_filenames(self.npair_mm_file, name_combos, 'npair_mm_file')
             self.theta_npair_mm, self.npair_mm = self.__read_npair_set(
-                files, combos, (self.n_tomo_lens, self.n_tomo_lens, 1), True)
+                files, combos, (self.n_tomo_lens, self.n_tomo_lens, 1), True,
+                self.npair_mm_column_name)
           
     def __read_in_powspec_files(self,
                                 Pfile):
@@ -5897,6 +5963,70 @@ class FileInput:
 
             except:
                 print("InputWarning: The bias files " + self.bias_files[0] + "... where not found, will procede with HoD or unbiased clustering")
+        return True
+
+    def __read_in_s_of_z_files(self,
+                               config):
+        """
+        Reads in the slope of the cumulative galaxy number counts,
+        s(z) = d log10 N(<m) / dm, of each clustering bin, which sets the
+        magnification bias C = 5 s - 2 of the galaxy overdensity. It is
+        interpolated onto the redshifts of the clustering n(z) (stored in
+        self.mag_s with the shape of zclust 'nz').
+
+        Parameters
+        ----------
+        config : class
+            This class holds all the information specified the config
+            file. It originates from the configparser module.
+
+        File structure :
+        --------------
+        Either one file with the redshift in the first column and one
+        column s_i(z) per clustering bin, or one file per bin with
+        (z, s_i(z)).
+        # z     s_1(z)  ...  s_N(z)
+        0.1     0.4     ...  0.5
+        ...     ...     ...  ...
+
+        """
+        self.magnification = 'magnification' in config and \
+            config['magnification'].getboolean('magnification', fallback=False)
+        if not (self.magnification and (self.clustering or self.ggl)):
+            return False
+        section = config['magnification']
+        if section.get('s_of_z_file', '').strip() == '':
+            raise Exception("ConfigError: [magnification]: 'magnification = True' requires " +
+                            "the slope s(z) of the number counts of each clustering bin in 's_of_z_file'.")
+        directory = section.get('s_of_z_directory', '').strip()
+        if directory == '':
+            directory = self.zet_clust_dir if self.zet_clust_dir is not None else ''
+        files = [f for f in section['s_of_z_file'].replace(' ', '').split(',') if f != '']
+        z_all, s_all = [], []
+        for file in files:
+            fname = path.join(directory, file)
+            try:
+                print("Reading in the magnification slope s(z) from file " + fname + ".")
+                data = ascii.read(fname)
+            except Exception:
+                raise Exception("ConfigError: [magnification]: the file " + fname + " in 's_of_z_file' " +
+                                "could not be read.")
+            if len(data.colnames) < 2:
+                raise Exception("ConfigError: [magnification]: the file " + fname + " needs the redshift " +
+                                "in the first and s(z) in the following column(s).")
+            for colname in data.colnames[1:]:
+                z_all.append(np.array(data[data.colnames[0]], dtype=float))
+                s_all.append(np.array(data[colname], dtype=float))
+        if len(s_all) != self.n_tomo_clust:
+            raise Exception("ConfigError: [magnification]: " + str(len(s_all)) + " s(z) columns/files were " +
+                            "given but there are " + str(self.n_tomo_clust) + " clustering bins.")
+        self.mag_s = np.array([np.interp(self.zet_clust_z, z_i, s_i)
+                               for z_i, s_i in zip(z_all, s_all)])
+        for z_i in z_all:
+            if np.min(z_i) > np.min(self.zet_clust_z) or np.max(z_i) < np.max(self.zet_clust_z):
+                print("ConfigWarning: [magnification]: s(z) does not cover the redshift range of the " +
+                      "clustering n(z); the edge values are extended.")
+                break
         return True
 
     def __read_in_Cell_manyfiles(self,
@@ -8331,6 +8461,10 @@ class FileInput:
         keys = ['z', 'nz', 'value_loc_in_bin', 'tomos_6x2pt']
         values = [self.zet_clust_z, self.zet_clust_nz,
                   self.value_loc_in_clustbin, self.tomos_6x2pt_clust]
+        if self.mag_s is not None:
+            # magnification slope s_i(z) on the same redshifts as n(z)
+            keys.append('s')
+            values.append(self.mag_s)
         self.zet_clust = dict(zip(keys, values))
 
         keys = ['z', 'photoz', 'value_loc_in_bin']
@@ -8670,6 +8804,154 @@ class FileInput:
 
         return True
 
+    # sections whose files are read by FileInput (masks, alms and the catalogue
+    # of the mixed term are read later by other classes)
+    _FILE_SECTIONS = ('tabulated inputs files', 'redshift', 'csmf settings',
+                      'bias', 'magnification')
+
+    def __file_is_needed(self, key):
+        """
+        Whether the file(s) of the configuration keyword 'key' (lower case)
+        are used for the observables, estimators and terms that are set.
+        Keywords not listed here are always considered as needed.
+
+        """
+        clust, ggl, shear = bool(self.clustering), bool(self.ggl), \
+            bool(self.cosmicshear)
+        arb = bool(self.do_arbitrary_obs)
+        # number of pairs: the shot noise of everything but the C_ell
+        # (real-space, COSEBIs, bandpowers, arbitrary summaries)
+        harmonic = ('C_ell', 'k_space')
+        if key == 'npair_gg_file':
+            return clust and (arb or self.est_clust not in harmonic)
+        if key == 'npair_gm_file':
+            return ggl and (arb or self.est_ggl not in harmonic)
+        if key == 'npair_mm_file':
+            return shear and (arb or self.est_shear not in harmonic)
+        if key == 'zclust_file':
+            return clust or ggl
+        if key == 'zlens_file':
+            return shear or ggl
+        if key in ('zcsmf_file', 'zcsmf_mass_file', 'v_max_file',
+                   'f_tomo_file'):
+            return bool(self.cstellar_mf)
+        if key == 'bias_files':
+            return clust or ggl
+        if key == 's_of_z_file':
+            return bool(self.magnification) and (clust or ggl)
+        if key in ('wn_log_file', 'wn_lin_file', 'norm_file', 'root_file',
+                   'tn_plus_file', 'tn_minus_file', 'wn_gg_file', 'qn_file',
+                   'un_file'):
+            # COSEBI auxiliary files: not read at the moment
+            # (see FileInput.read_input)
+            return False
+        if key.startswith('arb_radial_filter_'):
+            if not self.do_arbitrary_radial_weight:
+                return False
+            return clust if key.endswith('_gg_file') else shear
+        if key.startswith('arb_'):
+            if not arb:
+                return False
+            if 'fourier' in key and self.theta_to_obs:
+                return False
+            if '_gg_' in key:
+                return clust
+            if '_gm_' in key:
+                return ggl
+            return shear
+        return True
+
+    @staticmethod
+    def __unknown_keywords(config):
+        """
+        Keywords of the configuration file that the code does not know,
+        e.g. because of a typo. A keyword is known if it appears as a
+        quoted string in one of the code files (configparser lower-cases
+        the keywords, so the comparison is case insensitive).
+
+        Returns
+        -------
+        a list of tuples (section, keyword)
+
+        """
+        code_dir = path.dirname(path.abspath(__file__))
+        source = ''
+        for fname in sorted(os.listdir(code_dir)) + ['../covariance.py']:
+            if fname.endswith('.py'):
+                try:
+                    with open(path.join(code_dir, fname)) as codefile:
+                        source += codefile.read().lower()
+                except OSError:
+                    pass
+        if source == '':
+            return []
+        return [(section, key) for section in config.sections()
+                for key in config[section]
+                if "'" + key + "'" not in source
+                and '"' + key + '"' not in source]
+
+    def __report_unread_files(self, config, read_files):
+        """
+        Prints all files listed in the configuration file that were not
+        read, e.g. because of a typo in the file name or keyword, because
+        the file belongs to an observable or term that is not calculated,
+        or because the code fell back to an approximation (e.g. npair
+        files that could not be found). File names containing '?' are
+        compared with '?' as wildcard. Files are matched by their base
+        name only, the directories are not compared.
+
+        Parameters
+        ----------
+        config : class
+            Parsed configuration file (configparser).
+        read_files : set
+            Base names of all files that were successfully read.
+
+        """
+        unread = []
+        for section in self._FILE_SECTIONS:
+            if section not in config:
+                continue
+            for key, value in config[section].items():
+                if 'file' not in key or 'directory' in key:
+                    continue
+                if not self.__file_is_needed(key):
+                    continue
+                for fname in value.split(','):
+                    fname = path.basename(fname.strip().strip('"\''))
+                    if fname == '':
+                        continue
+                    pattern = fname.replace('[', '[[]').replace('?', '*')
+                    if not any(fnmatch.fnmatchcase(read, pattern)
+                               for read in read_files):
+                        unread.append((section, key, fname))
+
+        unknown = self.__unknown_keywords(config)
+        if len(unread) == 0 and len(unknown) == 0:
+            return False
+        # coloured output (bold red banner, yellow entries) on a terminal
+        use_color = sys.stdout.isatty() and 'NO_COLOR' not in os.environ
+        red, yellow, reset = ('\033[1;31m', '\033[1;33m', '\033[0m') \
+            if use_color else ('', '', '')
+        banner = red + '=' * 78 + reset
+        print('\n' + banner)
+        if len(unknown) > 0:
+            print(red + "InputWarning: The following keywords in the " +
+                  "configuration file are not known to the code and are " +
+                  "IGNORED (typo?):" + reset)
+            for section, key in unknown:
+                print(yellow + "    [" + section + "] " + key + reset)
+        if len(unread) > 0:
+            print(red + "InputWarning: The following files are given in the " +
+                  "configuration file and needed for the chosen settings, " +
+                  "but were NOT read (typo in the file name, file not " +
+                  "found, or replaced by a fallback):" + reset)
+            for section, key, fname in unread:
+                print(yellow + "    [" + section + "] " + key + " : " +
+                      fname + reset)
+        print(banner + '\n')
+        return True
+
     def read_input(self,
                    config_name='config.ini'):
         """
@@ -8751,22 +9033,25 @@ class FileInput:
         self.diagonal_lenses = max(len(self.bias_dict['logmass_bins']) - 1, 1) > 1 and \
             'csmf settings' in config and \
             config['csmf settings'].getboolean('csmf_diagonal_lenses', fallback=False)
-        self.__read_in_z_files(config, config_name)
-        self.__read_in_csmf_files(config)
-        self.__get_npair_tabs(config)
-        self.__get_powspec_tabs(config)
-        self.__get_Cell_tabs(config)  
-        self.__get_effbias_tabs(config)
-        self.__get_mor_tabs(config)
-        self.__get_occprob_tabs(config)
-        self.__get_occnum_tabs(config)
-        self.__get_trispec_tabs(config)
-        #self.__get_cosebi_tabs(config)
-        self.__get_arbitrary_filter_tabs(config)
-        self.__get_arbitrary_radial_weights_tabs(config)
-        self.__read_in_bias_files(config, config_name)
+        with _ReadFileTracker() as tracker:
+            self.__read_in_z_files(config, config_name)
+            self.__read_in_csmf_files(config)
+            self.__get_npair_tabs(config)
+            self.__get_powspec_tabs(config)
+            self.__get_Cell_tabs(config)
+            self.__get_effbias_tabs(config)
+            self.__get_mor_tabs(config)
+            self.__get_occprob_tabs(config)
+            self.__get_occnum_tabs(config)
+            self.__get_trispec_tabs(config)
+            #self.__get_cosebi_tabs(config)
+            self.__get_arbitrary_filter_tabs(config)
+            self.__get_arbitrary_radial_weights_tabs(config)
+            self.__read_in_bias_files(config, config_name)
+            self.__read_in_s_of_z_files(config)
         self.__zip_to_dicts()
         self.__write_params()
+        self.__report_unread_files(config, tracker.read_files)
 
         return {'zclust': self.zet_clust,
                 'zlens': self.zet_lens,
