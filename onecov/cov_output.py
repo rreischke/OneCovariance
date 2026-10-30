@@ -7773,7 +7773,7 @@ class Output:
                 trispec[idx] = \
                     np.zeros((len(krange), len(krange), sampledim, sampledim))
 
-        idxlist = self.__get_idxlist_covk(krange, sampledim)
+        idxlist = self.__get_idxlist(krange, sampledim)
         olist = []
         olist.append("#log10ki\tlog10kj\t\ts1\ts2\t" +
                      "gggg\t\tgggm\t\tggmm\t\tgmgm\t\tmmgm\t\tmmmm")
