@@ -69,7 +69,6 @@ class Output:
         self.__check_filetype()
         self.style = output_dict['style']
         self.plot = output_dict['make_plot']
-        self.trispecfile = output_dict['trispec']
         self.Cellfile = output_dict['Cell']
         self.tex = output_dict['use_tex']
         self.save_as_binary = output_dict['save_as_binary']
@@ -164,23 +163,108 @@ class Output:
     def _reduce_covariance(blocks,
                            full_covariance):
         """
-        Cuts the selected tomographic bin combinations out of the full matrix.
-        blocks lists the consecutive blocks of the matrix as tuples
-        (all combinations, selected combinations, entries per summary and
-        combination). Within a block the summaries follow each other, each of
-        them ordered as (tomographic combination, stellar mass sample, spatial
-        bin).
+        Removes the tomographic bin combinations that are not selected from
+        the full matrix, everything after the blocks (the stellar mass
+        function) is kept. blocks lists the consecutive blocks of the matrix as tuples
+        (probe, all combinations, selected combinations, spatial bins per
+        summary, stellar mass samples per combination, None for cosmic shear).
+        Within a block the summaries follow each other, each of them ordered
+        as (tomographic combination, stellar mass sample, spatial bin).
         """
         indices = []
         offset = 0
-        for all_comb, selected, n_spatial in blocks:
+        for _, all_comb, selected, n_spatial, n_sample in blocks:
             for n_spat in n_spatial:
+                n_spat = n_spat*(n_sample or 1)
                 for select in selected:
                     if select in all_comb:
                         start = offset + all_comb.index(select)*n_spat
                         indices.extend(range(start, start + n_spat))
                 offset += len(all_comb)*n_spat
+        indices.extend(range(offset, len(full_covariance)))
         return full_covariance[np.ix_(indices, indices)]
+
+    @staticmethod
+    def _reduced_block_order(probe, combinations, n_spatial, n_sample, diagonal):
+        """
+        One line of the header of the reduced matrix listing the order of the
+        entries of a block: the selected combinations (in the order of the
+        config file) outer, sample in the middle, spatial bin inner. With
+        diagonal the sample is the first tomographic bin.
+        """
+        ranges = []
+        for t1, t2 in combinations:
+            pair = '_{' + str(t1 + 1) + str(t2 + 1) + '}('
+            if n_sample is None:
+                first, last = probe + pair, probe + pair
+            else:
+                s_first, s_last = (t1 + 1, t1 + 1) if diagonal else (1, n_sample)
+                first = probe + '^{' + str(s_first) + '}' + pair
+                last = probe + '^{' + str(s_last) + '}' + pair
+            ranges.append(first + '1) ... ' + last + str(n_spatial) + ')')
+        return ' '.join(ranges) + '\n'
+
+    def _reduced_header(self,
+                        blocks,
+                        second_mm,
+                        n_entries,
+                        obs_dict):
+        """
+        Header of the matrix with the selected tomographic bin combinations
+        for the blocks of _reduce_covariance. second_mm names what a second
+        cosmic shear block holds.
+        """
+        notation = {
+            'gg': "galaxy clustering: gg^{stellar mass sample bin}_{tomographic bin i tomographic bin j}(spatial bin k)\n",
+            'gm': "galaxy galaxy lensing: gm^{stellar mass sample bin}_{tomographic bin i tomographic bin j}(spatial bin k)\n",
+            'mm': "cosmic shear: mm_{tomographic bin i tomographic bin j}(spatial bin k)\n"}
+        diagonal = bool(getattr(self, 'csmf_diagonal_lenses', False))
+        hdr_str = 'Covariance matrix (' + str(n_entries) + ' x ' + str(n_entries) + \
+            ') with only the tomographic bin combinations selected in the config file, in the order given there.\n'
+        hdr_str += 'Tomographic bins are counted from 1 here, but from 0 in the config file.\n'
+        if self.has_csmf:
+            csmf_description, csmf_notation, csmf_order = self._csmf_header(obs_dict)
+            hdr_str += csmf_description
+        hdr_str += "The structure of the diagonal blocks is, using the following notation\n"
+        probes = []
+        for probe, all_comb, selected, n_spatial, _ in blocks:
+            if probe not in probes and n_spatial and any(c in all_comb for c in selected):
+                probes.append(probe)
+                hdr_str += notation[probe]
+        if self.has_csmf:
+            hdr_str += csmf_notation
+        repeated = []
+        for probe, all_comb, selected, n_spatial, n_sample in blocks:
+            if probe not in probes:
+                continue
+            if probe in repeated:
+                hdr_str += "Followed by " + second_mm + "\n"
+            repeated.append(probe)
+            combinations = [c for c in selected if c in all_comb]
+            for i_summary, n_spat in enumerate(n_spatial):
+                if i_summary > 0:
+                    hdr_str += "Followed by the second " + probe + " summary\n"
+                hdr_str += self._reduced_block_order(probe, combinations, n_spat, n_sample, diagonal)
+        if self.has_csmf:
+            hdr_str += csmf_order
+        return hdr_str
+
+    def _write_reduced_matrix(self,
+                              covariance,
+                              header):
+        """
+        Writes the matrix with the selected tomographic bin combinations next
+        to the full matrix, in the same format.
+        """
+        name, extension = os.path.splitext(self.filename[self.style.index('matrix')])
+        if self.save_as_binary:
+            print("Saving covariance with selected tomographic bins in", name + "_reduced.npz")
+            np.savez(name + "_reduced", covariance = covariance, header = header)
+        else:
+            fn_reduced = name + "_reduced" + extension
+            print("Saving covariance with selected tomographic bins in", fn_reduced)
+            np.savetxt(fn_reduced, covariance, fmt='%.6e', delimiter=' ',
+                    newline='\n', header=header, comments='# ')
 
     def select_tomographic_bins(self,
                                 obs_dict,
@@ -192,9 +276,9 @@ class Output:
                                 sampledim = 1):
         """
         Reduced covariance with the tomographic bin combinations of the
-        config file. second_shear states that the matrix contains a second
-        cosmic shear block (xi_minus or B-modes) after the first one, which
-        is reduced in the same way.
+        config file and its header. second_shear states that the matrix
+        contains a second cosmic shear block (xi_minus or B-modes) after the
+        first one, which is reduced in the same way.
         """
         n_spatial_clustering = len(proj_quant)
         n_spatial_ggl = len(proj_quant)
@@ -208,12 +292,15 @@ class Output:
         (all_gg, sel_gg), (all_gm, sel_gm), (all_mm, sel_mm) = \
             self._selected_tomo_combinations(obs_dict, n_tomo_clust, n_tomo_lens)
         n_sample = self._sample_factor(sampledim)
-        blocks = [(all_gg, sel_gg, [n_spatial_clustering*n_sample]),
-                  (all_gm, sel_gm, [n_spatial_ggl*n_sample]),
-                  (all_mm, sel_mm, [n_spatial_shear])]
+        blocks = [('gg', all_gg, sel_gg, [n_spatial_clustering], n_sample),
+                  ('gm', all_gm, sel_gm, [n_spatial_ggl], n_sample),
+                  ('mm', all_mm, sel_mm, [n_spatial_shear], None)]
         if second_shear:
-            blocks.append((all_mm, sel_mm, [n_spatial_shear]))
-        return self._reduce_covariance(blocks, full_covariance)
+            blocks.append(('mm', all_mm, sel_mm, [n_spatial_shear], None))
+        reduced = self._reduce_covariance(blocks, full_covariance)
+        xi_pm = obs_dict['observables']['est_shear'] == 'xi_pm'
+        second_mm = 'the second mm summary (' + ('xi_minus' if xi_pm else 'B-modes') + ')'
+        return reduced, self._reduced_header(blocks, second_mm, len(reduced), obs_dict)
 
     def select_tomographic_bins_arbitrary(self,
                                           obs_dict,
@@ -223,28 +310,30 @@ class Output:
                                           full_covariance,
                                           sampledim = 1):
         """
-        Reduced covariance for arbitrary summary statistics. The matrix holds
-        gg, gm, the first and the second component of mm (E/B); a probe with
-        two summaries has them one after the other.
+        Reduced covariance for arbitrary summary statistics and its header.
+        The matrix holds gg, gm, the first and the second component of mm
+        (E/B); a probe with two summaries has them one after the other.
         """
         n_sample = self._sample_factor(sampledim)
 
-        def spatial_bins(probe, weights, n_sample=1):
+        def spatial_bins(probe, weights):
             if weights is None:
                 return []
             n_first = summary['arb_number_first_summary_' + probe]
             if summary['number_summary_' + probe] > 1:
-                return [n_first*n_sample, (len(weights) - n_first)*n_sample]
-            return [len(weights)*n_sample]
+                return [n_first, len(weights) - n_first]
+            return [len(weights)]
 
         (all_gg, sel_gg), (all_gm, sel_gm), (all_mm, sel_mm) = \
             self._selected_tomo_combinations(obs_dict, n_tomo_clust, n_tomo_lens)
         n_mm = spatial_bins('mm', summary['WL_mmE'])
-        blocks = [(all_gg, sel_gg, spatial_bins('gg', summary['WL_gg'], n_sample)),
-                  (all_gm, sel_gm, spatial_bins('gm', summary['WL_gm'], n_sample)),
-                  (all_mm, sel_mm, n_mm),
-                  (all_mm, sel_mm, n_mm)]
-        return self._reduce_covariance(blocks, full_covariance)
+        blocks = [('gg', all_gg, sel_gg, spatial_bins('gg', summary['WL_gg']), n_sample),
+                  ('gm', all_gm, sel_gm, spatial_bins('gm', summary['WL_gm']), n_sample),
+                  ('mm', all_mm, sel_mm, n_mm, None),
+                  ('mm', all_mm, sel_mm, n_mm, None)]
+        reduced = self._reduce_covariance(blocks, full_covariance)
+        return reduced, self._reduced_header(
+            blocks, 'the second component summaries of mm', len(reduced), obs_dict)
 
     def __split_off_csmf(self,
                          gauss,
@@ -5954,14 +6043,10 @@ class Output:
                             np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
                                     newline='\n', header=hdr_str, comments='# ')
                 if obs_dict['observables']['combinations_clustering'] is not None or obs_dict['observables']['combinations_ggl'] is not None or obs_dict['observables']['combinations_lensing'] is not None:
-                    cov2d_total_reduced = self.select_tomographic_bins(obs_dict, proj_quant, n_tomo_clust, n_tomo_lens, cov2d_total,
-                                                                    obslength == 10 and xipp and ximm,
-                                                                    sampledim)
-                    fn = self.filename[self.style.index('matrix')]
-                    name, extension = os.path.splitext(fn)
-                    fn_reduced = name + "_reduced" + extension
-                    print("Saving covariance with selected tomographic bins in", fn_reduced)
-                    np.savetxt(fn_reduced, cov2d_total_reduced, fmt='%.6e', delimiter=' ')
+                    cov2d_total_reduced, hdr_reduced = self.select_tomographic_bins(obs_dict, proj_quant, n_tomo_clust, n_tomo_lens, cov2d_total,
+                                                                                    obslength == 10 and xipp and ximm,
+                                                                                    sampledim)
+                    self._write_reduced_matrix(cov2d_total_reduced, hdr_reduced)
 
         else:
             self.csmf_diagonal_lenses = False
@@ -7220,13 +7305,9 @@ class Output:
                         np.savetxt(fn_ssc, cov2d_ssc, fmt='%.6e', delimiter=' ',
                                 newline='\n', header=hdr_str, comments='# ')
             if obs_dict['observables']['combinations_clustering'] is not None or obs_dict['observables']['combinations_ggl'] is not None or obs_dict['observables']['combinations_lensing'] is not None:
-                cov2d_total_reduced = self.select_tomographic_bins_arbitrary(obs_dict, summary, n_tomo_clust, n_tomo_lens, cov2d_total,
-                                                                              sampledim)
-                fn = self.filename[self.style.index('matrix')]
-                name, extension = os.path.splitext(fn)
-                fn_reduced = name + "_reduced" + extension
-                print("Saving covariance with selected tomographic bins in", fn_reduced)
-                np.savetxt(fn_reduced, cov2d_total_reduced, fmt='%.6e', delimiter=' ')
+                cov2d_total_reduced, hdr_reduced = self.select_tomographic_bins_arbitrary(obs_dict, summary, n_tomo_clust, n_tomo_lens, cov2d_total,
+                                                                                          sampledim)
+                self._write_reduced_matrix(cov2d_total_reduced, hdr_reduced)
                 
         
     def __get_obslist(self, 
@@ -7698,40 +7779,5 @@ class Output:
                 print("Writing '" + fname + "'.")
                 for ostr in olist_mmB:
                     file.write("%s\n" % ostr)
-
-        return True
-
-    def write_trispectra(self,
-                         zet,
-                         krange, 
-                         sampledim,
-                         trispec,
-                         tri_bool):
-
-        for idx,tbool in enumerate(tri_bool):
-            if not tbool:
-                trispec[idx] = \
-                    np.zeros((len(krange), len(krange), sampledim, sampledim))
-
-        idxlist = self.__get_idxlist_covk(krange, sampledim)
-        olist = []
-        olist.append("#log10ki\tlog10kj\t\ts1\ts2\t" +
-                     "gggg\t\tgggm\t\tggmm\t\tgmgm\t\tmmgm\t\tmmmm")
-        for kdxi, ki, kdxj, kj, m, n in idxlist:
-            ostr = "%.4f\t\t%.4f\t\t%i\t%i\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e\t%.4e" \
-                 % (ki, kj, m, n,
-                    trispec[0][kdxi, kdxj, m, n],
-                    trispec[1][kdxi, kdxj, m, n],
-                    trispec[2][kdxi, kdxj, m, n], 
-                    trispec[3][kdxi, kdxj, m, n],
-                    trispec[4][kdxi, kdxj, m, n],
-                    trispec[5][kdxi, kdxj, m, n])
-            olist.append(ostr)
-            
-        fname = self.__add_string_to_filename(zet, self.trispecfile)
-        with open(fname, 'w') as file:
-            print("Writing '" + fname + "'.")
-            for ostr in olist:
-                file.write("%s\n" % ostr)
 
         return True

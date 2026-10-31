@@ -1115,6 +1115,10 @@ class Setup:
                 continue
             spline = interp1d(theta_mid, column, fill_value="extrapolate")
             result[(~outside,) + index] = spline(theta_ul_bins[~outside])
+            if not np.all(result[(~outside,) + index] > 0):
+                raise Exception("SetupError: The pair counts for " + name + " (bin and sample indices " +
+                                str(index) + ") have zero or NaN entries within the angular range of " +
+                                "the estimator, so the shot noise is undefined. Please check the files.")
         return result
 
     def get_dnpair(self,
@@ -1138,7 +1142,7 @@ class Setup:
                 * survey_params_dict['n_eff_clust'][None, None, :, :]
             if npair_tab['npair_gg'] is not None:
                 dnpair_gg = self.__dnpair_from_table(npair_tab['npair_gg'], npair_tab['theta_gg'], theta_ul_bins,
-                                                     analytic, 'shot noise')
+                                                     analytic, 'clustering')
             else:
                 print("Approximating the clustering real space shot noise " +
                       "contribution with the effective number density.")

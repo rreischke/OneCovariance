@@ -574,7 +574,7 @@ class CovELLSpace(PolySpectra):
             weights = np.concatenate((weights, Akima1DInterpolator(ell, weights, axis=1)(ell_mid)), axis=1)
             ell = np.concatenate((ell, ell_mid))
             order = np.argsort(ell)
-            ell, weights = ell[order], weights[:, order]
+            ell, weights = ell[order], np.take(weights, order, axis=1)
         print("ProjectionWarning: the weight functions are not resolved well enough for the "
               "quadrature projection (estimated error " + str(error) + "), using cquad instead.")
 
@@ -2883,10 +2883,9 @@ class CovELLSpace(PolySpectra):
             e.g., ell_min/max and the number of ell-modes to be
             calculated.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.
@@ -3563,10 +3562,9 @@ class CovELLSpace(PolySpectra):
                 e.g., ell_min/max and the number of ell-modes to be
                 calculated.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.
@@ -7267,10 +7265,9 @@ class CovELLSpace(PolySpectra):
                 e.g., ell_min/max and the number of ell-modes to be
                 calculated.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.
@@ -7367,7 +7364,7 @@ class CovELLSpace(PolySpectra):
             self.update_mass_func(
                 zet, bias_dict, hod_dict, prec)
             aux_tri = self.trispectra(
-                output_dict, bias_dict, hod_dict, prec['hm'], tri_tab)
+                bias_dict, hod_dict, prec['hm'], tri_tab)
             gggg_z.append(aux_tri[0])
             gggm_z.append(aux_tri[1])
             ggmm_z.append(aux_tri[2])
@@ -7383,7 +7380,7 @@ class CovELLSpace(PolySpectra):
         self.update_mass_func(
             zet, bias_dict, hod_dict, prec)
         aux_tri = self.trispectra(
-            output_dict, bias_dict, hod_dict, prec['hm'], tri_tab)
+            bias_dict, hod_dict, prec['hm'], tri_tab)
         gggg_z.append(aux_tri[0])
         gggm_z.append(aux_tri[1])
         ggmm_z.append(aux_tri[2])
@@ -8704,10 +8701,9 @@ class CovELLSpace(PolySpectra):
                 e.g., ell_min/max and the number of ell-modes to be
                 calculated.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.
@@ -8785,7 +8781,7 @@ class CovELLSpace(PolySpectra):
             self.update_mass_func(
                 zet, bias_dict, hod_dict, prec)
             trispec_at_z.append(self.trispectra(
-                output_dict, bias_dict, hod_dict, prec['hm'], tri_tab))
+                bias_dict, hod_dict, prec['hm'], tri_tab))
 
         gggg_z = np.zeros(len(chi_list))
         gggm_z = np.zeros(len(chi_list))

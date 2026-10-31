@@ -869,10 +869,9 @@ class CovCOSEBI(CovELLSpace):
                 Specifies the exact details of the projection to bandpowers,
                 e.g. the ell modes and their spacing.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be 
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from 
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.
@@ -1695,10 +1694,9 @@ class CovCOSEBI(CovELLSpace):
             dispersion for galaxy shapes. To be passed from the
             read_input method of the Input class.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.
@@ -1776,10 +1774,9 @@ class CovCOSEBI(CovELLSpace):
             dispersion for galaxy shapes. To be passed from the
             read_input method of the Input class.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.
@@ -1856,10 +1853,9 @@ class CovCOSEBI(CovELLSpace):
             dispersion for galaxy shapes. To be passed from the
             read_input method of the Input class.
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be passed
             from the read_input method of the Input class.

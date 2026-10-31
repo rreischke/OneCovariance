@@ -12,10 +12,8 @@ from scipy.interpolate import (
 
 try:
     from onecov.cov_halo_model import HaloModel
-    from onecov.cov_output import Output
 except:
     from cov_halo_model import HaloModel
-    from cov_output import Output
 
 
 
@@ -1108,7 +1106,6 @@ class PolySpectra(HaloModel):
         return log_tri
 
     def trispectra(self,
-                   output_dict,
                    bias_dict,
                    hod_dict,
                    hm_prec,
@@ -1122,11 +1119,6 @@ class PolySpectra(HaloModel):
 
         Parameters
         ----------
-        output_dict : dictionary
-            Specifies whether a file for the trispectra should be 
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from 
-            the read_input method of the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -1182,21 +1174,6 @@ class PolySpectra(HaloModel):
         self.trispectra234h = trispectra234h
         self.trispec1h_gggg = trispec1h_gggg
         self.trispec1h_mmmm = trispec1h_mmmm
-        if output_dict['trispec']:
-            out = Output(output_dict)
-            trispecs = [trispec1h_gggg + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2*self.effective_bias[None,None,None, :]**2,
-                        trispec1h_gggm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2*self.effective_bias[None,None,None, :],
-                        trispec1h_ggmm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]**2,
-                        trispec1h_gmgm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,:,None]*self.effective_bias[None,None,None, :],
-                        trispec1h_mmgm + trispectra234h[:, :, None, None]*self.effective_bias[None,None,None,:],
-                        trispec1h_mmmm + trispectra234h[:, :, None, None]]
-            tri_bool = [tri_gggg, tri_gggm, tri_ggmm,
-                        tri_gmgm, tri_mmgm, tri_mmmm]
-            out.write_trispectra(self.mass_func.z,
-                                 self.logks_tri,
-                                 self.sample_dim,
-                                 trispecs,
-                                 tri_bool)
 
         k_dim = len(self.mass_func.k)
         b_i = self.effective_bias[None, None, :, None]
@@ -2090,73 +2067,3 @@ class PolySpectra(HaloModel):
             trispec_4h = np.nan_to_num(trispec_4h,
                                        nan=np.nanmean(trispec_4h))
         return trispec_2h + trispec_3h + trispec_4h
-
-    def get_trispec_files(self,
-                          output_dict,
-                          bias_dict,
-                          hod_dict,
-                          prec,
-                          zmax,
-                          deltaz=0.5,
-                          zmin=0):
-        """
-        Calculates and outputs the trispectra for all desired 
-        combinations of matter ('m') and tracer ('g') for all redshifts 
-        between zmin and zmax with deltaz steps in the k-range specified 
-        in trispec_prec.
-
-        Parameters
-        ----------
-        output_dict : dictionary
-            Specifies whether a file for the trispectra should be 
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from 
-            the read_input method of the Input class.
-        bias_dict : dictionary
-            Specifies all the information about the bias model. To be 
-            passed from the read_input method of the Input class.
-        hod_dict : dictionary
-            Specifies all the information about the halo occupation 
-            distribution used. This defines the shot noise level of the 
-            covariance and includes the mass bin definition of the 
-            different galaxy populations. To be passed from the 
-            read_input method of the Input class.
-        hm_prec : dictionary
-            Contains precision information about the HaloModel (also, 
-            see hmf documentation by Steven Murray), this includes mass 
-            range and spacing for the mass integrations in the halo 
-            model. To be passed from the read_input method of the Input 
-            class.
-        zmax : float
-            Maximum redshift for which the trispectrum should be 
-            calculated.
-        deltaz : float
-            default : 0.5
-            Step size for which trispectra are calculated. zmin is 
-            increased until the redshift exceeds zmax.
-        zmin : float
-            default : 0
-            Minimum redshift for which the trispectrum should be 
-            calculated.
-
-        """
-        if output_dict['trispec'] == False:
-            print("InputWarning: This function will output trispectra files " +
-                  "as './trispectra_>z<.ascii', although the config file " +
-                  "indicates [output settings]: 'save_trispectra = False'.")
-            output_dict['trispec'] = './trispectra.ascii'
-
-        zets = np.arange(zmin, zmax+deltaz, deltaz)
-        for zet in zets:
-            print('\rz=', round(zet, 3), '   ',
-                  np.round(100*np.argwhere(zets == zet)[0][0]/len(zets), 1),
-                  '%',
-                  end=' ')
-            self.update_mass_func(zet, bias_dict, hod_dict, prec)
-            self.trispectra(output_dict, bias_dict, hod_dict, prec['hm'], None)
-
-        print('\rtrispectra output files for z=[', round(zets[0], 3), ',',
-              round(zets[-1], 3), ']   100%')
-        output_dict['trispec'] = False
-
-        return True

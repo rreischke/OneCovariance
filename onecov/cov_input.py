@@ -83,7 +83,6 @@ class Input:
         self.make_plot = None
         self.save_configs = None
         self.save_Cells = None
-        self.save_trispecs = None
         self.output_suffix = None
         self.save_alms = None
         self.use_tex = None
@@ -536,7 +535,7 @@ class Input:
                     self.combinations_ggl.append(aux)
             if 'combinations_lensing' in config['observables']:
                 aux_combinations = config['observables']['combinations_lensing'].split(',')
-                self.combinations_clustering = []
+                self.combinations_lensing = []
                 for i in range(len(aux_combinations)):
                     index = aux_combinations[i].index('-')
                     aux = [int(aux_combinations[i][:index]),int(aux_combinations[i][index+1:])]
@@ -2062,20 +2061,6 @@ class Input:
 
 
 
-            self.save_trispecs = False
-            if 'save_trispectra' in config['output settings']:
-                if (config['output settings']
-                        ['save_trispectra'].casefold() == 'true' or
-                    config['output settings']
-                        ['save_trispectra'].casefold() == 'false'):
-                    self.save_trispecs = \
-                        config['output settings'].getboolean('save_trispectra')
-                else:
-                    self.save_trispecs = \
-                        config['output settings']['save_trispectra']
-            if type(self.save_trispecs) is bool and self.save_trispecs:
-                self.save_trispecs = 'trispectra.ascii'
-
             self.save_alms = False
             if 'save_alms' in config['output settings']:
                 if (config['output settings']
@@ -2107,7 +2092,6 @@ class Input:
             print("The current configuration will be saved in the of file " +
                   "'save_configs.ini'.")
             self.save_Cells = False
-            self.save_trispecs = False
             self.save_alms = False
             self.use_tex = False
             self.list_style_spatial_first = False
@@ -2348,6 +2332,11 @@ class Input:
                     np.array(config['bias']['log10mass_bins_lower'].split(',')).astype(float)
                 self.logmass_bins_upper = \
                     np.array(config['bias']['log10mass_bins_upper'].split(',')).astype(float)
+                if len(self.logmass_bins_lower) != len(self.logmass_bins_upper):
+                    raise Exception("ConfigError: [bias]: 'log10mass_bins_lower' has " +
+                                    str(len(self.logmass_bins_lower)) + " entries but " +
+                                    "'log10mass_bins_upper' has " + str(len(self.logmass_bins_upper)) +
+                                    ". There must be one lower and one upper limit per sample.")
                 self.sampledim = len(self.logmass_bins_upper)
 
             else:
@@ -3761,10 +3750,10 @@ class Input:
         if self.output_suffix is not None:
             aux_suffix = self.output_suffix
         keys = ['directory', 'file', 'style', 'corrmatrix_plot',
-                'save_configs', 'save_Cells', 'save_trispectra', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary','output_suffix']
+                'save_configs', 'save_Cells', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary','output_suffix']
         values = [self.output_dir, self.output_file, self.output_style,
                   self.make_plot, self.save_configs, self.save_Cells,
-                  self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary, aux_suffix]
+                  self.save_alms, self.use_tex, self.list_style_spatial_first, self.save_as_binary, aux_suffix]
         self.output_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
         self.output_abr['file'] = \
@@ -3778,9 +3767,7 @@ class Input:
                                 for file in self.output_file]
         if self.save_Cells and self.output_dir is not None:
             self.save_Cells = path.join(self.output_dir, self.save_Cells)
-        if self.save_trispecs and self.output_dir is not None:
-            self.save_trispecs = path.join(self.output_dir, self.save_trispecs)
-        keys = ['file', 'style', 'make_plot', 'Cell', 'trispec', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary', 'adjacent_clustering_bins']
+        keys = ['file', 'style', 'make_plot', 'Cell', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary', 'adjacent_clustering_bins']
 
         if self.output_suffix is not None:
             if self.output_file is not None:
@@ -3796,7 +3783,7 @@ class Input:
                     everything_else,file_extension = os.path.splitext(self.make_plot)
                     self.make_plot = everything_else + self.output_suffix + file_extension        
         values = [self.output_file, self.output_style, self.make_plot,
-                  self.save_Cells, self.save_trispecs, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary, self.adjacent_clustering_bins]
+                  self.save_Cells, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary, self.adjacent_clustering_bins]
         self.output = dict(zip(keys, values))
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
@@ -4251,8 +4238,7 @@ class Input:
         output : dictionary
             Specifies the full path and name, and the style(s) for the 
             output file(s).
-            Possible keys: 'file', 'style', 'make_plot', 'Cell', 
-                           'trispec'
+            Possible keys: 'file', 'style', 'make_plot', 'Cell'
         observables : dictionary
             with the following keys (also a dictionary each)
             'observables' : dictionary
@@ -4829,6 +4815,8 @@ class FileInput:
                     np.array(config['bias']['log10mass_bins'].split(','))
                 logmass_bins = logmass_bins.astype(float)
                 self.sampledim = len(logmass_bins) - 1
+            elif 'log10mass_bins_upper' in config['bias'] and 'log10mass_bins_lower' in config['bias']:
+                self.sampledim = len(config['bias']['log10mass_bins_upper'].split(','))
             else:
                 self.sampledim = 1
         else:
@@ -5417,8 +5405,8 @@ class FileInput:
                                     "Please specify it in the config vile in the [csmf settings] section via V_max_file = ...." )
                 if 'f_tomo_file' in config['csmf settings']:
                     self.f_tomo_file = config['csmf settings']['f_tomo_file']
-                    print("ConfigWarning: [csmf settings]: 'f_tomo_file' is no longer used. " +
-                          "The galaxies entering each stellar mass bin and tomographic bin of the csmf " +
+                    print("ConfigWarning: [csmf settings]: 'f_tomo_file' is no longer used, " +
+                          "the file is not read. The galaxies entering each stellar mass bin and tomographic bin of the csmf " +
                           "are described by the V_max volumes or by 'zcsmf_mass_file' in the " +
                           "[redshift] section.")
                 if 'V_max_zmin' in config['csmf settings']:
@@ -5550,6 +5538,9 @@ class FileInput:
             theta, values = self.__read_in_npair_files(nfile, column_name)
             if type(values) == bool:
                 return None, None
+            if np.any(np.diff(theta) <= 0):
+                raise Exception("ConfigError: The angular bins in file " +
+                                path.join(self.npair_dir, nfile) + " must be ascending.")
             if theta_ref is not None and (len(theta) != len(theta_ref) or
                                           np.any(np.abs(theta - theta_ref) > 1e-4)):
                 raise Exception("ConfigError: The angular bins in file " +
@@ -5628,7 +5619,11 @@ class FileInput:
         else:
             pass
 
-        n_sample = max(len(self.bias_dict['logmass_bins']) - 1, 1)
+        n_sample = max(self.sampledim, 1)
+        if self.diagonal_lenses and (self.clustering or self.ggl) and self.n_tomo_clust != n_sample:
+            raise Exception("ConfigError: [csmf settings]: 'csmf_diagonal_lenses = True' needs one " +
+                            "tomographic clustering bin per galaxy sample, but there are " +
+                            str(self.n_tomo_clust) + " bins and " + str(n_sample) + " samples.")
         # with csmf_diagonal_lenses only sample i in clustering bin i is
         # measured, so only these pair counts are needed
         diagonal_lenses = self.diagonal_lenses
@@ -8832,9 +8827,11 @@ class FileInput:
             return clust or ggl
         if key == 'zlens_file':
             return shear or ggl
-        if key in ('zcsmf_file', 'zcsmf_mass_file', 'v_max_file',
-                   'f_tomo_file'):
+        if key in ('zcsmf_file', 'zcsmf_mass_file', 'v_max_file'):
             return bool(self.cstellar_mf)
+        if key == 'f_tomo_file':
+            # no longer used, see the ConfigWarning in the csmf settings
+            return False
         if key == 'bias_files':
             return clust or ggl
         if key == 's_of_z_file':
@@ -9030,7 +9027,7 @@ class FileInput:
         self.__read_config_for_consistency_checks(config, config_name)
         # with csmf_diagonal_lenses only galaxy sample i in clustering bin i
         # is measured, which reduces the tabulated inputs
-        self.diagonal_lenses = max(len(self.bias_dict['logmass_bins']) - 1, 1) > 1 and \
+        self.diagonal_lenses = max(self.sampledim, 1) > 1 and \
             'csmf settings' in config and \
             config['csmf settings'].getboolean('csmf_diagonal_lenses', fallback=False)
         with _ReadFileTracker() as tracker:

@@ -171,10 +171,9 @@ class CovKSpace(PolySpectra):
         Parameters
         ----------
         output_dict : dictionary
-            Specifies whether a file for the trispectra should be 
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from 
-            the read_input method of the Input class.
+            Specifies the full path and name, and the style(s) for the
+            output file(s). To be passed from the read_input method of
+            the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -240,8 +239,7 @@ class CovKSpace(PolySpectra):
                                        tomo_clust_idx, 
                                        tomo_lens_idx)
 
-        nongauss = self.covK_non_gaussian(output_dict,
-                                          bias_dict, 
+        nongauss = self.covK_non_gaussian(bias_dict, 
                                           hod_dict,
                                           prec['hm'], 
                                           read_in_tables['tri'])
@@ -477,7 +475,6 @@ class CovKSpace(PolySpectra):
                gaussmmmm_sva, gaussmmmm_mix, gaussmmmm_sn
     
     def covK_non_gaussian(self, 
-                          output_dict,
                           bias_dict, 
                           hod_dict,
                           hm_prec,
@@ -488,11 +485,6 @@ class CovKSpace(PolySpectra):
 
         Parameters
         ----------
-        output_dict : dictionary
-            Specifies whether a file for the trispectra should be 
-            written to save computational time in the future. Gives the
-            full path and name for the output file. To be passed from 
-            the read_input method of the Input class.
         bias_dict : dictionary
             Specifies all the information about the bias model. To be 
             passed from the read_input method of the Input class.
@@ -527,8 +519,7 @@ class CovKSpace(PolySpectra):
 
         print("Calculating nongaussian covariance in k_space.")
 
-        return self.trispectra(output_dict,
-                               bias_dict, 
+        return self.trispectra(bias_dict, 
                                hod_dict,
                                hm_prec, 
                                tri_tab)

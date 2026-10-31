@@ -44,7 +44,6 @@ between the observables are calculated.
    corrmatrix_plot = correlation_coefficient.pdf
    save_configs = save_configs.ini
    save_Cells = True
-   save_trispectra = False
    save_alms = True
    use_tex = False
 
@@ -695,10 +694,26 @@ volume. In this case, the number of tomographic clustering bins must match the n
 With several galaxy samples, ``n_eff_clust`` in the ``survey specs`` should give one number density per tomographic bin and sample (all samples of the first tomographic bin, then those of the second, ...),
 or one value per tomographic bin with ``csmf_diagonal_lenses = True`` (the number density of sample :math:`i` in tomographic bin :math:`i`). Otherwise, the number density of each sample is estimated
 from the HoD, assuming that each sample is complete wherever its redshift distribution is non-zero, which is an upper bound on the number density for photometric bins.
-Measured pair counts for the real-space shot noise (``npair_gg_file`` and ``npair_gm_file`` in the ``tabulated inputs files``) are given per tomographic bin combination and sample
-(e.g. ``npair_gg_file = npair_gg_?_?_?.dat`` for bin :math:`i`, bin :math:`j` and sample :math:`s`). With ``csmf_diagonal_lenses = True`` only the files of sample :math:`i` in bin :math:`i`
-are needed (e.g. ``npair_gg_file = npair_gg_?.dat`` and ``npair_gm_file = npair_gm_?_?.dat`` for lens bin :math:`i` and source bin :math:`j`); ``csmf_diagonal_lenses`` can also be used
-without the stellar mass function.
+Measured pair counts for the shot noise (``npair_gg_file`` and ``npair_gm_file`` in the ``tabulated inputs files``) are given per tomographic bin combination and sample, for
+``log10mass_bins`` and ``log10mass_bins_upper``/``log10mass_bins_lower`` alike. Each ``?`` in the file name is replaced by a number:
+
+=====================================  =======================================  =====================================
+Setup                                  ``npair_gg_file``                        ``npair_gm_file``
+=====================================  =======================================  =====================================
+One sample                             ``gg_?_?.dat`` (bins i, j)               ``gm_?_?.dat`` (lens, source)
+Several samples                        ``gg_?_?_?.dat`` (bins i, j, sample)     ``gm_?_?_?.dat`` (lens, source, sample)
+``csmf_diagonal_lenses = True``        ``gg_?.dat``, ``gg_?_?.dat`` or          ``gm_?_?.dat`` (lens, source) or
+                                       ``gg_?_?_?.dat`` (all replaced by i)     ``gm_?_?_?.dat`` (lens, source, sample)
+=====================================  =======================================  =====================================
+
+For clustering only the combinations :math:`i \leq j` are read. Alternatively list all files, separated by commas, in this order. A file name with the wrong number of ``?`` or a list
+with too few files is an error. With ``csmf_diagonal_lenses = True`` the number of tomographic clustering bins must equal the number of samples; this option can also be used without
+the stellar mass function.
+
+The files hold the angular bins, which must be ascending and identical in all files of a kind, in the first column and the pair counts in the last column (or in the one named by
+``npair_gg_column_name`` or ``npair_gm_column_name``). If one file can not be read, all files of this kind are ignored and the analytic number of pairs is used, with only an ``InputWarning``
+in the log, so check it. The analytic number is also used where the files do not cover the angular range. Angular bins without pairs are interpolated from their neighbours in real space, whereas
+with COSEBIs, bandpowers and arbitrary summaries zero pairs within the used range are an error.
 
 Running this config file will calculate the previously calculated :math:`3\times 2` covariance, the SMF covariance and their cross-correlations in the following order:
 
