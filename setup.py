@@ -8,6 +8,32 @@ from setuptools import setup
 
 __version__ = "0.0.1"
 
+
+def _fix_missing_compilers():
+    """Fall back to a compiler on PATH if the configured one (e.g. a conda
+    cross-compiler such as x86_64-conda-linux-gnu-c++) is not installed."""
+    import shutil
+
+    def first_word(cmd):
+        return cmd.split()[0] if cmd and cmd.split() else ""
+
+    for var, candidates in (("CC", ("gcc", "cc", "clang")),
+                            ("CXX", ("g++", "c++", "clang++"))):
+        configured = os.environ.get(var) or distutils.sysconfig.get_config_var(var) or ""
+        exe = first_word(configured)
+        if exe and shutil.which(exe):
+            continue
+        for cand in candidates:
+            path = shutil.which(cand)
+            if path:
+                print(f"WARNING: compiler '{exe or var}' not found, using '{path}' for {var}. "
+                      "Install gxx_linux-64 from conda-forge to use the conda toolchain.")
+                os.environ[var] = path
+                break
+
+
+_fix_missing_compilers()
+
 if (sys.platform[:6] == "darwin"
         and ("clang" in distutils.sysconfig.get_config_var("CC")
                 or "clang" in os.environ.get("CC", ""))):
@@ -52,7 +78,7 @@ setup(
     install_requires=[
         'future',
         'pyyaml',
-        'numpy>=1.22',
+        'numpy<1.24',
         'astropy',
         'healpy',
         'pip>=20.0',
