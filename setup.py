@@ -50,8 +50,6 @@ compiler_args_levin =  compiler_args + ["-fopenmp", "-O3"]
 linker_args_levin   =  linker_args   + ["-fopenmp", "-O3"] + omp_link_args
 
 compiler = "g++"
-compiler_args_discretecov =  compiler_args + ["-fopenmp", "-O3"]
-linker_args_discretecov   =  linker_args   + ["-fopenmp", "-O3"]
 ext_modules = [
     Pybind11Extension(
         "levin",

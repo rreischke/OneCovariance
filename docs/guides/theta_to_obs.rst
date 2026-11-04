@@ -30,9 +30,8 @@ correlation functions in the fine bins,
 
 with the integral over the fine bin :math:`i`. Every term of the real-space covariance
 enters this way, independently of how it was obtained: e.g. the shot noise from the
-measured pair counts (``npair_*_file``) or the mixed term from the triplet counts of a
-catalogue (``mix_term_*``). All other settings of ``[covTHETAspace settings]`` are used as
-given there.
+measured pair counts (``npair_*_file``). All other settings of ``[covTHETAspace settings]``
+are used as given there.
 
 Filters
 -------

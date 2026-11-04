@@ -158,22 +158,6 @@ class Input:
         self.theta_acc = None
         self.bin_averaging = None
         self.integration_intervals = None
-        self.mix_term_file_path_catalog = None
-        self.mix_term_col_name_weight = None
-        self.mix_term_col_name_pos1 = None
-        self.mix_term_col_name_pos2 = None
-        self.mix_term_col_name_zbin = None
-        self.mix_term_isspherical = None
-        self.mix_term_target_patchsize = None
-        self.mix_term_do_overlap = None
-        self.mix_term_do_mix_for = None
-        self.mix_term_nbins_phi = None
-        self.mix_term_nmax = None
-        self.mix_term_do_ec = None
-        self.mix_term_subsample = None
-        self.mix_term_nsubr = None
-        self.mix_term_file_path_save_triplets = None
-        self.mix_term_file_path_load_triplets = None
 
 
         # for COSEBIs
@@ -1073,81 +1057,6 @@ class Input:
             if 'integration_intervals' in config['covTHETAspace settings']:
                 self.integration_intervals = int(config['covTHETAspace settings']['integration_intervals'])
                 
-            if 'mix_term_do_mix_for' in config['covTHETAspace settings']:
-                self.mix_term_do_mix_for = config['covTHETAspace settings']['mix_term_do_mix_for'].split(',')
-                if self.mix_term_do_mix_for[0] == '':
-                    self.mix_term_do_mix_for = None
-            if self.mix_term_do_mix_for:
-                if 'mix_term_file_path_load_triplets' in config['covTHETAspace settings']:
-                    self.mix_term_file_path_load_triplets = config['covTHETAspace settings']['mix_term_file_path_load_triplets']
-                    if self.mix_term_file_path_load_triplets == '':
-                        self.mix_term_file_path_load_triplets = None
-                else:
-                    self.mix_term_file_path_load_triplets = None
-            if self.mix_term_do_mix_for:
-                if 'mix_term_file_path_catalog' in config['covTHETAspace settings']:
-                    self.mix_term_file_path_catalog = config['covTHETAspace settings']['mix_term_file_path_catalog']
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the path to the catalogue. Please update [mix_term_file_path_catalog] in your config")
-                if 'mix_term_col_name_weight' in config['covTHETAspace settings']:
-                    self.mix_term_col_name_weight = config['covTHETAspace settings']['mix_term_col_name_weight']
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not the column name of the weight. Please update [mix_term_col_name_weight] in your config")
-                if 'mix_term_col_name_pos1' in config['covTHETAspace settings']:
-                    self.mix_term_col_name_pos1 = config['covTHETAspace settings']['mix_term_col_name_pos1']
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the column name of the first position. Please update [mix_term_col_name_pos1] in your config")
-                if 'mix_term_col_name_pos2' in config['covTHETAspace settings']:
-                    self.mix_term_col_name_pos2 = config['covTHETAspace settings']['mix_term_col_name_pos2']
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the column name of the second position. Please update [mix_term_col_name_pos2] in your config")
-                if 'mix_term_col_name_zbin' in config['covTHETAspace settings']:
-                    self.mix_term_col_name_zbin = config['covTHETAspace settings']['mix_term_col_name_zbin']
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the column name of the zbin. Please update [mix_term_col_name_zbin] in your config")
-                if 'mix_term_isspherical' in config['covTHETAspace settings']:
-                    self.mix_term_isspherical = config['covTHETAspace settings'].getboolean('mix_term_isspherical')
-                else:
-                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify mix_term_isspherical. mix_term_isspherical is set to false")
-                    self.mix_term_isspherical = False
-                if 'mix_term_target_patchsize' in config['covTHETAspace settings']:
-                    self.mix_term_target_patchsize = float(config['covTHETAspace settings']['mix_term_target_patchsize'])
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify patchsize. Please update [mix_term_target_patchsize] in your config")
-                if 'mix_term_do_overlap' in config['covTHETAspace settings']:
-                    self.mix_term_do_overlap = config['covTHETAspace settings'].getboolean('mix_term_do_overlap')
-                else:
-                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specif whether the overlap should be considered. mix_term_do_overlap is set to false")
-                    self.mix_term_do_overlap = False
-                if 'mix_term_nbins_phi' in config['covTHETAspace settings']:
-                    self.mix_term_nbins_phi = int(config['covTHETAspace settings']['mix_term_nbins_phi'])
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the number of phi bins. Please update [mix_term_nbins_phi] in your config")
-                if 'mix_term_nmax' in config['covTHETAspace settings']:
-                    self.mix_term_nmax = int(config['covTHETAspace settings']['mix_term_nmax'])
-                else:
-                    raise Exception("ConfigError: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify the N_max for the mixterm. Please update [mix_term_nmax] in your config")
-                if 'mix_term_do_ec' in config['covTHETAspace settings']:
-                    self.mix_term_do_ec = config['covTHETAspace settings'].getboolean('mix_term_do_ec')
-                else:
-                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify whether the edge correction should be done. mix_term_do_ec is set to false")
-                    self.mix_term_do_ec = False
-                    
-                if 'mix_term_subsample' in config['covTHETAspace settings']:
-                    self.mix_term_subsample = int(config['covTHETAspace settings']['mix_term_subsample'])
-                else:
-                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify how much the original catalog should be downsampled. mix_term_subsample is set to 10")
-                    self.mix_term_subsample = 10
-                if 'mix_term_nsubr' in config['covTHETAspace settings']:
-                    self.mix_term_nsubr = int(config['covTHETAspace settings']['mix_term_nsubr'])
-                else:
-                    print("ConfigWarning: You want to calculate the mixterm for", self.mix_term_do_mix_for, "but did not specify how many subintervals are required for the triplet calculation. mix_term_nsubr is set to 5")
-                    self.mix_term_nsubr = 5
-                if 'mix_term_file_path_save_triplets' in config['covTHETAspace settings']:
-                    self.mix_term_file_path_save_triplets = config['covTHETAspace settings']['mix_term_file_path_save_triplets']
-                else:
-                    print("ConfigWarning: You want to save the triplets for the mixterm for", self.mix_term_do_mix_for, "but did not specify a path to save. Will not be saved")
-                    self.mix_term_file_path_save_triplets = None
         elif self.cosmicshear and self.est_shear == 'xi_pm':
             self.xi_pp = True
             self.xi_mm = True
@@ -1351,13 +1260,6 @@ class Input:
         else:
             self.xi_pm = False
         
-        if self.mix_term_do_mix_for and not self.mix_term_file_path_load_triplets:
-            if not self.mix_term_file_path_catalog:
-                raise Exception("ConfigError: The mix term is supposed to be calculated " + 
-                                "for " + self.mix_term_do_mix_for + ", however, the path to the " +
-                                "catalog is not specified. Please specify " +
-                                "'mix_term_file_path_catalog = path' in " + config_name)
-
         return True
 
     def __read_in_covCOSEBI_settings(self,
@@ -3824,25 +3726,14 @@ class Input:
         keys = ['theta_min', 'theta_max', 'theta_bins', 'theta_type',
                 'theta_min_clustering', 'theta_max_clustering', 'theta_bins_clustering', 'theta_type_clustering',
                 'theta_min_lensing', 'theta_max_lensing', 'theta_bins_lensing', 'theta_type_lensing', 'theta_list', 'xi_pp',
-                'xi_pm', 'xi_mm', 'theta_acc', 'bin_averaging', 'integration_intervals', 'mix_term_file_path_catalog',
-                'mix_term_col_name_weight',
-                'mix_term_col_name_pos1', 'mix_term_col_name_pos2', 'mix_term_col_name_zbin',
-                'mix_term_isspherical', 'mix_term_target_patchsize', 'mix_term_do_overlap',
-                'mix_term_do_mix_for', 'mix_term_nbins_phi', 'mix_term_nmax',
-                'mix_term_do_ec', 'mix_term_subsample', 'mix_term_nsubr', 'mix_term_file_path_save_triplets',
-                'mix_term_file_path_load_triplets', 'theta_to_obs_bins', 'theta_to_obs_bins_clustering',
+                'xi_pm', 'xi_mm', 'theta_acc', 'bin_averaging', 'integration_intervals', 'theta_to_obs_bins', 'theta_to_obs_bins_clustering',
                 'theta_to_obs_bins_lensing', 'theta_to_obs_type', 'theta_to_obs_type_clustering',
                 'theta_to_obs_type_lensing']
         values = [self.theta_min, self.theta_max, self.theta_bins, self.theta_type,
                   self.theta_min_clustering, self.theta_max_clustering, self.theta_bins_clustering, self.theta_type_clustering,
                   self.theta_min_lensing, self.theta_max_lensing, self.theta_bins_lensing, self.theta_type_lensing,
                   self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc, self.bin_averaging,
-                  self.integration_intervals, self.mix_term_file_path_catalog, self.mix_term_col_name_weight,
-                  self.mix_term_col_name_pos1, self.mix_term_col_name_pos2, self.mix_term_col_name_zbin,
-                  self.mix_term_isspherical, self.mix_term_target_patchsize, self.mix_term_do_overlap,
-                  self.mix_term_do_mix_for, self.mix_term_nbins_phi, self.mix_term_nmax,
-                  self.mix_term_do_ec, self.mix_term_subsample, self.mix_term_nsubr, 
-                  self.mix_term_file_path_save_triplets, self.mix_term_file_path_load_triplets,
+                  self.integration_intervals,
                   self.theta_to_obs_bins, self.theta_to_obs_bins_clustering, self.theta_to_obs_bins_lensing,
                   self.theta_to_obs_type, self.theta_to_obs_type_clustering, self.theta_to_obs_type_lensing]
         self.covTHETAspace_settings = dict(zip(keys, values))
