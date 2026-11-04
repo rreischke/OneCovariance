@@ -772,63 +772,13 @@ class CovCOSEBI(CovELLSpace):
         E_mode_gg = np.zeros((self.En_g_modes, self.sample_dim, self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_clust))
         if not self.cov_dict['sn_only']:
+            g_modes = range(self.En_modes, self.En_modes + self.En_g_modes)
             if (self.mm or self.gm):
-                t0, tcomb = time.time(), 1
-                tcombs = self.En_modes
-                original_shape = self.Cell_mm[0, :, :, :].shape
-                flat_length = self.n_tomo_lens**2
-                Cell_mm_flat = np.reshape(self.Cell_mm, (len(
-                    self.ellrange), flat_length))
-                for mode in range(self.En_modes):
-                    self.levin_int.init_integral(self.ellrange, Cell_mm_flat*self.ellrange[:,None], True, True)
-                    E_mode_mm[mode,:,:,:] = 1 / 2 / np.pi * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode][:], mode)),original_shape)
-                    eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode calculation for lensing at '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-                print(" ")
-
+                E_mode_mm = self._project_signal(self.levin_int, self.ell_limits, range(self.En_modes), self.Cell_mm)
             if (self.gm or (self.gg and self.mm and self.cross_terms)):
-                t0, tcomb = time.time(), 1
-                tcombs = self.En_g_modes
-                original_shape = self.Cell_gm[0, :, :, :].shape
-                flat_length = self.sample_dim*self.n_tomo_lens*self.n_tomo_clust
-                Cell_gm_flat = np.reshape(self.Cell_gm, (len(
-                    self.ellrange), flat_length))
-                for mode in range(self.En_g_modes):
-                    self.levin_int.init_integral(self.ellrange, Cell_gm_flat*self.ellrange[:,None], True, True)
-                    E_mode_gm[mode,:,:,:] = 1 / 2 / np.pi * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + self.En_modes][:], mode + self.En_modes)),original_shape)
-                    eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode calculation for GGL at '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-                    
-                print(" ")
-
+                E_mode_gm = self._project_signal(self.levin_int, self.ell_limits, g_modes, self.Cell_gm)
             if (self.gg or self.gm):
-                t0, tcomb = time.time(), 1
-                tcombs = self.En_g_modes
-                original_shape = self.Cell_gg[0, :, :, :, :].shape
-                flat_length = self.sample_dim**2*self.n_tomo_clust**2
-                Cell_gg_flat = np.reshape(self.Cell_gg, (len(
-                    self.ellrange), flat_length))
-                for mode in range(self.En_g_modes):
-                    self.levin_int.init_integral(self.ellrange, Cell_gg_flat*self.ellrange[:,None], True, True)
-                    E_mode_gg[mode,:,:,:] = 1 / 2 / np.pi * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + self.En_modes][:], mode + self.En_modes)),original_shape)
-                    eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
-                    print('\rCOSEBI E-mode calculation for clustering at '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-                print(" ")
+                E_mode_gg = self._project_signal(self.levin_int, self.ell_limits, g_modes, self.Cell_gg)
 
         return E_mode_gg, E_mode_gm, E_mode_mm
 
@@ -971,7 +921,7 @@ class CovCOSEBI(CovELLSpace):
                     gauss_EEgmgm, gauss_EEmmgm, gauss_EBmmgm, \
                     gauss_EEmmmm, gauss_EBmmmm, \
                     gauss_BBmmmm, \
-                    gauss_EEgggg_sn, gauss_EEgmgm_sn, gauss_EEmmmm_sn, gauss_BBmmmm_sn = \
+                    gauss_EEgggg_sn, gauss_EEgmgm_sn, gauss_EEmmmm_sn, gauss_BBmmmm_sn, \
                     csmf_COSEBI_auto, csmf_COSEBI_gg, csmf_COSEBI_gm, csmf_COSEBI_mmE, csmf_COSEBI_mmB = \
                     self.covCOSEBI_gaussian(obs_dict,
                                             survey_params_dict)
@@ -1605,38 +1555,22 @@ class CovCOSEBI(CovELLSpace):
                 if self.gg:
                     csmf_COSEBIgg = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
                     if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                        original_shape = csmf_gg[0, :, :, :, :, :].shape
-                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
-                        csmf_COSEBI_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                        for m_mode in range(self.En_g_modes):
-                            local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
-                            self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat*self.ellrange[:, None], True, True)
-                            csmf_COSEBIgg[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+                        csmf_COSEBIgg = self._project_signal(self.levin_int, self.ell_limits, range(self.En_modes, self.En_modes + self.En_g_modes),
+                                                             csmf_gg, 1./(2.0*np.pi))
                 else:
                     csmf_COSEBIgg = 0
                 if self.gm:
                     csmf_COSEBIgm = np.zeros((self.En_g_modes, len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
                     if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                        original_shape = csmf_gm[0, :, :, :, :, :].shape
-                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
-                        csmf_COSEBI_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                        for m_mode in range(self.En_g_modes):
-                            local_ell_limit = self.ell_limits[m_mode + self.En_modes][:]
-                            self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat*self.ellrange[:, None], True, True)
-                            csmf_COSEBIgm[m_mode , :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + self.En_modes)),original_shape)            
+                        csmf_COSEBIgm = self._project_signal(self.levin_int, self.ell_limits, range(self.En_modes, self.En_modes + self.En_g_modes),
+                                                             csmf_gm, 1./(2.0*np.pi))
                 else:
                     csmf_COSEBIgm = 0
                 if self.mm:
                     csmf_COSEBImmE = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                     csmf_COSEBImmB = np.zeros((self.En_modes, len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                     if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                        original_shape = csmf_mm[0, :, :, :, :, :].shape
-                        flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
-                        csmf_COSEBI_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                        for m_mode in range(self.En_modes):
-                            local_ell_limit = self.ell_limits[m_mode][:]
-                            self.levin_int.init_integral(self.ellrange, csmf_COSEBI_flat*self.ellrange[:, None], True, True)
-                            csmf_COSEBImmE[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                        csmf_COSEBImmE = self._project_signal(self.levin_int, self.ell_limits, range(self.En_modes), csmf_mm, 1./(2.0*np.pi))
                 else:
                     csmf_COSEBImmE, csmf_COSEBImmB = 0, 0
                 csmf_projected.append((csmf_COSEBIgg, csmf_COSEBIgm, csmf_COSEBImmE, csmf_COSEBImmB))

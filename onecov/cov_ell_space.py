@@ -60,7 +60,10 @@ class LazyWeightsLevin:
     """
     A levin.Levin integrator that passes the weights of init_w_ell on only
     when an integration over them is requested (the cquad methods, all with
-    'well' in their name). With projection_method = quadrature the
+    'well' in their name) or before init_integral (which extrapolates the
+    integrand to the ell range of the weights only if these are already
+    set, otherwise cquad beyond the last ell aborts in gsl). With
+    projection_method = quadrature the
     projections use the registered weights instead
     (CovELLSpace._register_projection_weights), and the copy of the weights
     in levin, several times their size, is large for many weights (e.g. fine
@@ -76,7 +79,7 @@ class LazyWeightsLevin:
         self._pending_weights = (ell, weights)
 
     def __getattr__(self, name):
-        if 'well' in name and self._pending_weights is not None:
+        if ('well' in name or name == 'init_integral') and self._pending_weights is not None:
             ell, weights = self._pending_weights
             self._pending_weights = None
             self._levin_int.init_w_ell(ell, np.ascontiguousarray(weights))
@@ -612,7 +615,8 @@ class CovELLSpace(PolySpectra):
         all columns of the integrand (tabulated on self.ellrange, interpolated
         as in Levin.init_integral). With the quadrature projection this is
         Simpson's rule on the nodes of the registered weights (in blocks of
-        modes), otherwise cquad.
+        modes), otherwise cquad. Identical columns (e.g. symmetric
+        tomographic combinations) are integrated once.
 
         Returns
         -------
@@ -620,12 +624,17 @@ class CovELLSpace(PolySpectra):
             with shape (len(modes), integrand.shape[1])
         """
         integrand = np.asarray(integrand, dtype=float)
+        unique_idx, inverse = self._unique_columns(integrand)
+        integrand = integrand[:, unique_idx]
         result = np.zeros((len(modes), integrand.shape[1]))
+        if len(modes) == 0:
+            return result[:, inverse]
         if not self._use_quadrature_projection(levin_int):
             levin_int.init_integral(self.ellrange, integrand, True, True)
-            for i, mode in enumerate(modes):
-                result[i] = levin_int.cquad_integrate_single_well(ell_limits[mode], mode)
-            return result
+            result = np.array(levin_int.cquad_integrate_single_well_subset(
+                [ell_limits[mode] for mode in modes], [int(mode) for mode in modes],
+                list(range(integrand.shape[1]))))
+            return result[:, inverse]
         groups = {}
         for i, mode in enumerate(modes):
             groups.setdefault((ell_limits[mode][0], ell_limits[mode][-1]), []).append(i)
@@ -638,7 +647,26 @@ class CovELLSpace(PolySpectra):
                 if values is None:
                     values = self._integrand_at(self.ellrange, integrand, x, True)*self._simpson_weights_nonuniform(x)[:, None]
                 result[idx[rows]] = Wx @ values
-        return result
+        return result[:, inverse]
+
+    def _project_signal(self, levin_int, ell_limits, modes, Cell, prefactors=1/2/np.pi, pixel_weight=None):
+        """
+        prefactor_m int dell ell W_m(ell) Cell(ell) for the weights modes of
+        levin_int (the signal of a projected estimator, see _project_single),
+        prefactors is a number or one per mode, pixel_weight is optionally
+        multiplied twice to Cell.
+
+        Returns
+        -------
+        result : array
+            with shape (len(modes),) + Cell.shape[1:]
+        """
+        modes = list(modes)
+        integrand = np.reshape(Cell, (len(self.ellrange), -1))*self.ellrange[:, None]
+        if pixel_weight is not None:
+            integrand = integrand*(pixel_weight**2)[:, None]
+        projected = self._project_single(levin_int, ell_limits, modes, integrand)
+        return np.reshape(np.reshape(prefactors, (-1, 1))*projected, (len(modes),) + np.shape(Cell)[1:])
 
     def _weights_on_nodes(self, levin_int, mode_list, lo, hi):
         """
@@ -1609,18 +1637,9 @@ class CovELLSpace(PolySpectra):
         result : array
             with shape (len(modes), 1, n_tomo_lens, n_tomo_lens)
         """
-        result = np.zeros((len(modes), 1, self.n_tomo_lens, self.n_tomo_lens))
         if self.Cell_mmB is None:
-            return result
-        original_shape = self.Cell_mmB[0].shape
-        integrand = np.reshape(self.Cell_mmB, (len(self.ellrange), -1))*self.ellrange[:, None]
-        if pixel_weight is not None:
-            integrand = integrand*(pixel_weight**2)[:, None]
-        levin_int.init_integral(self.ellrange, integrand, True, True)
-        for i_mode, (mode, prefactor) in enumerate(zip(modes, prefactors)):
-            result[i_mode] = prefactor*np.reshape(np.array(
-                levin_int.cquad_integrate_single_well(ell_limits[mode], mode)), original_shape)
-        return result
+            return np.zeros((len(modes), 1, self.n_tomo_lens, self.n_tomo_lens))
+        return self._project_signal(levin_int, ell_limits, modes, self.Cell_mmB, prefactors, pixel_weight)
 
     def _assign_4pt_results(self, live, values):
         """

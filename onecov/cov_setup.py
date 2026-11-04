@@ -1051,18 +1051,27 @@ class Setup:
 
     def __rebin_npair(self, npairs, theta_npair, theta_ul_bins, theta_bins, analytic, name):
         """
-        Sums the tabulated pair counts npairs (angular bins at theta_npair,
-        the nominal centres of logarithmic bins) into the angular bins with
-        edges theta_ul_bins. Bins that the table does not fully cover and
-        combinations without a file (NaN) get the analytic pair counts (same
-        shape as the result); covered bins without any tabulated pairs are
-        interpolated (in log theta) from the covered bins with pairs.
+        Distributes the tabulated pair counts npairs (angular bins at
+        theta_npair, the nominal centres of logarithmic or linear bins) over
+        the angular bins with edges theta_ul_bins: the cumulative pair count
+        at the edges of the tabulated bins is interpolated linearly in
+        theta^2 (pairs uniform in theta dtheta within a tabulated bin), so
+        that the pair counts are smooth also for bins whose edges are not
+        tabulated bin edges (and exact sums if they are). Bins that the table
+        does not fully cover and combinations without a file (NaN) get the
+        analytic pair counts (same shape as the result); covered bins without
+        any tabulated pairs are interpolated (in log theta) from the covered
+        bins with pairs.
         """
         n_theta = len(theta_ul_bins) - 1
         pair_rebinned = np.zeros((n_theta,) + npairs.shape[1:])
-        bin_index = np.searchsorted(theta_ul_bins, theta_npair, side='left') - 1
-        inside = (bin_index >= 0) & (bin_index < n_theta)
-        np.add.at(pair_rebinned, bin_index[inside], npairs[inside])
+        # edges of the tabulated bins (centres of linear or of logarithmic bins)
+        if np.allclose(np.diff(theta_npair), theta_npair[1] - theta_npair[0]):
+            mid = .5*(theta_npair[1:] + theta_npair[:-1])
+            table_edges = np.concatenate(([2*theta_npair[0] - mid[0]], mid, [2*theta_npair[-1] - mid[-1]]))
+        else:
+            mid = np.sqrt(theta_npair[1:]*theta_npair[:-1])
+            table_edges = np.concatenate(([theta_npair[0]**2/mid[0]], mid, [theta_npair[-1]**2/mid[-1]]))
         # range covered by the table (half a bin beyond the outermost centres, with half a bin of tolerance for rounding)
         dlog_lo = np.log(theta_npair[1]/theta_npair[0]) if len(theta_npair) > 1 else 0.0
         dlog_hi = np.log(theta_npair[-1]/theta_npair[-2]) if len(theta_npair) > 1 else 0.0
@@ -1071,9 +1080,12 @@ class Setup:
         log_theta = np.log(theta_bins)
         for index in np.ndindex(npairs.shape[1:]):
             column = pair_rebinned[(slice(None),) + index]
-            if np.all(np.isnan(npairs[(slice(None),) + index])):
+            table = npairs[(slice(None),) + index]
+            if np.all(np.isnan(table)):
                 column[:] = analytic[(slice(None),) + index]
                 continue
+            column[:] = np.diff(np.interp(theta_ul_bins**2, table_edges**2,
+                                          np.concatenate(([0.0], np.nancumsum(table)))))
             good = covered & (column > 0)
             holes = covered & ~(column > 0)
             if np.any(holes):
@@ -1211,8 +1223,8 @@ class Setup:
             else:
                 print("Warning: The number of pairs for clustering is not " +
                       "given in the same angular bins / range as is queried " +
-                      "in the config. The rebinning routine just sums up " +
-                      "N_pairs until they match the requested binning. This " +
+                      "in the config. The pair counts are redistributed to the requested bins " +
+                      "(uniformly in theta dtheta within the tabulated bins). This " +
                       "may not be correct, e.g., in the presence of weights. ")
                 npair_gg = self.__rebin_npair(npair_tab['npair_gg'],
                                               npair_tab['theta_gg'],
@@ -1242,10 +1254,9 @@ class Setup:
             else:
                 print("Warning: The number of pairs for galaxy-galaxy " +
                       "lensing is not given in the same angular bins / " +
-                      "range as is queried in the config. The rebinning " +
-                      "routine just sums up N_pairs until they match the " +
-                      "requested binning. This may not be correct, e.g., in " +
-                      "the presence of weights. ")
+                      "range as is queried in the config. The pair counts are redistributed to the requested bins " +
+                      "(uniformly in theta dtheta within the tabulated bins). This " +
+                      "may not be correct, e.g., in the presence of weights. ")
                 npair_gm = self.__rebin_npair(npair_tab['npair_gm'],
                                               npair_tab['theta_gm'],
                                               theta_ul_bins,
@@ -1275,8 +1286,8 @@ class Setup:
             else:
                 print("Warning: The number of pairs for cosmic shear is not " +
                       "given in the same angular bins / range as is queried " +
-                      "in the config. The rebinning routine just sums up " +
-                      "N_pairs until they match the requested binning. This " +
+                      "in the config. The pair counts are redistributed to the requested bins " +
+                      "(uniformly in theta dtheta within the tabulated bins). This " +
                       "may not be correct, e.g., in the presence of weights. ")
                 npair_mm = self.__rebin_npair(npair_tab['npair_mm'],
                                               npair_tab['theta_mm'],

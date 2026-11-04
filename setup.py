@@ -78,7 +78,7 @@ setup(
     install_requires=[
         'future',
         'pyyaml',
-        'numpy<1.24',
+        'numpy',
         'astropy',
         'healpy',
         'pip>=20.0',

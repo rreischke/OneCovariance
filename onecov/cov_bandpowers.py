@@ -310,25 +310,12 @@ class CovBandPowers(CovTHETASpace):
         self.CE_gg = np.zeros((len(self.ell_bins_clustering), self.sample_dim, self.sample_dim,
                               self.n_tomo_clust, self.n_tomo_clust))
         if not self.cov_dict['sn_only']:
+            n_clust, n_lens = len(self.ell_bins_clustering), len(self.ell_bins_lensing)
             if self.mm:
-                t0, tcomb = time.time(), 1
-                tcombs = len(self.ell_bins_lensing)
-                original_shape = self.Cell_mm[0, :, :, :].shape
-                flat_length = self.n_tomo_lens**2
-                Cell_mm_flat = np.reshape(self.Cell_mm, (len(
-                    self.ellrange), flat_length))
-                for mode in range(len(self.ell_bins_lensing)):
-                    self.levin_int.init_integral(self.ellrange, Cell_mm_flat*self.ellrange[:,None], True, True)
-                    self.CE_mm[mode,:,:,:] = 1 / 2 / self.N_ell_lensing[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + 2*len(self.ell_bins_clustering)][:], mode + 2*len(self.ell_bins_clustering))),original_shape)
-                    self.CB_mm[mode,:,:,:] = 1 / 2 / self.N_ell_lensing[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing)][:], mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))),original_shape)
-                    eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
-                    print('\rBP E/B-mode calculation for lensing at '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-                print(" ")
+                # E modes 2 n_clust, ..., B modes 2 n_clust + n_lens, ...
+                CE_CB_mm = self._project_signal(self.levin_int, self.ell_limits, range(2*n_clust, 2*n_clust + 2*n_lens),
+                                                self.Cell_mm, np.tile(1 / 2 / self.N_ell_lensing, 2))
+                self.CE_mm, self.CB_mm = CE_CB_mm[:n_lens], CE_CB_mm[n_lens:]
                 if self.Cell_mmB is not None:
                     # intrinsic B-modes (Eqs. G.15, G.16 of arXiv:2410.06962):
                     # C_E = int W_EE C_EE + W_EB C_BB, C_B = int W_EB C_EE + W_EE C_BB
@@ -340,44 +327,12 @@ class CovBandPowers(CovTHETASpace):
                                                            [first + mode for mode in range(n_lens)], prefactors)
 
             if self.gm:
-                t0, tcomb = time.time(), 1
-                tcombs = len(self.ell_bins_clustering)
-                original_shape = self.Cell_gm[0, :, :, :].shape
-                flat_length = self.sample_dim*self.n_tomo_lens*self.n_tomo_clust
-                Cell_gm_flat = np.reshape(self.Cell_gm, (len(
-                    self.ellrange), flat_length))
-                for mode in range(len(self.ell_bins_clustering)):
-                    self.levin_int.init_integral(self.ellrange, Cell_gm_flat*self.ellrange[:,None], True, True)
-                    self.CE_gm[mode,:,:,:] = 1 / self.N_ell_clustering[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode + len(self.ell_bins_clustering)][:], mode + len(self.ell_bins_clustering))),original_shape)
-                    eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
-                    print('\rBP E-mode calculation for GGL at '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-                    
-                print(" ")
-
+                self.CE_gm = self._project_signal(self.levin_int, self.ell_limits, range(n_clust, 2*n_clust),
+                                                  self.Cell_gm, 1 / self.N_ell_clustering)
             if self.gg:
-                t0, tcomb = time.time(), 1
-                tcombs = len(self.ell_bins_clustering)
-                original_shape = self.Cell_gg[0, :, :, :, :].shape
-                flat_length = self.sample_dim**2*self.n_tomo_clust**2
-                Cell_gg_flat = np.reshape(self.Cell_gg, (len(
-                    self.ellrange), flat_length))
-                for mode in range(len(self.ell_bins_clustering)):
-                    self.levin_int.init_integral(self.ellrange, Cell_gg_flat*self.ellrange[:,None], True, True)
-                    self.CE_gg[mode,:,:,:] = 1 / self.N_ell_clustering[mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(self.ell_limits[mode ][:], mode)),original_shape)
-                    eta = (time.time()-t0)/60 * (tcombs/tcomb-1)
-                    print('\rBP E-mode calculation for clustering at '
-                            + str(round(tcomb/tcombs*100, 1)) + '% in '
-                            + str(round(((time.time()-t0)/60), 1)) +
-                            'min  ETA '
-                            'in ' + str(round(eta, 1)) + 'min', end="")
-                    tcomb += 1
-                print(" ")
-        
+                self.CE_gg = self._project_signal(self.levin_int, self.ell_limits, range(n_clust),
+                                                  self.Cell_gg, 1 / self.N_ell_clustering)
+
     def __set_multipoles(self,
                          covbandpowersettings):
         """
@@ -1497,25 +1452,16 @@ class CovBandPowers(CovTHETASpace):
                 if self.gg:
                     csmf_BPgg = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_clust))
                     if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                        original_shape = csmf_gg[0, :, :, :, :, :].shape
-                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust**2*self.n_tomo_csmf
-                        csmf_BP_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
-                        for m_mode in range(len(self.ell_bins_clustering)):
-                            local_ell_limit = self.ell_limits[m_mode][:]
-                            self.levin_int.init_integral(self.ellrange, csmf_BP_flat*self.ellrange[:, None], True, True)
-                            csmf_BPgg[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode)),original_shape)            
+                        csmf_BPgg = self._project_signal(self.levin_int, self.ell_limits, range(len(self.ell_bins_clustering)),
+                                                         csmf_gg, 1./self.N_ell_clustering)
                 else:
                     csmf_BPgg = 0
                 if self.gm:
                     csmf_BPgm = np.zeros((len(self.ell_bins_clustering), len(self.log10csmf_mass_bins), self.sample_dim, self.n_tomo_csmf, self.n_tomo_clust, self.n_tomo_lens))
                     if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                        original_shape = csmf_gm[0, :, :, :, :, :].shape
-                        flat_length = len(self.log10csmf_mass_bins) *self.sample_dim*self.n_tomo_clust*self.n_tomo_lens*self.n_tomo_csmf
-                        csmf_BP_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
-                        for m_mode in range(len(self.ell_bins_clustering)):
-                            local_ell_limit = self.ell_limits[m_mode + len(self.ell_bins_clustering)][:]
-                            self.levin_int.init_integral(self.ellrange, csmf_BP_flat*self.ellrange[:, None], True, True)
-                            csmf_BPgm[m_mode, :, :, :, :, :] = 1./self.N_ell_clustering[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit, m_mode + len(self.ell_bins_clustering))),original_shape)            
+                        n_clust = len(self.ell_bins_clustering)
+                        csmf_BPgm = self._project_signal(self.levin_int, self.ell_limits, range(n_clust, 2*n_clust),
+                                                         csmf_gm, 1./self.N_ell_clustering)
                 else:
                     csmf_BPgm = 0
             
@@ -1523,16 +1469,10 @@ class CovBandPowers(CovTHETASpace):
                     csmf_BPmmE = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                     csmf_BPmmB = np.zeros((len(self.ell_bins_lensing), len(self.log10csmf_mass_bins), 1, self.n_tomo_csmf, self.n_tomo_lens, self.n_tomo_lens))
                     if not self.cov_dict['sn_only'] and not self.csmf_auto_only:
-                        original_shape = csmf_mm[0, :, :, :, :, :].shape
-                        flat_length = len(self.log10csmf_mass_bins)*self.n_tomo_lens**2*self.n_tomo_csmf
-                        csmf_BP_flat = np.reshape(csmf_mm, (len(self.ellrange), flat_length))
-                        for m_mode in range(len(self.ell_bins_lensing)):
-                            local_ell_limit_E = self.ell_limits[m_mode + 2*len(self.ell_bins_clustering)][:]
-                            local_ell_limit_B = self.ell_limits[m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing)][:]
-                            self.levin_int.init_integral(self.ellrange, csmf_BP_flat*self.ellrange[:, None], True, True)
-                            csmf_BPmmE[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit_E, m_mode + 2*len(self.ell_bins_clustering))), original_shape)
-                            csmf_BPmmB[m_mode, :, :, :, :, :] = 1./2./self.N_ell_lensing[m_mode] * np.reshape(np.array(self.levin_int.cquad_integrate_single_well(local_ell_limit_B, m_mode + 2*len(self.ell_bins_clustering) + len(self.ell_bins_lensing))), original_shape)
-
+                        first, n_lens = 2*len(self.ell_bins_clustering), len(self.ell_bins_lensing)
+                        csmf_BPmm = self._project_signal(self.levin_int, self.ell_limits, range(first, first + 2*n_lens),
+                                                         csmf_mm, np.tile(1./2./self.N_ell_lensing, 2))
+                        csmf_BPmmE, csmf_BPmmB = csmf_BPmm[:n_lens], csmf_BPmm[n_lens:]
                 else:
                     csmf_BPmmE, csmf_BPmmB = 0, 0
                 csmf_projected.append((csmf_BPgg, csmf_BPgm, csmf_BPmmE, csmf_BPmmB))
