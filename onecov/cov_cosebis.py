@@ -1082,7 +1082,8 @@ class CovCOSEBI(CovELLSpace):
                 gaussCOSEBIEmmgm = gaussCOSEBIEmmgm_sva + gaussCOSEBIEmmgm_mix
                 gaussCOSEBIBmmgm = gaussCOSEBIBmmgm_sva + gaussCOSEBIBmmgm_mix
                 gaussCOSEBIEEmmmm = gaussCOSEBIEEmmmm_sva + gaussCOSEBIEEmmmm_mix
-                gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix
+                # (the E-B shape noise is not returned separately)
+                gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix + gaussCOSEBIEBmmmm_sn
                 gaussCOSEBIBBmmmm = gaussCOSEBIBBmmmm_sva + gaussCOSEBIBBmmmm_mix
                 return gaussCOSEBIgggg, gaussCOSEBIgggm, gaussCOSEBIEggmm, \
                     gaussCOSEBIBggmm, gaussCOSEBIgmgm, gaussCOSEBIEmmgm, \
@@ -1110,7 +1111,8 @@ class CovCOSEBI(CovELLSpace):
             gaussCOSEBIEmmgm = gaussCOSEBIEmmgm_sva + gaussCOSEBIEmmgm_mix
             gaussCOSEBIBmmgm = gaussCOSEBIBmmgm_sva + gaussCOSEBIBmmgm_mix
             gaussCOSEBIEEmmmm = gaussCOSEBIEEmmmm_sva + gaussCOSEBIEEmmmm_mix
-            gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix
+            # (the E-B shape noise is not returned separately)
+            gaussCOSEBIEBmmmm = gaussCOSEBIEBmmmm_sva + gaussCOSEBIEBmmmm_mix + gaussCOSEBIEBmmmm_sn
             gaussCOSEBIBBmmmm = gaussCOSEBIBBmmmm_sva + gaussCOSEBIBBmmmm_mix
             return gaussCOSEBIgggg, gaussCOSEBIgggm, gaussCOSEBIEggmm, \
                 gaussCOSEBIBggmm, gaussCOSEBIgmgm, gaussCOSEBIEmmgm, \
@@ -1492,14 +1494,18 @@ class CovCOSEBI(CovELLSpace):
                                 sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode, n_mode), m_mode, n_mode, gaussCOSEBIEEmmmm_sva, (m_mode, n_mode), 1.0 / 2.0 / np.pi / (survey_params_dict['survey_area_lens'] / self.deg2torad2), (n_mode, m_mode)))
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
-                    Tpm_product = self.Tn_p[m_mode](self.theta_mm)*self.Tn_p[n_mode](self.theta_mm) + self.Tn_m[m_mode](self.theta_mm)*self.Tn_m[n_mode](self.theta_mm)
-                    integrand = (Tpm_product*self.theta_mm**2)[:,None, None, None]/self.dnpair_mm
-                    aux_mm_sn = simpson(integrand, x = self.theta_mm,axis=0)/self.arcmin2torad2**2
-                    gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = (kron_delta_tomo_lens[None, None, :, None, :, None]
-                                                                            * kron_delta_tomo_lens[None, None, None, :, None, :]
-                                                                            + kron_delta_tomo_lens[None, None, :, None, None, :]
-                                                                            * kron_delta_tomo_lens[None, None, None, :, :, None]) \
-                                                                            * aux_mm_sn[None, :, :, :, None, None]/2.
+                    # E/B = 1/2 int dtheta theta [T_+ xi_+ +/- T_- xi_-] with uncorrelated shape noise
+                    # in xi_+ and xi_-: EE and BB with T_+T_+ + T_-T_-, EB with T_+T_+ - T_-T_- (vanishes
+                    # only for a uniform pair density, dN/dtheta ~ theta)
+                    Tp_product = self.Tn_p[m_mode](self.theta_mm)*self.Tn_p[n_mode](self.theta_mm)
+                    Tm_product = self.Tn_m[m_mode](self.theta_mm)*self.Tn_m[n_mode](self.theta_mm)
+                    kron_sn = kron_delta_tomo_lens[None, None, :, None, :, None]*kron_delta_tomo_lens[None, None, None, :, None, :] \
+                        + kron_delta_tomo_lens[None, None, :, None, None, :]*kron_delta_tomo_lens[None, None, None, :, :, None]
+                    for target, Tpm_product in ((gaussCOSEBIEEmmmm_sn, Tp_product + Tm_product),
+                                                (gaussCOSEBIEBmmmm_sn, Tp_product - Tm_product)):
+                        integrand = (Tpm_product*self.theta_mm**2)[:,None, None, None]/self.dnpair_mm
+                        aux_mm_sn = simpson(integrand, x = self.theta_mm,axis=0)/self.arcmin2torad2**2
+                        target[m_mode, n_mode, :, :, :, :, :, :] = kron_sn*aux_mm_sn[None, :, :, :, None, None]/2.
                     gaussCOSEBIBBmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = gaussCOSEBIEEmmmm_sn[m_mode, n_mode, :, :, :, :, :, :]
                     print('\rCOSEBI E-mode covariance calculation for the '
                             'mmmm term '

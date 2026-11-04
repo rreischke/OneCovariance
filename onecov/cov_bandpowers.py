@@ -559,7 +559,9 @@ class CovBandPowers(CovTHETASpace):
         self.SN_integral_gggg = np.zeros((len(self.ell_bins_clustering), len(self.ell_bins_clustering), self.sample_dim, self.n_tomo_clust, self.n_tomo_clust))
         self.SN_integral_gmgm = np.zeros((len(self.ell_bins_clustering), len(self.ell_bins_clustering), self.sample_dim, self.n_tomo_clust, self.n_tomo_lens))
         self.SN_integral_mmmm = np.zeros((len(self.ell_bins_lensing), len(self.ell_bins_lensing), 1, self.n_tomo_lens, self.n_tomo_lens))
-        
+        # E-B shape noise, with g_+g_+ - g_-g_- instead of g_+g_+ + g_-g_- (zero for a uniform pair density)
+        self.SN_integral_mmmm_EB = np.zeros_like(self.SN_integral_mmmm)
+
         t0, tcomb = time.time(), 1
         tcombs = len(self.ell_bins_clustering)**2
         if self.gg:
@@ -648,6 +650,8 @@ class CovBandPowers(CovTHETASpace):
                     result -= L1up*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1up, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
                     result -= L1lo*L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
                     result += L1lo*L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
+                    # theta^2 g_+g_+ (theta^2 g_-g_- contains the same term, plus the ones below)
+                    g_plus_part = np.copy(result)
                     result *= 2
                     integrand /= self.theta_mm[:,None]/60/180*np.pi
                     self.levin_int.init_integral(self.theta_mm/60/180*np.pi, integrand, True, True)
@@ -686,6 +690,7 @@ class CovBandPowers(CovTHETASpace):
                     result -= 64./L1lo/L2up*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2up, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
                     result += 64./L1lo/L2lo*np.nan_to_num(self.levin_int.double_bessel(L1lo, L2lo, 1, 1, self.theta_mm[0]/60/180*np.pi, self.theta_mm[-1]/60/180*np.pi))
                     self.SN_integral_mmmm[m_mode, n_mode,:, :, :] = np.reshape(np.array(result), original_shape)
+                    self.SN_integral_mmmm_EB[m_mode, n_mode,:, :, :] = np.reshape(np.array(2*g_plus_part - result), original_shape)
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rCalculating Shot Noise integrals for mmmm bandpower covariance '
@@ -1001,7 +1006,7 @@ class CovBandPowers(CovTHETASpace):
                 gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
                 gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
                 gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
-                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+                gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix + gauss_BPEBmmmm_sn  # (E-B shape noise not returned separately)
                 gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
                 return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
                     gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
@@ -1031,7 +1036,7 @@ class CovBandPowers(CovTHETASpace):
             gauss_BPEmmgm = gauss_BPEmmgm_sva + gauss_BPEmmgm_mix
             gauss_BPBmmgm = gauss_BPBmmgm_sva + gauss_BPBmmgm_mix
             gauss_BPEEmmmm = gauss_BPEEmmmm_sva + gauss_BPEEmmmm_mix
-            gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix
+            gauss_BPEBmmmm = gauss_BPEBmmmm_sva + gauss_BPEBmmmm_mix + gauss_BPEBmmmm_sn  # (E-B shape noise not returned separately)
             gauss_BPBBmmmm = gauss_BPBBmmmm_sva + gauss_BPBBmmmm_mix
             return gauss_BPgggg, gauss_BPgggm, gauss_BPEggmm, gauss_BPBggmm, \
                 gauss_BPgmgm, gauss_BPEmmgm, gauss_BPBmmgm, \
@@ -1353,7 +1358,8 @@ class CovBandPowers(CovTHETASpace):
             gauss_BPBBmmmm_mix = np.zeros_like(gauss_BPEEmmmm_sva)
             gauss_BPEBmmmm_sva = np.zeros_like(gauss_BPEEmmmm_sva)
             gauss_BPEBmmmm_mix = np.zeros_like(gauss_BPEEmmmm_sva)
-            
+            gauss_BPEBmmmm_sn = np.zeros_like(gauss_BPEEmmmm_sva)
+
             original_shape = gauss_BPEEmmmm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.n_tomo_lens**4
             gaussELL_sva_flat = self._ell_cov_flat(gaussELLmmmm_sva, flat_length)
@@ -1383,11 +1389,11 @@ class CovBandPowers(CovTHETASpace):
                                 sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + 2 * len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2 * len(self.ell_bins_clustering) + len(self.ell_bins_lensing)), m_mode + 2 * len(self.ell_bins_clustering) + len(self.ell_bins_lensing), n_mode + 2 * len(self.ell_bins_clustering) + len(self.ell_bins_lensing), gauss_BPBBmmmm_sva, (m_mode, n_mode), np.pi / 2.0 / self.N_ell_lensing[m_mode] / self.N_ell_lensing[n_mode] / (survey_params_dict['survey_area_lens'] / self.deg2torad2), (n_mode, m_mode)))
                             
 
-                    gauss_BPEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :] = 2*np.pi**2/self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode]*(kron_delta_tomo_lens[None, None, :, None, :, None]
-                                                                            * kron_delta_tomo_lens[None, None, None, :, None, :]
-                                                                            + kron_delta_tomo_lens[None, None, :, None, None, :]
-                                                                            * kron_delta_tomo_lens[None, None, None, :, :, None]) \
-                                                                            * self.SN_integral_mmmm[m_mode, n_mode, None, :, :, : ,None, None] 
+                    kron_sn = 2*np.pi**2/self.N_ell_lensing[m_mode]/self.N_ell_lensing[n_mode] \
+                        * (kron_delta_tomo_lens[None, None, :, None, :, None]*kron_delta_tomo_lens[None, None, None, :, None, :]
+                           + kron_delta_tomo_lens[None, None, :, None, None, :]*kron_delta_tomo_lens[None, None, None, :, :, None])
+                    gauss_BPEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :] = kron_sn*self.SN_integral_mmmm[m_mode, n_mode, None, :, :, : ,None, None]
+                    gauss_BPEBmmmm_sn[m_mode, n_mode, :, :, :, :, :, :] = kron_sn*self.SN_integral_mmmm_EB[m_mode, n_mode, None, :, :, : ,None, None]
                     gauss_BPBBmmmm_sn[n_mode, m_mode, :, :, :, :, :, :] = gauss_BPEEmmmm_sn[n_mode, m_mode, :, :, :, :, :, :]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
@@ -1428,7 +1434,6 @@ class CovBandPowers(CovTHETASpace):
                 if not self.cov_dict['split_gauss']:
                     BB_mix_jobs = []
                 self._project_gauss_jobs_added(self.levin_int, self._gauss_todo(BB_sva_flat, BB_mix_flat, BB_sva_jobs, BB_mix_jobs), original_shape, 'bandpower covariance term (intrinsic B-modes)')
-            gauss_BPEBmmmm_sn = 0
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CB_mm[:, None, :, None, :, :, None, None]*self.CB_mm[None, :, None, :, None, None, :, :])
             gauss_BPBBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_BPBBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.CE_mm[:, None, :, None, :, :, None, None]*self.CB_mm[None, :, None, :, None, None, :, :])

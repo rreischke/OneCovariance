@@ -412,6 +412,7 @@ class CovARBsummary(CovELLSpace):
                     if j in np.arange(len(self.index_realspace_lensing)):
                         local_correction *= correction[j, :, :, :]
                     self.SN_integral_mmmm[i,j, : ,: ,:] *= local_correction
+                    self.SN_integral_mmmm_EB[i,j, : ,: ,:] *= local_correction
         if self.gm and self.index_realspace_ggl is not None:
             correction = []
             for i in range(len(self.SN_integral_gmgm[:,0,0,0,0])):
@@ -781,6 +782,7 @@ class CovARBsummary(CovELLSpace):
             t0, tcomb = time.time(), 1
             tcombs = self.mmE_summaries**2
             self.SN_integral_mmmm = np.zeros((self.mmE_summaries, self.mmE_summaries,  1, self.n_tomo_lens, self.n_tomo_lens))
+            self.SN_integral_mmmm_EB = np.zeros_like(self.SN_integral_mmmm)
             original_shape = (1,self.n_tomo_lens, self.n_tomo_lens)
             dnpair_mm_flat = np.reshape(self.dnpair_mm, (len(self.theta_real_integral), self.n_tomo_lens*self.n_tomo_lens))
             
@@ -794,8 +796,11 @@ class CovARBsummary(CovELLSpace):
                         continue
                     integrand = 1/(dnpair_mm_flat* 60*180/np.pi)*(self.theta_real_integral[:, None]/60/180*np.pi)**2
                     self.levin_int_real.init_integral(self.theta_real_integral/60/180*np.pi, integrand, True, True)
-                    self.SN_integral_mmmm[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :] = np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode, n_mode)), original_shape)
-                    self.SN_integral_mmmm[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :] += np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)), original_shape)
+                    # R_+ R_+ + R_- R_- for EE and BB, R_+ R_+ - R_- R_- for EB
+                    plus = np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode, n_mode)), original_shape)
+                    minus = np.reshape(np.array(self.levin_int_real.cquad_integrate_double_well(local_theta_limit, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries)), original_shape)
+                    self.SN_integral_mmmm[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :] = plus + minus
+                    self.SN_integral_mmmm_EB[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :] = plus - minus
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
                     print('\rCalculating Shot Noise integrals for mmmm arbitrary summary covariance '
@@ -1102,7 +1107,7 @@ class CovARBsummary(CovELLSpace):
                 gauss_ASEmmgm = gauss_ASEmmgm_sva + gauss_ASEmmgm_mix
                 gauss_ASBmmgm = gauss_ASBmmgm_sva + gauss_ASBmmgm_mix
                 gauss_ASEEmmmm = gauss_ASEEmmmm_sva + gauss_ASEEmmmm_mix
-                gauss_ASEBmmmm = gauss_ASEBmmmm_sva + gauss_ASEBmmmm_mix
+                gauss_ASEBmmmm = gauss_ASEBmmmm_sva + gauss_ASEBmmmm_mix + gauss_ASEBmmmm_sn  # (E-B shape noise not returned separately)
                 gauss_ASBBmmmm = gauss_ASBBmmmm_sva + gauss_ASBBmmmm_mix
                 return gauss_ASgggg, gauss_ASgggm, gauss_ASEggmm, gauss_ASBggmm, \
                     gauss_ASgmgm, gauss_ASEmmgm, gauss_ASBmmgm, \
@@ -1131,7 +1136,7 @@ class CovARBsummary(CovELLSpace):
             gauss_ASEmmgm = gauss_ASEmmgm_sva + gauss_ASEmmgm_mix
             gauss_ASBmmgm = gauss_ASBmmgm_sva + gauss_ASBmmgm_mix
             gauss_ASEEmmmm = gauss_ASEEmmmm_sva + gauss_ASEEmmmm_mix
-            gauss_ASEBmmmm = gauss_ASEBmmmm_sva + gauss_ASEBmmmm_mix
+            gauss_ASEBmmmm = gauss_ASEBmmmm_sva + gauss_ASEBmmmm_mix + gauss_ASEBmmmm_sn  # (E-B shape noise not returned separately)
             gauss_ASBBmmmm = gauss_ASBBmmmm_sva + gauss_ASBBmmmm_mix
             return gauss_ASgggg, gauss_ASgggm, gauss_ASEggmm, gauss_ASBggmm, \
                 gauss_ASgmgm, gauss_ASEmmgm, gauss_ASBmmgm, \
@@ -1459,7 +1464,8 @@ class CovARBsummary(CovELLSpace):
             gauss_ASBBmmmm_mix = np.zeros_like(gauss_ASEEmmmm_sva)
             gauss_ASEBmmmm_sva = np.zeros_like(gauss_ASEEmmmm_sva)
             gauss_ASEBmmmm_mix = np.zeros_like(gauss_ASEEmmmm_sva)
-            
+            gauss_ASEBmmmm_sn = np.zeros_like(gauss_ASEEmmmm_sva)
+
             original_shape = gauss_ASEEmmmm_sva[0, 0, :, :, :, :, :, :].shape
             flat_length = self.n_tomo_lens**4
             gaussELL_sva_flat = self._ell_cov_flat(gaussELLmmmm_sva, flat_length)
@@ -1488,11 +1494,11 @@ class CovARBsummary(CovELLSpace):
                             if n_mode >= m_mode:
                                 sva_jobs.append((self._ell_limits_double(self.ell_limits, m_mode + self.mmE_summaries, n_mode + self.mmE_summaries), m_mode + self.mmE_summaries, n_mode + self.mmE_summaries, gauss_ASBBmmmm_sva, (m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries), 1.0 / (2.0 * np.pi * survey_params_dict['survey_area_lens'] / self.deg2torad2), (n_mode - self.gg_summaries - self.gm_summaries, m_mode - self.gg_summaries - self.gm_summaries)))
                     
-                    gauss_ASEEmmmm_sn[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] = (kron_delta_tomo_lens[None, None, :, None, :, None]
-                                                                            * kron_delta_tomo_lens[None, None, None, :, None, :]
-                                                                            + kron_delta_tomo_lens[None, None, :, None, None, :]
-                                                                            * kron_delta_tomo_lens[None, None, None, :, :, None]) \
-                                                                            * self.SN_integral_mmmm[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, None, :, :, : ,None, None]/0.5
+                    kron_sn = kron_delta_tomo_lens[None, None, :, None, :, None]*kron_delta_tomo_lens[None, None, None, :, None, :] \
+                        + kron_delta_tomo_lens[None, None, :, None, None, :]*kron_delta_tomo_lens[None, None, None, :, :, None]
+                    m_sn, n_sn = m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries
+                    gauss_ASEEmmmm_sn[m_sn, n_sn, :, :, :, :, :, :] = kron_sn*self.SN_integral_mmmm[m_sn, n_sn, None, :, :, :, None, None]/0.5
+                    gauss_ASEBmmmm_sn[m_sn, n_sn, :, :, :, :, :, :] = kron_sn*self.SN_integral_mmmm_EB[m_sn, n_sn, None, :, :, :, None, None]/0.5
                     gauss_ASBBmmmm_sn[n_mode - self.gg_summaries - self.gm_summaries, m_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :] = gauss_ASEEmmmm_sn[m_mode - self.gg_summaries - self.gm_summaries, n_mode - self.gg_summaries - self.gm_summaries, :, :, :, :, :, :]
                     eta = (time.time()-t0) / \
                         60 * (tcombs/tcomb-1)
@@ -1528,7 +1534,6 @@ class CovARBsummary(CovELLSpace):
                 if not self.cov_dict['split_gauss']:
                     BB_mix_jobs = []
                 self._project_gauss_jobs_added(self.levin_int_fourier, self._gauss_todo(BB_sva_flat, BB_mix_flat, BB_sva_jobs, BB_mix_jobs), original_shape, 'arbitrary summary covariance term (intrinsic B-modes)')
-            gauss_ASEBmmmm_sn = 0
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbB_mm[:, None, :, None, :, :, None, None]*self.arbB_mm[None, :, None, :, None, None, :, :])
             gauss_ASBBmmmm_sva[:, :, 0, 0, :, :, :, :] = gauss_ASBBmmmm_sva[:, :, 0, 0, :, :, :, :] + adding[:, :, 0, 0, :, :, :, :]
             adding = self.gaussELLmmmm_sva_mult_shear_bias[None, None, :, : ,: , :, : ,:]*(self.arbE_mm[:, None, :, None, :, :, None, None]*self.arbB_mm[None, :, None, :, None, None, :, :])
