@@ -4,18 +4,15 @@ from math import factorial
 
 import levin
 import numpy as np
-from scipy.interpolate import UnivariateSpline
 from scipy.signal import argrelextrema
 from scipy.special import jv
 
 try:
-    from onecov.cov_discrete import *
-    from onecov.cov_discrete_utils import *
     from onecov.cov_ell_space import CovELLSpace, LazyWeightsLevin
+    from onecov.cov_orpheus import OrpheusCovTHETASpace
 except:
-    from cov_discrete import *
-    from cov_discrete_utils import *
     from cov_ell_space import CovELLSpace, LazyWeightsLevin
+    from cov_orpheus import OrpheusCovTHETASpace
 
 
 class CovTHETASpace(CovELLSpace):
@@ -180,6 +177,11 @@ class CovTHETASpace(CovELLSpace):
         self.bin_averaging = obs_dict['THETAspace']['bin_averaging']
         self.accuracy = obs_dict['THETAspace']['theta_acc']
         self.theta_space_dict = obs_dict['THETAspace']
+        self.theta_space_discrete_dict = \
+            obs_dict.get('THETAspace_discrete', {'do_discrete': False})
+        # tabulated pair counts take precedence for the shot noise of the
+        # discrete covariance
+        self.npair_mm_tabulated = read_in_tables['npair']['npair_mm'] is not None
         self.thetabins, self.theta_ul_bins = \
             self.__set_theta_bins(obs_dict['THETAspace'])
         if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
@@ -401,83 +403,6 @@ class CovTHETASpace(CovELLSpace):
             self.xi_plus = xip_signal
             self.xi_minus = xim_signal
             
-        ## define spline on finer theta range, theta_min = theta_min/5, theta_max = theta_ax*2
-        if obs_dict['THETAspace']['mix_term_do_mix_for'] is not None:
-            if 'xipxip' in obs_dict['THETAspace']['mix_term_do_mix_for'][:] or 'ximxim' in obs_dict['THETAspace']['mix_term_do_mix_for'][:]:
-                if self.mm:
-                    theta_ul_bins = np.geomspace(
-                        self.theta_ul_bins[0]/5,
-                        self.theta_ul_bins[-1]*40,
-                        40)
-                    theta_bins = np.exp(.5 * (np.log(theta_ul_bins[1:])
-                                            + np.log(theta_ul_bins[:-1])))
-                    xip_signal_shape = (len(theta_bins),
-                                        1,
-                                        self.n_tomo_lens, self.n_tomo_lens)
-                    xip_signal = np.zeros(xip_signal_shape)
-                    xim_signal = np.zeros(xip_signal_shape)
-                    original_shape = self.Cell_mm[0, :, :, :].shape
-                    flat_length = self.n_tomo_lens**2
-                    Cell_mm_flat = np.reshape(
-                        self.Cell_mm, (len(self.ellrange), flat_length))
-                    xip_signal_at_thetai_flat = np.zeros(flat_length)
-                    xim_signal_at_thetai_flat = np.zeros(flat_length)
-                    self.xi_spline = {}
-                    self.xi_spline["xip"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
-                    self.xi_spline["xim"] = [None]*int(self.n_tomo_lens*(self.n_tomo_lens + 1)/2)
-                    K_mmE = []
-                    K_mmB = []
-                    for i_theta in range(len(theta_bins)):
-                        x = self.ell_fourier_integral*theta_bins[i_theta]/60/180*np.pi
-                        K_mmE.append(jv(0,x))
-                        K_mmB.append(jv(4,x))
-                    WXY_stack = []
-                    K_mmE = np.array(K_mmE)
-                    K_mmB = np.array(K_mmB)
-                    for i_theta in range(len(theta_bins)):
-                        WXY_stack.append(K_mmE[i_theta,:])
-                    for i_theta in range(len(theta_bins)):
-                        WXY_stack.append(K_mmB[i_theta,:])
-                    WXY_stack = np.array(WXY_stack)
-                    ell_limits = []
-                    for mode in range(len(WXY_stack[:,0])):
-                        limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
-                        limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
-                        limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
-                        # start integrating at the smallest multipole of the ell-space covariance
-                        limits_at_mode_append[0] = self.ellrange[0]
-                        limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
-                        ell_limits.append(limits_at_mode_append)
-                    levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores)
-                    levin_int_fourier.init_w_ell(self.ell_fourier_integral, WXY_stack.T)
-                    integrand = Cell_mm_flat*self.ellrange[:, None]
-                    levin_int_fourier.init_integral(
-                            self.ellrange, integrand, True, True)
-                    for i_theta in range(len(theta_bins)):
-                        xip_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta],i_theta)
-                        xip_signal[i_theta, :, :, :] = np.reshape(
-                            xip_signal_at_thetai_flat, original_shape)/2.0/np.pi
-                        xim_signal_at_thetai_flat = levin_int_fourier.cquad_integrate_single_well(ell_limits[i_theta + len(theta_bins)],i_theta + len(theta_bins))
-                        xim_signal[i_theta, :, :, :] = np.reshape(
-                            xim_signal_at_thetai_flat, original_shape)/2.0/np.pi    
-                    if self.Cell_mmB is not None:
-                        # the correlation functions of the full shear field
-                        # include the intrinsic B-modes
-                        xip_signal += self._Cell_mmB_projected(
-                            levin_int_fourier, ell_limits, list(range(len(theta_bins))),
-                            [1/2.0/np.pi]*len(theta_bins))
-                        xim_signal += self._Cell_mmB_projected(
-                            levin_int_fourier, ell_limits, [len(theta_bins) + i for i in range(len(theta_bins))],
-                            [-1/2.0/np.pi]*len(theta_bins))
-                    self.xip = xip_signal
-                    self.xim = xim_signal
-                    flat_idx = 0
-                    for i_tomo in range(self.n_tomo_lens):
-                        for j_tomo in range(i_tomo, self.n_tomo_lens):
-                            self.xi_spline["xip"][flat_idx] = UnivariateSpline((theta_bins),(self.xip[:,0,i_tomo, j_tomo]), s=0, k= 3)
-                            self.xi_spline["xim"][flat_idx] = UnivariateSpline((theta_bins),(self.xim[:,0,i_tomo, j_tomo]), s=0, k= 3)
-                            flat_idx += 1
-        
     @staticmethod
     def __int_x_jn(x, n, j1=None):
         """
@@ -629,62 +554,151 @@ class CovTHETASpace(CovELLSpace):
                                [job + (prefac, area) for job in jobs],
                                original_shape, 'real-space covariance ' + name)
 
-    def __get_triplet_mix_term(self,
-                               CovTHETASpace_settings,
-                               survey_params_dict,
-                               gauss_xipxip_mix,
-                               gauss_xipxim_mix,
-                               gauss_ximxim_mix):
+    def __get_xi_tables(self,
+                        theta,
+                        chunk=128):
         """
-        Calculates the mixed term directly from a catalogue and therefore
-        accounts for a more accurate prediction, especially at the survey
-        edges
-        """
-        if 'xipxip' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'ximxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:] or 'xipxim' in CovTHETASpace_settings['mix_term_do_mix_for'][:]:
-            print("")
-            print("\rCalculating the mixed term from triplet counts")
-            print("\rAllocating DiscreteDataClass")
-            thisdata = DiscreteData(path_to_data=CovTHETASpace_settings['mix_term_file_path_catalog'], 
-                    colname_weight=CovTHETASpace_settings['mix_term_col_name_weight'], 
-                    colname_pos1=CovTHETASpace_settings['mix_term_col_name_pos1'], 
-                    colname_pos2=CovTHETASpace_settings['mix_term_col_name_pos2'], 
-                    colname_zbin=CovTHETASpace_settings['mix_term_col_name_zbin'], 
-                    isspherical=CovTHETASpace_settings['mix_term_isspherical'], 
-                    sigma2_eps= survey_params_dict['ellipticity_dispersion']**2, 
-                    target_patchsize=CovTHETASpace_settings['mix_term_target_patchsize'], 
-                    do_overlap=CovTHETASpace_settings['mix_term_do_overlap'])
-            if not thisdata.mixed_fail:
-                print("\rBuilding patches")
-                thisdata.gen_patches(func=cygnus_patches, 
-                        func_args={"ra":thisdata.pos1, "dec":thisdata.pos2, 
-                                    "g1":np.ones(len(thisdata.pos1)), "g2":np.ones(len(thisdata.pos1)), 
-                                    "e1":np.ones(len(thisdata.pos1)), "e2":np.ones(len(thisdata.pos1)),
-                                    "zbin":thisdata.zbin, "weight":thisdata.weight,
-                                    "overlap_arcmin":CovTHETASpace_settings['mix_term_do_overlap']*self.theta_ul_bins[-1]})
-                print("\rAllocating DiscreteCovTHETASpace")
-                disccov = DiscreteCovTHETASpace(discrete=thisdata,
-                                    xi_spl=self.xi_spline,
-                                    bin_edges=self.theta_ul_bins,
-                                    nmax=CovTHETASpace_settings['mix_term_nmax'],
-                                    nbinsphi=CovTHETASpace_settings['mix_term_nbins_phi'],
-                                    nsubbins=CovTHETASpace_settings['mix_term_nsubr'],
-                                    do_ec=CovTHETASpace_settings['mix_term_do_ec'],
-                                    nthreads=self.num_cores,
-                                    savepath_triplets=CovTHETASpace_settings['mix_term_file_path_save_triplets'],
-                                    loadpath_triplets=CovTHETASpace_settings['mix_term_file_path_load_triplets'],
-                                    terms=CovTHETASpace_settings['mix_term_do_mix_for'])
+        Tabulates xi_+ and xi_- of all lensing bin pairs at arbitrary
+        separations, e.g. far beyond the theta bins as needed by the
+        discrete covariance. The Bessel weights are set up for at most
+        'chunk' separations at a time, which bounds the memory.
 
-                print("\rComputing triplets",end="")
-                disccov.compute_triplets(fthin=CovTHETASpace_settings['mix_term_subsample'])
-                print("\rComputing Mixed covariance",end="")
-                gauxx_xipxip_mixed_reconsidered, gauxx_xipxim_mixed_reconsidered, gauxx_ximxim_mixed_reconsidered = \
-                disccov.mixed_covariance()
-                return gauxx_xipxip_mixed_reconsidered, gauxx_xipxim_mixed_reconsidered, gauxx_ximxim_mixed_reconsidered
-            else:
-                return gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix
+        Parameters
+        ----------
+        theta : array
+            Separations in arcmin.
+        chunk : int
+            Number of separations integrated together.
+
+        Returns
+        -------
+        xip, xim : arrays
+            with shape (len(theta), n_tomo_lens, n_tomo_lens)
+        """
+        def bessel_weights(theta_chunk):
+            return np.array([jv(n_bessel, self.ell_fourier_integral*theta_i/60/180*np.pi)
+                             for n_bessel in (0, 4) for theta_i in theta_chunk])
+
+        chunks = [theta[i:i + chunk] for i in range(0, len(theta), chunk)]
+        # the integration limits of all separations come first, since the
+        # longest list of them sets the accuracy of levin
+        ell_limits = []
+        for theta_chunk in chunks:
+            WXY_stack = bessel_weights(theta_chunk)
+            limits_chunk = []
+            for mode in range(len(WXY_stack[:,0])):
+                limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
+                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
+                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
+                # start integrating at the smallest multipole of the ell-space covariance
+                limits_at_mode_append[0] = self.ellrange[0]
+                limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
+                limits_chunk.append(limits_at_mode_append)
+            ell_limits.append(limits_chunk)
+        accuracy = self.accuracy/np.sqrt(max(len(limits) for limits_chunk in ell_limits for limits in limits_chunk))
+        flat_length = self.n_tomo_lens*self.n_tomo_lens
+        Cell_mm_flat = np.reshape(self.Cell_mm, (len(self.ellrange), flat_length))
+        integrand = Cell_mm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+        xip = np.zeros((len(theta), self.n_tomo_lens, self.n_tomo_lens))
+        xim = np.zeros((len(theta), self.n_tomo_lens, self.n_tomo_lens))
+        start = 0
+        for theta_chunk, limits_chunk in zip(chunks, ell_limits):
+            n_theta = len(theta_chunk)
+            levin_int_fourier = levin.Levin(0, 16, 32, accuracy, self.integration_intervals, self.num_cores)
+            levin_int_fourier.init_w_ell(self.ell_fourier_integral, bessel_weights(theta_chunk).T)
+            levin_int_fourier.init_integral(self.ellrange, integrand, True, True)
+            for i_theta in range(n_theta):
+                xip[start + i_theta, :, :] = np.reshape(levin_int_fourier.cquad_integrate_single_well(limits_chunk[i_theta], i_theta),
+                                                        (self.n_tomo_lens, self.n_tomo_lens))/2.0/np.pi
+                xim[start + i_theta, :, :] = np.reshape(levin_int_fourier.cquad_integrate_single_well(limits_chunk[i_theta + n_theta], i_theta + n_theta),
+                                                        (self.n_tomo_lens, self.n_tomo_lens))/2.0/np.pi
+            if self.Cell_mmB is not None:
+                # the correlation functions of the full shear field include the
+                # intrinsic B-modes, xi_+ = int J_0 (C_EE + C_BB) and
+                # xi_- = int J_4 (C_EE - C_BB)
+                xip[start:start + n_theta] += np.reshape(self._Cell_mmB_projected(levin_int_fourier, limits_chunk, list(range(n_theta)),
+                                                                                  [1/2.0/np.pi]*n_theta, self.pixel_weight),
+                                                         (n_theta, self.n_tomo_lens, self.n_tomo_lens))
+                xim[start:start + n_theta] += np.reshape(self._Cell_mmB_projected(levin_int_fourier, limits_chunk, [n_theta + i for i in range(n_theta)],
+                                                                                  [-1/2.0/np.pi]*n_theta, self.pixel_weight),
+                                                         (n_theta, self.n_tomo_lens, self.n_tomo_lens))
+            start += n_theta
+        return xip, xim
+
+    def __get_discrete_gaussian(self,
+                                survey_params_dict,
+                                gauss_xipxip_sva,
+                                gauss_xipxim_sva,
+                                gauss_ximxim_sva,
+                                gauss_xipxip_mix,
+                                gauss_xipxim_mix,
+                                gauss_ximxim_mix,
+                                gauss_xipxip_sn,
+                                gauss_ximxim_sn):
+        """
+        Replaces the Gaussian xi_pm terms listed in [covTHETAspace
+        discrete]: 'replace_terms' by the discrete covariance computed
+        with orpheus (see OrpheusCovTHETASpace). The uncertainty of the
+        multiplicative shear bias is added to the new sample-variance
+        term as to the one it replaces. The shot noise is kept if the
+        pair counts are tabulated, since they take precedence.
+
+        Returns
+        -------
+        gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, \
+        gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, \
+        gauss_xipxip_sn, gauss_ximxim_sn : arrays
+            the replaced blocks as returned by _theta_block, here with
+            shape (theta bins, theta bins, 1, 1,
+                   n_tomo_lens, n_tomo_lens, n_tomo_lens, n_tomo_lens)
+        """
+        replace_terms = self.theta_space_discrete_dict['replace_terms']
+        disccov = OrpheusCovTHETASpace(self.theta_space_discrete_dict,
+                                       self.theta_ul_bins_lensing,
+                                       survey_params_dict['n_eff_lens'],
+                                       survey_params_dict['ellipticity_dispersion'],
+                                       survey_params_dict['survey_area_lens'][0],
+                                       self.num_cores, self.cache_dir)
+        xi_theta = disccov.get_xi_theta()
+        if self.cov_dict['sn_only']:
+            xip = np.zeros((len(xi_theta), self.n_tomo_lens, self.n_tomo_lens))
+            xim = np.zeros((len(xi_theta), self.n_tomo_lens, self.n_tomo_lens))
         else:
-            return None
-        
+            print("Tabulating xi_pm at " + str(len(xi_theta)) + " separations between " +
+                  str(np.round(xi_theta[0], 4)) + " and " + str(np.round(xi_theta[-1], 1)) +
+                  " arcmin for the discrete covariance.")
+            xip, xim = self.__get_xi_tables(xi_theta)
+        sva, mix, sn = disccov.calc_covTHETA_discrete(xi_theta, xip, xim)
+
+        if 'sva' in replace_terms:
+            if not self.cov_dict['sn_only']:
+                sva['xipxip'] = self._theta_add_product(sva['xipxip'], self.gaussELLmmmm_sva_mult_shear_bias, self.xi_plus, self.xi_plus)
+                sva['xipxim'] = self._theta_add_product(sva['xipxim'], self.gaussELLmmmm_sva_mult_shear_bias, self.xi_plus, self.xi_minus)
+                sva['ximxim'] = self._theta_add_product(sva['ximxim'], self.gaussELLmmmm_sva_mult_shear_bias, self.xi_minus, self.xi_minus)
+            if isinstance(gauss_xipxip_sva, np.ndarray):
+                gauss_xipxip_sva = self._theta_block('xipxip', sva['xipxip'])
+            if isinstance(gauss_xipxim_sva, np.ndarray):
+                gauss_xipxim_sva = self._theta_block('xipxim', sva['xipxim'])
+            if isinstance(gauss_ximxim_sva, np.ndarray):
+                gauss_ximxim_sva = self._theta_block('ximxim', sva['ximxim'])
+        if 'mix' in replace_terms:
+            if isinstance(gauss_xipxip_mix, np.ndarray):
+                gauss_xipxip_mix = self._theta_block('xipxip', mix['xipxip'])
+            if isinstance(gauss_xipxim_mix, np.ndarray):
+                gauss_xipxim_mix = self._theta_block('xipxim', mix['xipxim'])
+            if isinstance(gauss_ximxim_mix, np.ndarray):
+                gauss_ximxim_mix = self._theta_block('ximxim', mix['ximxim'])
+        if 'sn' in replace_terms:
+            if self.npair_mm_tabulated:
+                print("The shot noise of xi_pm is kept from the tabulated pair counts.")
+            else:
+                gauss_xipxip_sn = self._theta_block('xipxip', sn['xipxip'])
+                gauss_ximxim_sn = self._theta_block('ximxim', sn['ximxim'])
+
+        return gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, \
+            gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, \
+            gauss_xipxip_sn, gauss_ximxim_sn
+
     def __plot_signal(self,
                       output_dict):
         """
@@ -1052,17 +1066,17 @@ class CovTHETASpace(CovELLSpace):
                 self.__covTHETA_split_gaussian(covELLspacesettings,
                                             survey_params_dict,
                                             calc_prefac)
-        if self.theta_space_dict['mix_term_do_mix_for'] is not None:
+        if self.theta_space_discrete_dict['do_discrete'] and self.mm:
             print("")
-            print('\rDoing mixed term', end="")
-            mix_terms = (gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix)
-            replaced = self.__get_triplet_mix_term(self.theta_space_dict, survey_params_dict, *mix_terms)
-            if replaced is not None:
-                # the mixed terms from the triplet counts are blocks in the real-space bins
-                gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix = [
-                    term if term is old else self._theta_block(name, term)
-                    for name, term, old in zip(('xipxip', 'xipxim', 'ximxim'), replaced, mix_terms)]
-        
+            print("Calculating the discrete Gaussian covariance of xi_pm with orpheus.")
+            gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva, \
+                gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix, \
+                gauss_xipxip_sn, gauss_ximxim_sn = \
+                self.__get_discrete_gaussian(survey_params_dict,
+                                             gauss_xipxip_sva, gauss_xipxim_sva, gauss_ximxim_sva,
+                                             gauss_xipxip_mix, gauss_xipxim_mix, gauss_ximxim_mix,
+                                             gauss_xipxip_sn, gauss_ximxim_sn)
+
         if self.csmf:
             if not self.cov_dict['split_gauss']:
                 gauss_ww = gauss_ww_sva + gauss_ww_mix

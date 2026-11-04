@@ -14,10 +14,8 @@ cz_covariance.py
 __pycache__
 levin.egg-info
 .vscode
-/input/catalogue_mixed/*
 /output/*
 /my_config_files/*
-!/input/catalogue_mixed/tmptripletcounts_test.fits
 !/output/Cell_gg.ascii
 !/output/Cell_gkappa.ascii
 !/output/Cell_kappakappa.ascii
