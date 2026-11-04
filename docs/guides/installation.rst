@@ -40,6 +40,19 @@ You can install both via ``conda``:
 Once you have carried out these steps, you are ready to run the code. 
 Lastly, since the code uses simpson instead of trapezoidal rules for some integrations, ``scipy`` should be at least version 1.11.
 
+Optional: discrete covariance of :math:`\xi_\pm`
+-------------------------------------------------
+
+The ``[covTHETAspace discrete]`` section of the ``config.ini`` replaces the Gaussian covariance of :math:`\xi_\pm` by the discrete covariance of the survey,
+which is computed with `orpheus <https://github.com/lporth93/orpheus>`_. This requires a version of ``orpheus`` that provides ``orpheus.GGCovariance.get_cov_terms_tomo``
+in the same environment, installed from its repository:
+
+.. code-block:: bash
+
+    git clone -b covariance git@github.com:lporth93/orpheus.git
+    cd orpheus
+    pip install .
+
 
 Known issues
 ------------

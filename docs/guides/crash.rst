@@ -30,6 +30,7 @@ provides all the necessary details.
 - Specifying Observables:
     - ``[covELLspace settings]``: options for standard covariance in flat sky spherical harmonic space. Since this forms the basis of the estimator for all of the other observables, these settings are required.
     - ``[covTHETAspace settings]``: options for the real space covariance matrix
+    - ``[covTHETAspace discrete]``: optionally replaces the Gaussian covariance of :math:`\xi_\pm` by the discrete covariance of the survey, computed with ``orpheus`` from the pairs, triplets and quadruplets of galaxies (see the installation guide)
     - ``[covCOSEBI settings]``: options for the COSEBI covariance matrix (or any probe with the same integral shape)
     - ``[covbandpowers settings]``: options for the bandpower covariance matrix.
 - Specifying the Survey::

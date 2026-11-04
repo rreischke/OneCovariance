@@ -159,6 +159,44 @@ class Input:
         self.bin_averaging = None
         self.integration_intervals = None
 
+        # for the discrete covariance of xi_pm (computed with orpheus)
+        self.covTHETAspace_discrete_settings = dict()
+        self.covTHETAspace_discrete_settings_abr = dict()
+        self.discrete_do_discrete = None
+        self.discrete_method = None
+        self.discrete_method_pairs = None
+        self.discrete_method_triplets = None
+        self.discrete_method_quadruplets = None
+        self.discrete_replace_terms = None
+        self.discrete_phidist_min = None
+        self.discrete_phidist_max = None
+        self.discrete_phidist_bins = None
+        self.discrete_varphi_bins = None
+        self.discrete_xi_theta_bins = None
+        self.discrete_catalog_file = None
+        self.discrete_col_name_pos1 = None
+        self.discrete_col_name_pos2 = None
+        self.discrete_col_name_weight = None
+        self.discrete_npatches = None
+        self.discrete_rmin_pixsize = None
+        self.discrete_tree_resos = None
+        self.discrete_tree_method = None
+        self.discrete_nmaxs = None
+        self.discrete_shuffle_pix = None
+        self.discrete_memory_bound = None
+        self.discrete_nbins_phi_triplets = None
+        self.discrete_triplet_oversample = None
+        self.discrete_quad_theta_min = None
+        self.discrete_quad_theta_max = None
+        self.discrete_quad_binsize = None
+        self.discrete_quad_nbins_phi = None
+        self.discrete_frompairs_suppression_file = None
+        self.discrete_frompairs_thin = None
+        self.discrete_n_coarse = None
+        self.discrete_slab_width = None
+        self.discrete_path_multiplets = None
+        self.discrete_store_multiplets = None
+
 
         # for COSEBIs
         self.covCOSEBI_settings = dict()
@@ -1260,6 +1298,254 @@ class Input:
         else:
             self.xi_pm = False
         
+        return True
+
+    def __read_in_covTHETAspace_discrete_settings(self,
+                                                  config,
+                                                  config_name):
+        """
+        Reads in the settings for the discrete covariance of the
+        estimator 'xi_pm', which is computed with the GGCovariance class
+        of orpheus and replaces the Gaussian terms derived from the
+        angular power spectra. Every value that is not specified either
+        raises an exception or gets a fall-back value which is reported
+        to the user where it matters.
+
+        Parameters
+        ----------
+        config : class
+            This class holds all the information specified the config
+            file. It originates from the configparser module.
+        config_name : string
+            Name of the config file. Needed for giving meaningful
+            exception texts.
+
+        """
+
+        section = 'covTHETAspace discrete'
+        if section in config and 'do_discrete' in config[section]:
+            self.discrete_do_discrete = \
+                config[section].getboolean('do_discrete')
+        else:
+            self.discrete_do_discrete = False
+        if not self.discrete_do_discrete:
+            return True
+        settings = config[section]
+
+        # with theta_to_obs the discrete covariance of xi_pm in the fine
+        # theta bins is mapped to the shear estimator
+        if not (self.cosmicshear and (self.est_shear == 'xi_pm' or self.theta_to_obs)):
+            raise Exception("ConfigError: The discrete covariance in [" +
+                            section + "] is only available for [observables]: " +
+                            "'cosmic_shear = True' with 'est_shear = xi_pm' or with " +
+                            "'theta_to_obs = True'. Must be adjusted in config file " +
+                            config_name + ".")
+        if not self.theta_to_obs and self.theta_type_lensing != 'log':
+            raise Exception("ConfigError: The discrete covariance in [" +
+                            section + "] needs logarithmic theta bins, since " +
+                            "orpheus bins in log theta. Must be adjusted in config " +
+                            "file " + config_name + ", [covTHETAspace settings]: " +
+                            "'theta_type = log'.")
+
+        # Which multiplet counts enter: the method presets for pairs,
+        # triplets and quadruplets, each of which can be overwritten
+        presets = {'continuous': ('continuous', 'continuous', 'continuous'),
+                   'idealised': ('analytic', 'analytic', 'analytic'),
+                   'discrete': ('discrete', 'discrete', 'discrete'),
+                   'discrete_frompairs': ('discrete', 'discrete', 'frompairs')}
+        if 'method' in settings:
+            self.discrete_method = settings['method'].strip()
+        else:
+            self.discrete_method = 'discrete'
+            print("ConfigWarning: [" + section + "]: 'method' is not " +
+                  "specified and set to 'discrete'.")
+        if self.discrete_method not in presets:
+            raise Exception("ConfigError: [" + section + "]: 'method = " +
+                            self.discrete_method + "' is not recognised. Must be " +
+                            "one of " + ", ".join(presets) + " in config file " +
+                            config_name + ".")
+        self.discrete_method_pairs, self.discrete_method_triplets, \
+            self.discrete_method_quadruplets = presets[self.discrete_method]
+        if 'method_pairs' in settings and settings['method_pairs'].strip() != '':
+            self.discrete_method_pairs = settings['method_pairs'].strip()
+        if 'method_triplets' in settings and settings['method_triplets'].strip() != '':
+            self.discrete_method_triplets = settings['method_triplets'].strip()
+        if 'method_quadruplets' in settings and settings['method_quadruplets'].strip() != '':
+            self.discrete_method_quadruplets = \
+                settings['method_quadruplets'].strip()
+        methods_avail = ['analytic', 'discrete', 'continuous']
+        if self.discrete_method_pairs not in methods_avail or \
+           self.discrete_method_triplets not in methods_avail or \
+           self.discrete_method_quadruplets not in methods_avail + ['frompairs']:
+            raise Exception("ConfigError: [" + section + "]: 'method_pairs', " +
+                            "'method_triplets' and 'method_quadruplets' must be one " +
+                            "of " + ", ".join(methods_avail) + " ('frompairs' only " +
+                            "for the quadruplets). Must be adjusted in config file " +
+                            config_name + ".")
+        if (self.discrete_method_triplets == 'continuous') != \
+           (self.discrete_method_quadruplets == 'continuous'):
+            raise Exception("ConfigError: [" + section + "]: orpheus evaluates the " +
+                            "continuous mixed and sample-variance terms together, so " +
+                            "'method_triplets' and 'method_quadruplets' must either both " +
+                            "or neither be 'continuous'. Must be adjusted in config file " +
+                            config_name + ".")
+
+        if 'replace_terms' in settings:
+            self.discrete_replace_terms = \
+                (settings['replace_terms'].replace(" ", "")).split(',')
+        else:
+            self.discrete_replace_terms = ['sva', 'mix', 'sn']
+        if not set(self.discrete_replace_terms) <= {'sva', 'mix', 'sn'}:
+            raise Exception("ConfigError: [" + section + "]: 'replace_terms' must " +
+                            "be a list of sva, mix and sn. Must be adjusted in config " +
+                            "file " + config_name + ".")
+
+        # Integration grid of the sample-variance terms and the xi table
+        if 'phidist_min' in settings:
+            self.discrete_phidist_min = float(settings['phidist_min'])
+        else:
+            self.discrete_phidist_min = 1e-4
+        if 'phidist_max' in settings and settings['phidist_max'].strip() != '':
+            self.discrete_phidist_max = float(settings['phidist_max'])
+        else:
+            self.discrete_phidist_max = 1e4
+        if 'phidist_bins' in settings:
+            self.discrete_phidist_bins = int(settings['phidist_bins'])
+        else:
+            self.discrete_phidist_bins = 1024
+        if 'varphi_bins' in settings:
+            self.discrete_varphi_bins = int(settings['varphi_bins'])
+        else:
+            self.discrete_varphi_bins = 1024
+        if 'xi_theta_bins' in settings:
+            self.discrete_xi_theta_bins = int(settings['xi_theta_bins'])
+        else:
+            self.discrete_xi_theta_bins = 1024
+
+        # The catalogue and the measurement of the multiplets
+        needs_catalog = 'discrete' in (self.discrete_method_pairs,
+                                       self.discrete_method_triplets,
+                                       self.discrete_method_quadruplets)
+        if 'catalog_file' in settings and settings['catalog_file'].strip() != '':
+            self.discrete_catalog_file = settings['catalog_file'].strip()
+        elif needs_catalog:
+            raise Exception("ConfigError: [" + section + "]: the multiplets " +
+                            "are measured on a catalogue, but 'catalog_file' is not " +
+                            "specified. Must be adjusted in config file " +
+                            config_name + ".")
+        if 'col_name_pos1' in settings:
+            self.discrete_col_name_pos1 = settings['col_name_pos1'].strip()
+        else:
+            self.discrete_col_name_pos1 = 'RA'
+        if 'col_name_pos2' in settings:
+            self.discrete_col_name_pos2 = settings['col_name_pos2'].strip()
+        else:
+            self.discrete_col_name_pos2 = 'DEC'
+        if 'col_name_weight' in settings and settings['col_name_weight'].strip() != '':
+            self.discrete_col_name_weight = settings['col_name_weight'].strip()
+        if 'npatches' in settings:
+            self.discrete_npatches = int(settings['npatches'])
+        else:
+            self.discrete_npatches = 10
+            if needs_catalog:
+                print("ConfigWarning: [" + section + "]: 'npatches' is not " +
+                      "specified and set to 10.")
+        if 'rmin_pixsize' in settings:
+            self.discrete_rmin_pixsize = float(settings['rmin_pixsize'])
+        else:
+            self.discrete_rmin_pixsize = 40.
+        if 'tree_resos' in settings:
+            self.discrete_tree_resos = \
+                np.array(settings['tree_resos'].split(',')).astype(float)
+        else:
+            self.discrete_tree_resos = np.array([0., 0.5, 1., 2., 4.])
+        if 'tree_method' in settings:
+            self.discrete_tree_method = settings['tree_method'].strip()
+        else:
+            self.discrete_tree_method = 'DoubleTree'
+        if 'nmaxs' in settings:
+            self.discrete_nmaxs = int(settings['nmaxs'])
+        else:
+            self.discrete_nmaxs = 25
+            if needs_catalog:
+                print("ConfigWarning: [" + section + "]: 'nmaxs' is not " +
+                      "specified and set to 25.")
+        if 'shuffle_pix' in settings:
+            self.discrete_shuffle_pix = int(settings['shuffle_pix'])
+        else:
+            self.discrete_shuffle_pix = 1
+        if 'memory_bound' in settings:
+            self.discrete_memory_bound = float(settings['memory_bound'])
+        else:
+            self.discrete_memory_bound = 512.
+        if 'nbins_phi_triplets' in settings:
+            self.discrete_nbins_phi_triplets = int(settings['nbins_phi_triplets'])
+        else:
+            self.discrete_nbins_phi_triplets = 512
+        # left at None, the oversampling is set from the width of the theta bins
+        if 'triplet_oversample' in settings and settings['triplet_oversample'].strip() != '':
+            self.discrete_triplet_oversample = int(settings['triplet_oversample'])
+
+        # Binning of the measured quadruplet density
+        if 'quad_theta_min' in settings:
+            self.discrete_quad_theta_min = float(settings['quad_theta_min'])
+        else:
+            self.discrete_quad_theta_min = 0.25
+        if 'quad_theta_max' in settings and settings['quad_theta_max'].strip() != '':
+            self.discrete_quad_theta_max = float(settings['quad_theta_max'])
+        else:
+            self.discrete_quad_theta_max = self.discrete_phidist_max
+            if self.discrete_method_quadruplets == 'discrete':
+                print("ConfigWarning: [" + section + "]: 'quad_theta_max' is " +
+                      "not specified and set to 'phidist_max' = " +
+                      str(self.discrete_phidist_max) + " arcmin.")
+        if 'quad_binsize' in settings:
+            self.discrete_quad_binsize = float(settings['quad_binsize'])
+        else:
+            self.discrete_quad_binsize = 0.2
+        if 'quad_nbins_phi' in settings:
+            self.discrete_quad_nbins_phi = int(settings['quad_nbins_phi'])
+        else:
+            self.discrete_quad_nbins_phi = 64
+
+        # Pair-count suppression for the quadruplet density 'frompairs'
+        if 'frompairs_suppression_file' in settings and \
+           settings['frompairs_suppression_file'].strip() != '':
+            self.discrete_frompairs_suppression_file = \
+                settings['frompairs_suppression_file'].strip()
+        if 'frompairs_thin' in settings:
+            self.discrete_frompairs_thin = int(settings['frompairs_thin'])
+        else:
+            self.discrete_frompairs_thin = 10
+        if self.discrete_method_quadruplets == 'frompairs' and \
+           self.discrete_frompairs_suppression_file is None and \
+           self.discrete_catalog_file is None:
+            raise Exception("ConfigError: [" + section + "]: the quadruplet " +
+                            "density 'frompairs' needs either " +
+                            "'frompairs_suppression_file' or a 'catalog_file' to " +
+                            "measure the pair counts on. Must be adjusted in config " +
+                            "file " + config_name + ".")
+
+        # Coarse grid for the hybrid computation and the multiplet cache
+        if 'n_coarse' in settings and settings['n_coarse'].strip() != '':
+            self.discrete_n_coarse = int(settings['n_coarse'])
+        if 'slab_width' in settings:
+            self.discrete_slab_width = \
+                np.array(settings['slab_width'].split(',')).astype(float)
+        else:
+            self.discrete_slab_width = np.array([1.35, 1.35, 1.9])
+        if len(self.discrete_slab_width) != 3:
+            raise Exception("ConfigError: [" + section + "]: 'slab_width' needs " +
+                            "three values for xi_pp, xi_mm and xi_pm. Must be " +
+                            "adjusted in config file " + config_name + ".")
+        if 'path_multiplets' in settings and settings['path_multiplets'].strip() != '':
+            self.discrete_path_multiplets = settings['path_multiplets'].strip()
+        if 'store_multiplets' in settings:
+            self.discrete_store_multiplets = \
+                settings.getboolean('store_multiplets')
+        else:
+            self.discrete_store_multiplets = True
+
         return True
 
     def __read_in_covCOSEBI_settings(self,
@@ -3740,6 +4026,39 @@ class Input:
         self.covTHETAspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
 
+        keys = ['do_discrete', 'method', 'method_pairs', 'method_triplets',
+                'method_quadruplets', 'replace_terms', 'phidist_min', 'phidist_max',
+                'phidist_bins', 'varphi_bins', 'xi_theta_bins', 'catalog_file',
+                'col_name_pos1', 'col_name_pos2', 'col_name_weight', 'npatches',
+                'rmin_pixsize', 'tree_resos', 'tree_method', 'nmaxs', 'shuffle_pix',
+                'memory_bound', 'nbins_phi_triplets', 'triplet_oversample',
+                'quad_theta_min', 'quad_theta_max', 'quad_binsize', 'quad_nbins_phi',
+                'frompairs_suppression_file', 'frompairs_thin', 'n_coarse',
+                'slab_width', 'path_multiplets', 'store_multiplets']
+        values = [self.discrete_do_discrete, self.discrete_method, self.discrete_method_pairs,
+                  self.discrete_method_triplets, self.discrete_method_quadruplets,
+                  self.discrete_replace_terms, self.discrete_phidist_min,
+                  self.discrete_phidist_max, self.discrete_phidist_bins,
+                  self.discrete_varphi_bins, self.discrete_xi_theta_bins,
+                  self.discrete_catalog_file, self.discrete_col_name_pos1,
+                  self.discrete_col_name_pos2, self.discrete_col_name_weight,
+                  self.discrete_npatches, self.discrete_rmin_pixsize,
+                  self.discrete_tree_resos, self.discrete_tree_method, self.discrete_nmaxs,
+                  self.discrete_shuffle_pix, self.discrete_memory_bound,
+                  self.discrete_nbins_phi_triplets, self.discrete_triplet_oversample,
+                  self.discrete_quad_theta_min, self.discrete_quad_theta_max,
+                  self.discrete_quad_binsize, self.discrete_quad_nbins_phi,
+                  self.discrete_frompairs_suppression_file, self.discrete_frompairs_thin,
+                  self.discrete_n_coarse, self.discrete_slab_width,
+                  self.discrete_path_multiplets, self.discrete_store_multiplets]
+        self.covTHETAspace_discrete_settings = dict(zip(keys, values))
+        if self.discrete_do_discrete:
+            self.covTHETAspace_discrete_settings_abr.update(
+                {k: v for k, v in zip(keys, values) if v is not None})
+            for key in ['replace_terms', 'tree_resos', 'slab_width']:
+                self.covTHETAspace_discrete_settings_abr[key] = \
+                    ', '.join(map(str, self.covTHETAspace_discrete_settings[key]))
+
         keys = ['En_modes', 'theta_min', 'theta_max', 'En_acc', 'Wn_style',
                 'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',
                 'En_modes_lensing', 'theta_min_lensing', 'theta_max_lensing',
@@ -4063,6 +4382,8 @@ class Input:
             params_used['covELLspace settings'] = self.covELLspace_settings_abr
         if len(self.covTHETAspace_settings_abr) > 0:
             params_used['covTHETAspace settings'] = self.covTHETAspace_settings_abr
+        if len(self.covTHETAspace_discrete_settings_abr) > 0:
+            params_used['covTHETAspace discrete'] = self.covTHETAspace_discrete_settings_abr
         if len(self.covCOESBI_settings_abr) > 0:
             params_used['covCOSEBI settings'] = self.covCOESBI_settings_abr
         if len(self.covbandpowers_settings_abr) > 0:
@@ -4150,8 +4471,14 @@ class Input:
                 Specifies information needed to calculate the covariance
                 for the correlation function estimator 'xi_pm'. Also,
                 allows to turn calculation of xi_pp/pm/mm off.
-                Possible keys: 'theta_min', 'theta_max', 'theta_bins', 
+                Possible keys: 'theta_min', 'theta_max', 'theta_bins',
                                'theta_type', 'xi_pp', 'xi_pm', 'xi_mm'
+            'THETAspace_discrete' : dictionary
+                Specifies the discrete covariance of 'xi_pm' computed
+                with orpheus, see the [covTHETAspace discrete] section.
+                Possible keys: 'do_discrete', 'method',
+                               'method_pairs', 'method_triplets',
+                               'method_quadruplets', 'replace_terms', ...
             'COSEBIs' : dictionary
                 Specifies information needed to calculate the covariance
                 for the COSEBI estimator.
@@ -4243,6 +4570,7 @@ class Input:
         self.__read_in_obs_dict(config, config_name)
         self.__read_in_covELLspace_settings(config, config_name)
         self.__read_in_covTHETAspace_settings(config, config_name)
+        self.__read_in_covTHETAspace_discrete_settings(config, config_name)
         self.__read_in_covRspace_settings(config, config_name)
         self.__read_in_covCOSEBI_settings(config, config_name)
         self.__read_in_covbandpowers_settings(config, config_name)
@@ -4264,6 +4592,7 @@ class Input:
         observables = {'observables': self.observables,
                        'ELLspace': self.covELLspace_settings,
                        'THETAspace': self.covTHETAspace_settings,
+                       'THETAspace_discrete': self.covTHETAspace_discrete_settings,
                        'COSEBIs': self.covCOSEBI_settings,
                        'bandpowers': self.covbandpowers_settings,
                        'Rspace': self.covRspace_settings,
