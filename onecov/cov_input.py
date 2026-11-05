@@ -194,6 +194,8 @@ class Input:
         self.discrete_frompairs_thin = None
         self.discrete_n_coarse = None
         self.discrete_slab_width = None
+        self.discrete_nr_block = None
+        self.discrete_v2_block = None
         self.discrete_path_multiplets = None
         self.discrete_store_multiplets = None
 
@@ -1538,6 +1540,22 @@ class Input:
             raise Exception("ConfigError: [" + section + "]: 'slab_width' needs " +
                             "three values for xi_pp, xi_mm and xi_pm. Must be " +
                             "adjusted in config file " + config_name + ".")
+
+        # Tiling of the quadruplet integral, bounds its memory but not its result
+        if 'nr_block' in settings and settings['nr_block'].strip() != '':
+            self.discrete_nr_block = int(settings['nr_block'])
+            if self.discrete_nr_block < 1:
+                raise Exception("ConfigError: [" + section + "]: 'nr_block' must " +
+                                "be a positive integer or empty (no tiling). Must " +
+                                "be adjusted in config file " + config_name + ".")
+        if 'v2_block' in settings and settings['v2_block'].strip() != '':
+            self.discrete_v2_block = int(settings['v2_block'])
+            if self.discrete_v2_block < 1:
+                raise Exception("ConfigError: [" + section + "]: 'v2_block' must " +
+                                "be a positive integer. Must be adjusted in config " +
+                                "file " + config_name + ".")
+        else:
+            self.discrete_v2_block = 16
         if 'path_multiplets' in settings and settings['path_multiplets'].strip() != '':
             self.discrete_path_multiplets = settings['path_multiplets'].strip()
         if 'store_multiplets' in settings:
@@ -4034,7 +4052,8 @@ class Input:
                 'memory_bound', 'nbins_phi_triplets', 'triplet_oversample',
                 'quad_theta_min', 'quad_theta_max', 'quad_binsize', 'quad_nbins_phi',
                 'frompairs_suppression_file', 'frompairs_thin', 'n_coarse',
-                'slab_width', 'path_multiplets', 'store_multiplets']
+                'slab_width', 'nr_block', 'v2_block', 'path_multiplets',
+                'store_multiplets']
         values = [self.discrete_do_discrete, self.discrete_method, self.discrete_method_pairs,
                   self.discrete_method_triplets, self.discrete_method_quadruplets,
                   self.discrete_replace_terms, self.discrete_phidist_min,
@@ -4050,6 +4069,7 @@ class Input:
                   self.discrete_quad_binsize, self.discrete_quad_nbins_phi,
                   self.discrete_frompairs_suppression_file, self.discrete_frompairs_thin,
                   self.discrete_n_coarse, self.discrete_slab_width,
+                  self.discrete_nr_block, self.discrete_v2_block,
                   self.discrete_path_multiplets, self.discrete_store_multiplets]
         self.covTHETAspace_discrete_settings = dict(zip(keys, values))
         if self.discrete_do_discrete:

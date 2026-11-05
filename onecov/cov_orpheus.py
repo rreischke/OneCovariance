@@ -323,6 +323,7 @@ class OrpheusCovTHETASpace():
                          spl_suppression_ww=suppression, phi_grid=self.phi_grid,
                          varphi1_grid=self.varphi_grid, varphi2_grid=self.varphi_grid,
                          store_multiplets=self.store_multiplets,
+                         nr_block=settings['nr_block'], v2_block=settings['v2_block'],
                          nthreads=self.num_cores)
         if method_quadruplets == 'discrete':
             n_qr = int(round(np.log(settings['quad_theta_max']/settings['quad_theta_min'])
