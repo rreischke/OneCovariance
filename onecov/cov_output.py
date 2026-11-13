@@ -70,6 +70,8 @@ class Output:
         self.style = output_dict['style']
         self.plot = output_dict['make_plot']
         self.Cellfile = output_dict['Cell']
+        self.directory = output_dict.get('directory') or ''
+        self.output_suffix = output_dict.get('output_suffix') or ''
         self.tex = output_dict['use_tex']
         self.save_as_binary = output_dict['save_as_binary']
         self.list_style_spatial_first = output_dict['list_style_spatial_first']
@@ -7779,5 +7781,46 @@ class Output:
                 print("Writing '" + fname + "'.")
                 for ostr in olist_mmB:
                     file.write("%s\n" % ostr)
+
+        return True
+
+    def write_signals(self,
+                      signals):
+        """
+        Writes the signals of the summary statistics in the layout of the
+        C_ell output (write_Cells) to 'signal_<probe><output_suffix>.dat' in
+        the output directory for the probes gg, gm, mm, csmf and xi_discrete
+        (xi_pm tabulated for the discrete covariance): one row per
+        spatial bin (ell, theta, mode, ...) and tomographic bin combination,
+        one column per signal (e.g. xi_plus and xi_minus) and galaxy sample
+        (combination).
+
+        Parameters
+        ----------
+        signals : dictionary
+            as returned by the signals method of the covariance classes,
+            {probe: (label of the spatial index, spatial values,
+                     {name: signal})}, the signals with the shape
+            (spatial, sample bins, tomo, tomo) (csmf: (mass bins, tomo)).
+        """
+        for probe, (label, spatial, values) in signals.items():
+            n_tomo_axes = 1 if probe == 'csmf' else 2
+            header = '#' + label + '\t\t' + ''.join('tomo_' + idx + '\t' for idx in 'ij'[:n_tomo_axes])
+            columns = []
+            for name, signal in values.items():
+                samples = signal.shape[1:signal.ndim - n_tomo_axes]
+                for sample in np.ndindex(*samples):
+                    columns.append(signal[(slice(None),) + sample])
+                    header += name + ('' if np.prod(samples) == 1 else
+                                      '_' + '_'.join(str(s + 1) for s in sample)) + '\t\t\t'
+            columns = np.stack(columns, axis=-1)
+            fname = os.path.join(self.directory, 'signal_' + probe + self.output_suffix + '.dat')
+            with open(fname, 'w') as file:
+                print("Writing '" + fname + "'.")
+                file.write(header + '\n')
+                for i_x, x in enumerate(spatial):
+                    for tomo in np.ndindex(*columns.shape[1:-1]):
+                        file.write('%.10e\t' % x + ''.join('%i\t\t' % (t + 1) for t in tomo)
+                                   + ''.join('%.10e\t\t\t' % value for value in columns[(i_x,) + tomo]) + '\n')
 
         return True

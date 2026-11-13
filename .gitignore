@@ -31,4 +31,5 @@ test.ipynb
 CLAUDE.md
 /cache/
 /tests/*
+/test_discrete/*
 !/test_discrete/generate_mocks.ipynb

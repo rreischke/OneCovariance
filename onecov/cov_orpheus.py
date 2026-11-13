@@ -73,6 +73,12 @@ class OrpheusCovTHETASpace():
                             "orpheus package at " + orpheus.__file__ + " does " +
                             "not provide GGCovariance.get_cov_terms_tomo, please " +
                             "update it.")
+        if discrete_dict.get('quad_richardson') and \
+           not hasattr(orpheus.GGCovariance, '_coarsened_quadruplets'):
+            raise Exception("ConfigError: [covTHETAspace discrete]: " +
+                            "'quad_richardson = True' needs an orpheus version with " +
+                            "GGCovariance(q_richardson=...), the one at " +
+                            orpheus.__file__ + " does not provide it, please update it.")
         self.orpheus = orpheus
         self.settings = discrete_dict
         self.theta_ul_bins = np.asarray(theta_ul_bins, dtype=float)
@@ -306,6 +312,12 @@ class OrpheusCovTHETASpace():
                            method=settings['tree_method'],
                            shuffle_pix=settings['shuffle_pix'],
                            memory_bound=settings['memory_bound'], verbosity=1)
+            # finer tree settings of the triplet counts only (orpheus falls back to the
+            # shared ones without them)
+            if settings.get('rmin_pixsize_triplets') is not None:
+                catalog['rmin_pixsize_triplets'] = settings['rmin_pixsize_triplets']
+            if settings.get('tree_resos_triplets') is not None:
+                catalog['tree_resos_triplets'] = list(settings['tree_resos_triplets'])
             print("Read " + str(len(ra)) + " galaxies from " + settings['catalog_file'] +
                   ", their density is " + str(np.round(nbar_ref, 4)) + " arcmin^-2.")
         suppression = None
@@ -328,6 +340,17 @@ class OrpheusCovTHETASpace():
         if method_quadruplets == 'discrete':
             n_qr = int(round(np.log(settings['quad_theta_max']/settings['quad_theta_min'])
                              /settings['quad_binsize']))
+            if settings.get('quad_richardson'):
+                # The sample variance is extrapolated in the radial bin width of q, with the
+                # second density on pairs of merged radial bins, so their number has to be even
+                if n_qr % 2:
+                    n_qr += 1
+                    print("quad_richardson: using " + str(n_qr) + " radial quadruplet bins " +
+                          "(an even number) of width " +
+                          str(np.round(np.log(settings['quad_theta_max']/
+                                              settings['quad_theta_min'])/n_qr, 4)) +
+                          " in ln(theta).")
+                common_kw.update(q_richardson=True)
             q_theta_edges = np.geomspace(settings['quad_theta_min'],
                                          settings['quad_theta_max'], n_qr + 1)
             q_phi_edges = np.linspace(0., 2.*np.pi, settings['quad_nbins_phi'] + 1)

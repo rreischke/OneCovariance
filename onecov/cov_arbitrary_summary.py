@@ -3,11 +3,12 @@ import time
 import levin
 import numpy as np
 from scipy.signal import argrelextrema
+from scipy.special import jv
 
 try:
-    from onecov.cov_ell_space import CovELLSpace
+    from onecov.cov_ell_space import CovELLSpace, wigner_d
 except:
-    from cov_ell_space import CovELLSpace
+    from cov_ell_space import CovELLSpace, wigner_d
 
 
 class CovARBsummary(CovELLSpace):
@@ -153,6 +154,12 @@ class CovARBsummary(CovELLSpace):
                              survey_params_dict,
                              prec,
                              read_in_tables)
+        # the tabulated Fourier filters are flat-sky Hankel transforms of the real-space
+        # filters, W(ell) = int dtheta theta [R_+ J_0(ell theta) +/- R_- J_4(ell theta)]
+        # projected with ell/(2 pi): they are used at ell + 1/2 with the measure ell + 1/2
+        # (real_space_kernel = flat) or with the exact curved-sky kernels for ell <=
+        # curved_sky_ell_max (curved), as for COSEBIs and bandpowers
+        self.real_space_kernel, self.curved_sky_ell_max = self._real_space_kernel_settings(obs_dict)
         self.__get_fourier_weights(read_in_tables['arb_summary'])
         self.__get_real_weights(read_in_tables['arb_summary'])
         if self.gg or self.gm:
@@ -179,21 +186,30 @@ class CovARBsummary(CovELLSpace):
         if self.mm or self.gm:
             survey_params_dict['n_eff_lens'] = save_n_eff_lens
         
-        self.ell_limits = []
-        for mode in range(len(self.WXY_stack[:,0])):
-            limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::obs_dict['arbitrary_summary']['oscillations_straddle']]
-            # start integrating at the smallest multipole of the ell-space covariance
-            ell_start = max(self.ellrange[0], self.ell_fourier_integral[0])
-            limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
-            limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.ell_fourier_integral[-2])]
-            limits_at_mode_append[0] = ell_start
-            limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
-            self.ell_limits.append(limits_at_mode_append)
+        def limits(lower):
+            result = []
+            for mode in range(len(self.WXY_stack[:,0])):
+                minima = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::obs_dict['arbitrary_summary']['oscillations_straddle']]
+                minima = minima[(minima > lower) & (minima < self.ell_fourier_integral[-2])]
+                result.append(np.concatenate(([lower], minima, [self.ell_fourier_integral[-1]])))
+            return result
+        # half a multipole below the smallest one of the ell-space covariance: the full-sky
+        # sum over the integers is the midpoint rule (as for xi_pm, see
+        # CovTHETASpace._theta_ell_limits), within the range of the tabulated filters
+        self.ell_limits = limits(max(self.ellrange[0] - 0.5, self.ell_fourier_integral[0]))
         self.weight_alias = self._weight_aliases(self.WXY_stack)
         self.levin_int_fourier = levin.Levin(0, 16, 32, obs_dict['arbitrary_summary']['arbitrary_accuracy']/np.sqrt(len(max(self.ell_limits, key=len))), 50, self.num_cores)
         self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
         self._register_projection_weights(self.levin_int_fourier, self.ell_fourier_integral, self.WXY_stack,
                                           obs_dict['arbitrary_summary']['arbitrary_accuracy'])
+        # the curved-sky measure: sum_ell (2 ell + 1)/(4 pi) = int dell (ell + 1/2)/(2 pi)
+        # in all projections (signals, Gaussian and four-point terms)
+        self._register_ell_measure(self.levin_int_fourier, np.asarray(self.ellrange, dtype=float) + 0.5)
+        if self.real_space_kernel == 'curved':
+            split = self._setup_curved_sky(self.levin_int_fourier, self.ell_fourier_integral, self.WXY_stack,
+                                           self.__exact_arbitrary_kernels)
+            if split is not None:
+                self.ell_limits = limits(split)
     
         self.theta_limits = []
         for mode in range(len(self.RXY_stack[:,0])):
@@ -254,6 +270,18 @@ class CovARBsummary(CovELLSpace):
                                                 range(self.gg_summaries, self.gg_summaries + self.gm_summaries), self.Cell_gm)
         if self.gg:
             self.arbE_gg = self._project_signal(self.levin_int_fourier, self.ell_limits, range(self.gg_summaries), self.Cell_gg)
+
+    SIGNALS = {'gg': ('index', 'arbE_gg'), 'gm': ('index', 'arbE_gm'), 'mm': ('index', 'arbE_mm', 'arbB_mm')}
+
+    def signals(self):
+        """
+        The signals of the arbitrary summary statistics, labelled by the
+        index of the summary (see CovELLSpace.signals).
+        """
+        return self._signal_dict(self.SIGNALS,
+                                 gg=(None, [getattr(self, 'arbE_gg', None)]),
+                                 gm=(None, [getattr(self, 'arbE_gm', None)]),
+                                 mm=(None, [getattr(self, 'arbE_mm', None), getattr(self, 'arbB_mm', None)]))
 
     def __detect_rscf(self,
                       survey_params_dict,
@@ -554,22 +582,124 @@ class CovARBsummary(CovELLSpace):
                 self.ell_fourier_integral = self.fourier_ell_mmBB
         if self.gg:
             for i_summaries in range(self.gg_summaries):
-                self.WXY_stack.append(np.interp(self.ell_fourier_integral,self.fourier_ell_gg, self.fourier_weights_gg[i_summaries], left=0,right=0))
+                self.WXY_stack.append(np.interp(self.ell_fourier_integral + 0.5,self.fourier_ell_gg, self.fourier_weights_gg[i_summaries], left=0,right=0))
         if self.gm:
             for i_summaries in range(self.gm_summaries):
-                self.WXY_stack.append(np.interp(self.ell_fourier_integral,self.fourier_ell_gm,self.fourier_weights_gm[i_summaries], left=0,right=0))
+                self.WXY_stack.append(np.interp(self.ell_fourier_integral + 0.5,self.fourier_ell_gm,self.fourier_weights_gm[i_summaries], left=0,right=0))
         if self.mm:
             for i_summaries in range(self.mmE_summaries):
-                self.WXY_stack.append(np.interp(self.ell_fourier_integral,self.fourier_ell_mmE,self.fourier_weights_mmE[i_summaries], left=0,right=0))
+                self.WXY_stack.append(np.interp(self.ell_fourier_integral + 0.5,self.fourier_ell_mmE,self.fourier_weights_mmE[i_summaries], left=0,right=0))
             for i_summaries in range(self.mmB_summaries):
-                self.WXY_stack.append(np.interp(self.ell_fourier_integral,self.fourier_ell_mmB,self.fourier_weights_mmB[i_summaries], left=0,right=0))
+                self.WXY_stack.append(np.interp(self.ell_fourier_integral + 0.5,self.fourier_ell_mmB,self.fourier_weights_mmB[i_summaries], left=0,right=0))
             if self.mmBB_filters:
                 # weights gg, gm, mmE, mmB, then C_BB -> E and C_BB -> B
                 for weights in (self.fourier_weights_mmE_BB, self.fourier_weights_mmB_BB):
                     for i_summaries in range(self.mmE_summaries):
-                        self.WXY_stack.append(np.interp(self.ell_fourier_integral, self.fourier_ell_mmBB, weights[i_summaries], left=0, right=0))
+                        self.WXY_stack.append(np.interp(self.ell_fourier_integral + 0.5, self.fourier_ell_mmBB, weights[i_summaries], left=0, right=0))
+        # the filters at ell + 1/2 (flat-sky kernels with ell -> ell + 1/2, see
+        # CovTHETASpace.__get_weights; with the measure ell + 1/2 of the projections the
+        # full-sky sum to leading order)
         self.WXY_stack = np.array(self.WXY_stack)
         return True
+
+    # combinations (c_+, c_-) of the real-space filters, W = c_+ int R_+ J_0 + c_- int R_- J_4,
+    # in the order of preference if several describe a Fourier filter equally well (e.g. for
+    # COSEBIs, whose two flat-sky transforms are identical)
+    FILTER_COMBINATIONS = ((1., 1.), (1., -1.), (1., 0.), (0., 1.))
+
+    def __exact_arbitrary_kernels(self, ell_int, ell_fit_max=1000., tolerance=0.02, chunk=20000):
+        """
+        {mode: exact curved-sky kernel at ell_int} of the tabulated Fourier
+        filters for real_space_kernel = curved (see
+        CovELLSpace._setup_curved_sky), from the real-space filters: a cosmic
+        shear filter is s int dtheta theta [c_+ R_+ J_0(ell theta) + c_- R_-
+        J_4(ell theta)] (R_+/- the mm_p and mm_m filters of the summary, e.g.
+        c_+ = c_- = 1 for E-modes of COSEBIs and bandpowers, c_- = -1 for
+        their B-modes, (1, 0) and (0, 1) for xi_+ and xi_-), a clustering
+        filter s int dtheta theta R J_0(ell theta). The combination (and the
+        scale s) is found from the tabulated filter itself (least squares at
+        ell <= ell_fit_max; the first of FILTER_COMBINATIONS within the
+        accuracy of the quadrature if several fit, e.g. for COSEBIs whose two
+        flat-sky transforms are identical), as the files do not say how they
+        were built. The exact kernel is the tabulated filter at ell + 1/2
+        plus s times the difference of the curved-sky (d^ell_{2,2},
+        d^ell_{2,-2}, P_ell) and flat-sky transforms of the real-space
+        filters (the same quadrature for both, trapezoidal on the tabulated
+        angles, subdivided where the kernels oscillate). Filters that are
+        none of these (relative residual above tolerance), vanishing ones and
+        gamma_t keep the flat-sky ones.
+        """
+        theta_tab = np.asarray(self.theta_real_integral, dtype=float)/60/180*np.pi
+        # subdivide the tabulated angles where the kernels oscillate (linear interpolation
+        # of the filters as for the shot noise)
+        steps = np.maximum(1, np.ceil(np.diff(theta_tab)*max(ell_fit_max, ell_int[-1])/0.2).astype(int))
+        theta = np.concatenate([np.linspace(lo, hi, n, endpoint=False) for lo, hi, n in zip(theta_tab[:-1], theta_tab[1:], steps)]
+                               + [theta_tab[-1:]])
+        weight = theta*np.gradient(theta)
+        weight[0] *= 0.5
+        weight[-1] *= 0.5
+        Rw = np.array([np.interp(theta, theta_tab, row) for row in self.RXY_stack])*weight
+        ell_max, rows = int(ell_int[-1]), np.asarray(ell_int, dtype=int)
+        ell_lo = max(float(ell_int[0]), float(self.ell_fourier_integral[0]) + 0.5)
+        ell_fit = np.geomspace(ell_lo, min(ell_fit_max, float(self.ell_fourier_integral[-1])), 80)
+        # transforms of all real-space filters: fit[n], flat[n] (J_n at ell_fit and at
+        # ell_int + 1/2) and the curved-sky ones, accumulated in chunks of angles
+        n_R = len(Rw)
+        fit = {n: np.zeros((n_R, len(ell_fit))) for n in (0, 4)}
+        flat = {n: np.zeros((n_R, len(ell_int))) for n in (0, 4)}
+        curved = {key: np.zeros((n_R, len(ell_int))) for key in ('P', 'd+', 'd-')}
+        for start in range(0, len(theta), chunk):
+            part = slice(start, start + chunk)
+            x, R_part = np.cos(theta[part]), Rw[:, part]
+            for n in (0, 4):
+                fit[n] += R_part @ jv(n, np.outer(ell_fit, theta[part])).T
+                flat[n] += R_part @ jv(n, np.outer(ell_int + 0.5, theta[part])).T
+            if self.gg:
+                curved['P'] += R_part @ wigner_d(0, 0, ell_max, x)[rows].T
+            if self.mm:
+                curved['d+'] += R_part @ wigner_d(2, 2, ell_max, x)[rows].T
+                curved['d-'] += R_part @ wigner_d(2, -2, ell_max, x)[rows].T
+        tabulated_int = self._weights_at_integers(self.ell_fourier_integral, self.WXY_stack, ell_int)
+        exact = {}
+
+        def add(mode, pairs, combinations):
+            # pairs: [(fit, flat, curved) transforms of R_+ (and R_-)]
+            # the tabulated filter at ell_fit (the stack holds it at ell + 1/2)
+            W_fit = np.interp(ell_fit - 0.5, self.ell_fourier_integral, self.WXY_stack[mode])
+            norm = np.sqrt(np.mean(W_fit**2))
+            if norm == 0:
+                return
+            candidates = []
+            for c in combinations:
+                G = sum(ci*t[0] for ci, t in zip(c, pairs))
+                if np.dot(G, G) == 0:
+                    continue
+                scale = np.dot(W_fit, G)/np.dot(G, G)
+                candidates.append((np.sqrt(np.mean((W_fit - scale*G)**2))/norm, c, scale))
+            smallest = min(candidate[0] for candidate in candidates)
+            if smallest > tolerance:
+                print("CurvedSkyWarning: the Fourier filter " + str(mode) + " of the arbitrary summary statistics is " +
+                      "not the flat-sky transform of its real-space filters (relative residual " + str(round(smallest, 3)) +
+                      "), its flat-sky kernel is used throughout.")
+                return
+            _, c, scale = next(candidate for candidate in candidates if candidate[0] <= max(2*smallest, 1e-3))
+            difference = sum(ci*(t[2] - t[1]) for ci, t in zip(c, pairs))
+            exact[mode] = tabulated_int[mode] + scale*difference
+
+        if self.gg:
+            for i in range(self.gg_summaries):
+                add(i, [(fit[0][i], flat[0][i], curved['P'][i])], ((1.,),))
+        if self.mm:
+            first = self.gg_summaries + self.gm_summaries
+            n_mm = self.mmE_summaries
+            blocks = [first, first + n_mm] + ([first + 2*n_mm, first + 3*n_mm] if self.mmBB_filters else [])
+            for i in range(n_mm):
+                plus, minus = first + i, first + n_mm + i
+                pairs = [(fit[0][plus], flat[0][plus], curved['d+'][plus]),
+                         (fit[4][minus], flat[4][minus], curved['d-'][minus])]
+                for block in blocks:
+                    add(block + i, pairs, self.FILTER_COMBINATIONS)
+        return exact
 
     @staticmethod
     def __common_ell_filters(ells, filters, number):

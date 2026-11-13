@@ -5,12 +5,14 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 try:
-    from onecov.cov_bandpowers import bandpower_real_filters, hann_window
-    from onecov.cov_cosebis import cosebi_filters, psi_Qn, psi_Un
+    from onecov.cov_arbitrary_summary import CovARBsummary
+    from onecov.cov_bandpowers import CovBandPowers, bandpower_real_filters, hann_window
+    from onecov.cov_cosebis import CovCOSEBI, cosebi_filters, psi_Qn, psi_Un
     from onecov.cov_theta_space import CovTHETASpace
 except:
-    from cov_bandpowers import bandpower_real_filters, hann_window
-    from cov_cosebis import cosebi_filters, psi_Qn, psi_Un
+    from cov_arbitrary_summary import CovARBsummary
+    from cov_bandpowers import CovBandPowers, bandpower_real_filters, hann_window
+    from cov_cosebis import CovCOSEBI, cosebi_filters, psi_Qn, psi_Un
     from cov_theta_space import CovTHETASpace
 
 ARCMIN = np.pi/180/60
@@ -518,6 +520,11 @@ class CovTHETAtoOBS(CovTHETASpace):
         do_gm = bool(observables['ggl'])
         do_mm = bool(observables['cosmic_shear'])
         self.arbitrary_filters = bool(obs_dict['arbitrary_summary']['do_arbitrary_summary'])
+        # names of the signals (signals) as for the estimator computed directly
+        classes = {'cosebi': CovCOSEBI, 'bandpowers': CovBandPowers}
+        self.signal_names = CovARBsummary.SIGNALS if self.arbitrary_filters else \
+            {probe: classes.get(observables[est], CovTHETASpace).SIGNALS[probe]
+             for probe, est in (('gg', 'est_clust'), ('gm', 'est_ggl'), ('mm', 'est_shear'))}
         self.filters = self.__get_filters(obs_dict, read_in_tables, do_gg, do_gm, do_mm)
         self.theta_obs_dict = self.__theta_space_obs_dict(obs_dict, do_gg, do_gm, do_mm)
         # map every real-space block to the summaries as soon as it is
@@ -541,6 +548,27 @@ class CovTHETAtoOBS(CovTHETASpace):
         # the projected quantity of the output (summary labels)
         self.obs_proj_quant = self.obs_bins_lensing if self.obs_bins_lensing is not None \
             else self.obs_bins_clustering
+
+    def signals(self):
+        """
+        The signals of the summaries (see CovELLSpace.signals): the filter
+        matrices applied to the correlation functions in the fine bins,
+        E/B = P xi_+ + M xi_- for cosmic shear.
+        """
+        def mapped(n, *pairs):
+            # only the first n rows (the others are the merged-bin check)
+            terms = [np.tensordot(A[:n], signal, axes=1) for A, signal in pairs
+                     if A is not None and signal is not None]
+            return sum(terms) if terms else None
+
+        n = self.n_summaries
+        xi_plus, xi_minus = getattr(self, 'xi_plus', None), getattr(self, 'xi_minus', None)
+        (P_E, M_E), (P_B, M_B) = self.A_mmE, self.A_mmB
+        return self._signal_dict(self.signal_names,
+                                 gg=(self.obs_bins_clustering, [mapped(n['gg'], (self.A_gg, getattr(self, 'w_gg', None)))]),
+                                 gm=(self.obs_bins_clustering, [mapped(n['gm'], (self.A_gm, getattr(self, 'gt', None)))]),
+                                 mm=(self.obs_bins_lensing, [mapped(n['mm'], (P_E, xi_plus), (M_E, xi_minus)),
+                                                             mapped(n['mm'], (P_B, xi_plus), (M_B, xi_minus))]))
 
     def __get_filters(self, obs_dict, read_in_tables, do_gg, do_gm, do_mm):
         """

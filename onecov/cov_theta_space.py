@@ -8,11 +8,13 @@ from scipy.signal import argrelextrema
 from scipy.special import jv
 
 try:
-    from onecov.cov_ell_space import CovELLSpace, LazyWeightsLevin
+    from onecov.cov_ell_space import CovELLSpace, LazyWeightsLevin, wigner_d
     from onecov.cov_orpheus import OrpheusCovTHETASpace
+    from onecov.cov_output import Output
 except:
-    from cov_ell_space import CovELLSpace, LazyWeightsLevin
+    from cov_ell_space import CovELLSpace, LazyWeightsLevin, wigner_d
     from cov_orpheus import OrpheusCovTHETASpace
+    from cov_output import Output
 
 
 class CovTHETASpace(CovELLSpace):
@@ -176,9 +178,18 @@ class CovTHETASpace(CovELLSpace):
         self.xi_mm = obs_dict['THETAspace']['xi_mm']
         self.bin_averaging = obs_dict['THETAspace']['bin_averaging']
         self.accuracy = obs_dict['THETAspace']['theta_acc']
+        # kernels of the projections to theta space (see __get_weights and
+        # _setup_curved_sky): 'flat' (default), J_n((ell + 1/2) theta), or
+        # 'curved', the exact full-sky sums for ell <= curved_sky_ell_max
+        self.real_space_kernel, self.curved_sky_ell_max = self._real_space_kernel_settings(obs_dict)
+        # integrate up to ell_max + 1/2 of the ell-space table instead of
+        # extrapolating the spectra up to 1e5 (see _theta_ell_limits)
+        self.cut_at_ell_max = bool(obs_dict['THETAspace'].get('cut_at_ell_max') or False)
         self.theta_space_dict = obs_dict['THETAspace']
         self.theta_space_discrete_dict = \
             obs_dict.get('THETAspace_discrete', {'do_discrete': False})
+        # for the output written during the calculation (xi_pm of the discrete covariance)
+        self.output_dict = output_dict
         # tabulated pair counts take precedence for the shot noise of the
         # discrete covariance
         self.npair_mm_tabulated = read_in_tables['npair']['npair_mm'] is not None
@@ -220,20 +231,18 @@ class CovTHETASpace(CovELLSpace):
         if ((obs_dict['observables']['est_shear'] == 'xi_pm' and obs_dict['observables']['cosmic_shear']) or (obs_dict['observables']['est_ggl'] == 'gamma_t' and obs_dict['observables']['ggl']) or obs_dict['observables']['est_clust'] == 'w' and obs_dict['observables']['clustering']):
             if not self.cov_dict['sn_only']:
                 self.__get_weights()
-                self.ell_limits = []
-                for mode in range(len(self.WXY_stack[:,0])):
-                    limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
-                    limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
-                    limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
-                    # start integrating at the smallest multipole of the ell-space covariance
-                    limits_at_mode_append[0] = self.ellrange[0]
-                    limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
-                    self.ell_limits.append(limits_at_mode_append)
+                self.ell_limits = self._theta_ell_limits(self.WXY_stack)
                 # the weights are only passed to levin if a cquad integral needs them
                 self.levin_int_fourier = LazyWeightsLevin(levin.Levin(0, 16, 32, obs_dict['THETAspace']['theta_acc']/np.sqrt(len(max(self.ell_limits, key=len))), self.integration_intervals, self.num_cores))
                 self.levin_int_fourier.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
                 self._register_projection_weights(self.levin_int_fourier, self.ell_fourier_integral, self.WXY_stack,
                                                   obs_dict['THETAspace']['theta_acc'])
+                if self.real_space_kernel == 'curved':
+                    # exact full-sky sums up to curved_sky_ell_max, the integrals from there on
+                    split = self._setup_curved_sky(self.levin_int_fourier, self.ell_fourier_integral,
+                                                   self.WXY_stack, self.__exact_theta_kernels)
+                    if split is not None:
+                        self.ell_limits = self._theta_ell_limits(self.WXY_stack, lower=split)
                 self.__get_signal(obs_dict)
         
     def __set_theta_bins(self,
@@ -340,7 +349,7 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.sample_dim**2*self.n_tomo_clust**2
             Cell_gg_flat = np.reshape(
                 self.Cell_gg, (len(self.ellrange), flat_length))
-            integrand = Cell_gg_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+            integrand = Cell_gg_flat*self._curved_sky_measure()[:, None]*(self.pixel_weight**2)[:, None]
             projected = self._project_single(self.levin_int_fourier, self.ell_limits,
                                              list(range(len(self.theta_bins_clustering))), integrand)
             for i_theta in range(len(self.theta_bins_clustering)):
@@ -357,7 +366,7 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.sample_dim*self.n_tomo_clust*self.n_tomo_lens
             Cell_gm_flat = np.reshape(
                 self.Cell_gm, (len(self.ellrange), flat_length))
-            integrand = Cell_gm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+            integrand = Cell_gm_flat*self._curved_sky_measure()[:, None]*(self.pixel_weight**2)[:, None]
             projected = self._project_single(self.levin_int_fourier, self.ell_limits,
                                              [i_theta + self.gg_summaries for i_theta in range(len(self.theta_bins_clustering))],
                                              integrand)
@@ -377,7 +386,7 @@ class CovTHETASpace(CovELLSpace):
             flat_length = self.n_tomo_lens*self.n_tomo_lens
             Cell_mm_flat = np.reshape(
                 self.Cell_mm, (len(self.ellrange), flat_length))
-            integrand = Cell_mm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+            integrand = Cell_mm_flat*self._curved_sky_measure()[:, None]*(self.pixel_weight**2)[:, None]
             n_theta = len(self.theta_bins_lensing)
             first = self.gg_summaries + self.gm_summaries
             projected = self._project_single(self.levin_int_fourier, self.ell_limits,
@@ -395,14 +404,30 @@ class CovTHETASpace(CovELLSpace):
                 xip_signal += self._Cell_mmB_projected(
                     self.levin_int_fourier, self.ell_limits,
                     [first + i_theta for i_theta in range(n_theta)],
-                    [1/2.0/np.pi]*n_theta, self.pixel_weight)
+                    [1/2.0/np.pi]*n_theta, self.pixel_weight,
+                    ell_measure=self._curved_sky_measure())
                 xim_signal += self._Cell_mmB_projected(
                     self.levin_int_fourier, self.ell_limits,
                     [first + self.mmE_summaries + i_theta for i_theta in range(n_theta)],
-                    [-1/2.0/np.pi]*n_theta, self.pixel_weight)
+                    [-1/2.0/np.pi]*n_theta, self.pixel_weight,
+                    ell_measure=self._curved_sky_measure())
             self.xi_plus = xip_signal
             self.xi_minus = xim_signal
-            
+
+    SIGNALS = {'gg': ('theta', 'w_gg'), 'gm': ('theta', 'gamma_t'),
+               'mm': ('theta', 'xi_plus', 'xi_minus')}
+
+    def signals(self):
+        """
+        The signals w, gamma_t and xi_pm in the theta bins (see
+        CovELLSpace.signals).
+        """
+        return self._signal_dict(self.SIGNALS,
+                                 gg=(self.theta_bins_clustering, [getattr(self, 'w_gg', None)]),
+                                 gm=(self.theta_bins_clustering, [getattr(self, 'gt', None)]),
+                                 mm=(self.theta_bins_lensing, [getattr(self, 'xi_plus', None),
+                                                               getattr(self, 'xi_minus', None)]))
+
     @staticmethod
     def __int_x_jn(x, n, j1=None):
         """
@@ -430,6 +455,111 @@ class CovTHETASpace(CovELLSpace):
             result[small] = series
         return result
 
+    # the curved-sky kernels of the flat-sky Bessel functions J_n((ell + 1/2) theta):
+    # (m, m') of the Wigner-d functions d^ell_{m,m'}, J_0 of w is P_ell = d^ell_{0,0}
+    # (gamma_t, d^ell_{2,0}, has no exact kernel here, see __get_weights)
+    EXACT_ORDERS = {'gg': (0, 0), 'mm+': (2, 2), 'mm-': (2, -2)}
+
+    @staticmethod
+    def _exact_kernels_at(theta_ul_bins, theta_bins, m, mp, ell_int, bin_averaging):
+        """
+        The exact curved-sky kernels d^ell_{m,mp} (wigner_d) at the integers
+        ell_int for real-space bins (in arcmin): bin-averaged with the weight
+        theta (as the flat-sky kernels of __get_weights, Gauss-Legendre with
+        enough nodes for the oscillations of d^ell up to max(ell_int) within
+        the bin) or at the bin centres theta_bins. Shape (len(theta_bins),
+        len(ell_int)).
+        """
+        ell_max = int(ell_int[-1])
+        rows = np.asarray(ell_int, dtype=int)
+        arcmin = np.pi/180/60
+        if not bin_averaging or theta_ul_bins is None:
+            return wigner_d(m, mp, ell_max, np.cos(np.asarray(theta_bins)*arcmin))[rows].T
+        lo, hi = np.asarray(theta_ul_bins[:-1])*arcmin, np.asarray(theta_ul_bins[1:])*arcmin
+        result = np.empty((len(lo), len(rows)))
+        # the bins with the same number of nodes together
+        n_nodes = 16 + 2*np.ceil(ell_max*(hi - lo)).astype(int)
+        for nodes in np.unique(n_nodes):
+            which = np.nonzero(n_nodes == nodes)[0]
+            x, w = np.polynomial.legendre.leggauss(int(nodes))
+            theta = .5*(hi[which] + lo[which])[:, None] + .5*(hi[which] - lo[which])[:, None]*x
+            weight = theta*w
+            weight /= np.sum(weight, axis=1, keepdims=True)
+            d = wigner_d(m, mp, ell_max, np.cos(theta.ravel()))[rows]
+            result[which] = np.einsum('lbn,bn->bl', d.reshape(len(rows), len(which), int(nodes)), weight)
+        return result
+
+    def __exact_theta_kernels(self, ell_int):
+        """
+        {row of self.WXY_stack: exact curved-sky kernel at ell_int} for
+        real_space_kernel = curved (see _setup_curved_sky): P_ell for w and
+        d^ell_{2,pm2} for xi_pm, with the binning of __get_weights.
+        """
+        exact = {}
+        if self.gg:
+            m, mp = self.EXACT_ORDERS['gg']
+            kernels = self._exact_kernels_at(self.theta_ul_bins_clustering, self.theta_bins_clustering, m, mp,
+                                             ell_int, self.bin_averaging)
+            exact.update({i: kernels[i] for i in range(self.gg_summaries)})
+        if self.mm:
+            first = self.gg_summaries + self.gm_summaries
+            for key, offset in (('mm+', first), ('mm-', first + self.mmE_summaries)):
+                m, mp = self.EXACT_ORDERS[key]
+                kernels = self._exact_kernels_at(self.theta_ul_bins_lensing, self.theta_bins_lensing, m, mp,
+                                                 ell_int, self.bin_averaging)
+                exact.update({offset + i: kernels[i] for i in range(self.mmE_summaries)})
+        return exact
+
+    def _curved_sky_measure(self):
+        """
+        ell + 1/2 on self.ellrange, the factor that replaces ell in the
+        projections with the curved-sky kernels of __get_weights: the
+        full-sky sums sum_ell (2 ell + 1)/(4 pi) are int dell (ell + 1/2)/(2 pi)
+        (the midpoint rule on the integers), while the flat-sky integrals carry
+        ell/(2 pi). Each projected sum over ell carries one such factor: one
+        for the signals and the Gaussian covariance (Cov(C_ell) is diagonal
+        in ell, sum_ell (2 ell + 1) C_ell^2 d^ell d^ell), two for the
+        four-point terms. With ell instead, xi_+ is low by about 1/(2 ell),
+        e.g. 2 (8) per cent at 50 (200) arcmin in test_discrete.
+        """
+        return np.asarray(self.ellrange, dtype=float) + 0.5
+
+    def _theta_ell_limits(self, weights, lower=None):
+        """
+        The integration limits over ell for each row of weights (tabulated on
+        self.ell_fourier_integral): every integration_intervals-th minimum of
+        the weight inside, between ell_min - 1/2 (or lower, e.g. the split
+        curved_sky_ell_max + 1/2 of real_space_kernel = curved, see
+        _setup_curved_sky) and ell_upper.
+
+        The lower limit is half a multipole below the smallest one of the
+        ell-space table (ell_min = 2): the full-sky sum over the integers is
+        the midpoint rule, whose ell = 2 term covers [1.5, 2.5]; the spectra
+        are extrapolated in ln C_ell below the table. ell_min = 1 with C_1 = 0
+        instead turns the interpolation of the whole integrand linear (it is
+        in ln C_ell only if positive), which costs accuracy at high ell (xi_-
+        and the mixed terms by up to 3 per cent, test_discrete).
+
+        The upper limit is the end of the kernel table (1e5), with the spectra
+        extrapolated as power laws beyond the ell-space table, or, with
+        cut_at_ell_max, ell_max + 1/2 of the ell-space table (the sum up to
+        and including ell_max). The latter matches a spectrum that is zero
+        beyond ell_max, e.g. healpix maps with lmax = 3 nside - 1: there the
+        extrapolation adds the small-scale power the maps do not have, and
+        the missing hard cutoff shows up as oscillations of a few per cent
+        in xi_pm at small theta (test_discrete).
+        """
+        if lower is None:
+            lower = self.ellrange[0] - 0.5
+        upper = self.ellrange[-1] + 0.5 if self.cut_at_ell_max else self.ell_fourier_integral[-1]
+        inner_max = min(upper, self.ell_fourier_integral[-2])
+        limits = []
+        for weight in weights:
+            minima = self.ell_fourier_integral[argrelextrema(weight, np.less)[0]][::self.integration_intervals]
+            minima = minima[(minima > max(self.ellrange[1], lower)) & (minima < inner_max)]
+            limits.append(np.concatenate(([lower], minima, [upper])))
+        return limits
+
     def __get_weights(self):
         """
         Sets the (bin-averaged) Bessel kernels of all real-space bins,
@@ -438,6 +568,27 @@ class CovTHETASpace(CovELLSpace):
         into the stack, which is the only copy (it is large for many bins).
         With bin averaging, the antiderivatives int_0^x t J_n(t) dt are
         evaluated once per bin edge (neighbouring bins share them).
+
+        The kernels are the flat-sky ones with ell -> ell + 1/2, J_n((ell +
+        1/2) theta) (real_space_kernel = flat, the default). Together with the
+        measure ell + 1/2 (_curved_sky_measure) and the lower limit ell_min -
+        1/2 (_theta_ell_limits) this is sum_ell (2 ell + 1)/(4 pi) C_ell
+        J_n((ell + 1/2) theta), which agrees with the exact full-sky xi_+ to
+        0.1 per cent up to 80 arcmin, 0.3 per cent at 110 arcmin and 2 (5)
+        per cent at 240 (300) arcmin, xi_- to 0.1 per cent (test_discrete;
+        the plain flat-sky ell J_n(ell theta) is low by 1 to 2 per cent from
+        20 to 200 arcmin).
+
+        With real_space_kernel = curved, the sums over ell <= curved_sky_ell_max
+        use the exact curved-sky kernels instead (bin-averaged P_ell for w and
+        d^ell_{2,pm2} for xi_pm, see _setup_curved_sky and
+        _exact_kernels_at), which removes the remaining difference at large
+        theta (it comes from the lowest multipoles); these weights are then
+        integrated from curved_sky_ell_max + 1/2 on only. gamma_t (d^ell_{2,0},
+        whose normalisation relative to C_ell^{g kappa} depends on the
+        convention of the spectra) keeps J_2((ell + 1/2) theta), summed over
+        the integers there. The four-point terms use these weights over the
+        full range in both cases.
         """
         N_fourier = int(1e5)
         self.gg_summaries = 0
@@ -469,12 +620,17 @@ class CovTHETASpace(CovELLSpace):
             if not self.bin_averaging:
                 # at the bin centres (theta in arcmin)
                 for i_theta in range(len(theta_bins)):
-                    x = self.ell_fourier_integral*theta_bins[i_theta]/60/180*np.pi
+                    theta_rad = theta_bins[i_theta]/60/180*np.pi
+                    # ell + 1/2 is the leading-order curved-sky correction to the
+                    # flat-sky Bessel kernel (Hilb-type asymptotic of the Wigner-d functions)
+                    x = (self.ell_fourier_integral + 0.5)*theta_rad
                     for n, row in blocks:
                         self.WXY_stack[row + i_theta] = jv(n, x)
                 continue
+            # exact bin averages of J_n((ell + 1/2) theta) for all orders
             def at_edge(edge, blocks=blocks):
-                x = self.ell_fourier_integral*edge/60/180*np.pi
+                # same ell + 1/2 curved-sky correction as in the bin-centre case above
+                x = (self.ell_fourier_integral + 0.5)*edge/60/180*np.pi
                 j1 = jv(1, x)
                 return x, {n: x*j1 if n == 0 else self.__int_x_jn(x, n, j1) for n, _ in blocks}
 
@@ -526,9 +682,11 @@ class CovTHETASpace(CovELLSpace):
             return [(self._ell_limits_double(self.ell_limits, job[0], job[1]), job[0], job[1], job[2], job[3], prefac) + tuple(job[4:])
                     for job in jobs]
         project = self._project_gauss_jobs_added if added else self._project_gauss_jobs
+        # one curved-sky factor ell + 1/2 (see _curved_sky_measure)
         project(self.levin_int_fourier,
                 self._gauss_todo(sva_flat, mix_flat, with_limits(sva_jobs), with_limits(mix_jobs)),
-                original_shape, 'real-space covariance ' + name)
+                original_shape, 'real-space covariance ' + name,
+                ell_measure=self._curved_sky_measure())
 
     def __project_4pt(self,
                       ell_cov,
@@ -550,9 +708,11 @@ class CovTHETASpace(CovELLSpace):
             if not None, the results are divided by it (connected term)
         """
         prefac = 1.0/(4.0*np.pi**2)
+        # ell + 1/2 for each of the two integrals (see _curved_sky_measure)
         self._project_4pt_jobs(self.levin_int_fourier, self.ell_limits, ell_cov,
                                [job + (prefac, area) for job in jobs],
-                               original_shape, 'real-space covariance ' + name)
+                               original_shape, 'real-space covariance ' + name,
+                               ell_measure=self._curved_sky_measure())
 
     def __get_xi_tables(self,
                         theta,
@@ -575,54 +735,77 @@ class CovTHETASpace(CovELLSpace):
         xip, xim : arrays
             with shape (len(theta), n_tomo_lens, n_tomo_lens)
         """
-        def bessel_weights(theta_chunk):
-            return np.array([jv(n_bessel, self.ell_fourier_integral*theta_i/60/180*np.pi)
-                             for n_bessel in (0, 4) for theta_i in theta_chunk])
+        def bessel_weights(theta_chunk, pool):
+            # kernels of order 0 and 4 as in __get_weights (J_n((ell + 1/2) theta)),
+            # in parallel (scipy ufuncs release the GIL, no OpenMP involved)
+            orders = [(n_bessel, theta_i) for n_bessel in (0, 4) for theta_i in theta_chunk]
+            weights = np.empty((len(orders), len(self.ell_fourier_integral)))
+            # curved-sky measure: xi = sum_ell (2 ell + 1)/(4 pi) C_ell d^ell, i.e.
+            # int dell (ell + 1/2)/(2 pi) C_ell d^ell, while _project_signal integrates
+            # ell C_ell/(2 pi); without this factor xi_+ is low by about 1/(2 ell)
+            # (2 per cent at 50 arcmin, 8 at 200 arcmin, test_discrete). Only here:
+            # the kernels of __get_weights also project the covariance, which
+            # carries a single factor (2 ell + 1), not one per kernel.
+            measure = (self.ell_fourier_integral + 0.5)/self.ell_fourier_integral
+            def row(i):
+                n, theta_i = orders[i]
+                theta_rad = theta_i/60/180*np.pi
+                x = (self.ell_fourier_integral + 0.5)*theta_rad
+                weights[i] = measure*jv(n, x)
+            list(pool.map(row, range(len(orders))))
+            return weights
 
-        chunks = [theta[i:i + chunk] for i in range(0, len(theta), chunk)]
-        # the integration limits of all separations come first, since the
-        # longest list of them sets the accuracy of levin
-        ell_limits = []
-        for theta_chunk in chunks:
-            WXY_stack = bessel_weights(theta_chunk)
-            limits_chunk = []
-            for mode in range(len(WXY_stack[:,0])):
-                limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(WXY_stack[mode,:], np.less)[0][:]])[::self.integration_intervals]
-                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
-                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  self.ellrange[1]) & (limits_at_mode < self.ell_fourier_integral[-2])]
-                # start integrating at the smallest multipole of the ell-space covariance
-                limits_at_mode_append[0] = self.ellrange[0]
-                limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
-                limits_chunk.append(limits_at_mode_append)
-            ell_limits.append(limits_chunk)
-        accuracy = self.accuracy/np.sqrt(max(len(limits) for limits_chunk in ell_limits for limits in limits_chunk))
-        flat_length = self.n_tomo_lens*self.n_tomo_lens
-        Cell_mm_flat = np.reshape(self.Cell_mm, (len(self.ellrange), flat_length))
-        integrand = Cell_mm_flat*self.ellrange[:, None]*(self.pixel_weight**2)[:, None]
+        def exact_kernels(theta_chunk):
+            # real_space_kernel = curved: d^ell_{2,pm2} at the separations, with the
+            # same measure factor (ell + 1/2)/ell as the weights
+            def kernels(ell_int):
+                exact = {}
+                for i_order, key in enumerate(('mm+', 'mm-')):
+                    m, mp = self.EXACT_ORDERS[key]
+                    d = self._exact_kernels_at(None, theta_chunk, m, mp, ell_int, False)*((ell_int + 0.5)/ell_int)
+                    exact.update({i_order*len(theta_chunk) + i: d[i] for i in range(len(theta_chunk))})
+                return exact
+            return kernels
+
+        # the same limits as for the signals (lower ell_min - 1/2, upper 1e5 or
+        # ell_max + 1/2 with cut_at_ell_max)
+        limits_of = self._theta_ell_limits
+
         xip = np.zeros((len(theta), self.n_tomo_lens, self.n_tomo_lens))
         xim = np.zeros((len(theta), self.n_tomo_lens, self.n_tomo_lens))
-        start = 0
-        for theta_chunk, limits_chunk in zip(chunks, ell_limits):
-            n_theta = len(theta_chunk)
-            levin_int_fourier = levin.Levin(0, 16, 32, accuracy, self.integration_intervals, self.num_cores)
-            levin_int_fourier.init_w_ell(self.ell_fourier_integral, bessel_weights(theta_chunk).T)
-            levin_int_fourier.init_integral(self.ellrange, integrand, True, True)
-            for i_theta in range(n_theta):
-                xip[start + i_theta, :, :] = np.reshape(levin_int_fourier.cquad_integrate_single_well(limits_chunk[i_theta], i_theta),
-                                                        (self.n_tomo_lens, self.n_tomo_lens))/2.0/np.pi
-                xim[start + i_theta, :, :] = np.reshape(levin_int_fourier.cquad_integrate_single_well(limits_chunk[i_theta + n_theta], i_theta + n_theta),
-                                                        (self.n_tomo_lens, self.n_tomo_lens))/2.0/np.pi
-            if self.Cell_mmB is not None:
-                # the correlation functions of the full shear field include the
-                # intrinsic B-modes, xi_+ = int J_0 (C_EE + C_BB) and
-                # xi_- = int J_4 (C_EE - C_BB)
-                xip[start:start + n_theta] += np.reshape(self._Cell_mmB_projected(levin_int_fourier, limits_chunk, list(range(n_theta)),
-                                                                                  [1/2.0/np.pi]*n_theta, self.pixel_weight),
-                                                         (n_theta, self.n_tomo_lens, self.n_tomo_lens))
-                xim[start:start + n_theta] += np.reshape(self._Cell_mmB_projected(levin_int_fourier, limits_chunk, [n_theta + i for i in range(n_theta)],
-                                                                                  [-1/2.0/np.pi]*n_theta, self.pixel_weight),
-                                                         (n_theta, self.n_tomo_lens, self.n_tomo_lens))
-            start += n_theta
+        with ThreadPoolExecutor(max_workers=max(1, int(getattr(self, 'num_cores', 1)))) as pool:
+            # the longest list of integration limits, the one of the largest
+            # separation, sets the accuracy of levin
+            accuracy = self.accuracy/np.sqrt(max(len(limits) for limits in limits_of(bessel_weights([np.max(theta)], pool))))
+            for start in range(0, len(theta), chunk):
+                theta_chunk = theta[start:start + chunk]
+                n_theta = len(theta_chunk)
+                modes = list(range(2*n_theta))
+                weights = bessel_weights(theta_chunk, pool)
+                limits_chunk = limits_of(weights)
+                # as for the signals: Simpson on the registered weight nodes,
+                # the weights only reach levin if cquad is needed after all
+                levin_int = LazyWeightsLevin(levin.Levin(0, 16, 32, accuracy, self.integration_intervals, self.num_cores))
+                levin_int.init_w_ell(self.ell_fourier_integral, weights.T)
+                self._register_projection_weights(levin_int, self.ell_fourier_integral, weights, self.accuracy)
+                if self.real_space_kernel == 'curved':
+                    # exact full-sky sums up to curved_sky_ell_max as for the signals
+                    split = self._setup_curved_sky(levin_int, self.ell_fourier_integral, weights,
+                                                   exact_kernels(theta_chunk))
+                    if split is not None:
+                        limits_chunk = limits_of(weights, lower=split)
+                xi = self._project_signal(levin_int, limits_chunk, modes, self.Cell_mm, 1/2.0/np.pi, self.pixel_weight)
+                if self.Cell_mmB is not None:
+                    # the correlation functions of the full shear field include the
+                    # intrinsic B-modes, xi_+ = int J_0 (C_EE + C_BB) and
+                    # xi_- = int J_4 (C_EE - C_BB)
+                    xi += self._Cell_mmB_projected(levin_int, limits_chunk, modes,
+                                                   [1/2.0/np.pi]*n_theta + [-1/2.0/np.pi]*n_theta, self.pixel_weight)
+                xip[start:start + n_theta], xim[start:start + n_theta] = \
+                    np.reshape(xi, (2, n_theta, self.n_tomo_lens, self.n_tomo_lens))
+                # the registered weights are only needed for this chunk
+                self._projection_weights_of.pop(id(levin_int), None)
+                getattr(self, '_low_ell_exact_of', {}).pop(id(levin_int), None)
         return xip, xim
 
     def __get_discrete_gaussian(self,
@@ -668,6 +851,9 @@ class CovTHETASpace(CovELLSpace):
                   str(np.round(xi_theta[0], 4)) + " and " + str(np.round(xi_theta[-1], 1)) +
                   " arcmin for the discrete covariance.")
             xip, xim = self.__get_xi_tables(xi_theta)
+            # written right away (as the signals, own file), not lost if a later step fails
+            Output(self.output_dict).write_signals(
+                {'xi_discrete': ('theta', xi_theta, {'xi_plus': xip[:, None], 'xi_minus': xim[:, None]})})
         sva, mix, sn = disccov.calc_covTHETA_discrete(xi_theta, xip, xim)
 
         if 'sva' in replace_terms:
@@ -1467,7 +1653,7 @@ class CovTHETASpace(CovELLSpace):
                         csmf_AS_flat = np.reshape(csmf_gg, (len(self.ellrange), flat_length))
                         modes = list(range(self.gg_summaries))
                         projected = self._project_single(self.levin_int_fourier, self.ell_limits, modes,
-                                                         csmf_AS_flat*self.ellrange[:, None])
+                                                         csmf_AS_flat*self._curved_sky_measure()[:, None])
                         for i, m_mode in enumerate(modes):
                             csmf_w[m_mode, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[i], original_shape)
                 else:
@@ -1480,7 +1666,7 @@ class CovTHETASpace(CovELLSpace):
                         csmf_AS_flat = np.reshape(csmf_gm, (len(self.ellrange), flat_length))
                         modes = list(range(self.gg_summaries, self.gm_summaries + self.gg_summaries))
                         projected = self._project_single(self.levin_int_fourier, self.ell_limits, modes,
-                                                         csmf_AS_flat*self.ellrange[:, None])
+                                                         csmf_AS_flat*self._curved_sky_measure()[:, None])
                         for i, m_mode in enumerate(modes):
                             csmf_gt[m_mode - self.gg_summaries, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[i], original_shape)
                 else:
@@ -1497,7 +1683,7 @@ class CovTHETASpace(CovELLSpace):
                         modes = list(range(first, first + self.mmE_summaries))
                         projected = self._project_single(self.levin_int_fourier, self.ell_limits,
                                                          modes + [m_mode + self.mmE_summaries for m_mode in modes],
-                                                         csmf_AS_flat*self.ellrange[:, None])
+                                                         csmf_AS_flat*self._curved_sky_measure()[:, None])
                         for i, m_mode in enumerate(modes):
                             csmf_xip[m_mode - first, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[i], original_shape)
                             csmf_xim[m_mode - first, :, :, :, :, :] = 1./(2.0*np.pi) * np.reshape(projected[len(modes) + i], original_shape)

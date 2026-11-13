@@ -158,6 +158,9 @@ class Input:
         self.theta_acc = None
         self.bin_averaging = None
         self.integration_intervals = None
+        self.real_space_kernel = None
+        self.curved_sky_ell_max = None
+        self.cut_at_ell_max = None
 
         # for the discrete covariance of xi_pm (computed with orpheus)
         self.covTHETAspace_discrete_settings = dict()
@@ -180,6 +183,8 @@ class Input:
         self.discrete_npatches = None
         self.discrete_rmin_pixsize = None
         self.discrete_tree_resos = None
+        self.discrete_rmin_pixsize_triplets = None
+        self.discrete_tree_resos_triplets = None
         self.discrete_tree_method = None
         self.discrete_nmaxs = None
         self.discrete_shuffle_pix = None
@@ -190,6 +195,7 @@ class Input:
         self.discrete_quad_theta_max = None
         self.discrete_quad_binsize = None
         self.discrete_quad_nbins_phi = None
+        self.discrete_quad_richardson = None
         self.discrete_frompairs_suppression_file = None
         self.discrete_frompairs_thin = None
         self.discrete_n_coarse = None
@@ -1096,7 +1102,19 @@ class Input:
                 self.bin_averaging = None
             if 'integration_intervals' in config['covTHETAspace settings']:
                 self.integration_intervals = int(config['covTHETAspace settings']['integration_intervals'])
-                
+            if 'real_space_kernel' in config['covTHETAspace settings']:
+                self.real_space_kernel = config['covTHETAspace settings']['real_space_kernel'].strip().lower()
+                if self.real_space_kernel not in ('flat', 'curved'):
+                    raise Exception("ConfigError: [covTHETAspace settings]: 'real_space_kernel' " +
+                                    "must be 'flat' or 'curved', not '" + self.real_space_kernel + "'.")
+            if 'curved_sky_ell_max' in config['covTHETAspace settings']:
+                self.curved_sky_ell_max = int(config['covTHETAspace settings']['curved_sky_ell_max'])
+                if self.curved_sky_ell_max < 2:
+                    raise Exception("ConfigError: [covTHETAspace settings]: 'curved_sky_ell_max' " +
+                                    "must be at least 2, not " + str(self.curved_sky_ell_max) + ".")
+            if 'cut_at_ell_max' in config['covTHETAspace settings']:
+                self.cut_at_ell_max = config['covTHETAspace settings'].getboolean('cut_at_ell_max')
+
         elif self.cosmicshear and self.est_shear == 'xi_pm':
             self.xi_pp = True
             self.xi_mm = True
@@ -1193,6 +1211,12 @@ class Input:
                 print("The number of integration intervals for the theta space covariance " +
                       "[covTHETAspace settings]: 'integration_intervals' is set to  " +
                       str(self.integration_intervals))
+            if self.real_space_kernel is None:
+                self.real_space_kernel = 'flat'
+            if self.curved_sky_ell_max is None:
+                self.curved_sky_ell_max = 300
+            if self.cut_at_ell_max is None:
+                self.cut_at_ell_max = False
         if self.cosmicshear and self.est_shear == 'xi_pm':
             if self.theta_min is None:
                 if self.theta_min_lensing is None:
@@ -1251,6 +1275,12 @@ class Input:
                 print("The number of integration intervals for the theta space covariance " +
                       "[covTHETAspace settings]: 'integration_intervals' is set to  " +
                       str(self.integration_intervals))
+            if self.real_space_kernel is None:
+                self.real_space_kernel = 'flat'
+            if self.curved_sky_ell_max is None:
+                self.curved_sky_ell_max = 300
+            if self.cut_at_ell_max is None:
+                self.cut_at_ell_max = False
             
             if self.limber is None:
                 self.limber = True
@@ -1461,6 +1491,14 @@ class Input:
                 np.array(settings['tree_resos'].split(',')).astype(float)
         else:
             self.discrete_tree_resos = np.array([0., 0.5, 1., 2., 4.])
+        # finer tree settings of the triplet counts only (default: the ones above). The cells
+        # bias the mixed term of xi_- low at small opening angles (about 10 per cent just
+        # above rmin_pixsize times a cell size), while the quadruplets cannot be counted exactly
+        if 'rmin_pixsize_triplets' in settings and settings['rmin_pixsize_triplets'].strip() != '':
+            self.discrete_rmin_pixsize_triplets = float(settings['rmin_pixsize_triplets'])
+        if 'tree_resos_triplets' in settings and settings['tree_resos_triplets'].strip() != '':
+            self.discrete_tree_resos_triplets = \
+                np.array(settings['tree_resos_triplets'].split(',')).astype(float)
         if 'tree_method' in settings:
             self.discrete_tree_method = settings['tree_method'].strip()
         else:
@@ -1509,6 +1547,10 @@ class Input:
             self.discrete_quad_nbins_phi = int(settings['quad_nbins_phi'])
         else:
             self.discrete_quad_nbins_phi = 64
+        if 'quad_richardson' in settings:
+            self.discrete_quad_richardson = settings.getboolean('quad_richardson')
+        else:
+            self.discrete_quad_richardson = False
 
         # Pair-count suppression for the quadruplet density 'frompairs'
         if 'frompairs_suppression_file' in settings and \
@@ -3973,7 +4015,8 @@ class Input:
                                 for file in self.output_file]
         if self.save_Cells and self.output_dir is not None:
             self.save_Cells = path.join(self.output_dir, self.save_Cells)
-        keys = ['file', 'style', 'make_plot', 'Cell', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary', 'adjacent_clustering_bins']
+        keys = ['file', 'style', 'make_plot', 'Cell', 'save_alms', 'use_tex', 'list_style_spatial_first', 'save_as_binary', 'adjacent_clustering_bins',
+                'directory', 'output_suffix']
 
         if self.output_suffix is not None:
             if self.output_file is not None:
@@ -3989,7 +4032,8 @@ class Input:
                     everything_else,file_extension = os.path.splitext(self.make_plot)
                     self.make_plot = everything_else + self.output_suffix + file_extension        
         values = [self.output_file, self.output_style, self.make_plot,
-                  self.save_Cells, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary, self.adjacent_clustering_bins]
+                  self.save_Cells, self.save_alms, self.use_tex, self.list_style_spatial_first,self.save_as_binary, self.adjacent_clustering_bins,
+                  self.output_dir, self.output_suffix]
         self.output = dict(zip(keys, values))
         keys = ['limber','nglimber','pixelised_cell','pixel_Nside', 'ell_min', 'ell_max', 'ell_bins', 'ell_type', 'delta_z',
                 'integration_steps', 'nz_polyorder', 'tri_delta_z', 'mult_shear_bias', 'n_spec',
@@ -4032,14 +4076,15 @@ class Input:
                 'theta_min_lensing', 'theta_max_lensing', 'theta_bins_lensing', 'theta_type_lensing', 'theta_list', 'xi_pp',
                 'xi_pm', 'xi_mm', 'theta_acc', 'bin_averaging', 'integration_intervals', 'theta_to_obs_bins', 'theta_to_obs_bins_clustering',
                 'theta_to_obs_bins_lensing', 'theta_to_obs_type', 'theta_to_obs_type_clustering',
-                'theta_to_obs_type_lensing']
+                'theta_to_obs_type_lensing', 'real_space_kernel', 'curved_sky_ell_max', 'cut_at_ell_max']
         values = [self.theta_min, self.theta_max, self.theta_bins, self.theta_type,
                   self.theta_min_clustering, self.theta_max_clustering, self.theta_bins_clustering, self.theta_type_clustering,
                   self.theta_min_lensing, self.theta_max_lensing, self.theta_bins_lensing, self.theta_type_lensing,
                   self.theta_list, self.xi_pp, self.xi_pm, self.xi_mm, self.theta_acc, self.bin_averaging,
                   self.integration_intervals,
                   self.theta_to_obs_bins, self.theta_to_obs_bins_clustering, self.theta_to_obs_bins_lensing,
-                  self.theta_to_obs_type, self.theta_to_obs_type_clustering, self.theta_to_obs_type_lensing]
+                  self.theta_to_obs_type, self.theta_to_obs_type_clustering, self.theta_to_obs_type_lensing,
+                  self.real_space_kernel, self.curved_sky_ell_max, self.cut_at_ell_max]
         self.covTHETAspace_settings = dict(zip(keys, values))
         self.covTHETAspace_settings_abr.update(
             {k: v for k, v in zip(keys, values) if v is not None})
@@ -4048,10 +4093,11 @@ class Input:
                 'method_quadruplets', 'replace_terms', 'phidist_min', 'phidist_max',
                 'phidist_bins', 'varphi_bins', 'xi_theta_bins', 'catalog_file',
                 'col_name_pos1', 'col_name_pos2', 'col_name_weight', 'npatches',
-                'rmin_pixsize', 'tree_resos', 'tree_method', 'nmaxs', 'shuffle_pix',
+                'rmin_pixsize', 'tree_resos', 'rmin_pixsize_triplets', 'tree_resos_triplets',
+                'tree_method', 'nmaxs', 'shuffle_pix',
                 'memory_bound', 'nbins_phi_triplets', 'triplet_oversample',
                 'quad_theta_min', 'quad_theta_max', 'quad_binsize', 'quad_nbins_phi',
-                'frompairs_suppression_file', 'frompairs_thin', 'n_coarse',
+                'quad_richardson', 'frompairs_suppression_file', 'frompairs_thin', 'n_coarse',
                 'slab_width', 'nr_block', 'v2_block', 'path_multiplets',
                 'store_multiplets']
         values = [self.discrete_do_discrete, self.discrete_method, self.discrete_method_pairs,
@@ -4062,11 +4108,13 @@ class Input:
                   self.discrete_catalog_file, self.discrete_col_name_pos1,
                   self.discrete_col_name_pos2, self.discrete_col_name_weight,
                   self.discrete_npatches, self.discrete_rmin_pixsize,
-                  self.discrete_tree_resos, self.discrete_tree_method, self.discrete_nmaxs,
+                  self.discrete_tree_resos, self.discrete_rmin_pixsize_triplets,
+                  self.discrete_tree_resos_triplets, self.discrete_tree_method, self.discrete_nmaxs,
                   self.discrete_shuffle_pix, self.discrete_memory_bound,
                   self.discrete_nbins_phi_triplets, self.discrete_triplet_oversample,
                   self.discrete_quad_theta_min, self.discrete_quad_theta_max,
                   self.discrete_quad_binsize, self.discrete_quad_nbins_phi,
+                  self.discrete_quad_richardson,
                   self.discrete_frompairs_suppression_file, self.discrete_frompairs_thin,
                   self.discrete_n_coarse, self.discrete_slab_width,
                   self.discrete_nr_block, self.discrete_v2_block,
@@ -4075,9 +4123,10 @@ class Input:
         if self.discrete_do_discrete:
             self.covTHETAspace_discrete_settings_abr.update(
                 {k: v for k, v in zip(keys, values) if v is not None})
-            for key in ['replace_terms', 'tree_resos', 'slab_width']:
-                self.covTHETAspace_discrete_settings_abr[key] = \
-                    ', '.join(map(str, self.covTHETAspace_discrete_settings[key]))
+            for key in ['replace_terms', 'tree_resos', 'tree_resos_triplets', 'slab_width']:
+                if self.covTHETAspace_discrete_settings[key] is not None:
+                    self.covTHETAspace_discrete_settings_abr[key] = \
+                        ', '.join(map(str, self.covTHETAspace_discrete_settings[key]))
 
         keys = ['En_modes', 'theta_min', 'theta_max', 'En_acc', 'Wn_style',
                 'En_modes_clustering', 'theta_min_clustering', 'theta_max_clustering',

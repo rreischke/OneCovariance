@@ -45,6 +45,7 @@ if observables['observables'].get('theta_to_obs'):
                     covariance_obs[0],
                     covariance_obs[1],
                     covariance_obs[2])
+        out.write_signals(covobs.signals())
     else:
         out = Output(output, covobs.obs_bins_clustering, covobs.obs_bins_lensing)
         out.write_cov(covterms, observables, covobs.n_tomo_clust,
@@ -52,6 +53,7 @@ if observables['observables'].get('theta_to_obs'):
                     covariance_obs[0],
                     covariance_obs[1],
                     covariance_obs[2])
+        out.write_signals(covobs.signals())
 elif not observables['arbitrary_summary']['do_arbitrary_summary']:
     if ((observables['observables']['est_shear'] == 'C_ell' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'C_ell' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'C_ell' and observables['observables']['clustering']):
         print("CALCULATING COVARIANCE FOR ANGULAR POWER SPECTRA")
@@ -76,6 +78,7 @@ elif not observables['arbitrary_summary']['do_arbitrary_summary']:
                     covariance_in_ell_space[0],
                     covariance_in_ell_space[1],
                     covariance_in_ell_space[2])
+        out.write_signals(covell.signals())
 
 
     if ((observables['observables']['est_shear'] == 'xi_pm' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'gamma_t' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'w' and observables['observables']['clustering']):
@@ -92,6 +95,7 @@ elif not observables['arbitrary_summary']['do_arbitrary_summary']:
                     covariance_in_theta_space[0],
                     covariance_in_theta_space[1],
                     covariance_in_theta_space[2])
+        out.write_signals(covtheta.signals())
     if (observables['observables']['est_shear'] == 'cosebi' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'cosebi' and observables['observables']['ggl']) or (observables['observables']['est_clust'] == 'cosebi' and observables['observables']['clustering']):
         print("CALCULATING COVARIANCE FOR COSEBIS")
         print("##################################")
@@ -105,6 +109,7 @@ elif not observables['arbitrary_summary']['do_arbitrary_summary']:
                     covariance_COSEBIS[0],
                     covariance_COSEBIS[1],
                     covariance_COSEBIS[2])
+        out.write_signals(covcosebis.signals())
 
     if ((observables['observables']['est_shear'] == 'bandpowers' and observables['observables']['cosmic_shear']) or (observables['observables']['est_ggl'] == 'bandpowers' and observables['observables']['ggl']) or observables['observables']['est_clust'] == 'bandpowers' and observables['observables']['clustering']):
         print("CALCULATING COVARIANCE FOR BANDPOWERS")
@@ -119,6 +124,7 @@ elif not observables['arbitrary_summary']['do_arbitrary_summary']:
                     covariance_bp[0],
                     covariance_bp[1],
                     covariance_bp[2])
+        out.write_signals(covbp.signals())
 else:
     print("CALCULATING COVARIANCE FOR ARBITRARY SUMMARY STATISTICS")
     print("#######################################################")
@@ -132,4 +138,5 @@ else:
                 covariance_arb[0],
                 covariance_arb[1],
                 covariance_arb[2])
+    out.write_signals(covARB.signals())
     

@@ -2,13 +2,16 @@ import time
 
 import levin
 import numpy as np
+from scipy.integrate import simpson
 from scipy.signal import argrelextrema
 from scipy.special import jv
 
 try:
+    from onecov.cov_ell_space import wigner_d
     from onecov.cov_setup import cached_computation
     from onecov.cov_theta_space import CovTHETASpace
 except:
+    from cov_ell_space import wigner_d
     from cov_setup import cached_computation
     from cov_theta_space import CovTHETASpace
 
@@ -248,6 +251,10 @@ class CovBandPowers(CovTHETASpace):
                              prec,
                              read_in_tables)
         self.__get_Hann_window(obs_dict)
+        if self.mm:
+            # for the exact curved-sky kernels (__exact_bandpower_kernels)
+            self.hann_lensing = (obs_dict['bandpowers']['theta_lo_lensing'],
+                                 obs_dict['bandpowers']['theta_up_lensing'], self.delta_ln_theta_lensing)
         self.__set_multipoles(obs_dict['bandpowers'])
         self.__get_norm()
         self.levin_int = levin.Levin(2, 16, 32, obs_dict['bandpowers']['bandpower_accuracy'], 100, self.num_cores)
@@ -280,16 +287,26 @@ class CovBandPowers(CovTHETASpace):
             self.levin_int.init_w_ell(self.ell_fourier_integral, self.WXY_stack.T)
             self._register_projection_weights(self.levin_int, self.ell_fourier_integral, self.WXY_stack,
                                               obs_dict['bandpowers']['bandpower_accuracy'])
-            self.ell_limits = []
-            for mode in range(len(self.WXY_stack[:,0])):
-                limits_at_mode = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode, :], np.less)[0][:]])
-                # start integrating at the smallest multipole of the ell-space covariance
-                ell_start = max(self.ellrange[0], self.ell_fourier_integral[0])
-                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.ell_fourier_integral[-2])]) + 2)
-                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.ell_fourier_integral[-2])]
-                limits_at_mode_append[0] = ell_start
-                limits_at_mode_append[-1] = self.ell_fourier_integral[-1]
-                self.ell_limits.append(limits_at_mode_append)
+
+            def limits(lower):
+                result = []
+                for mode in range(len(self.WXY_stack[:,0])):
+                    minima = np.array(self.ell_fourier_integral[argrelextrema(self.WXY_stack[mode, :], np.less)[0][:]])
+                    minima = minima[(minima > lower) & (minima < self.ell_fourier_integral[-2])]
+                    result.append(np.concatenate(([lower], minima, [self.ell_fourier_integral[-1]])))
+                return result
+            # half a multipole below the smallest one of the ell-space covariance: the
+            # full-sky sum over the integers is the midpoint rule (as for xi_pm, see
+            # CovTHETASpace._theta_ell_limits)
+            self.ell_limits = limits(self.ellrange[0] - 0.5)
+            # the curved-sky measure: sum_ell (2 ell + 1)/(4 pi) = int dell (ell + 1/2)/(2 pi)
+            # in all projections (signals, Gaussian and four-point terms)
+            self._register_ell_measure(self.levin_int, np.asarray(self.ellrange, dtype=float) + 0.5)
+            if self.real_space_kernel == 'curved':
+                split = self._setup_curved_sky(self.levin_int, self.ell_fourier_integral, self.WXY_stack,
+                                               self.__exact_bandpower_kernels)
+                if split is not None:
+                    self.ell_limits = limits(split)
             self.weight_alias = self._weight_aliases(self.WXY_stack)
         self.__get_bandpowers()
             
@@ -332,6 +349,18 @@ class CovBandPowers(CovTHETASpace):
             if self.gg:
                 self.CE_gg = self._project_signal(self.levin_int, self.ell_limits, range(n_clust),
                                                   self.Cell_gg, 1 / self.N_ell_clustering)
+
+    SIGNALS = {'gg': ('ell', 'CE_gg'), 'gm': ('ell', 'CE_gm'), 'mm': ('ell', 'CE_mm', 'CB_mm')}
+
+    def signals(self):
+        """
+        The signals of the bandpowers (see CovELLSpace.signals).
+        """
+        return self._signal_dict(self.SIGNALS,
+                                 gg=(self.ell_bins_clustering, [getattr(self, 'CE_gg', None)]),
+                                 gm=(self.ell_bins_clustering, [getattr(self, 'CE_gm', None)]),
+                                 mm=(self.ell_bins_lensing, [getattr(self, 'CE_mm', None),
+                                                             getattr(self, 'CB_mm', None)]))
 
     def __set_multipoles(self,
                          covbandpowersettings):
@@ -524,9 +553,51 @@ class CovBandPowers(CovTHETASpace):
         print("")
         return result
 
+    def __exact_bandpower_kernels(self, ell_int, n_theta=8000):
+        """
+        {mode: exact curved-sky kernel at ell_int} of the cosmic shear
+        bandpowers for real_space_kernel = curved (see
+        CovELLSpace._setup_curved_sky). With the full-sky xi_pm = sum_ell
+        (2 ell + 1)/(4 pi) C_ell d^ell_{2,pm2} the weights W_EE/W_EB(ell) =
+        int dtheta theta T [g_+ J_0(ell theta) +/- g_- J_4(ell theta)] of
+        __calc_bandpower_weights become int dtheta theta T [g_+ d^ell_{2,2}
+        +/- g_- d^ell_{2,-2}]. The kernels are the flat-sky weights at the
+        integers plus the difference of the two integrals (Simpson's rule on
+        n_theta logarithmic angles with the exact Hann window), so that the
+        quadrature and the representation of the window cancel to first
+        order. The clustering bandpowers keep the flat-sky weights.
+        """
+        exact = {}
+        if not self.mm:
+            return exact
+        theta_lo, theta_up, delta = self.hann_lensing
+        arcmin = np.pi/180/60
+        theta = np.geomspace(theta_lo*np.exp(-delta/2), theta_up*np.exp(delta/2), n_theta)*arcmin
+        window = theta*hann_window(theta, theta_lo*arcmin, theta_up*arcmin, delta)
+        ell_max, rows = int(ell_int[-1]), np.asarray(ell_int, dtype=int)
+        x = np.cos(theta)
+        dp = wigner_d(2, 2, ell_max, x)[rows]
+        dm = wigner_d(2, -2, ell_max, x)[rows]
+        k = np.outer(ell_int + 0.5, theta)
+        jp, jm = jv(0, k), jv(4, k)
+        n_clust, n_lens = len(self.ell_bins_clustering), len(self.ell_bins_lensing)
+        first = 2*n_clust
+        flat = self._weights_at_integers(self.ell_fourier_integral, self.WXY_stack[first:first + 2*n_lens], ell_int)
+        for i_ell in range(n_lens):
+            g_plus, g_minus, _ = bandpower_real_filters(theta, self.ell_ul_bins_lensing[i_ell],
+                                                        self.ell_ul_bins_lensing[i_ell + 1])
+            gp, gm = window*g_plus, window*g_minus
+            for sign, offset in ((1.0, 0), (-1.0, n_lens)):
+                difference = simpson(gp*(dp - jp) + sign*gm*(dm - jm), x=theta, axis=1)
+                exact[first + offset + i_ell] = flat[offset + i_ell] + difference
+        return exact
+
     def __get_WXY(self):
         """
-        Function precomputing bandpower weight functions WEE, WEB and WnE for later integration
+        Function precomputing bandpower weight functions WEE, WEB and WnE for later integration.
+        The weights are evaluated at ell + 1/2 (the flat-sky kernels with ell -> ell + 1/2, see
+        CovTHETASpace.__get_weights; with the measure ell + 1/2 of the projections the full-sky
+        sum to leading order).
         """
         Wl_EE_lens = np.zeros((len(self.ell_bins_lensing), len(self.ell_fourier_integral)))
         Wl_EB = np.zeros((len(self.ell_bins_lensing), len(self.ell_fourier_integral)))
@@ -535,7 +606,7 @@ class CovBandPowers(CovTHETASpace):
         
         self.WXY_stack = np.zeros((2*len(self.ell_bins_clustering) + 2*len(self.ell_bins_lensing), len(self.ell_fourier_integral)))
         if self.gg or self.gm:
-            weights = self.__get_bandpower_weights(self.ell_fourier_integral, self.ell_ul_bins_clustering,
+            weights = self.__get_bandpower_weights(self.ell_fourier_integral + 0.5, self.ell_ul_bins_clustering,
                                                    self.thetabins/60/180*np.pi, self.T_of_theta_clustering,
                                                    ['EE', 'EB', 'nE'], 'clustering')
             # clustering: C_nn = 2 pi/N int dtheta theta T w g_+ = 1/N int dell ell W_nn C_gg with
@@ -543,7 +614,7 @@ class CovBandPowers(CovTHETASpace):
             # (the definition of the band powers, Eq. 123 of arXiv:2410.06962)
             Wl_EE_clust, Wl_nE = (weights['EE'] + weights['EB'])/2, weights['nE']
         if self.mm:
-            weights = self.__get_bandpower_weights(self.ell_fourier_integral, self.ell_ul_bins_lensing,
+            weights = self.__get_bandpower_weights(self.ell_fourier_integral + 0.5, self.ell_ul_bins_lensing,
                                                    self.thetabins/60/180*np.pi, self.T_of_theta_lensing,
                                                    ['EE', 'EB'], 'lensing')
             Wl_EE_lens, Wl_EB = weights['EE'], weights['EB']

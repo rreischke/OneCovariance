@@ -9,7 +9,7 @@ import numpy as np
 from camb import model
 from scipy.fft import fht, fhtoffset
 from scipy.integrate import cumulative_trapezoid, simpson
-from scipy.interpolate import Akima1DInterpolator, RegularGridInterpolator, UnivariateSpline, interp1d
+from scipy.interpolate import Akima1DInterpolator, CubicSpline, RegularGridInterpolator, UnivariateSpline, interp1d
 from scipy.linalg import block_diag
 from scipy.special import spherical_jn
 from scipy.sparse import csr_matrix
@@ -54,6 +54,43 @@ NONLIMBER_TAPER_CHI = 5.0
 NONLIMBER_TOL = 1e-4
 NONLIMBER_N_CONVERGED = 3
 NONLIMBER_ELL_MAX = 1000
+# default of curved_sky_ell_max: the multipoles up to which the projections of
+# real-space based estimators sum the exact curved-sky kernels with
+# real_space_kernel = curved (see CovELLSpace._register_low_ell_exact)
+CURVED_SKY_ELL_MAX = 300
+
+
+def wigner_d(m, mp, ell_max, x):
+    """
+    The Wigner-d functions d^ell_{m, mp}(theta) for ell = 0, ..., ell_max at
+    x = cos(theta), with shape (ell_max + 1, len(x)), zero for ell <
+    max(|m|, |mp|). d^ell_{0,0} = P_ell (w), d^ell_{2,2} and d^ell_{2,-2}
+    are the curved-sky kernels of xi_+ and xi_-: xi_pm(theta) = sum_ell
+    (2 ell + 1)/(4 pi) C_ell d^ell_{2,pm2}(theta). Only m = mp = 0 and m =
+    2, mp = +-2 are implemented, with the stable three-term recursion in
+    ell starting from d^l_{2,pm2} = ((1 pm x)/2)^2 at ell = 2 (P_0 = 1, P_1 =
+    x).
+    """
+    x = np.atleast_1d(np.asarray(x, dtype=float))
+    result = np.zeros((ell_max + 1, len(x)))
+    if (m, mp) == (0, 0):
+        start, d_start = 0, np.ones_like(x)
+    elif m == 2 and abs(mp) == 2:
+        start, d_start = 2, ((1 + np.sign(mp)*x)/2)**2
+    else:
+        raise ValueError("wigner_d is only implemented for (m, mp) = (0, 0), (2, 2) and (2, -2)")
+    if ell_max < start:
+        return result
+    result[start] = d_start
+    previous, current = np.zeros_like(x), d_start
+    for ell in range(start, ell_max):
+        l = float(ell)
+        a_next = np.sqrt(((l + 1)**2 - m**2)*((l + 1)**2 - mp**2))/(l + 1)
+        mixed = m*mp/(l*(l + 1)) if m*mp != 0 else 0.0
+        a_prev = np.sqrt((l**2 - m**2)*(l**2 - mp**2))/l if ell > start else 0.0
+        previous, current = current, ((2*l + 1)*(x - mixed)*current - a_prev*previous)/a_next
+        result[ell + 1] = current
+    return result
 
 
 class LazyWeightsLevin:
@@ -581,6 +618,169 @@ class CovELLSpace(PolySpectra):
         print("ProjectionWarning: the weight functions are not resolved well enough for the "
               "quadrature projection (estimated error " + str(error) + "), using cquad instead.")
 
+    def _register_low_ell_exact(self, levin_int, ell_int, weights_int, lower, split):
+        """
+        Registers the exact low-multipole part of the projections with the
+        weights of levin_int (real_space_kernel = curved, for real-space
+        based estimators): weights_int (shape (modes, len(ell_int))) are the
+        exact curved-sky kernels of all modes at the integers ell_int (e.g.
+        the bin-averaged d^ell_{2,pm2} of xi_pm), split = max(ell_int) + 1/2.
+        The projections of signals and Gaussian covariances (_project_single,
+        _project_signal, _project_gauss_jobs) of modes whose integration
+        limits start at split then add the sums over ell_int,
+            sum_ell W_m(ell) integrand(ell) and
+            sum_ell W_m(ell) W_n(ell) integrand(ell),
+        with the same integrands (including the measure ell + 1/2) as the
+        integrals over the weights of levin_int above split: the full-sky
+        sum over the integers, sum_ell (2 ell + 1)/(4 pi) = sum_ell (ell +
+        1/2)/(2 pi), is exact below split and the midpoint rule (the
+        integral from split on) above. The four-point projections keep the
+        (flat-sky) weights of levin_int over the full range, from lower on
+        (_full_ell_limits); there the curved-sky corrections are negligible.
+        """
+        self.__dict__.setdefault('_low_ell_exact_of', {})[id(levin_int)] = {
+            'levin': levin_int, 'ell': np.asarray(ell_int, dtype=float),
+            'weights': np.ascontiguousarray(weights_int, dtype=float),
+            'lower': float(lower), 'split': float(split)}
+
+    @staticmethod
+    def _real_space_kernel_settings(obs_dict):
+        """
+        real_space_kernel ('flat' or 'curved') and curved_sky_ell_max of
+        [covTHETAspace settings], which apply to all real-space based
+        estimators (xi_pm, gamma_t, w, COSEBIs, bandpowers).
+        """
+        settings = obs_dict.get('THETAspace', {}) or {}
+        kernel = settings.get('real_space_kernel') or 'flat'
+        ell_max = settings.get('curved_sky_ell_max')
+        return kernel, int(CURVED_SKY_ELL_MAX if ell_max is None else ell_max)
+
+    def _setup_curved_sky(self, levin_int, ell, weights, exact_kernels):
+        """
+        Registers the exact low-multipole sums of real_space_kernel = curved
+        (_register_low_ell_exact) for the weights (shape (modes, len(ell)))
+        of levin_int, for the integers from the smallest multipole of the
+        ell-space table to curved_sky_ell_max (below the largest one).
+        exact_kernels(ell_int) returns {mode: exact curved-sky kernel at
+        ell_int}; the other modes (without an exact kernel, e.g. gamma_t)
+        are summed with their flat-sky weights at the integers.
+
+        Returns
+        -------
+        split : float or None
+            curved_sky_ell_max + 1/2, the lower integration limit of all
+            modes from then on (None if the ell-space table starts above
+            curved_sky_ell_max, nothing is registered then)
+        """
+        ell_lo = int(np.ceil(self.ellrange[0] - 1e-9))
+        ell_hi = min(int(self.curved_sky_ell_max), int(np.floor(self.ellrange[-1])) - 1)
+        if ell_hi < ell_lo:
+            print("CurvedSkyWarning: the ell-space table starts above curved_sky_ell_max = " +
+                  str(self.curved_sky_ell_max) + ", the flat-sky kernels are used throughout.")
+            return None
+        ell_int = np.arange(ell_lo, ell_hi + 1, dtype=float)
+        exact = exact_kernels(ell_int)
+        W_int = np.empty((len(weights), len(ell_int)))
+        missing = [mode for mode in range(len(weights)) if mode not in exact]
+        if missing:
+            W_int[missing] = self._weights_at_integers(ell, np.asarray(weights)[missing], ell_int)
+        for mode, kernel in exact.items():
+            W_int[mode] = kernel
+        split = ell_hi + 0.5
+        self._register_low_ell_exact(levin_int, ell_int, W_int, self.ellrange[0] - 0.5, split)
+        return split
+
+    def _low_ell_exact(self, levin_int):
+        entry = getattr(self, '_low_ell_exact_of', {}).get(id(levin_int))
+        if entry is None or entry['levin'] is not levin_int:
+            return None
+        return entry
+
+    def _low_ell_exact_single(self, levin_int, ell_limits, modes, integrand):
+        """
+        The exact low-multipole sums (_register_low_ell_exact) of
+        _project_single, shape (len(modes), integrand.shape[1]); zero for
+        modes whose limits do not start at split.
+        """
+        part = np.zeros((len(modes), integrand.shape[1]))
+        entry = self._low_ell_exact(levin_int)
+        if entry is None:
+            return part
+        rows = [i for i, mode in enumerate(modes) if ell_limits[mode][0] == entry['split']]
+        if rows:
+            F = self._integrand_at(self.ellrange, integrand, entry['ell'], True)
+            part[rows] = entry['weights'][[int(modes[i]) for i in rows]] @ F
+        return part
+
+    def _low_ell_exact_gauss(self, levin_int, keys, lowers, integrand):
+        """
+        The exact low-multipole sums (_register_low_ell_exact) of
+        _project_gauss_jobs for the weight pairs keys with the lower
+        integration limits lowers, shape (len(keys), integrand.shape[1]).
+        """
+        part = np.zeros((len(keys), integrand.shape[1]))
+        entry = self._low_ell_exact(levin_int)
+        if entry is None:
+            return part
+        rows = [i for i, lower in enumerate(lowers) if lower == entry['split']]
+        if rows:
+            F = self._integrand_at(self.ellrange, integrand, entry['ell'], True)
+            W = entry['weights']
+            part[rows] = (W[[int(keys[i][0]) for i in rows]]*W[[int(keys[i][1]) for i in rows]]) @ F
+        return part
+
+    def _full_ell_limits(self, levin_int, ell_limits):
+        """
+        The integration limits of the four-point projections: those starting
+        at the split of the exact low-multipole sums (_register_low_ell_exact)
+        are extended down to its lower limit (the flat-sky weights over the
+        full range).
+        """
+        entry = self._low_ell_exact(levin_int)
+        if entry is None:
+            return ell_limits
+        return [np.concatenate(([entry['lower']], limits)) if limits[0] == entry['split'] else limits
+                for limits in ell_limits]
+
+    @staticmethod
+    def _weights_at_integers(ell, weights, ell_int):
+        """
+        The weights (shape (modes, len(ell))) tabulated at ell at the
+        integers ell_int (cubic spline on the part of the table around
+        them), e.g. the flat-sky weights of the modes without an exact
+        curved-sky kernel for _register_low_ell_exact.
+        """
+        ell = np.asarray(ell, dtype=float)
+        lo = max(np.searchsorted(ell, ell_int[0]) - 4, 0)
+        hi = min(np.searchsorted(ell, ell_int[-1]) + 4, len(ell))
+        result = np.empty((len(weights), len(ell_int)))
+        for start in range(0, len(weights), 64):
+            block = np.asarray(weights[start:start + 64])[:, lo:hi]
+            result[start:start + 64] = CubicSpline(ell[lo:hi], block, axis=1)(ell_int)
+        return result
+
+    def _register_ell_measure(self, levin_int, measure):
+        """
+        Registers the factor (on self.ellrange) that replaces ell in all
+        projections with the weights of levin_int if no ell_measure is
+        passed, e.g. ell + 1/2 for the curved-sky convention of COSEBIs and
+        bandpowers (see CovTHETASpace._curved_sky_measure).
+        """
+        self.__dict__.setdefault('_ell_measure_of', {})[id(levin_int)] = (levin_int, np.asarray(measure, dtype=float))
+
+    def _ell_measure(self, levin_int, ell_measure=None):
+        """
+        The factor that replaces ell in the projections: ell_measure if
+        given, the one registered for levin_int (_register_ell_measure) or
+        self.ellrange.
+        """
+        if ell_measure is not None:
+            return np.asarray(ell_measure)
+        entry = getattr(self, '_ell_measure_of', {}).get(id(levin_int))
+        if entry is None or entry[0] is not levin_int:
+            return self.ellrange
+        return entry[1]
+
     def _weight_quadrature_error(self, ell, weights):
         """
         Estimated relative error of Simpson's rule for int dell W(ell)^2/ell
@@ -634,19 +834,21 @@ class CovELLSpace(PolySpectra):
             result = np.array(levin_int.cquad_integrate_single_well_subset(
                 [ell_limits[mode] for mode in modes], [int(mode) for mode in modes],
                 list(range(integrand.shape[1]))))
-            return result[:, inverse]
-        groups = {}
-        for i, mode in enumerate(modes):
-            groups.setdefault((ell_limits[mode][0], ell_limits[mode][-1]), []).append(i)
-        n_nodes = len(self._projection_weights_of[id(levin_int)][0])
-        for (lo, hi), idx in groups.items():
-            idx = np.array(idx)
-            values = None
-            for rows in self._blocks(len(idx), n_nodes):
-                x, Wx = self._weights_on_nodes(levin_int, [modes[i] for i in idx[rows]], lo, hi)
-                if values is None:
-                    values = self._integrand_at(self.ellrange, integrand, x, True)*self._simpson_weights_nonuniform(x)[:, None]
-                result[idx[rows]] = Wx @ values
+        else:
+            groups = {}
+            for i, mode in enumerate(modes):
+                groups.setdefault((ell_limits[mode][0], ell_limits[mode][-1]), []).append(i)
+            n_nodes = len(self._projection_weights_of[id(levin_int)][0])
+            for (lo, hi), idx in groups.items():
+                idx = np.array(idx)
+                values = None
+                for rows in self._blocks(len(idx), n_nodes):
+                    x, Wx = self._weights_on_nodes(levin_int, [modes[i] for i in idx[rows]], lo, hi)
+                    if values is None:
+                        values = self._integrand_at(self.ellrange, integrand, x, True)*self._simpson_weights_nonuniform(x)[:, None]
+                    result[idx[rows]] = Wx @ values
+        # the exact curved-sky sums at low ell (real_space_kernel = curved)
+        result += self._low_ell_exact_single(levin_int, ell_limits, modes, integrand)
         return result[:, inverse]
 
     def _project_signal(self, levin_int, ell_limits, modes, Cell, prefactors=1/2/np.pi, pixel_weight=None):
@@ -654,7 +856,8 @@ class CovELLSpace(PolySpectra):
         prefactor_m int dell ell W_m(ell) Cell(ell) for the weights modes of
         levin_int (the signal of a projected estimator, see _project_single),
         prefactors is a number or one per mode, pixel_weight is optionally
-        multiplied twice to Cell.
+        multiplied twice to Cell. ell is the measure registered for levin_int
+        if any (_register_ell_measure, e.g. ell + 1/2).
 
         Returns
         -------
@@ -662,7 +865,7 @@ class CovELLSpace(PolySpectra):
             with shape (len(modes),) + Cell.shape[1:]
         """
         modes = list(modes)
-        integrand = np.reshape(Cell, (len(self.ellrange), -1))*self.ellrange[:, None]
+        integrand = np.reshape(Cell, (len(self.ellrange), -1))*self._ell_measure(levin_int)[:, None]
         if pixel_weight is not None:
             integrand = integrand*(pixel_weight**2)[:, None]
         projected = self._project_single(levin_int, ell_limits, modes, integrand)
@@ -1144,7 +1347,8 @@ class CovELLSpace(PolySpectra):
                     result[mode] = (K[i], D_r[i], D_l[i])
         return result
 
-    def _project_4pt_quadrature(self, levin_int, ell_limits, ell_cov, live, original_shape, outer_logy):
+    def _project_4pt_quadrature(self, levin_int, ell_limits, ell_cov, live, original_shape, outer_logy,
+                                ell_measure=None):
         """
         Four-point projection of _project_4pt_jobs with fixed quadratures:
         inner integrals over ell_2 for all ell_1 and all columns, then the
@@ -1154,6 +1358,7 @@ class CovELLSpace(PolySpectra):
         """
         tol = self._projection_weights_of[id(levin_int)][3]
         n_ell = len(self.ellrange)
+        measure = self.ellrange if ell_measure is None else np.asarray(ell_measure)
         columns = getattr(ell_cov, 'columns', None)
         flat = np.reshape(np.asarray(ell_cov), (n_ell, n_ell, -1))
         unique_idx, inverse = self._unique_columns_blocked(np.reshape(flat, (n_ell*n_ell, -1)))
@@ -1164,7 +1369,7 @@ class CovELLSpace(PolySpectra):
         hi = max(ell_limits[m][-1] for m in inner_modes + outer_modes)
         # inner integrals, sampling checked on a few rows
         rows = np.unique(np.linspace(0, n_ell - 1, 8).astype(int))
-        check = np.moveaxis(flat[rows][:, :, unique_idx]*self.ellrange[None, :, None], 1, 0).reshape(n_ell, -1)
+        check = np.moveaxis(flat[rows][:, :, unique_idx]*measure[None, :, None], 1, 0).reshape(n_ell, -1)
         grid = self._sampling_grid(lo, hi, check, True, tol)
         del check
         if grid is None:
@@ -1178,14 +1383,14 @@ class CovELLSpace(PolySpectra):
         for cols in self._blocks(n_col, len(grid)):
             n_cols = cols.stop - cols.start
             for ell_1 in self._blocks(n_ell, len(grid)*n_cols):
-                block = flat[ell_1][:, :, unique_idx[cols]]*self.ellrange[None, :, None]
+                block = flat[ell_1][:, :, unique_idx[cols]]*measure[None, :, None]
                 n_rows = block.shape[0]
                 block = np.moveaxis(block, 1, 0).reshape(n_ell, -1)
                 values, d_right, d_left = self._integrand_at(self.ellrange, block, grid, True, derivative=True)
                 inner[ell_1, :, cols] = np.moveaxis((K_inner @ values + Dr_inner @ d_right + Dl_inner @ d_left)
                                                     .reshape(len(inner_modes), n_rows, n_cols), 1, 0)
         # outer integrals, on one grid (fine enough for all inner weights)
-        inner *= self.ellrange[:, None, None]
+        inner *= measure[:, None, None]
         integrand = np.reshape(inner, (n_ell, -1))
         grid = self._sampling_grid(lo, hi, integrand, outer_logy, tol)
         if grid is None:
@@ -1467,11 +1672,15 @@ class CovELLSpace(PolySpectra):
                             levin_int,
                             todo,
                             original_shape,
-                            name):
+                            name,
+                            ell_measure=None):
         """
         Projects Gaussian (diagonal in ell) ell-space covariances with two
         weights, target_array[target_index] =
             prefac * int dell ell W_m(ell) W_n(ell) Cov(ell, ell).
+        ell_measure replaces the factor ell of the integrand if given (on
+        self.ellrange), e.g. ell + 1/2 for the curved-sky real-space kernels
+        of CovTHETASpace, where sum_ell (2 ell + 1) = int dell 2 (ell + 1/2).
 
         Parameters
         ----------
@@ -1506,11 +1715,12 @@ class CovELLSpace(PolySpectra):
                     live.setdefault(key, []).append(job)
             if len(live) == 0:
                 continue
+            measure = self._ell_measure(levin_int, ell_measure)
             if ell_cov_flat.shape[1] == 1 and len(self.ellrange) > 1:
                 # only the diagonal is stored
-                integrand = ell_cov_flat[:, 0, :]*self.ellrange[:, None]
+                integrand = ell_cov_flat[:, 0, :]*measure[:, None]
             else:
-                integrand = np.moveaxis(np.diagonal(ell_cov_flat)*self.ellrange,0,-1)
+                integrand = np.moveaxis(np.diagonal(ell_cov_flat)*measure,0,-1)
             if self._use_quadrature_projection(levin_int):
                 by_range = {}
                 for key, key_jobs in live.items():
@@ -1520,15 +1730,21 @@ class CovELLSpace(PolySpectra):
                 unique_idx, inverse = self._unique_columns(integrand)
                 for (lo, hi), keys in by_range.items():
                     results = self._project_gauss_quadrature(levin_int, integrand[:, unique_idx], keys, lo, hi)
+                    # the exact curved-sky sums at low ell (real_space_kernel = curved)
+                    results = results + self._low_ell_exact_gauss(levin_int, keys, [lo]*len(keys),
+                                                                   integrand[:, unique_idx])
                     self._assign_gauss_results(live, keys, results, inverse, original_shape)
                 continue
             levin_int.init_integral(self.ellrange, integrand, True, True)
             unique_idx, inverse = self._unique_columns(integrand)
             representatives = [key_jobs[0] for key_jobs in live.values()]
-            results = levin_int.cquad_integrate_double_well_subset(
+            results = np.array(levin_int.cquad_integrate_double_well_subset(
                 [job[0] for job in representatives], [job[1] for job in representatives],
-                [job[2] for job in representatives], unique_idx)
-            self._assign_gauss_results(live, list(live.keys()), np.array(results), inverse, original_shape)
+                [job[2] for job in representatives], unique_idx))
+            results = results + self._low_ell_exact_gauss(levin_int, list(live.keys()),
+                                                          [job[0][0] for job in representatives],
+                                                          integrand[:, unique_idx])
+            self._assign_gauss_results(live, list(live.keys()), results, inverse, original_shape)
         print('\rProjection of the Gaussian term for the ' + name + ' done in ' +
               str(round((time.time()-t0)/60, 1)) + 'min', end="")
 
@@ -1583,7 +1799,8 @@ class CovELLSpace(PolySpectra):
                                   levin_int,
                                   todo,
                                   original_shape,
-                                  name):
+                                  name,
+                                  ell_measure=None):
         """
         As _project_gauss_jobs, but the results are added to the target
         arrays, target_array[target_index] += prefac * int dell ell W_m(ell)
@@ -1604,7 +1821,7 @@ class CovELLSpace(PolySpectra):
                     buffers[id(job[3])] = (job[3], np.zeros_like(job[3]))
                 buffered_jobs.append(tuple(job[:3]) + (buffers[id(job[3])][1],) + tuple(job[4:]))
             added.append((ell_cov_flat, buffered_jobs))
-        self._project_gauss_jobs(levin_int, added, original_shape, name)
+        self._project_gauss_jobs(levin_int, added, original_shape, name, ell_measure)
         for target, buffer in buffers.values():
             target += buffer
 
@@ -1613,7 +1830,8 @@ class CovELLSpace(PolySpectra):
                             ell_limits,
                             modes,
                             prefactors,
-                            pixel_weight=None):
+                            pixel_weight=None,
+                            ell_measure=None):
         """
         Projections of the intrinsic B-mode spectrum C_BB with the weights
         'modes' of levin_int, prefactor * int dell ell W_mode(ell) C_BB(ell),
@@ -1639,7 +1857,13 @@ class CovELLSpace(PolySpectra):
         """
         if self.Cell_mmB is None:
             return np.zeros((len(modes), 1, self.n_tomo_lens, self.n_tomo_lens))
-        return self._project_signal(levin_int, ell_limits, modes, self.Cell_mmB, prefactors, pixel_weight)
+        Cell_mmB = self.Cell_mmB
+        if ell_measure is not None:
+            # ell_measure replaces the factor ell of the integrand (see _project_gauss_jobs),
+            # _project_signal multiplies with the measure of levin_int
+            ratio = np.asarray(ell_measure)/self._ell_measure(levin_int)
+            Cell_mmB = Cell_mmB*np.reshape(ratio, (-1,) + (1,)*(np.ndim(Cell_mmB) - 1))
+        return self._project_signal(levin_int, ell_limits, modes, Cell_mmB, prefactors, pixel_weight)
 
     def _assign_4pt_results(self, live, values):
         """
@@ -1705,7 +1929,8 @@ class CovELLSpace(PolySpectra):
                           jobs,
                           original_shape,
                           name,
-                          outer_logy=True):
+                          outer_logy=True,
+                          ell_measure=None):
         """
         Projects a four-point (non-Gaussian or super-sample) ell-space
         covariance T(ell1, ell2),
@@ -1737,6 +1962,10 @@ class CovELLSpace(PolySpectra):
         zero.
         """
         t0 = time.time()
+        # the flat-sky weights over the full range (no exact low-ell sums, see
+        # _register_low_ell_exact) and the measure of levin_int if registered
+        ell_limits = self._full_ell_limits(levin_int, ell_limits)
+        ell_measure = self._ell_measure(levin_int, ell_measure)
         live = []
         for job in jobs:
             if min(self._weight_key(job[0]), self._weight_key(job[1])) < 0:
@@ -1746,7 +1975,8 @@ class CovELLSpace(PolySpectra):
         if len(live) == 0:
             return
         if self._use_quadrature_projection(levin_int):
-            if self._project_4pt_quadrature(levin_int, ell_limits, ell_cov, live, original_shape, outer_logy):
+            if self._project_4pt_quadrature(levin_int, ell_limits, ell_cov, live, original_shape, outer_logy,
+                                            ell_measure):
                 print('\rProjection of the four-point term for the ' + name + ' done in ' +
                       str(round((time.time()-t0)/60, 1)) + 'min', end="")
                 return
@@ -1754,11 +1984,13 @@ class CovELLSpace(PolySpectra):
                   " are not sampled accurately enough for the quadrature, using cquad instead.")
         columns = getattr(ell_cov, 'columns', None)
         ell_cov_flat = np.reshape(np.asarray(ell_cov), (len(self.ellrange), len(self.ellrange), -1))
+        # the factor ell of each of the two integrals (ell_measure if given, see _project_gauss_jobs)
+        measure = self.ellrange if ell_measure is None else np.asarray(ell_measure)
         inner_modes = sorted(set(self._weight_key(job[1]) for job in live))
         inner = {n_mode: np.zeros((len(self.ellrange), ell_cov_flat.shape[2])) for n_mode in inner_modes}
         projected = {}
         for i_ell in range(len(self.ellrange)):
-            integrand = ell_cov_flat[i_ell, :, :]*self.ellrange[:, None]
+            integrand = ell_cov_flat[i_ell, :, :]*measure[:, None]
             levin_int.init_integral(self.ellrange, integrand, True, True)
             unique_idx, inverse = self._unique_columns(integrand)
             results = levin_int.cquad_integrate_single_well_subset(
@@ -1771,7 +2003,7 @@ class CovELLSpace(PolySpectra):
         for n_mode in inner_modes:
             outer_jobs = [job for job in live if self._weight_key(job[1]) == n_mode]
             outer_modes = sorted(set(self._weight_key(job[0]) for job in outer_jobs))
-            integrand = inner[n_mode]*self.ellrange[:, None]
+            integrand = inner[n_mode]*measure[:, None]
             levin_int.init_integral(self.ellrange, integrand, True, outer_logy)
             unique_idx, inverse = self._unique_columns(integrand)
             results = levin_int.cquad_integrate_single_well_subset(
@@ -3554,6 +3786,62 @@ class CovELLSpace(PolySpectra):
                 self.Cell_gm_mag = dCell_gm
 
         return Cell_gg, Cell_gm, Cell_mm
+
+    # label of the spatial index and names of the signals of each probe (signals)
+    SIGNALS = {'gg': ('ell', 'Cell_gg'), 'gm': ('ell', 'Cell_gkappa'),
+               'mm': ('ell', 'Cell_kappakappa', 'Cell_kappakappa_BB')}
+
+    def signals(self):
+        """
+        The signals of the summary statistics, written by
+        Output.write_signals. Here the C_ell, averaged over the ell bins
+        (ell_bins_clustering/lensing) like the covariance.
+
+        Returns
+        -------
+        signals : dictionary
+            {probe: (label of the spatial index, spatial values,
+                     {name: signal})}
+            for the probes 'gg', 'gm', 'mm' and 'csmf' that are calculated,
+            the signals with the shape (spatial, sample bins, tomo, tomo)
+            (stellar mass function: (stellar mass bins, tomo)).
+        """
+        def binned(ellrange_ul, Cell):
+            if ellrange_ul is None or not isinstance(Cell, np.ndarray):
+                return Cell
+            weights, interpolation = self.__bin_average_matrix(ellrange_ul)
+            return np.tensordot(weights @ interpolation, Cell, axes=1) \
+                / weights.sum(axis=1).reshape((-1,) + (1,)*(Cell.ndim - 1))
+
+        clust_ul, lens_ul = self.ellrange_clustering_ul, self.ellrange_lensing_ul
+        ell_clust = self.ellrange if clust_ul is None else self.ellrange_clustering
+        ell_lens = self.ellrange if lens_ul is None else self.ellrange_lensing
+        Cell_mmB = getattr(self, 'Cell_mmB', None)
+        return self._signal_dict(self.SIGNALS,
+                                 gg=(ell_clust, [binned(clust_ul, self.Cell_gg)]),
+                                 gm=(ell_clust, [binned(clust_ul, self.Cell_gm)]),
+                                 mm=(ell_lens, [binned(lens_ul, self.Cell_mm)]
+                                     + ([binned(lens_ul, Cell_mmB)] if Cell_mmB is not None else [])))
+
+    def _signal_dict(self, names, **probes):
+        """
+        Collects the signals for Output.write_signals (see signals).
+        names[probe] holds the label of the spatial index and the names of
+        the signals of the probe, probes[probe] = (spatial values, list of
+        signals) with None for the index of the summaries. Probes that are
+        not calculated or have no signal (e.g. shot noise only) are left
+        out. The stellar mass function (per dex, averaged over the stellar
+        mass bins and the line-of-sight window) is added if requested.
+        """
+        signals = {}
+        for probe, (spatial, values) in probes.items():
+            if getattr(self, probe) and all(isinstance(value, np.ndarray) for value in values):
+                n_spatial = len(values[0])
+                spatial = np.arange(1, n_spatial + 1) if spatial is None else np.asarray(spatial)[:n_spatial]
+                signals[probe] = (names[probe][0], spatial, dict(zip(names[probe][1:], values)))
+        if self.csmf and isinstance(getattr(self, 'csmf_at_tomo_and_mass', None), np.ndarray):
+            signals['csmf'] = ('log10M', self.log10csmf_mass_bins, {'csmf': self.csmf_at_tomo_and_mass})
+        return signals
 
     def calc_covELL(self,
                     obs_dict,

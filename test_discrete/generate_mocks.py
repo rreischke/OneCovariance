@@ -62,24 +62,31 @@ from onecov.cov_theta_to_obs import (ARCMIN, RealSpaceFilter, filter_matrix,
 
 Cell_file = os.path.join(HERE, '../input/Cell/Cell_kappakappa.ascii')
 cosebi_directory = os.path.join(HERE, '../input/arbitrary_summary/cosebis/')
-output_directory = os.path.join(HERE, 'output/')
+
+# survey geometry: 'survey' (footprint with star masks and satellite trails),
+# 'footprint' (the same footprint without holes and trails) or 'none' (full sky)
+mask_type = 'survey'
+# the outputs of other mask types go to output_<mask_type>/, so they do not
+# overwrite (or continue) the runs with the survey mask
+output_directory = os.path.join(
+    HERE, 'mock_data/output/' if mask_type == 'survey' else 'output_%s/' % mask_type)
 
 # healpix resolution of the shear map and the mask, lmax = 3 nside - 1
-nside = 1024
+nside = 2048
 # number of galaxies, at the same positions in all realisations
-N_pos = 100000
+N_pos = 500000
 # ellipticity dispersion per component (last tomographic bin in config.ini),
 # the shape noise is shape_noise_scale*sigma_eps (0 for noise-free mocks)
 sigma_eps = 0.27
 shape_noise_scale = 0
-n_realisations = 100
+n_realisations = 5000
 # seed of the mask and the positions, realisation i uses seed + 1 + i
 seed = 1234
 
 # range of the COSEBI filter tables (in arcmin), number of modes and of the
 # logarithmic xi_pm bins (DEFAULT_FINE_BINS['cosebi'] of CovTHETAtoOBS)
-theta_min, theta_max = 0.5, 300.
-n_modes = 6
+theta_min, theta_max = 4., 300.
+n_modes = 5
 n_fine_bins = 500
 
 # orpheus tree: cells of size tree_resos (in arcmin, 0: exact pairs) are used for
@@ -133,10 +140,15 @@ def read_Cell(Cell_file, lmax):
 # trails (great-circle segments of a few arcmin width).
 # ---------------------------------------------------------------------------
 
-def make_mask(nside, rng):
+def make_mask(nside, rng, mask_type='survey'):
     """
-    Boolean healpix map (ring ordering) of the survey footprint.
+    Boolean healpix map (ring ordering) of the survey footprint. mask_type
+    'footprint' leaves out the holes and trails, 'none' returns the full sky.
     """
+    if mask_type == 'none':
+        return np.ones(hp.nside2npix(nside), dtype=bool)
+    if mask_type not in ('survey', 'footprint'):
+        raise ValueError('unknown mask_type %r' % mask_type)
     mask = np.zeros(hp.nside2npix(nside), dtype=bool)
     # the field, ra in [15, 65] deg and dec in [-42, -18] deg with wavy edges
     pix = hp.query_strip(nside, np.radians(90 + 18 - 2), np.radians(90 + 42 + 2))
@@ -150,6 +162,8 @@ def make_mask(nside, rng):
     # star masks: dN/dr ~ r^-2.5 between 1 and 20 arcmin, and five large holes
     radii = (1. + rng.uniform(size=595)*(20.**-1.5 - 1.))**(-1/1.5)*ARCMIN
     radii = np.concatenate((radii, np.radians(rng.uniform(.3, 1., 5))))
+    if mask_type == 'footprint':
+        return mask
     for centre, radius in zip(holes, radii, strict=True):
         mask[hp.query_disc(nside, centre, radius)] = False
     # satellite trails: great-circle segments, 2 to 6 arcmin wide and 3 to 10 deg long
@@ -178,8 +192,9 @@ def draw_positions(mask, N_pos, rng):
     nside = hp.npix2nside(len(mask))
     ra_mask, dec_mask = hp.pix2ang(nside, np.flatnonzero(mask), lonlat=True)
     margin = hp.nside2resol(nside, arcmin=True)/60.
-    ra_range = [np.min(ra_mask) - margin, np.max(ra_mask) + margin]
-    dec_range = np.radians([np.min(dec_mask) - margin, np.max(dec_mask) + margin])
+    ra_range = [max(np.min(ra_mask) - margin, 0.), min(np.max(ra_mask) + margin, 360.)]
+    dec_range = np.radians([max(np.min(dec_mask) - margin, -90.),
+                            min(np.max(dec_mask) + margin, 90.)])
     ra, dec = [], []
     while sum(len(chunk) for chunk in ra) < N_pos:
         ra_new = rng.uniform(*ra_range, N_pos)
@@ -244,10 +259,21 @@ def add_shape_noise(gamma_1, gamma_2, sigma, rng):
             gamma_2 + sigma*rng.normal(size=len(gamma_2)))
 
 
+def measured_dispersion(e_1, e_2):
+    """
+    Effective ellipticity dispersion per component measured on the catalogue,
+    sqrt(<e_1^2 + e_2^2>/2). Besides the shape noise it contains the variance of
+    the shear field at the galaxy positions, xi_+(0)/2, which acts as noise when
+    xi_pm is measured from discrete galaxies (non-zero even without shape noise).
+    """
+    return np.sqrt(np.mean(np.asarray(e_1)**2 + np.asarray(e_2)**2)/2)
+
+
 def measure_xi_pm(ra, dec, e_1, e_2):
     """
-    xi_+ and xi_- (pair-weighted averages over the fine bins) and the pair
-    counts measured with orpheus on the sphere.
+    xi_+ and xi_- (pair-weighted averages over the fine bins), the pair
+    counts and the pair-weighted mean separation in the bins (in arcmin)
+    measured with orpheus on the sphere.
     """
     cat = orpheus.SpinTracerCatalog(spin=2, pos1=ra, pos2=dec, tracer_1=e_1,
                                     tracer_2=e_2, units_pos1='deg', units_pos2='deg',
@@ -257,7 +283,8 @@ def measure_xi_pm(ra, dec, e_1, e_2):
                                process_spherical=True, tree_resos=tree_resos,
                                rmin_pixsize=rmin_pixsize, nthreads=num_cores)
     gg.process(cat, dotomo=False)
-    return gg.xip[0].real, gg.xim[0].real, gg.npair[0]
+    return (gg.xip[0].real, gg.xim[0].real, gg.npair[0],
+            np.ravel(gg.bin_centers_mean))
 
 
 # ---------------------------------------------------------------------------
@@ -358,12 +385,15 @@ def main():
 
     # Survey mask
     rng = np.random.default_rng(seed)
-    mask = make_mask(nside, rng)
+    mask = make_mask(nside, rng, mask_type)
     area = np.sum(mask)*hp.nside2pixarea(nside, degrees=True)
-    print('area: %.1f deg^2, pixel size: %.2f arcmin'
-          % (area, hp.nside2resol(nside, arcmin=True)))
-    hp.cartview(mask.astype(float), lonra=[10, 70], latra=[-45, -15], cbar=False,
-                title='mask', xsize=1600)
+    print('mask: %s, area: %.1f deg^2, pixel size: %.2f arcmin'
+          % (mask_type, area, hp.nside2resol(nside, arcmin=True)))
+    if mask_type == 'none':
+        hp.mollview(mask.astype(float), cbar=False, title='mask', xsize=1600)
+    else:
+        hp.cartview(mask.astype(float), lonra=[10, 70], latra=[-45, -15], cbar=False,
+                    title='mask', xsize=1600)
     save_figure('mask')
 
     # Galaxy positions
@@ -387,19 +417,55 @@ def main():
     # COSEBI filters
     A_plus, A_minus = cosebi_filter_matrices(fine_edges)
 
+    # Prediction (with the spectrum of the map), saved with the realisations
+    En_theory = theory_cosebis(Cell_observed)
+    xi_plus_theory, xi_minus_theory = theory_xi_pm(Cell_observed, fine_edges)
+    prediction = {'En_theory': En_theory, 'Bn_theory': np.zeros(n_modes),
+                  'xi_plus_theory': xi_plus_theory, 'xi_minus_theory': xi_minus_theory}
+
     # Realisations: the results are written after every realisation; rerunning
     # the script continues a previous run with the same settings.
-    cosebi_file = os.path.join(output_directory, 'cosebis_realisations.npz')
+    # the shape noise per component, shape_noise_scale*sigma_eps, is part of
+    # the file name, so runs with different noise levels are kept apart
+    sigma_noise = shape_noise_scale*sigma_eps
+    cosebi_file = os.path.join(output_directory,
+                               'cosebis_realisations_sigma_eps_%.3f.npz' % sigma_noise)
+    # files from before the noise level was in the name: renamed if they match
+    old_file = os.path.join(output_directory, 'cosebis_realisations.npz')
+    if os.path.exists(old_file) and not os.path.exists(cosebi_file):
+        with np.load(old_file) as old:
+            matches = np.isclose(old['shape_noise_scale']*old['sigma_eps'], sigma_noise)
+        if matches:
+            os.rename(old_file, cosebi_file)
+            print('renamed %s to %s' % (old_file, cosebi_file))
     catalogue_file = os.path.join(output_directory, 'catalogue_realisation_0.fits')
-    settings = {'nside': nside, 'N_pos': N_pos, 'sigma_eps': sigma_eps,
+    settings = {'mask_type': mask_type, 'nside': nside, 'N_pos': N_pos, 'sigma_eps': sigma_eps,
                 'shape_noise_scale': shape_noise_scale, 'seed': seed,
                 'theta_min': theta_min, 'theta_max': theta_max,
                 'n_fine_bins': n_fine_bins}
 
+    # metadata of the mocks (not checked when continuing a run)
+    metadata = {'area': area, 'area_units': 'deg^2', 'N_gal': len(ra),
+                'n_gal': len(ra)/area/3600, 'n_gal_units': 'arcmin^-2',
+                # measured on the catalogue of realisation 0 (set below)
+                'sigma_eps_effective': np.nan,
+                # the same under the names of the OneCovariance config
+                'n_eff_lensing': len(ra)/area/3600, 'ellipticity_dispersion': sigma_noise,
+                'pixel_size': hp.nside2resol(nside, arcmin=True),
+                'theta_units': 'arcmin', 'lmax': lmax,
+                'tree_resos': tree_resos, 'rmin_pixsize': rmin_pixsize,
+                'Cell_file': os.path.abspath(Cell_file),
+                'cosebi_directory': os.path.abspath(cosebi_directory),
+                'catalogue_file': catalogue_file, 'Cmm_file': Cmm_file,
+                'last_update': time.strftime('%Y-%m-%d %H:%M:%S')}
+
     En, Bn, xi_plus, xi_minus = [], [], [], []
     if os.path.exists(cosebi_file):
         previous = np.load(cosebi_file)
-        if all(np.all(previous[key] == value) for key, value in settings.items()):
+        # runs from before mask_type existed used the survey mask
+        stored = {key: previous[key] if key in previous else
+                  ('survey' if key == 'mask_type' else None) for key in settings}
+        if all(np.all(stored[key] == value) for key, value in settings.items()):
             En, Bn = list(previous['En']), list(previous['Bn'])
             xi_plus, xi_minus = list(previous['xi_plus']), list(previous['xi_minus'])
             print('continuing after %i realisations' % len(En))
@@ -418,31 +484,53 @@ def main():
         e_1, e_2 = add_shape_noise(gamma_1, gamma_2, shape_noise_scale*sigma_eps,
                                    np.random.default_rng(seed + 1))
         write_catalogue(gamma_1, gamma_2, e_1, e_2)
+    if os.path.exists(catalogue_file):
+        catalogue = fits.getdata(catalogue_file)
+        metadata['sigma_eps_effective'] = measured_dispersion(catalogue['E1'], catalogue['E2'])
 
     for i in range(len(En), n_realisations):
         start = time.time()
         gamma_1, gamma_2 = shear_realisation(Cell, nside, pix, seed + 1 + i)
         e_1, e_2 = add_shape_noise(gamma_1, gamma_2, shape_noise_scale*sigma_eps,
                                    np.random.default_rng(seed + 1 + i))
-        xip, xim, npair = measure_xi_pm(ra, dec, e_1, e_2)
+        xip, xim, npair, theta_mean = measure_xi_pm(ra, dec, e_1, e_2)
         xi_plus.append(xip)
         xi_minus.append(xim)
         En.append(A_plus @ xip + A_minus @ xim)
         Bn.append(A_plus @ xip - A_minus @ xim)
         if i == 0:
             write_catalogue(gamma_1, gamma_2, e_1, e_2)
+            metadata['sigma_eps_effective'] = measured_dispersion(e_1, e_2)
+            print('sigma_eps_effective = %.5f (measured on the catalogue)'
+                  % metadata['sigma_eps_effective'])
         np.savez(cosebi_file, En=np.array(En), Bn=np.array(Bn), xi_plus=np.array(xi_plus),
-                 xi_minus=np.array(xi_minus), npair=npair, fine_edges=fine_edges, area=area,
-                 n_modes=np.arange(1, n_modes + 1), **settings)
+                 xi_minus=np.array(xi_minus), n_modes=np.arange(1, n_modes + 1),
+                 **metadata, **settings, **prediction,
+                 # bins of xi_pm (arcmin): edges, geometric centres and the
+                 # pair-weighted mean separation (the same in all realisations)
+                 npair=npair, fine_edges=fine_edges,
+                 theta=np.sqrt(fine_edges[1:]*fine_edges[:-1]), theta_mean=theta_mean,
+                 n_realisations_done=i + 1)
         print('realisation %i/%i: %.0f s' % (i + 1, n_realisations, time.time() - start),
               flush=True)
 
+    # a run that was already complete has not been rewritten above: add the
+    # prediction and the metadata if the file predates any of them
+    with np.load(cosebi_file) as previous:
+        complete = (all(key in previous for key in (*prediction, *metadata))
+                    and np.isclose(previous['sigma_eps_effective'],
+                                   metadata['sigma_eps_effective']))
+        if not complete:
+            contents = dict(previous)
+    if not complete:
+        contents.update(metadata, **prediction)
+        contents.setdefault('theta', np.sqrt(fine_edges[1:]*fine_edges[:-1]))
+        contents.setdefault('n_realisations_done', len(En))
+        np.savez(cosebi_file, **contents)
+        print('added the prediction to ' + cosebi_file)
+
     En, Bn = np.array(En), np.array(Bn)
     xi_plus, xi_minus = np.array(xi_plus), np.array(xi_minus)
-
-    # Prediction
-    En_theory = theory_cosebis(Cell_observed)
-    xi_plus_theory, xi_minus_theory = theory_xi_pm(Cell_observed, fine_edges)
 
     modes = np.arange(1, n_modes + 1)
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))

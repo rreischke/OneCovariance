@@ -10,10 +10,10 @@ from scipy.signal import argrelextrema
 from scipy.special import eval_legendre
 
 try:
-    from onecov.cov_ell_space import CovELLSpace
+    from onecov.cov_ell_space import CovELLSpace, wigner_d
     from onecov.cov_setup import cached_computation
 except:
-    from cov_ell_space import CovELLSpace
+    from cov_ell_space import CovELLSpace, wigner_d
     from cov_setup import cached_computation
 
 
@@ -349,26 +349,38 @@ class CovCOSEBI(CovELLSpace):
                              survey_params_dict,
                              prec,
                              read_in_tables)
-        
+        # flat-sky kernels with ell -> ell + 1/2 (default) or, with real_space_kernel
+        # = curved, the exact curved-sky ones for ell <= curved_sky_ell_max (see
+        # __get_WXY and __exact_cosebi_kernels)
+        self.real_space_kernel, self.curved_sky_ell_max = self._real_space_kernel_settings(obs_dict)
         self.__get_WXY(obs_dict)
         # only the shot noise (calculated in real space) without the integrator
         self.levin_int = None
         if not self.cov_dict['sn_only']:
-            self.ell_limits = []
-            for mode in range(self.total_modes):
-                limits_at_mode = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::30]
-                # start integrating at the smallest multipole of the ell-space covariance
-                ell_start = max(self.ellrange[0], self.wn_ells[0])
-                limits_at_mode_append = np.zeros(len(limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.wn_ells[-2])]) + 2)
-                limits_at_mode_append[1:-1] = limits_at_mode[(limits_at_mode >  ell_start) & (limits_at_mode < self.wn_ells[-2])]
-                limits_at_mode_append[0] = ell_start
-                limits_at_mode_append[-1] = self.wn_ells[-1]
-                self.ell_limits.append(limits_at_mode_append)
+            def limits(lower):
+                result = []
+                for mode in range(self.total_modes):
+                    minima = np.array(self.wn_ells[argrelextrema(self.wn_kernels[mode], np.less)[0][:]])[::30]
+                    minima = minima[(minima > lower) & (minima < self.wn_ells[-2])]
+                    result.append(np.concatenate(([lower], minima, [self.wn_ells[-1]])))
+                return result
+            # half a multipole below the smallest one of the ell-space covariance:
+            # the full-sky sum over the integers is the midpoint rule (as for xi_pm,
+            # see CovTHETASpace._theta_ell_limits)
+            self.ell_limits = limits(self.ellrange[0] - 0.5)
             self.weight_alias = self._weight_aliases(np.array(self.wn_kernels))
             self.levin_int = levin.Levin(0, 16, 32, obs_dict['COSEBIs']['En_acc'] / np.sqrt(len(self.ell_limits[0][:])), 20, self.num_cores)
             self.levin_int.init_w_ell(self.wn_ells, np.array(self.wn_kernels).T)
             self._register_projection_weights(self.levin_int, self.wn_ells, np.array(self.wn_kernels),
                                               obs_dict['COSEBIs']['En_acc'])
+            # the curved-sky measure: sum_ell (2 ell + 1)/(4 pi) = int dell (ell + 1/2)/(2 pi)
+            # in all projections (signals, Gaussian and four-point terms)
+            self._register_ell_measure(self.levin_int, np.asarray(self.ellrange, dtype=float) + 0.5)
+            if self.real_space_kernel == 'curved':
+                split = self._setup_curved_sky(self.levin_int, self.wn_ells, self.wn_kernels,
+                                               self.__exact_cosebi_kernels)
+                if split is not None:
+                    self.ell_limits = limits(split)
         if self.gg or self.gm:
             save_n_eff_clust = survey_params_dict['n_eff_clust']
         if self.mm or self.gm:
@@ -407,6 +419,19 @@ class CovCOSEBI(CovELLSpace):
                 self.B_mode_mm = self._Cell_mmB_projected(self.levin_int, self.ell_limits,
                                                           list(range(self.En_modes)),
                                                           [1/2/np.pi]*self.En_modes)
+
+    SIGNALS = {'gg': ('n', 'Psi_gg'), 'gm': ('n', 'Psi_gm'), 'mm': ('n', 'E_n', 'B_n')}
+
+    def signals(self):
+        """
+        The signals of the COSEBIs and Psi statistics (see
+        CovELLSpace.signals).
+        """
+        return self._signal_dict(self.SIGNALS,
+                                 gg=(self.array_En_g_modes, [getattr(self, 'E_mode_gg', None)]),
+                                 gm=(self.array_En_g_modes, [getattr(self, 'E_mode_gm', None)]),
+                                 mm=(self.array_En_modes, [getattr(self, 'E_mode_mm', None),
+                                                           getattr(self, 'B_mode_mm', None)]))
 
 
     def __get_wn_kernels(self,
@@ -450,6 +475,29 @@ class CovCOSEBI(CovELLSpace):
         lev_w.set_kb_levin_min(100)
         lev_w.init_integral(theta,(theta*tp)[:,None]*np.ones(self.num_cores)[None,:],True,True)
         return lev_w.single_bessel_many_args(ell,0,theta[0],theta[-1])
+
+    def __exact_cosebi_kernels(self, ell_int):
+        """
+        {mode: exact curved-sky kernel at ell_int} of the shear COSEBIs for
+        real_space_kernel = curved (see CovELLSpace._setup_curved_sky):
+        E_n = 1/2 int dtheta theta [T_+n xi_+ + T_-n xi_-] with the full-sky
+        xi_pm = sum_ell (2 ell + 1)/(4 pi) C_ell d^ell_{2,pm2} gives
+        W_n(ell) = 1/2 int dtheta theta [T_+n d^ell_{2,2} + T_-n d^ell_{2,-2}],
+        the flat-sky limit of which is int dtheta theta T_+n J_0(ell theta)
+        (__get_W_ell). Simpson's rule on the theta grid of the filters (1e4
+        points, d^ell oscillates a few times at most for ell <=
+        curved_sky_ell_max). The B-modes use the same kernel (the curved-sky
+        E/B leakage of the estimator is not included). The Psi statistics of
+        clustering keep the flat-sky kernels.
+        """
+        exact = {}
+        ell_max, rows = int(ell_int[-1]), np.asarray(ell_int, dtype=int)
+        for mode, (theta, tp, tm) in enumerate(self.Tn_pm_tables):
+            x = np.cos(theta)
+            dp = wigner_d(2, 2, ell_max, x)[rows]
+            dm = wigner_d(2, -2, ell_max, x)[rows]
+            exact[mode] = 0.5*simpson(theta*(tp*dp + tm*dm), x=theta, axis=1)
+        return exact
 
     def __get_Un(self, tmax, tmin, theta, Nmax):
         return psi_Un(tmin, tmax, theta, Nmax)
@@ -640,6 +688,7 @@ class CovCOSEBI(CovELLSpace):
         self.wn_kernels = np.zeros((self.total_modes, len(self.wn_ells)))
         self.Tn_p = []
         self.Tn_m = []
+        self.Tn_pm_tables = []
         self.Qn = []
         self.Un = []
         if self.mm:
@@ -651,7 +700,11 @@ class CovCOSEBI(CovELLSpace):
                 theta = tpn[:,0]
                 tmn = self.__tminus(tmin_mm,tmax_mm,1,Nn[n],rn[n], tpn, theta)
                 if not self.cov_dict['sn_only']:
-                    self.wn_kernels[nn - 1, :] = self.__get_W_ell(theta,tpn[:,1], self.wn_ells)
+                    # the flat-sky kernel at ell + 1/2 (see CovTHETASpace.__get_weights):
+                    # with the measure ell + 1/2 the full-sky sum to leading order
+                    self.wn_kernels[nn - 1, :] = self.__get_W_ell(theta,tpn[:,1], self.wn_ells + 0.5)
+                # T_+ and T_- for the exact curved-sky kernels (__exact_cosebi_kernels)
+                self.Tn_pm_tables.append((theta, tpn[:,1], tmn[:,1]))
                 self.Tn_p.append(UnivariateSpline(tpn[:,0]/arcmintorad,tpn[:,1], k=2, s=0, ext=0))
                 self.Tn_m.append(UnivariateSpline(tmn[:,0]/arcmintorad,tmn[:,1], k=2, s=0, ext=0))
                 eta = (time.time()-t0) / \
@@ -670,7 +723,7 @@ class CovCOSEBI(CovELLSpace):
             Qngg = self.__get_Qn(Ungg, theta_gm, Nmax_gg)
             for nn in range(1,Nmax_gg+1):
                 if not self.cov_dict['sn_only']:
-                    self.wn_kernels[nn - 1  + self.En_modes, :] = self.__get_Wpsi_ell(nn - 1, Ungg[nn-1,:], theta_gg, self.wn_ells)
+                    self.wn_kernels[nn - 1  + self.En_modes, :] = self.__get_Wpsi_ell(nn - 1, Ungg[nn-1,:], theta_gg, self.wn_ells + 0.5)
                 self.Un.append(UnivariateSpline(theta_gg/arcmintorad,  Ungg[nn-1,:]/self.arcmin2torad2, k=2, s=0, ext=1))
                 self.Qn.append(UnivariateSpline(theta_gg/arcmintorad,  Qngg[nn-1,:]/self.arcmin2torad2, k=2, s=0, ext=1))
                 eta = (time.time()-t0) / \
