@@ -619,6 +619,73 @@ The spectroscopic cross photometric clustering has four unique bin combinations 
 Photometric cross photometric clustering has three unique bin combinations and 8 :math:`\ell` bins. Spectroscopic GGL has 10 bin combinations with 12 :math:`\ell` bins each and lastly,
 Photometric GGL has also 10 bin combinations with 8 :math:`\ell` bins.
 
+Tabulated radial kernels: line-of-sight shear of strong lenses
+--------------------------------------------------------------
+Tracers whose line-of-sight kernel is not given by a redshift distribution can be added with tabulated radial kernels :math:`W(\chi)`,
+in the ``arbitrary_kernel`` section. Each kernel becomes a tomographic bin of the clustering field (spin 0, e.g. the CMB lensing convergence)
+or of the lensing field (spin 2) and enters all observables of its field, including GGL, with all covariance terms. The kernels enter the
+Limber projection like the internal ones,
+
+.. math::
+
+   C^{ij}_\ell = f_\ell \int \mathrm{d}\chi\, \frac{W_i(\chi)\, W_j(\chi)}{\chi^2}\, P_\mathrm{mm}\!\left(\frac{\ell + 1/2}{\chi}, z(\chi)\right)\,,
+
+with :math:`\chi` in Mpc/h, :math:`P_\mathrm{mm}` in (Mpc/h)\ :sup:`3` and :math:`f_\ell = 1` for clustering (times :math:`\ell(\ell+1)/(\ell+1/2)^2` for each
+convergence kernel, see below), :math:`(\ell+2)!/[(\ell-2)!\,(\ell+1/2)^4]` for lensing and its square root for GGL. A kernel therefore carries the units of its tracer, :math:`[W] = [\mathrm{tracer}]\,h/\mathrm{Mpc}`, and its full response
+(bias), since it is always projected with the matter power spectrum. Tabulated kernels have no intrinsic alignments and no magnification bias.
+Each file has two columns, the redshift and :math:`W(\chi(z))` per unit comoving distance (no :math:`\mathrm{d}z/\mathrm{d}\chi` is applied),
+and the kernel vanishes outside the table. The files are given in the ``tabulated inputs files`` section, a ``?`` stands for a running index:
+
+::
+
+   [arbitrary_kernel]
+   do_arbitrary_radial_weight = True
+   add_to_matter = True
+   add_to_galaxy = False
+
+   [tabulated inputs files]
+   arb_radial_weight_directory = ./input/arbitrary_radial_weight/
+   arb_radial_filter_mm_file = los_shear_kernel_?.txt
+
+With ``add_to_matter = True`` (``add_to_galaxy = True``) the tabulated bins follow the bins of the lensing (clustering) redshift distributions,
+otherwise they replace them. Their noise is set in the ``survey specs`` like for the other bins. With tabulated clustering kernels the clustering
+bins of the redshift distributions are projected with the matter power spectrum as well, so their bias must be passed via ``bias_files``
+(or ``unbiased_clustering = True``). With ``limber = False`` the tabulated kernels are part of the non-Limber correction: lensing kernels like the
+internal ones and clustering kernels either as densities, :math:`\int \mathrm{d}\chi\, W j_\ell(k\chi)`, or as convergences,
+:math:`\ell(\ell+1) \int \mathrm{d}\chi\, W j_\ell(k\chi)/(k\chi)^2` (``kernel_type_gg = density`` or ``convergence``, once for all or once per kernel).
+In Limber a convergence kernel has the factor :math:`\ell(\ell+1)/(\ell+1/2)^2` (8% at :math:`\ell = 2`), the Limber limit of its exact projection.
+Tabulated kernels are not available with the discrete covariance.
+
+The file ``config_los_shear_6x2pt.ini`` in the directory ``config_files`` uses them for the line-of-sight shear of strong lenses
+(`Fleury et al. 2026 <https://arxiv.org/abs/2603.03441>`_), :math:`\gamma_\mathrm{LOS} = \gamma_\mathrm{od} + \gamma_\mathrm{os} - \gamma_\mathrm{ds}`,
+jointly with the real-space :math:`3\times 2` pt statistics of KiDS-1000. The line-of-sight shear (L) is a lensing field with the kernel
+
+.. math::
+
+   W_\mathrm{LOS}(\chi) = \frac{3}{2}\,\Omega_\mathrm{m} \left(\frac{H_0}{c}\right)^2 \frac{\chi}{a(\chi)}\,
+   \left\langle K_\mathrm{LOS}(\chi; \chi_\mathrm{d}, \chi_\mathrm{s}) \right\rangle\,,
+
+averaged over the distribution of lens and source redshifts, :math:`p(z_\mathrm{d}, z_\mathrm{s})`, with :math:`K_\mathrm{LOS}` of eq. (12) of the paper.
+Two bins in :math:`z_\mathrm{d}` are added as the lensing bins 6 and 7 to the five KiDS-1000 source bins (E) and the two BOSS lens bins (P), so the
+output contains all six combinations: EE, LE and LL in :math:`\xi_\pm`, PE and PL in :math:`\gamma_\mathrm{t}` and PP in :math:`w`. The kernels in
+``input/arbitrary_radial_weight`` were written for a toy lens population with
+
+::
+
+   python input/arbitrary_radial_weight/script_weights/los_shear_kernel.py input/arbitrary_radial_weight/los_lenses_toy.txt --config config_files/config_los_shear_6x2pt.ini --zd_edges 0,0.5,2
+
+The script reads a list of lenses (columns :math:`z_\mathrm{d}`, :math:`z_\mathrm{s}` and an optional weight, e.g. a lens catalogue or a grid of
+:math:`p(z_\mathrm{d}, z_\mathrm{s})` as here), takes the cosmology from the config, and prints the fraction of the lenses in each bin. Its sign
+convention is that of the galaxy shear. The noise of a line-of-sight bin is
+
+::
+
+   n_eff_lensing          = number of lenses in the bin per arcmin^2
+   ellipticity_dispersion = sqrt((sigma_eta^2 + <|gamma_LOS|^2>)/2)
+
+with the measurement noise :math:`\sigma_\eta` of :math:`|\gamma_\mathrm{LOS}|` and the sparsity variance :math:`\langle|\gamma_\mathrm{LOS}|^2\rangle` of a single lens.
+In the example, :math:`10^5` lenses on 15000 deg\ :sup:`2` are split by the printed fractions, with :math:`\sigma_\mathrm{LOS} = 0.05`.
+
 3x2pt analysis and stellar mass function 
 ----------------------------------------
 The file ``config_3x2pt_pure_Cell_SMF.ini`` in the directory ``config_files`` illustrates how to calculate the covariance matrix in a :math:`3\times 2 + 1pt` analysis, where the 1pt refers to the stellar mass function (SMF).

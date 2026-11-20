@@ -2,6 +2,7 @@ import configparser
 import fnmatch
 import functools
 import os
+import re
 import sys
 from os import path, walk
 
@@ -184,6 +185,7 @@ class Input:
         self.discrete_rmin_pixsize = None
         self.discrete_tree_resos = None
         self.discrete_rmin_pixsize_triplets = None
+        self.discrete_rmin_pixsize_pairs = None
         self.discrete_tree_resos_triplets = None
         self.discrete_tree_method = None
         self.discrete_nmaxs = None
@@ -198,12 +200,14 @@ class Input:
         self.discrete_quad_richardson = None
         self.discrete_frompairs_suppression_file = None
         self.discrete_frompairs_thin = None
+        self.discrete_thinning_factor = None
         self.discrete_n_coarse = None
         self.discrete_slab_width = None
         self.discrete_nr_block = None
         self.discrete_v2_block = None
         self.discrete_path_multiplets = None
         self.discrete_store_multiplets = None
+        self.discrete_save_before_projection = None
 
 
         # for COSEBIs
@@ -1360,6 +1364,11 @@ class Input:
                 config[section].getboolean('do_discrete')
         else:
             self.discrete_do_discrete = False
+        # with theta_to_obs: write the real-space covariance in the fine
+        # bins before the projection (read also without do_discrete)
+        self.discrete_save_before_projection = \
+            config[section].getboolean('save_before_projection', fallback=False) \
+            if section in config else False
         if not self.discrete_do_discrete:
             return True
         settings = config[section]
@@ -1496,6 +1505,10 @@ class Input:
         # above rmin_pixsize times a cell size), while the quadruplets cannot be counted exactly
         if 'rmin_pixsize_triplets' in settings and settings['rmin_pixsize_triplets'].strip() != '':
             self.discrete_rmin_pixsize_triplets = float(settings['rmin_pixsize_triplets'])
+        # coarser cells for the pair counts only: N_p is smooth in theta, so the cells
+        # barely change it
+        if 'rmin_pixsize_pairs' in settings and settings['rmin_pixsize_pairs'].strip() != '':
+            self.discrete_rmin_pixsize_pairs = float(settings['rmin_pixsize_pairs'])
         if 'tree_resos_triplets' in settings and settings['tree_resos_triplets'].strip() != '':
             self.discrete_tree_resos_triplets = \
                 np.array(settings['tree_resos_triplets'].split(',')).astype(float)
@@ -1561,6 +1574,15 @@ class Input:
             self.discrete_frompairs_thin = int(settings['frompairs_thin'])
         else:
             self.discrete_frompairs_thin = 10
+        # Thinning of the catalogue for the triplet and quadruplet counts
+        if 'thinning_factor' in settings and settings['thinning_factor'].strip() != '':
+            self.discrete_thinning_factor = float(settings['thinning_factor'])
+        else:
+            self.discrete_thinning_factor = 1.
+        if self.discrete_thinning_factor < 1.:
+            raise Exception("ConfigError: [" + section + "]: 'thinning_factor' must " +
+                            "be at least 1. Must be adjusted in config file " +
+                            config_name + ".")
         if self.discrete_method_quadruplets == 'frompairs' and \
            self.discrete_frompairs_suppression_file is None and \
            self.discrete_catalog_file is None:
@@ -4094,12 +4116,14 @@ class Input:
                 'phidist_bins', 'varphi_bins', 'xi_theta_bins', 'catalog_file',
                 'col_name_pos1', 'col_name_pos2', 'col_name_weight', 'npatches',
                 'rmin_pixsize', 'tree_resos', 'rmin_pixsize_triplets', 'tree_resos_triplets',
+                'rmin_pixsize_pairs',
                 'tree_method', 'nmaxs', 'shuffle_pix',
                 'memory_bound', 'nbins_phi_triplets', 'triplet_oversample',
                 'quad_theta_min', 'quad_theta_max', 'quad_binsize', 'quad_nbins_phi',
-                'quad_richardson', 'frompairs_suppression_file', 'frompairs_thin', 'n_coarse',
+                'quad_richardson', 'frompairs_suppression_file', 'frompairs_thin', 'thinning_factor',
+                'n_coarse',
                 'slab_width', 'nr_block', 'v2_block', 'path_multiplets',
-                'store_multiplets']
+                'store_multiplets', 'save_before_projection']
         values = [self.discrete_do_discrete, self.discrete_method, self.discrete_method_pairs,
                   self.discrete_method_triplets, self.discrete_method_quadruplets,
                   self.discrete_replace_terms, self.discrete_phidist_min,
@@ -4109,16 +4133,19 @@ class Input:
                   self.discrete_col_name_pos2, self.discrete_col_name_weight,
                   self.discrete_npatches, self.discrete_rmin_pixsize,
                   self.discrete_tree_resos, self.discrete_rmin_pixsize_triplets,
-                  self.discrete_tree_resos_triplets, self.discrete_tree_method, self.discrete_nmaxs,
+                  self.discrete_tree_resos_triplets, self.discrete_rmin_pixsize_pairs,
+                  self.discrete_tree_method, self.discrete_nmaxs,
                   self.discrete_shuffle_pix, self.discrete_memory_bound,
                   self.discrete_nbins_phi_triplets, self.discrete_triplet_oversample,
                   self.discrete_quad_theta_min, self.discrete_quad_theta_max,
                   self.discrete_quad_binsize, self.discrete_quad_nbins_phi,
                   self.discrete_quad_richardson,
                   self.discrete_frompairs_suppression_file, self.discrete_frompairs_thin,
+                  self.discrete_thinning_factor,
                   self.discrete_n_coarse, self.discrete_slab_width,
                   self.discrete_nr_block, self.discrete_v2_block,
-                  self.discrete_path_multiplets, self.discrete_store_multiplets]
+                  self.discrete_path_multiplets, self.discrete_store_multiplets,
+                  self.discrete_save_before_projection]
         self.covTHETAspace_discrete_settings = dict(zip(keys, values))
         if self.discrete_do_discrete:
             self.covTHETAspace_discrete_settings_abr.update(
@@ -4547,7 +4574,8 @@ class Input:
                 with orpheus, see the [covTHETAspace discrete] section.
                 Possible keys: 'do_discrete', 'method',
                                'method_pairs', 'method_triplets',
-                               'method_quadruplets', 'replace_terms', ...
+                               'method_quadruplets', 'replace_terms',
+                               'save_before_projection', ...
             'COSEBIs' : dictionary
                 Specifies information needed to calculate the covariance
                 for the COSEBI estimator.
@@ -4949,13 +4977,11 @@ class FileInput:
         self.mmE_summary_name = None
         self.mmB_summary_name = None
 
-        # files for arbitrary radial kernel
+        # tabulated kernels of the arbitrary radial weights
         self.arbitrary_radial_weight = dict()
         self.arbitrary_radial_weight_dir = None
-        self.arb_radial_weight_gg_file = None
-        self.arb_radial_weight_mm_file = None
-        self.arb_radial_weight_number_gg = None
-        self.arb_radial_weight_number_mm = None
+        self.z_gg, self.wz_gg, self.z_mm, self.wz_mm = None, None, None, None
+        self.convergence_gg = None
         self.do_arbitrary_radial_weight = None
         self.add_to_matter = None
         self.add_to_galaxy = None
@@ -6228,24 +6254,18 @@ class FileInput:
                                                                                         left = 0,
                                                                                         right = 0)])
                 
-                self.bias_bz = np.array([])
-                for i_z in range(len(save_zet_bias_bz)):
-                    if i_z == 0:
-                        interp = interp1d(self.bias_z, save_zet_bias_bz[i_z], fill_value = "extrapolate")
-                        self.bias_bz = interp(self.zet_clust_z)
-                    else:
-                        interp = interp1d(self.bias_z, save_zet_bias_bz[i_z], fill_value = "extrapolate")
-                        
-                        self.bias_bz = np.vstack([self.bias_bz, interp(self.zet_clust_z)])
+                # one row per clustering bin, also for a single bin
+                self.bias_bz = np.array([interp1d(self.bias_z, bz, fill_value="extrapolate")(self.zet_clust_z)
+                                         for bz in save_zet_bias_bz])
                 if not self.unbiased_clustering:
-                    if self.arb_radial_weight_number_gg is None:
+                    if self.wz_gg is None:
                         print("Using redshft dependent bias and NOT HoD for galaxy count modelling from file " + self.bias_files[0] + "...")
                 else:
                     print("Using unbiased clustering for galaxy count modelling.")
                 if(len(save_zet_bias_bz) != self.n_tomo_clust):
-                    raise Exception("InputError: From the redshift files, " + self.n_tomo_clust + " bias functions are required. You have only specified " + len(save_zet_bias_bz) + ". Pleas change this in the config file." )
+                    raise Exception("InputError: From the redshift files, " + str(self.n_tomo_clust) + " bias functions are required. You have specified " + str(len(save_zet_bias_bz)) + ". Please change this in the config file.")
 
-            except:
+            except FileNotFoundError:
                 print("InputWarning: The bias files " + self.bias_files[0] + "... where not found, will procede with HoD or unbiased clustering")
         return True
 
@@ -7739,162 +7759,90 @@ class FileInput:
         return Tn_theta, Tn
     
     def __read_in_radial_weight_files(self,
-                                       wfile):
+                                      files):
         """
-        Reads in ...
+        Reads in the tabulated kernels of the arbitrary radial weights. A
+        '?' in a file name stands for a running index: all matching files
+        are read in natural order (2 before 10).
 
         Parameters
         ----------
-        wfile : string
-            Name of the filter file.
+        files : string
+            Comma separated names of the files, relative to
+            arb_radial_weight_directory.
 
         File structure :
         --------------
-        # z     radial filter
-        0       0.123456789
-        0.1     0.234567891
-        ...         ...
-        5.0     0.912345678
+        # z     W(chi(z)) in [tracer] h/Mpc
+        0.0     0.0
+        0.1     1.234e-5
+        ...     ...
 
+        Returns
+        -------
+        zets, kernels : lists
+            of arrays, one per kernel
         """
-        print("Reading in tabulated kernels for arbitrary radial weight from file " +
-              path.join(self.arbitrary_radial_weight_dir, wfile) + ".")
-        data = np.loadtxt(path.join(self.arbitrary_radial_weight_dir, wfile))
-        if len(data[0]) != 2:
-            raise Exception("FileInputError: The file " +
-                            path.join(self.arbitrary_radial_weight_dir, wfile) +
-                            " has not exactly 2 columns. The data file " +
-                            "should provide the redshift in the first column, and " +
-                            "the second column should hold the radial weight value.")
-        zet = data[:, 0]
-        wz = data[:, 1]
-        return zet, wz
-    
+        names = []
+        for fname in files.replace(" ", "").split(','):
+            if '?' in fname:
+                subdir, pattern = path.split(fname)
+                matched = fnmatch.filter(os.listdir(path.join(self.arbitrary_radial_weight_dir, subdir)),
+                                         pattern.replace('?', '*'))
+                names += [path.join(subdir, f) for f in
+                          sorted(matched, key=lambda f: [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', f)])]
+            elif fname:
+                names.append(fname)
+        if len(names) == 0:
+            raise Exception("ConfigError: No arbitrary radial weight files " + files +
+                            " found in " + self.arbitrary_radial_weight_dir + ".")
+        zets, kernels = [], []
+        for fname in names:
+            fname = path.join(self.arbitrary_radial_weight_dir, fname)
+            print("Reading in tabulated kernel for arbitrary radial weight from file " + fname + ".")
+            data = np.loadtxt(fname, ndmin=2)
+            if data.shape[1] != 2 or np.any(np.diff(data[:, 0]) <= 0) or not np.any(data[:, 1]):
+                raise Exception("FileInputError: The file " + fname + " must have exactly 2 " +
+                                "columns, the increasing redshift and the (not everywhere " +
+                                "vanishing) radial weight W(chi(z)).")
+            zets.append(data[:, 0])
+            kernels.append(data[:, 1])
+        return zets, kernels
+
     def __get_arbitrary_radial_weights_tabs(self,
-                                             config):
+                                            config):
         """
-        Reads in the ... Allows for an auto-generation of filenames if all files
-        are named in the same way and only the numbers for the
-        tomographic bin combination is changed. In such a case, replace
-        the two bin number with a '?' each.
+        Reads in the tabulated kernels of the arbitrary radial weights for
+        the clustering (arb_radial_filter_gg_file) and the lensing field
+        (arb_radial_filter_mm_file). Every kernel is an additional
+        tomographic bin of its field (added in Setup).
 
         Parameters
         ----------
         config : class
-            This class holds all the information specified the config 
+            This class holds all the information specified the config
             file. It originates from the configparser module.
 
         """
-
         if not self.do_arbitrary_radial_weight:
             return False
-        elif 'tabulated inputs files' in config:
-            if 'arb_radial_weight_directory' in config['tabulated inputs files']:
-                self.arbitrary_radial_weight_dir = \
-                    config['tabulated inputs files']['arb_radial_weight_directory']
-            elif 'input_directory' in config['tabulated inputs files']:
-                self.arbitrary_radial_weight_dir = \
-                    config['tabulated inputs files']['input_directory']
-            else:
-                self.arbitrary_radial_weight_dir = ''
-            if self.clustering:
-                if 'arb_radial_filter_gg_file' in config['tabulated inputs files']:
-                    self.arb_radial_weight_gg_file =(config['tabulated inputs files']
-                                                        ['arb_radial_filter_gg_file'].replace(" ", "")).split(',')
-                    self.arb_radial_weight_gg_file_save = np.copy(self.arb_radial_weight_gg_file)
-                else:
-                    raise Exception("ConfigError: To use the arbitrary radial weights for clustering, " +
-                                    "files for the corresponding weight must be provided. Please adjust in" +
-                                    "the config file under [tabulated inputs files] and arb_radial_filter_gg_file")
-
-            if self.cosmicshear:
-                if 'arb_radial_filter_mm_file' in config['tabulated inputs files']:
-                    self.arb_radial_weight_mm_file =(config['tabulated inputs files']
-                                                        ['arb_radial_filter_mm_file'].replace(" ", "")).split(',')
-                    self.arb_radial_weight_mm_file_save = np.copy(self.arb_radial_weight_mm_file)
-                else:
-                    raise Exception("ConfigError: To use the arbitrary radial weights for cosmic shear, " +
-                                    "files for the corresponding weight must be provided. Please adjust in" +
-                                    "the config file under [tabulated inputs files] and arb_radial_filter_mm_file")
-
-            if self.clustering:
-                aux_arb_file = []
-                start_index = 0
-                end_index = 0
-                self.arb_radial_weight_gg_file = self.arb_radial_weight_gg_file[0]
-                if '?' in self.arb_radial_weight_gg_file:
-                    last_slash_index = self.arb_radial_weight_gg_file.rfind('/')
-                    _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_gg_file[:last_slash_index + 1]))
-                    file_id = self.arb_radial_weight_gg_file[:self.arb_radial_weight_gg_file.find('?')]
-                    aux_dir = self.arb_radial_weight_gg_file[:last_slash_index + 1]
-                    self.arb_radial_weight_number_gg = len(sorted([fstr for fstr in filenames
-                                                                if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr]))
-                    if self.add_to_galaxy:
-                        self.n_tomo_clust += self.arb_radial_weight_number_gg
-                    else:
-                        self.n_tomo_clust = self.arb_radial_weight_number_gg
-                    for i_files in range(self.arb_radial_weight_number_gg):
-                        aux_arb_file.append(None)
-                        end_index += 1
-                    aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                if file_id in self.arb_radial_weight_gg_file[:last_slash_index + 1] + fstr])
-                    for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                        aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                    for i_files in range(self.arb_radial_weight_number_gg):
-                        start_index += 1
-                    self.arb_radial_weight_gg_file = aux_arb_file
-                    self.wz_gg = []
-                    if len(self.arb_radial_weight_gg_file) == 0:
-                        raise Exception("ConfigError: galaxy clustering requested but the radial weight files, please check the path in " + str(self.config_name))
-                    for wfile in self.arb_radial_weight_gg_file:
-                        z, wz = self.__read_in_radial_weight_files(wfile)
-                        self.wz_gg.append(wz)
-                    self.z_gg = z
-
-                else:
-                    raise Exception("ConfigError: Please pass the arbitrary radial weights for clustering in the desired format")
-
-            else:
-                self.wz_gg, self.z_gg = None, None
-
-            if self.cosmicshear:
-                aux_arb_file = []
-                start_index = 0
-                end_index = 0
-                self.arb_radial_weight_mm_file = self.arb_radial_weight_mm_file[0]
-                if '?' in self.arb_radial_weight_mm_file:
-                    last_slash_index = self.arb_radial_weight_mm_file.rfind('/')
-                    _, _, filenames = next(walk(self.arbitrary_radial_weight_dir + self.arb_radial_weight_mm_file[:last_slash_index + 1]))
-                    file_id = self.arb_radial_weight_mm_file[:self.arb_radial_weight_mm_file.find('?')]
-                    aux_dir = self.arb_radial_weight_mm_file[:last_slash_index + 1]
-                    self.arb_radial_weight_number_mm = len(sorted([fstr for fstr in filenames
-                                                                if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr]))
-                    if self.add_to_matter:
-                        self.n_tomo_lens += self.arb_radial_weight_number_mm
-                    else:
-                        self.n_tomo_lens = self.arb_radial_weight_number_mm
-                    for i_files in range(self.arb_radial_weight_number_mm):
-                        aux_arb_file.append(None)
-                        end_index += 1
-                    aux_arb_file[start_index:end_index] = sorted([fstr for fstr in filenames
-                                                                if file_id in self.arb_radial_weight_mm_file[:last_slash_index + 1] + fstr])
-                    for j, wnlogfile in enumerate(aux_arb_file[start_index:end_index]):
-                        aux_arb_file[j + start_index] = aux_dir + aux_arb_file[start_index:end_index][j]
-                    for i_files in range(self.arb_radial_weight_number_mm):
-                        start_index += 1
-                    self.arb_radial_weight_mm_file = aux_arb_file
-                    self.wz_mm = []
-                    if len(self.arb_radial_weight_mm_file) == 0:
-                        raise Exception("ConfigError: cosmic shear requested but the radial weight files, please check the path in " + str(self.config_name))
-                    for wfile in self.arb_radial_weight_mm_file:
-                        z, wz = self.__read_in_radial_weight_files(wfile)
-                        self.wz_mm.append(wz)
-                    self.z_mm = z
-                else:
-                    raise Exception("ConfigError: Please pass the arbitrary radial weights for cosmic shear in the desired format")
-
-            else:
-                self.wz_mm, self.z_mm = None, None
+        files = config['tabulated inputs files'] if 'tabulated inputs files' in config else {}
+        self.arbitrary_radial_weight_dir = files.get('arb_radial_weight_directory',
+                                                     files.get('input_directory', ''))
+        if (self.clustering or self.ggl) and files.get('arb_radial_filter_gg_file'):
+            self.z_gg, self.wz_gg = self.__read_in_radial_weight_files(files['arb_radial_filter_gg_file'])
+            kernel_types = config['arbitrary_kernel'].get('kernel_type_gg', 'density').replace(' ', '').split(',')
+            if not set(kernel_types) <= {'density', 'convergence'} or len(kernel_types) not in (1, len(self.wz_gg)):
+                raise Exception("ConfigError: 'kernel_type_gg' in [arbitrary_kernel] must be 'density' or " +
+                                "'convergence', once for all or once per clustering kernel.")
+            self.convergence_gg = np.broadcast_to(np.array(kernel_types) == 'convergence', len(self.wz_gg))
+        if (self.cosmicshear or self.ggl) and files.get('arb_radial_filter_mm_file'):
+            self.z_mm, self.wz_mm = self.__read_in_radial_weight_files(files['arb_radial_filter_mm_file'])
+        if self.wz_gg is None and self.wz_mm is None:
+            raise Exception("ConfigError: 'do_arbitrary_radial_weight = True' but no kernels are " +
+                            "given for the observables, set arb_radial_filter_gg_file and/or " +
+                            "arb_radial_filter_mm_file in [tabulated inputs files].")
+        return True
 
     def __read_arb_BB_filters(self,
                               files,
@@ -8868,14 +8816,16 @@ class FileInput:
                     'number_radial_weights_mm',
                     'do_arbitrary_radial_weights',
                     'add_to_matter',
-                    'add_to_galaxy']
+                    'add_to_galaxy',
+                    'convergence_gg']
             values = [self.z_gg, self.wz_gg,
                       self.z_mm, self.wz_mm,
-                      self.arb_radial_weight_number_gg,
-                      self.arb_radial_weight_number_mm,
+                      None if self.wz_gg is None else len(self.wz_gg),
+                      None if self.wz_mm is None else len(self.wz_mm),
                       self.do_arbitrary_radial_weight,
                       self.add_to_matter,
-                      self.add_to_galaxy]
+                      self.add_to_galaxy,
+                      self.convergence_gg]
             self.arbitrary_radial_weight = dict(zip(keys, values))
         else:
             self.arbitrary_radial_weight = {'do_arbitrary_radial_weights': False}
@@ -9134,7 +9084,7 @@ class FileInput:
         if key.startswith('arb_radial_filter_'):
             if not self.do_arbitrary_radial_weight:
                 return False
-            return clust if key.endswith('_gg_file') else shear
+            return (clust if key.endswith('_gg_file') else shear) or ggl
         if key.startswith('arb_'):
             if not arb:
                 return False

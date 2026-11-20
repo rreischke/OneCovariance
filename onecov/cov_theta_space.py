@@ -835,6 +835,9 @@ class CovTHETASpace(CovELLSpace):
             shape (theta bins, theta bins, 1, 1,
                    n_tomo_lens, n_tomo_lens, n_tomo_lens, n_tomo_lens)
         """
+        if self.do_arbitrary_radial_mm:
+            raise Exception("ConfigError: [covTHETAspace discrete] uses one catalogue for all " +
+                            "lensing bins, which does not describe the tracers of tabulated radial kernels.")
         replace_terms = self.theta_space_discrete_dict['replace_terms']
         disccov = OrpheusCovTHETASpace(self.theta_space_discrete_dict,
                                        self.theta_ul_bins_lensing,

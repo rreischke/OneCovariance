@@ -7,6 +7,42 @@ from astropy.table import Table
 from scipy.interpolate import interp1d
 
 
+def _thinned(GGCovariance):
+    """
+    Subclass of the orpheus GGCovariance which measures the triplets and
+    quadruplets on a random subset of the catalogue, keeping each galaxy
+    with probability f. As orpheus excludes multiplets with repeated
+    galaxies, a triplet survives with probability f^3 and a quadruplet
+    with f^4, so the counts are rescaled by thin_scale^3 and thin_scale^4
+    with thin_scale = 1/f. The pairs, which set the shape noise, are
+    measured on the full catalogue.
+    """
+    class ThinnedGGCovariance(GGCovariance):
+        def __init__(self, *args, catalog_thin=None, thin_scale=1., **kwargs):
+            self._catalog_thin = catalog_thin
+            self._thin_scale = thin_scale
+            self._cat_cache_thin = {}
+            super().__init__(*args, **kwargs)
+
+        def _on_thinned(self, measure, power):
+            # The patched full catalogue is only needed for the pairs, which
+            # are measured first, so its cache is released here
+            catalog = self.catalog
+            self.catalog, self._cat_cache = self._catalog_thin, self._cat_cache_thin
+            try:
+                return measure()*self._thin_scale**power
+            finally:
+                self.catalog, self._cat_cache = catalog, {}
+
+        def _measure_triplets(self):
+            return self._on_thinned(super()._measure_triplets, 3)
+
+        def _measure_quadruplets(self):
+            return self._on_thinned(super()._measure_quadruplets, 4)
+
+    return ThinnedGGCovariance
+
+
 class OrpheusCovTHETASpace():
     """
     This class calculates the Gaussian covariance of the shear-shear
@@ -312,10 +348,11 @@ class OrpheusCovTHETASpace():
                            method=settings['tree_method'],
                            shuffle_pix=settings['shuffle_pix'],
                            memory_bound=settings['memory_bound'], verbosity=1)
-            # finer tree settings of the triplet counts only (orpheus falls back to the
+            # tree settings of the pair or triplet counts only (orpheus falls back to the
             # shared ones without them)
-            if settings.get('rmin_pixsize_triplets') is not None:
-                catalog['rmin_pixsize_triplets'] = settings['rmin_pixsize_triplets']
+            for key in ('rmin_pixsize_pairs', 'rmin_pixsize_triplets'):
+                if settings.get(key) is not None:
+                    catalog[key] = settings[key]
             if settings.get('tree_resos_triplets') is not None:
                 catalog['tree_resos_triplets'] = list(settings['tree_resos_triplets'])
             print("Read " + str(len(ra)) + " galaxies from " + settings['catalog_file'] +
@@ -337,6 +374,17 @@ class OrpheusCovTHETASpace():
                          store_multiplets=self.store_multiplets,
                          nr_block=settings['nr_block'], v2_block=settings['v2_block'],
                          nthreads=self.num_cores)
+        thinned = catalog is not None and settings['thinning_factor'] > 1.
+        if thinned:
+            GGCovariance = _thinned(GGCovariance)
+            # fixed seed, so that the cached multiplets are reused
+            keep = np.random.default_rng(1234).random(len(ra)) < 1./settings['thinning_factor']
+            common_kw.update(catalog_thin=dict(catalog, ra=ra[keep], dec=dec[keep],
+                                               weight=weight[keep]),
+                             thin_scale=np.sum(weight)/np.sum(weight[keep]))
+            print("Measuring the triplets and quadruplets on " + str(np.sum(keep)) +
+                  " galaxies (thinning_factor = " + str(settings['thinning_factor']) +
+                  "), the pairs on all of them.")
         if method_quadruplets == 'discrete':
             n_qr = int(round(np.log(settings['quad_theta_max']/settings['quad_theta_min'])
                              /settings['quad_binsize']))
@@ -381,9 +429,10 @@ class OrpheusCovTHETASpace():
             fine_edges = self.theta_ul_bins
             fine_centers = np.sqrt(fine_edges[1:]*fine_edges[:-1])
             # orpheus builds the fine instance itself if all multiplets are
-            # measured and then reuses the coarse quadruplet density
+            # measured (on the full catalogue) and then reuses the coarse
+            # quadruplet density
             cov_fine = None
-            if self.methods != ('discrete', 'discrete', 'discrete'):
+            if self.methods != ('discrete', 'discrete', 'discrete') or thinned:
                 fine_kw = dict(common_kw)
                 if method_quadruplets == 'discrete':
                     fine_kw.update(quadruplets=cov.quadruplets,

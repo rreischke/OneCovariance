@@ -222,11 +222,19 @@ class PolySpectra(HaloModel):
         self.gg = obs_dict['observables']['clustering']
         self.unbiased_clustering = obs_dict['observables']['unbiased_clustering']
         self.magnification = bool(obs_dict['observables'].get('magnification', False))
-        if read_in_tables['zet_dep_bias'] is not None and not self.unbiased_clustering and (self.gg or self.gm):
+        # tabulated clustering kernels W(chi) carry the full response of
+        # their tracer: like the n(z) times the redshift dependent bias they
+        # are projected with the matter spectra (bias 1 without bias files)
+        arb_gg = read_in_tables['arb_radial'].get('number_radial_weights_gg')
+        self.zet_dep_bias = None if self.unbiased_clustering else read_in_tables['zet_dep_bias']
+        if arb_gg and read_in_tables['arb_radial']['add_to_galaxy'] and not self.unbiased_clustering \
+                and self.zet_dep_bias is None:
+            raise Exception("ConfigError: The tabulated clustering kernels are projected with the " +
+                            "matter power spectrum, so the bias of the clustering bins they are added to " +
+                            "must be redshift dependent ('bias_files') or 'unbiased_clustering = True'.")
+        self.redshift_dep_bias = (self.gg or self.gm) and (self.zet_dep_bias is not None or bool(arb_gg))
+        if self.redshift_dep_bias:
             self.unbiased_clustering = True
-            self.redshift_dep_bias = True
-        else:
-            self.redshift_dep_bias = False
        # if self.gg == False and self.gm == False:
        #     self.unbiased_clustering = False
         self.int_2h = None

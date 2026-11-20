@@ -2037,26 +2037,23 @@ class CovELLSpace(PolySpectra):
                              read_in_tables)
         self.do_not_update_ell = False
         self.checked_input_cells = False
-        self.do_arbitrary_radial_mm = False
-        self.do_arbitrary_radial_gg = False
-        self.do_arbitrary_radial = False
-        self.add_to_matter = False
-        self.add_to_galaxy = False
+        # tabulated radial kernels: number per field and whether they are
+        # added to the n(z) bins or replace them
+        arb = read_in_tables['arb_radial']
+        self.number_radial_weights_gg = arb.get('number_radial_weights_gg') or 0
+        self.number_radial_weights_mm = arb.get('number_radial_weights_mm') or 0
+        self.do_arbitrary_radial_gg = self.number_radial_weights_gg > 0
+        self.do_arbitrary_radial_mm = self.number_radial_weights_mm > 0
+        self.add_to_galaxy = bool(arb.get('add_to_galaxy'))
+        self.add_to_matter = bool(arb.get('add_to_matter'))
+        # clustering bins with a tabulated convergence-like kernel, ell(ell+1) int dchi W j_ell(k chi)/(k chi)^2,
+        # whose Limber limit has the factor ell(ell+1)/(ell+1/2)^2
+        self.convergence_clust = np.zeros(self.n_tomo_clust, dtype=bool)
+        if self.do_arbitrary_radial_gg:
+            self.convergence_clust[-self.number_radial_weights_gg:] = arb['convergence_gg']
         self.n_spec = None
         if obs_dict['ELLspace']['n_spec'] is not None and obs_dict['ELLspace']['n_spec'] != 0:
             self.n_spec = int(obs_dict['ELLspace']['n_spec'])
-        self.number_radial_weights_mm = 0
-        if read_in_tables['arb_radial']['do_arbitrary_radial_weights']:
-            self.do_arbitrary_radial = read_in_tables['arb_radial']['do_arbitrary_radial_weights']
-            if read_in_tables['arb_radial']['number_radial_weights_gg']:
-                self.do_arbitrary_radial_gg = True
-                if read_in_tables['arb_radial']['add_to_galaxy']:
-                    self.add_to_galaxy = True
-            if read_in_tables['arb_radial']['number_radial_weights_mm']:
-                self.do_arbitrary_radial_mm = True
-                self.number_radial_weights_mm = read_in_tables['arb_radial']['number_radial_weights_mm']
-                if read_in_tables['arb_radial']['add_to_matter']:
-                    self.add_to_matter = True
 
         self.ellrange_spec = None
         self.ellrange_photo = None
@@ -2127,17 +2124,14 @@ class CovELLSpace(PolySpectra):
         self.projection_method = obs_dict['ELLspace'].get('projection_method') or 'quadrature'
         self.deg2torad2 = DEG2TORAD2
         self.arcmin2torad2 = ARCMIN2TORAD2
-        # Handle redshift-dependent bias if enabled
+        # redshift dependent bias of the clustering bins (in the SSC
+        # responses): from the bias files (1 without), 0 for the tabulated
+        # kernels, which respond like matter (no number counts)
         if self.redshift_dep_bias:
-            self.bias_of_zet = []
-            for i_tomo in range(self.n_tomo_clust):
-                self.bias_of_zet.append(
-                    UnivariateSpline(
-                        read_in_tables['zclust']['z'],
-                        read_in_tables['zet_dep_bias'][i_tomo, :],
-                        k=3, s=0, ext=1
-                    )
-                )
+            self.bias_of_zet = [np.ones_like if self.zet_dep_bias is None else UnivariateSpline(
+                read_in_tables['zclust']['z'], self.zet_dep_bias[i_tomo, :], k=3, s=0, ext=1)
+                for i_tomo in range(self.n_tomo_clust - self.number_radial_weights_gg)] \
+                + [np.zeros_like]*self.number_radial_weights_gg
         # Set up redshift distribution splines
         self.__set_redshift_distribution_splines(obs_dict['ELLspace'], read_in_tables)
         if self.csmf:
@@ -2390,11 +2384,8 @@ class CovELLSpace(PolySpectra):
         # narrow self.los_integration_chi to the range of each bin pair)
         self.los_integration_chi_full = np.copy(self.los_integration_chi)
 
-        arb_gg = read_in_tables['arb_radial']['do_arbitrary_radial_weights'] and \
-            read_in_tables['arb_radial']['number_radial_weights_gg'] is not None and \
-            not read_in_tables['arb_radial']['add_to_galaxy']
         self.magnification_active = bool(self.magnification) and (self.gg or self.gm) \
-            and 's' in self.zet_clust and not arb_gg
+            and 's' in self.zet_clust and not (self.do_arbitrary_radial_gg and not self.add_to_galaxy)
         if self.magnification and not self.magnification_active and (self.gg or self.gm):
             print("ConfigWarning: [magnification] is ignored: no s(z) given or the clustering kernels " +
                   "are replaced by arbitrary radial weights.")
@@ -2419,11 +2410,7 @@ class CovELLSpace(PolySpectra):
             dzdchi_csmf = self.cosmology.efunc(self.zet_csmf['z']) \
                 / self.cosmology.hubble_distance.value  \
                 / self.cosmology.h
-        subtract = 0
-        
-        if self.add_to_galaxy:
-            subtract = read_in_tables['arb_radial']['number_radial_weights_gg']
-        for tomo in range(self.n_tomo_clust - subtract):
+        for tomo in range(self.n_tomo_clust - self.number_radial_weights_gg):
             norm = simpson(self.zet_clust['nz'][tomo], x = self.zet_clust['z'])
             self.zet_clust['nz'][tomo] /= norm
             if covELLspacesettings['nz_polyorder'] == 0:
@@ -2438,22 +2425,8 @@ class CovELLSpace(PolySpectra):
                     * self.cosmology.h,
                     self.zet_clust['nz'][tomo]*dzdchi_clust,
                     k=covELLspacesettings['nz_polyorder'], s=0, ext=1))
-            min_check = 0
-            for i_z, zet in enumerate(self.los_integration_chi, start = 1):     
-                cdf = simpson(
-                    self.spline_zclust[tomo](self.los_integration_chi[:i_z]),  x = self.los_integration_chi[:i_z])
-                if cdf > 0. and min_check == 0:
-                    if i_z > 1:
-                        self.chi_min_clust[tomo] = self.los_integration_chi[i_z]
-                    else:
-                        self.chi_min_clust[tomo] = self.los_integration_chi[0]
-                    min_check = 1
-                if cdf >= 0.9999 or i_z == len(self.los_integration_chi) - 1:
-                    if i_z < len(self.los_integration_chi) - 1:
-                        self.chi_max_clust[tomo] = self.los_integration_chi[i_z]
-                    else:
-                        self.chi_max_clust[tomo] = self.los_integration_chi[-1]
-                    break
+            self.chi_min_clust[tomo], self.chi_max_clust[tomo] = self.__kernel_chi_range(
+                self.zet_clust['z'], self.zet_clust['nz'][tomo])
             self.spline_zclust_unbiased.append(self.spline_zclust[tomo])
             if self.magnification_active:
                 chi_of_z = self.cosmology.comoving_distance(self.zet_clust['z']).value \
@@ -2461,89 +2434,25 @@ class CovELLSpace(PolySpectra):
                 self.spline_mag_s.append(interp1d(
                     chi_of_z, self.zet_clust['s'][tomo], bounds_error=False,
                     fill_value=(self.zet_clust['s'][tomo][0], self.zet_clust['s'][tomo][-1])))
-            if self.redshift_dep_bias:
+            if self.zet_dep_bias is not None:
                 self.spline_zclust[tomo] = UnivariateSpline(
                     self.cosmology.comoving_distance(self.zet_clust['z']).value
                     * self.cosmology.h,
-                    self.zet_clust['nz'][tomo]*dzdchi_clust*read_in_tables['zet_dep_bias'][tomo,:],
+                    self.zet_clust['nz'][tomo]*dzdchi_clust*self.zet_dep_bias[tomo,:],
                     k=covELLspacesettings['nz_polyorder'], s=0, ext=1)
             
             
         
-        if read_in_tables['arb_radial']['do_arbitrary_radial_weights']:
-            if read_in_tables['arb_radial']['number_radial_weights_gg'] is not None:
-                if self.gm or self.gg:
-                    if not read_in_tables['arb_radial']['add_to_galaxy']:
-                        self.spline_zclust = []
-                        max_arb = self.n_tomo_clust
-                    else:
-                        max_arb = read_in_tables['arb_radial']['number_radial_weights_gg']
-                    for tomo in range(max_arb):
-                        if covELLspacesettings['nz_polyorder'] == 0:
-                            self.spline_zclust.append(interp1d(
-                                self.cosmology.comoving_distance(read_in_tables['arb_radial']['z_gg']).value
-                                * self.cosmology.h,
-                                read_in_tables['arb_radial']['wz_gg'][tomo],
-                                kind='nearest-up', fill_value=0))
-                        else:
-                            self.spline_zclust.append(UnivariateSpline(
-                                self.cosmology.comoving_distance(read_in_tables['arb_radial']['z_gg']).value
-                                * self.cosmology.h,
-                                read_in_tables['arb_radial']['wz_gg'][tomo],
-                                k=covELLspacesettings['nz_polyorder'], s=0, ext=1))
-                        min_check = 0
-                        norm = simpson(read_in_tables['arb_radial']['wz_gg'][tomo], x = read_in_tables['arb_radial']['z_gg'])
-                        add_idx = 0
-                        if read_in_tables['arb_radial']['add_to_galaxy']:
-                            add_idx += read_in_tables['arb_radial']['number_radial_weights_gg']
-                        for i_z, zet in enumerate(self.los_integration_chi, start = 1):     
-                            cdf = simpson(
-                                self.spline_zclust[tomo + add_idx](self.los_integration_chi[:i_z]),  x = self.los_integration_chi[:i_z])/norm
-                            if cdf > 0. and min_check == 0:
-                                if i_z > 1:
-                                    self.chi_min_clust[tomo + add_idx] = self.los_integration_chi[i_z -2]
-                                else:
-                                    self.chi_min_clust[tomo + add_idx] = self.los_integration_chi[0]
-                                min_check = 1
-                            if cdf >= 0.9999 or i_z == len(self.los_integration_chi) - 1:
-                                if i_z < len(self.los_integration_chi) - 1:
-                                    self.chi_max_clust[tomo + add_idx] = self.los_integration_chi[i_z +1]
-                                else:
-                                    self.chi_max_clust[tomo + add_idx] = self.los_integration_chi[-1]
-                                break
-            if self.gm or self.mm:
-                if read_in_tables['arb_radial']['number_radial_weights_mm'] is not None:
-                    if not self.add_to_matter:
-                        self.spline_lensweight = []
-                        for tomo in range(self.n_tomo_lens):
-                            if covELLspacesettings['nz_polyorder'] == 0:
-                                self.spline_lensweight.append(interp1d(
-                                    self.cosmology.comoving_distance(read_in_tables['arb_radial']['z_mm']).value
-                                    * self.cosmology.h,
-                                    read_in_tables['arb_radial']['wz_mm'][tomo],
-                                    kind='nearest-up', fill_value=0))
-                            else:
-                                self.spline_lensweight.append(UnivariateSpline(
-                                    self.cosmology.comoving_distance(read_in_tables['arb_radial']['z_mm']).value
-                                    * self.cosmology.h,
-                                    read_in_tables['arb_radial']['wz_mm'][tomo],
-                                    k=covELLspacesettings['nz_polyorder'], s=0, ext=1))
-                    else:
-                        self.aux_spline_lensweight = []
-                        for tomo in range(self.number_radial_weights_mm):
-                            if covELLspacesettings['nz_polyorder'] == 0:
-                                self.aux_spline_lensweight.append(interp1d(
-                                    self.cosmology.comoving_distance(read_in_tables['arb_radial']['z_mm']).value
-                                    * self.cosmology.h,
-                                    read_in_tables['arb_radial']['wz_mm'][tomo],
-                                    kind='nearest-up', fill_value=0))
-                            else:
-                                self.aux_spline_lensweight.append(UnivariateSpline(
-                                    self.cosmology.comoving_distance(read_in_tables['arb_radial']['z_mm']).value
-                                    * self.cosmology.h,
-                                    read_in_tables['arb_radial']['wz_mm'][tomo],
-                                    k=covELLspacesettings['nz_polyorder'], s=0, ext=1))
-        
+        # the tabulated kernels follow the n(z) bins of their field
+        arb = read_in_tables['arb_radial']
+        if self.do_arbitrary_radial_gg and (self.gm or self.gg):
+            splines, chi_range = self.__tabulated_kernel_splines(arb['z_gg'], arb['wz_gg'], covELLspacesettings)
+            self.spline_zclust += splines
+            self.chi_min_clust[-len(splines):], self.chi_max_clust[-len(splines):] = chi_range.T
+        self.spline_lensweight_tab = []
+        if self.do_arbitrary_radial_mm and (self.gm or self.mm):
+            self.spline_lensweight_tab, _ = self.__tabulated_kernel_splines(
+                arb['z_mm'], arb['wz_mm'], covELLspacesettings)
 
         if self.csmf:
             for tomo in range(self.n_tomo_csmf):
@@ -2577,6 +2486,43 @@ class CovELLSpace(PolySpectra):
         
         
         
+    def __tabulated_kernel_splines(self,
+                                   zets,
+                                   kernels,
+                                   covELLspacesettings):
+        r"""
+        Splines the tabulated radial kernels W(chi) of the arbitrary radial
+        weights. They are densities per unit comoving distance sampled at
+        the redshifts zets (no dz/dchi is applied) and vanish outside the
+        table.
+
+        Returns
+        -------
+        splines : list
+            of the kernels as a function of chi in Mpc/h
+        chi_range : array
+            with shape (len(kernels), 2), the comoving distances in Mpc/h
+            between which the kernels do not vanish
+        """
+        splines = []
+        for zet, kernel in zip(zets, kernels):
+            chi = self.cosmology.comoving_distance(zet).value*self.cosmology.h
+            if covELLspacesettings['nz_polyorder'] == 0:
+                splines.append(interp1d(chi, kernel, kind='nearest-up', bounds_error=False, fill_value=0))
+            else:
+                splines.append(UnivariateSpline(chi, kernel, k=covELLspacesettings['nz_polyorder'], s=0, ext=1))
+        return splines, np.array([self.__kernel_chi_range(zet, kernel) for zet, kernel in zip(zets, kernels)])
+
+    def __kernel_chi_range(self, zet, kernel):
+        r"""
+        Returns the comoving distances in Mpc/h between which a radial kernel
+        tabulated at the redshifts zet does not vanish, extended by one
+        node on either side to include the interpolation to zero.
+        """
+        nonzero = np.flatnonzero(kernel)
+        zet_range = zet[[max(nonzero[0] - 1, 0), min(nonzero[-1] + 1, len(zet) - 1)]]
+        return np.clip(self.cosmology.comoving_distance(zet_range).value*self.cosmology.h, self.chimin, self.chimax)
+
     def __set_csmf_windows(self,
                            covELLspacesettings,
                            survey_params_dict,
@@ -2794,9 +2740,9 @@ class CovELLSpace(PolySpectra):
                                                            k=1, s=0, ext=0))
             self.spline_lensweight_IA.append(UnivariateSpline(self.los_integration_chi,
                                                               aux_W_iA, k=1, s=0, ext=0))
-        if self.add_to_matter:
-            for tomo in range(self.number_radial_weights_mm):
-                self.spline_lensweight.append(self.aux_spline_lensweight[tomo])
+        # the tabulated kernels carry no intrinsic alignments
+        self.spline_lensweight += self.spline_lensweight_tab
+        self.spline_lensweight_IA += [np.zeros_like]*len(self.spline_lensweight_tab)
 
 
     def __set_magweight_splines(self,
@@ -3327,10 +3273,6 @@ class CovELLSpace(PolySpectra):
             and isinstance(self.Cell_mm, np.ndarray)
         if not (do_gg or do_gm or do_mm):
             return
-        if self.do_arbitrary_radial_gg or self.do_arbitrary_radial_mm:
-            print("ConfigWarning: The non-Limber angular power spectra are not available " +
-                  "with arbitrary radial weights, the Limber ones are used.")
-            return
         print("Calculating the non-Limber correction of the angular power spectra (C_ell's).")
         chi_0 = self.los_chi[0]
 
@@ -3357,14 +3299,22 @@ class CovELLSpace(PolySpectra):
         n_chi = len(chi)
         mag = self.magnification_active and (do_gg or do_gm)
         if do_gg or do_gm:
-            # linear bias of each sample from the power spectra at k_ref
-            bias = np.array([np.sqrt(10**self.spline_Pgg[i_sample*self.sample_dim + i_sample](
-                np.stack([chi_eval, np.full_like(chi, np.log10(k_ref))], axis=-1)) / np.exp(lnP_lin))
-                for i_sample in range(self.sample_dim)])
+            # linear bias of each sample: 1 for unbiased clustering or a redshift dependent bias
+            # (part of W, P_gg = P_mm), the two-halo bias of the HoD, or from a tabulated P_gg at k_ref
+            if self.unbiased_clustering:
+                bias = np.ones((self.sample_dim, n_chi))
+            elif self.Pxy_tab['gg'] is None:
+                bias = np.array([np.interp(chi_eval, self.los_chi, b) for b in self.los_bias_2h.T])
+            else:
+                bias = np.array([np.sqrt(10**self.spline_Pgg[i_sample*self.sample_dim + i_sample](
+                    np.stack([chi_eval, np.full_like(chi, np.log10(k_ref))], axis=-1)) / np.exp(lnP_lin))
+                    for i_sample in range(self.sample_dim)])
             W = np.array([on_grid(self.spline_zclust[tomo], self.chi_min_clust[tomo], self.chi_max_clust[tomo])
                           for tomo in range(self.n_tomo_clust)])
             # legs ordered (sample, tomographic bin)
             gal_density = (bias[:, None, :]*W[None, :, :]*growth).reshape((-1, n_chi))
+            convergence = np.tile(self.convergence_clust, self.sample_dim)
+            gal_density[convergence] *= taper
             if mag:
                 gal_kappa = np.array([self.spline_magweight[tomo](chi) for tomo in range(self.n_tomo_clust)]) \
                     * growth*taper
@@ -3387,6 +3337,9 @@ class CovELLSpace(PolySpectra):
             if do_gg or do_gm:
                 k, I_gal = proj.transform(gal_density, ell)
                 K_gal = gal_density
+                if convergence.any():
+                    I_gal[convergence] = ell*(ell + 1)*proj.transform(gal_density[convergence], ell, lensing=True)[1]
+                    K_gal = np.where(convergence[:, None], ell*(ell + 1)/(ell + 0.5)**2, 1)*gal_density
                 if mag:
                     _, I_kappa = proj.transform(gal_kappa, ell, lensing=True)
                     I_gal = I_gal + ell*(ell + 1)*np.tile(I_kappa, (n_s, 1))
@@ -3489,6 +3442,7 @@ class CovELLSpace(PolySpectra):
         self.los_chi = self.cosmology.comoving_distance(
             self.los_z).value * self.cosmology.h
         aux_ngal = np.zeros((self.los_interpolation_sampling,self.sample_dim))
+        self.los_bias_2h = np.zeros((self.los_interpolation_sampling, self.sample_dim))
         grid = self.hod.Mbins
         self.samples_overlap = any(min(grid[i, -1], grid[j, -1]) > max(grid[i, 0], grid[j, 0])
                                    for i in range(len(grid)) for j in range(len(grid)) if i != j)
@@ -3554,6 +3508,7 @@ class CovELLSpace(PolySpectra):
         for zet in range(self.los_interpolation_sampling):
             self.update_mass_func(self.los_z[zet], bias_dict, hod_dict, prec)
             aux_ngal[zet, :] = self.ngal
+            self.los_bias_2h[zet] = bias_dict['bias_2h']*self.effective_bias
             if self.samples_overlap:
                 aux_ngal_overlap[zet] = self.nbar_overlap(hod_dict)
             if self.gg or self.gm:
@@ -3690,8 +3645,7 @@ class CovELLSpace(PolySpectra):
             spline_Pmm = RegularGridInterpolator((self.los_chi,np.log10(self.mass_func.k)), np.log10(aux_mm[:, :]),bounds_error= False, fill_value = None)
             self.spline_Pmm = spline_Pmm
 
-        if not self.do_arbitrary_radial_mm or self.add_to_matter:
-            self.__set_lensweight_splines(covELLspacesettings, iA_dict)
+        self.__set_lensweight_splines(covELLspacesettings, iA_dict)
         self.Cell_gg_mag, self.Cell_gm_mag = None, None
         if mag:
             self.__set_magweight_splines(covELLspacesettings)
@@ -3774,6 +3728,12 @@ class CovELLSpace(PolySpectra):
         else:
             Cell_mm = 0
 
+        if self.convergence_clust.any():
+            f_clust = np.where(self.convergence_clust, (self.ellrange*(self.ellrange + 1)/(self.ellrange + 0.5)**2)[:, None], 1)
+            if not self.tab_bools[0] and isinstance(Cell_gg, np.ndarray):
+                Cell_gg = Cell_gg*f_clust[:, None, None, :, None]*f_clust[:, None, None, None, :]
+            if not self.tab_bools[1] and isinstance(Cell_gm, np.ndarray):
+                Cell_gm = Cell_gm*f_clust[:, None, :, None]
         if mag:
             print("Adding the magnification bias to the Limber C_ell (gg, gm).")
             dCell_gg, dCell_gm = self.__magnification_Cells(spline_Pgm, spline_Pmm, covELLspacesettings)

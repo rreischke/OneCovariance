@@ -13,6 +13,19 @@ from onecov.cov_theta_to_obs import CovTHETAtoOBS
 
 if len(platform.mac_ver()[0]) > 0 and (platform.processor() == 'arm' or int(platform.mac_ver()[0][:(platform.mac_ver()[0]).find(".")]) > 13):
     os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
+
+def tagged_output(output, tag):
+    """The output settings with tag appended to all output file names."""
+    def tagged(fname):
+        name, ext = os.path.splitext(fname)
+        return name + tag + ext
+    return {**output,
+            'file': [tagged(f) if f else f for f in output['file']],
+            'make_plot': tagged(output['make_plot']) if output.get('make_plot') else output.get('make_plot'),
+            'output_suffix': (output.get('output_suffix') or '') + tag}
+
+
 print("READING INPUT")
 print("#############")
 
@@ -36,8 +49,19 @@ if observables['observables'].get('theta_to_obs'):
     print("##########################################################################")
     covobs = CovTHETAtoOBS(covterms, observables, output,
                            cosmo, bias, iA, hod, survey_params, prec, read_in_tables)
-    covariance_obs = covobs.calc_covTHETAtoOBS(observables, output, bias, hod, survey_params, prec, read_in_tables)
+    # keep the real-space blocks in the fine bins and save them before the projection
+    covobs.contract_blocks = False
+    covariance_theta = covobs.calc_covTHETA(covobs.theta_obs_dict, output, bias, hod, survey_params, prec, read_in_tables)
     covterms['gauss'] = safe_gauss
+    if observables['THETAspace_discrete']['save_before_projection']:
+        print("WRITING THE REAL SPACE COVARIANCE IN THE FINE ANGULAR BINS")
+        out = Output(tagged_output(output, '_rcf_before_projection'),
+                     covobs.theta_bins_clustering, covobs.theta_bins_lensing)
+        out.write_cov(covterms, covobs.theta_obs_dict, covobs.n_tomo_clust,
+                      covobs.n_tomo_lens, covobs.thetabins,
+                      *[list(terms) for terms in covariance_theta])
+        out.write_signals(CovTHETASpace.signals(covobs))
+    covariance_obs = covobs.project_covariance(*covariance_theta)
     if observables['arbitrary_summary']['do_arbitrary_summary']:
         out = Output(output)
         out.write_arbitrary_cov(covterms, observables, covobs.n_tomo_clust,

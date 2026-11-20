@@ -280,6 +280,15 @@ class Setup:
         n_tomo_lens = len(self.zet_lens['photoz']) if self.zet_lens['z'] is not None else 0
         n_tomo_csmf = len(self.zet_csmf['pz']) if self.zet_csmf['z'] is not None else 0
         zets = [tab['z'] for tab in (self.zet_clust, self.zet_lens, self.zet_csmf) if tab['z'] is not None]
+        # every tabulated radial kernel is an additional (or the only)
+        # tomographic bin of its field
+        arb = read_in_tables['arb_radial']
+        if arb['do_arbitrary_radial_weights']:
+            if arb['number_radial_weights_gg']:
+                n_tomo_clust = n_tomo_clust*arb['add_to_galaxy'] + arb['number_radial_weights_gg']
+            if arb['number_radial_weights_mm']:
+                n_tomo_lens = n_tomo_lens*arb['add_to_matter'] + arb['number_radial_weights_mm']
+            zets += (arb['z_gg'] or []) + (arb['z_mm'] or [])
         zet_min = min(zet[0] for zet in zets) if zets else None
         zet_max = max(zet[-1] for zet in zets) if zets else None
 
@@ -316,29 +325,6 @@ class Setup:
                                 " while the redshift distribution requires " +
                                 str(round(zet_max, 4)) + ". Must be " +
                                 "adjusted to go on.")
-        if read_in_tables['arb_radial']['do_arbitrary_radial_weights']:
-            if read_in_tables['arb_radial']['number_radial_weights_gg'] is not None:
-                if read_in_tables['arb_radial']['add_to_galaxy']:
-                    n_tomo_clust += read_in_tables['arb_radial']['number_radial_weights_gg']
-                else:
-                    n_tomo_clust = read_in_tables['arb_radial']['number_radial_weights_gg']
-            if read_in_tables['arb_radial']['number_radial_weights_mm'] is not None:
-                if read_in_tables['arb_radial']['add_to_matter']:
-                    n_tomo_lens += read_in_tables['arb_radial']['number_radial_weights_mm']
-                else:
-                    n_tomo_lens = read_in_tables['arb_radial']['number_radial_weights_mm']
-            try:
-                zet_min_arb = min(read_in_tables['arb_radial']['z_gg'][0], read_in_tables['arb_radial']['z_mm'][0])
-                zet_max_arb = max(read_in_tables['arb_radial']['z_gg'][-1], read_in_tables['arb_radial']['z_mm'][-1])
-            except TypeError:
-                if read_in_tables['arb_radial']['z_gg'] is not None:
-                    zet_min_arb = read_in_tables['arb_radial']['z_gg'][0]
-                    zet_max_arb = read_in_tables['arb_radial']['z_gg'][-1]
-                if read_in_tables['arb_radial']['z_mm'] is not None:
-                    zet_min_arb = read_in_tables['arb_radial']['z_mm'][0]
-                    zet_max_arb = read_in_tables['arb_radial']['z_mm'][-1]
-            zet_min = min(zet_min, zet_min_arb)
-            zet_max = max(zet_max, zet_max_arb)
         return zet_min, zet_max, n_tomo_clust, n_tomo_lens, n_tomo_csmf
 
     def __consistency_checks_for_tomographic_dims(self,

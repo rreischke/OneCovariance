@@ -1075,8 +1075,17 @@ class CovTHETAtoOBS(CovTHETASpace):
                         n_tomo_clust/lens, n_tomo_clust/lens)
             For the estimators xi_pm, 'mmE' is xi_+ and 'mmB' xi_-.
         """
-        gauss, nongauss, ssc = self.calc_covTHETA(self.theta_obs_dict, output_dict, bias_dict,
-                                                  hod_dict, survey_params_dict, prec, read_in_tables)
+        return self.project_covariance(*self.calc_covTHETA(self.theta_obs_dict, output_dict, bias_dict,
+                                                           hod_dict, survey_params_dict, prec, read_in_tables))
+
+    def project_covariance(self, gauss, nongauss, ssc):
+        """
+        Maps the real-space covariance in the fine bins (calc_covTHETA with
+        self.theta_obs_dict) to the summary statistics and estimates the
+        discretisation error. Returns gauss, nongauss, ssc as
+        calc_covTHETAtoOBS. With self.contract_blocks False, the full
+        real-space blocks can be saved before (see covariance.py).
+        """
         t0 = time.time()
         main, check = [], []
         for terms in (gauss, nongauss, ssc):

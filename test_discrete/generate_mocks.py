@@ -79,7 +79,7 @@ N_pos = 500000
 # the shape noise is shape_noise_scale*sigma_eps (0 for noise-free mocks)
 sigma_eps = 0.27
 shape_noise_scale = 0
-n_realisations = 5000
+n_realisations = 20000
 # seed of the mask and the positions, realisation i uses seed + 1 + i
 seed = 1234
 
