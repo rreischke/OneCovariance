@@ -21,24 +21,32 @@ def _thinned(GGCovariance):
         def __init__(self, *args, catalog_thin=None, thin_scale=1., **kwargs):
             self._catalog_thin = catalog_thin
             self._thin_scale = thin_scale
-            self._cat_cache_thin = {}
+            self._instances_thin = None
             super().__init__(*args, **kwargs)
 
-        def _on_thinned(self, measure, power):
-            # The patched full catalogue is only needed for the pairs, which
-            # are measured first, so its cache is released here
-            catalog = self.catalog
-            self.catalog, self._cat_cache = self._catalog_thin, self._cat_cache_thin
+        def computeDiscrete(self, contribution):
+            if contribution == 'pairs':
+                return super().computeDiscrete(contribution)
+            # orpheus measures and caches the multiplets of the catalogue it
+            # holds, so the thinned one is swapped in with its own
+            # correlators and hash before the cache file is looked up
+            full = (self.catalog, self.orpheus_instances, self._catalog_sha1,
+                    self._unit_weights)
+            self.catalog = self._catalog_thin
+            if self._instances_thin is None:
+                self.orpheus_instances = {}
+                self.set_orpheus_instances([])
+                self._instances_thin = (self.orpheus_instances, self._catalog_sha1,
+                                        self._unit_weights)
+            self.orpheus_instances, self._catalog_sha1, self._unit_weights = \
+                self._instances_thin
             try:
-                return measure()*self._thin_scale**power
+                counts = super().computeDiscrete(contribution)
             finally:
-                self.catalog, self._cat_cache = catalog, {}
-
-        def _measure_triplets(self):
-            return self._on_thinned(super()._measure_triplets, 3)
-
-        def _measure_quadruplets(self):
-            return self._on_thinned(super()._measure_quadruplets, 4)
+                self.catalog, self.orpheus_instances, self._catalog_sha1, \
+                    self._unit_weights = full
+            # out of place, as orpheus keeps the arrays it read from its cache
+            return counts*self._thin_scale**{'triplets': 3, 'quadruplets': 4}[contribution]
 
     return ThinnedGGCovariance
 
@@ -47,7 +55,7 @@ class OrpheusCovTHETASpace():
     """
     This class calculates the Gaussian covariance of the shear-shear
     correlation functions xi_+/- from the discrete pairs, triplets and
-    quadruplets of galaxies of a survey (Schneider et al. 2002, using 
+    quadruplets of galaxies of a survey (Schneider et al. 2002), using
     the orpheus package. All parameters that orpheus shares with this code
     (theta bins, effective number densities, ellipticity dispersion,
     survey area, xi_+/- and the number of cores) are passed on from
@@ -104,17 +112,11 @@ class OrpheusCovTHETASpace():
                             "'do_discrete = True' requires the orpheus package " +
                             "(https://github.com/lporth93/orpheus) in the python " +
                             "environment.")
-        if not hasattr(getattr(orpheus, 'GGCovariance', None), 'get_cov_terms_tomo'):
+        if not hasattr(getattr(orpheus, 'GGCovariance', None), 'set_quadruplets_from_multipoles'):
             raise Exception("ConfigError: [covTHETAspace discrete]: the " +
                             "orpheus package at " + orpheus.__file__ + " does " +
-                            "not provide GGCovariance.get_cov_terms_tomo, please " +
-                            "update it.")
-        if discrete_dict.get('quad_richardson') and \
-           not hasattr(orpheus.GGCovariance, '_coarsened_quadruplets'):
-            raise Exception("ConfigError: [covTHETAspace discrete]: " +
-                            "'quad_richardson = True' needs an orpheus version with " +
-                            "GGCovariance(q_richardson=...), the one at " +
-                            orpheus.__file__ + " does not provide it, please update it.")
+                            "not provide the GGCovariance with multiplets in Fourier " +
+                            "modes, please update it.")
         self.orpheus = orpheus
         self.settings = discrete_dict
         self.theta_ul_bins = np.asarray(theta_ul_bins, dtype=float)
@@ -135,7 +137,6 @@ class OrpheusCovTHETASpace():
         self.methods = (discrete_dict['method_pairs'],
                         discrete_dict['method_triplets'],
                         discrete_dict['method_quadruplets'])
-        self.continuous = self.methods[2] == 'continuous'
         self.needs_catalog = 'discrete' in self.methods or \
             (self.methods[2] == 'frompairs' and
              discrete_dict['frompairs_suppression_file'] is None)
@@ -147,8 +148,22 @@ class OrpheusCovTHETASpace():
         else:
             self.path_multiplets = tempfile.mkdtemp(prefix='orpheus_multiplets_')
             self.store_multiplets = False
-        self.phi_grid = np.geomspace(discrete_dict['phidist_min'],
-                                     discrete_dict['phidist_max'],
+        # The catalogue is read here, as its extent sets the default
+        # largest separation of the two pairs and with it the xi_pm table
+        self.catalog = self.__read_catalog() if self.needs_catalog else None
+        phidist_max = discrete_dict['phidist_max']
+        if phidist_max is None:
+            if self.catalog is None:
+                phidist_max = 1e4
+            else:
+                ra, dec, weight = self.catalog
+                phidist_max = 60.*self.orpheus.ScalarTracerCatalog(
+                    pos1=ra, pos2=dec, tracer=np.ones_like(ra), units_pos1='deg',
+                    units_pos2='deg', geometry='spherical').max_separation()
+                print("The largest separation in the catalogue is " +
+                      str(np.round(phidist_max, 1)) + " arcmin, the integral of " +
+                      "the sample variance ends there ('phidist_max').")
+        self.phi_grid = np.geomspace(discrete_dict['phidist_min'], phidist_max,
                                      discrete_dict['phidist_bins'])
         self.varphi_grid = np.linspace(0., 2.*np.pi,
                                        discrete_dict['varphi_bins'],
@@ -157,15 +172,16 @@ class OrpheusCovTHETASpace():
     def get_xi_theta(self):
         """
         Returns the separations in arcmin at which xi_+/- has to be
-        tabulated: orpheus evaluates it between the smallest theta bin
-        edge (or phidist_min) and phidist_max plus the largest theta.
+        tabulated: the mixed term evaluates it on triangles whose third
+        side reaches below the theta bins, for which 0.01 arcmin suffices,
+        and the sample variance up to phidist_max plus the largest theta.
 
         Returns
         -------
         xi_theta : array
             with shape ('xi_theta_bins',)
         """
-        theta_lo = min(self.theta_ul_bins[0], self.phi_grid[0])
+        theta_lo = min(.01, self.theta_ul_bins[0], self.phi_grid[0])
         theta_hi = self.phi_grid[-1] + self.theta_ul_bins[-1]
         return np.geomspace(theta_lo, theta_hi, self.settings['xi_theta_bins'])
 
@@ -189,6 +205,22 @@ class OrpheusCovTHETASpace():
             oversample = int(np.ceil(np.log(theta_edges[1]/theta_edges[0])/.05))
         return oversample
 
+    def __subgrid(self, theta_edges):
+        """
+        Radial nodes per theta bin of the sample-variance integral, as
+        offsets from the bin centres in units of the bin width, spread from
+        edge to edge. None for the bin centres alone.
+        """
+        nodes = self.settings['subgrid_nodes']
+        # Not given --> an odd number of nodes at most .1 in logtheta apart
+        if nodes is None:
+            nodes = 2*int(np.ceil((np.log(theta_edges[1]/theta_edges[0])/.1 - 1.)/2.)) + 1
+        if nodes <= 1:
+            return None
+        center = np.sqrt(theta_edges[0]*theta_edges[1])
+        width = theta_edges[1] - theta_edges[0]
+        return np.linspace((theta_edges[0] - center)/width, (theta_edges[1] - center)/width, nodes)
+
     def __read_catalog(self):
         """
         Reads positions (in degree) and weights from the catalogue. The
@@ -210,6 +242,9 @@ class OrpheusCovTHETASpace():
         else:
             weight = np.asarray(data[self.settings['col_name_weight']], dtype=float)
         weight = weight/np.mean(weight)
+        print("Read " + str(len(ra)) + " galaxies from " + self.settings['catalog_file'] +
+              ", their density is " + str(np.round(np.sum(weight)/self.area, 4)) +
+              " arcmin^-2.")
         return ra, dec, weight
 
     def __frompairs_suppression(self, ra, dec, weight):
@@ -218,8 +253,8 @@ class OrpheusCovTHETASpace():
         over the full range of the quadruplet integral, which sets the
         quadruplet density of the method 'frompairs'. It is read from
         'frompairs_suppression_file' if given and otherwise measured with
-        orpheus on the sphere on a random subset of the catalogue (cached
-        in the multiplet directory).
+        orpheus on the sphere on the (thinned) catalogue (cached in the
+        multiplet directory).
 
         Returns
         -------
@@ -237,45 +272,57 @@ class OrpheusCovTHETASpace():
             suppression.x = table[:, 0]
             return suppression
 
+        theta_min = self.settings['quad_theta_min']
+        if theta_min is None:
+            theta_min = self.theta_ul_bins[0]
         theta_max = self.phi_grid[-1] + self.theta_ul_bins[-1]
         binsize = .05
-        nbins = int(np.ceil(np.log(theta_max/self.settings['quad_theta_min'])/binsize))
-        edges = np.geomspace(self.settings['quad_theta_min'], theta_max, nbins + 1)
+        nbins = int(np.ceil(np.log(theta_max/theta_min)/binsize))
+        edges = np.geomspace(theta_min, theta_max, nbins + 1)
         centers = np.sqrt(edges[1:]*edges[:-1])
-        thin = self.settings['frompairs_thin']
-        # the tree of the multiplet measurement, coarsened further up to theta_max
-        rmin_pixsize = self.settings['rmin_pixsize']
-        tree_resos = list(self.settings['tree_resos'])
+        # the tree of the pair counts, coarsened further up to theta_max
+        rmin_pixsize, tree_resos = self.__tree('pairs')
+        tree_resos = list(tree_resos)
         while rmin_pixsize*tree_resos[-1] < theta_max:
             tree_resos.append(2.*tree_resos[-1])
         hashed = hashlib.sha1()
         for arr in (ra, dec, weight):
             hashed.update(np.ascontiguousarray(arr, dtype=np.float64).tobytes())
-        hashed.update(repr(('orpheus', edges[0], edges[-1], nbins, thin, rmin_pixsize, tree_resos)).encode())
+        hashed.update(repr(('orpheus', edges[0], edges[-1], nbins, rmin_pixsize, tree_resos)).encode())
         fname = os.path.join(self.path_multiplets,
                              "widepairs_%s.npz" % hashed.hexdigest()[:16])
         if os.path.exists(fname):
-            data = np.load(fname)
-            npairs, nbar_thin = data['pairs'], float(data['nbar_thin'])
+            npairs = np.load(fname)['pairs']
         else:
-            print("Measuring the pair counts between " + str(edges[0]) + " and " +
-                  str(edges[-1]) + " arcmin for the quadruplet density 'frompairs'.")
-            sel = np.random.RandomState(12345).rand(len(ra)) < 1./thin
-            cat = self.orpheus.ScalarTracerCatalog(pos1=ra[sel], pos2=dec[sel], tracer=np.ones(np.sum(sel)),
-                                                   weight=weight[sel], units_pos1='deg', units_pos2='deg',
+            print("Measuring the pair counts between " + str(np.round(edges[0], 4)) + " and " +
+                  str(np.round(edges[-1], 1)) + " arcmin for the quadruplet density 'frompairs'.")
+            cat = self.orpheus.ScalarTracerCatalog(pos1=ra, pos2=dec, tracer=np.ones_like(ra),
+                                                   weight=weight, units_pos1='deg', units_pos2='deg',
                                                    geometry='spherical')
+            # random cell centres, as the centres of mass put the separations of the cells on the
+            # lattice of the pixels, which nothing normalises here
             nn = self.orpheus.NNCorrelation(min_sep=edges[0], max_sep=edges[-1], nbinsr=nbins,
                                             sep_units='arcmin', process_spherical=True,
                                             tree_resos=tree_resos, rmin_pixsize=rmin_pixsize,
-                                            nthreads=self.num_cores)
+                                            shuffle_pix=1, nthreads=self.num_cores)
             nn.process(cat, dotomo=False)
             # both orders of every pair, as GGCovariance counts them
             npairs = nn.npair[0]
-            nbar_thin = np.sum(weight[sel])/self.area
             if self.store_multiplets:
-                np.savez(fname, pairs=npairs, edges=edges, nbar_thin=nbar_thin)
+                os.makedirs(self.path_multiplets, exist_ok=True)
+                np.savez(fname, pairs=npairs, edges=edges)
         return self.orpheus.GGCovariance.suppression_spline_from_pairs(
-            npairs, centers, edges, self.area, nbar_thin, weights_mean=1.)
+            npairs, centers, edges, self.area, np.sum(weight)/self.area, weights_mean=1.)
+
+    def __tree(self, multiplet):
+        """
+        rmin_pixsize and tree_resos of the measurement of one multiplet,
+        those of [covTHETAspace discrete] unless set for it alone.
+        """
+        rmin_pixsize = self.settings['rmin_pixsize_' + multiplet]
+        tree_resos = self.settings.get('tree_resos_' + multiplet)
+        return (self.settings['rmin_pixsize'] if rmin_pixsize is None else rmin_pixsize,
+                self.settings['tree_resos'] if tree_resos is None else tree_resos)
 
     def __to_theta_space_shape(self, cov, matrix):
         """
@@ -292,8 +339,8 @@ class OrpheusCovTHETASpace():
         n_r = cov.n_r
         out = np.zeros((n_r, n_r, 1, 1,
                         self.n_tomo, self.n_tomo, self.n_tomo, self.n_tomo))
-        for idx1, (i_tomo, j_tomo) in enumerate(cov.bp_list):
-            for idx2, (k_tomo, l_tomo) in enumerate(cov.bp_list):
+        for idx1, (i_tomo, j_tomo) in enumerate(cov.tomopairs_list):
+            for idx2, (k_tomo, l_tomo) in enumerate(cov.tomopairs_list):
                 block = matrix[idx1*n_r:(idx1 + 1)*n_r, idx2*n_r:(idx2 + 1)*n_r]
                 for i, j in {(i_tomo, j_tomo), (j_tomo, i_tomo)}:
                     for k, l in {(k_tomo, l_tomo), (l_tomo, k_tomo)}:
@@ -331,129 +378,86 @@ class OrpheusCovTHETASpace():
         bp_list = [(i, j) for i in range(self.n_tomo) for j in range(i, self.n_tomo)]
         xip_list = [(i, j, self.__xi_spline(xi_theta, xip[:, i, j])) for i, j in bp_list]
         xim_list = [(i, j, self.__xi_spline(xi_theta, xim[:, i, j])) for i, j in bp_list]
+        theta_edges = self.theta_ul_bins
+        subgrid = self.__subgrid(theta_edges)
+        common_kw = dict(theta_centers=np.sqrt(theta_edges[1:]*theta_edges[:-1]),
+                         theta_edges=theta_edges,
+                         triplet_oversample=self.__triplet_oversample(theta_edges),
+                         method_pairs=method_pairs, method_triplets=method_triplets,
+                         method_quadruplets=method_quadruplets,
+                         spline_xip=xip_list, spline_xim=xim_list,
+                         sigma_eps=self.sigma_eps_total, nbar=self.n_eff, area=self.area,
+                         weights_mean=1., weights_std=0., phi_grid=self.phi_grid,
+                         varphi1_grid=self.varphi_grid, varphi2_grid=self.varphi_grid,
+                         phi1_subgrid_frac=subgrid, phi2_subgrid_frac=subgrid,
+                         nthreads=self.num_cores)
 
         # Catalogue and reference density of the multiplets: the
         # catalogue density if measured, otherwise the first bin
-        catalog = None
         nbar_ref = self.n_eff[0]
+        catalog = None
         if self.needs_catalog:
-            ra, dec, weight = self.__read_catalog()
+            ra, dec, weight = self.catalog
             nbar_ref = np.sum(weight)/self.area
             os.makedirs(self.path_multiplets, exist_ok=True)
-            catalog = dict(ra=ra, dec=dec, weight=weight,
-                           path_save=self.path_multiplets,
-                           rmin_pixsize=settings['rmin_pixsize'],
-                           tree_resos=list(settings['tree_resos']),
-                           npatches=settings['npatches'], nmaxs=settings['nmaxs'],
-                           method=settings['tree_method'],
-                           shuffle_pix=settings['shuffle_pix'],
-                           memory_bound=settings['memory_bound'], verbosity=1)
-            # tree settings of the pair or triplet counts only (orpheus falls back to the
-            # shared ones without them)
-            for key in ('rmin_pixsize_pairs', 'rmin_pixsize_triplets'):
-                if settings.get(key) is not None:
-                    catalog[key] = settings[key]
-            if settings.get('tree_resos_triplets') is not None:
-                catalog['tree_resos_triplets'] = list(settings['tree_resos_triplets'])
-            print("Read " + str(len(ra)) + " galaxies from " + settings['catalog_file'] +
-                  ", their density is " + str(np.round(nbar_ref, 4)) + " arcmin^-2.")
-        suppression = None
-        if method_quadruplets == 'frompairs':
-            # Without a catalogue the suppression comes from its file
-            suppression = self.__frompairs_suppression(
-                *((ra, dec, weight) if self.needs_catalog else (None, None, None)))
+            catalog = dict(ra=ra, dec=dec, weight=weight)
+            # the settings orpheus takes as None are left at its defaults
+            rmin_pixsize, tree_resos = self.__tree('pairs')
+            t_rmin_pixsize, t_tree_resos = self.__tree('triplets')
+            q_rmin_pixsize, q_tree_resos = self.__tree('quadruplets')
+            measure_kw = dict(catalog=catalog, path_save=self.path_multiplets,
+                              store_multiplets=self.store_multiplets,
+                              nmaxs=settings['nmaxs'], t_nmaxs=settings['nmaxs_triplets'],
+                              q_nmaxs=settings['nmaxs_quadruplets'],
+                              rmin_pixsize=rmin_pixsize, tree_resos=list(tree_resos),
+                              t_rmin_pixsize=t_rmin_pixsize, t_tree_resos=list(t_tree_resos),
+                              q_rmin_pixsize=q_rmin_pixsize,
+                              q_tree_resos=None if settings['tree_resos_quadruplets'] is None
+                              else list(settings['tree_resos_quadruplets']),
+                              memory_bound=settings['memory_bound'],
+                              q_count_min=settings['q_count_min'])
+            common_kw.update({key: value for key, value in measure_kw.items() if value is not None})
+        common_kw.update(nbar_ref=nbar_ref)
 
-        phi_edges = np.linspace(0., 2.*np.pi, settings['nbins_phi_triplets'] + 1)
-        common_kw = dict(phi_centers=.5*(phi_edges[1:] + phi_edges[:-1]), phi_edges=phi_edges,
-                         spline_xip=xip_list, spline_xim=xim_list,
-                         sigma_eps=self.sigma_eps_total, nbar=self.n_eff,
-                         nbar_ref=nbar_ref, area=self.area,
-                         weights_mean=1., weights_std=0.,
-                         spl_suppression_ww=suppression, phi_grid=self.phi_grid,
-                         varphi1_grid=self.varphi_grid, varphi2_grid=self.varphi_grid,
-                         store_multiplets=self.store_multiplets,
-                         nr_block=settings['nr_block'], v2_block=settings['v2_block'],
-                         nthreads=self.num_cores)
+        # One random subset of the catalogue for the triplets, the
+        # quadruplets and the pair-count suppression of 'frompairs'
         thinned = catalog is not None and settings['thinning_factor'] > 1.
         if thinned:
-            GGCovariance = _thinned(GGCovariance)
             # fixed seed, so that the cached multiplets are reused
             keep = np.random.default_rng(1234).random(len(ra)) < 1./settings['thinning_factor']
-            common_kw.update(catalog_thin=dict(catalog, ra=ra[keep], dec=dec[keep],
-                                               weight=weight[keep]),
-                             thin_scale=np.sum(weight)/np.sum(weight[keep]))
+            ra, dec, weight = ra[keep], dec[keep], weight[keep]
+            GGCovariance = _thinned(GGCovariance)
+            common_kw.update(catalog_thin=dict(ra=ra, dec=dec, weight=weight),
+                             thin_scale=np.sum(catalog['weight'])/np.sum(weight))
             print("Measuring the triplets and quadruplets on " + str(np.sum(keep)) +
                   " galaxies (thinning_factor = " + str(settings['thinning_factor']) +
                   "), the pairs on all of them.")
+        if method_quadruplets == 'frompairs':
+            # Without a catalogue the suppression comes from its file
+            common_kw.update(spl_suppression_ww=self.__frompairs_suppression(
+                *((ra, dec, weight) if self.needs_catalog else (None, None, None))))
         if method_quadruplets == 'discrete':
-            n_qr = int(round(np.log(settings['quad_theta_max']/settings['quad_theta_min'])
-                             /settings['quad_binsize']))
-            if settings.get('quad_richardson'):
-                # The sample variance is extrapolated in the radial bin width of q, with the
-                # second density on pairs of merged radial bins, so their number has to be even
-                if n_qr % 2:
-                    n_qr += 1
-                    print("quad_richardson: using " + str(n_qr) + " radial quadruplet bins " +
-                          "(an even number) of width " +
-                          str(np.round(np.log(settings['quad_theta_max']/
-                                              settings['quad_theta_min'])/n_qr, 4)) +
-                          " in ln(theta).")
+            common_kw.update(q_binsize=settings['quad_binsize'])
+            if settings['quad_richardson']:
                 common_kw.update(q_richardson=True)
-            q_theta_edges = np.geomspace(settings['quad_theta_min'],
-                                         settings['quad_theta_max'], n_qr + 1)
-            q_phi_edges = np.linspace(0., 2.*np.pi, settings['quad_nbins_phi'] + 1)
-            common_kw.update(q_theta_centers=np.sqrt(q_theta_edges[1:]*q_theta_edges[:-1]),
-                             q_theta_edges=q_theta_edges,
-                             q_phi_centers=.5*(q_phi_edges[1:] + q_phi_edges[:-1]),
-                             q_phi_edges=q_phi_edges)
-        methods_kw = dict(method_pairs=method_pairs, method_triplets=method_triplets,
-                          method_quadruplets=method_quadruplets, catalog=catalog)
+            # orpheus bins the density from the first theta edge to the
+            # largest separation in the catalogue unless one of them is set
+            if settings['quad_theta_min'] is not None or settings['quad_theta_max'] is not None:
+                q_lo = theta_edges[0] if settings['quad_theta_min'] is None else settings['quad_theta_min']
+                q_hi = self.phi_grid[-1] if settings['quad_theta_max'] is None else settings['quad_theta_max']
+                n_qr = int(round(np.log(q_hi/q_lo)/settings['quad_binsize']))
+                # an even number, as quad_richardson merges pairs of radial bins
+                n_qr += n_qr % 2
+                q_theta_edges = np.geomspace(q_lo, q_hi, n_qr + 1)
+                common_kw.update(q_theta_centers=np.sqrt(q_theta_edges[1:]*q_theta_edges[:-1]),
+                                 q_theta_edges=q_theta_edges)
 
-        # The covariance is computed on n_coarse bins and refined to the
-        # theta bins with a recomputed band around the diagonal
-        theta_edges = self.theta_ul_bins
-        hybrid = settings['n_coarse'] is not None and not self.continuous
-        if hybrid:
-            theta_edges = np.geomspace(self.theta_ul_bins[0], self.theta_ul_bins[-1],
-                                       settings['n_coarse'] + 1)
-        print("Allocating the orpheus GGCovariance (multiplets: " + method_pairs + ", " +
-              method_triplets + ", " + method_quadruplets + ")")
-        cov = GGCovariance(theta_centers=np.sqrt(theta_edges[1:]*theta_edges[:-1]),
-                           theta_edges=theta_edges,
-                           triplet_oversample=self.__triplet_oversample(theta_edges),
-                           **methods_kw, **common_kw)
-        if self.continuous:
-            print("Computing the continuous covariance with orpheus")
-            cov.get_continuous_tomo_c(verbose=True)
-        elif hybrid:
-            fine_edges = self.theta_ul_bins
-            fine_centers = np.sqrt(fine_edges[1:]*fine_edges[:-1])
-            # orpheus builds the fine instance itself if all multiplets are
-            # measured (on the full catalogue) and then reuses the coarse
-            # quadruplet density
-            cov_fine = None
-            if self.methods != ('discrete', 'discrete', 'discrete') or thinned:
-                fine_kw = dict(common_kw)
-                if method_quadruplets == 'discrete':
-                    fine_kw.update(quadruplets=cov.quadruplets,
-                                   q_theta_centers=cov.q_theta_centers)
-                cov_fine = GGCovariance(theta_centers=fine_centers, theta_edges=fine_edges,
-                                        triplet_oversample=self.__triplet_oversample(fine_edges),
-                                        **methods_kw, **fine_kw)
-            print("Computing the discrete covariance with orpheus on " +
-                  str(settings['n_coarse']) + " bins and refining it to " +
-                  str(len(fine_centers)) + " bins")
-            slab_width = dict(zip(('pp', 'mm', 'pm'), settings['slab_width']))
-            cov = cov.subbin_tomo(fine_centers, fine_edges,
-                                  new_pairs=None if cov_fine is None else cov_fine.pairs,
-                                  slab_instance=cov_fine, recompute_slab=True,
-                                  slab_width=slab_width, recompute_full=True,
-                                  verbose=True)
-        else:
-            print("Computing the discrete covariance with orpheus")
+        print("Computing the discrete covariance with orpheus (multiplets: " + method_pairs +
+              ", " + method_triplets + ", " + method_quadruplets + ")")
+        cov = GGCovariance(**common_kw)
 
         # Assemble covariance blocks and match to onecov shape
-        terms = cov.get_cov_terms_tomo(verbose=True)
+        terms = cov.get_cov_terms(verbose=True)
         sva, mix, sn = dict(), dict(), dict()
         for name, block in [('xipxip', 'pp'), ('xipxim', 'pm'), ('ximxim', 'mm')]:
             sva[name] = self.__to_theta_space_shape(cov, terms[block]['sva'])

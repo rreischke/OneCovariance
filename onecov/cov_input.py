@@ -181,30 +181,26 @@ class Input:
         self.discrete_col_name_pos1 = None
         self.discrete_col_name_pos2 = None
         self.discrete_col_name_weight = None
-        self.discrete_npatches = None
         self.discrete_rmin_pixsize = None
         self.discrete_tree_resos = None
         self.discrete_rmin_pixsize_triplets = None
         self.discrete_rmin_pixsize_pairs = None
+        self.discrete_rmin_pixsize_quadruplets = None
         self.discrete_tree_resos_triplets = None
-        self.discrete_tree_method = None
+        self.discrete_tree_resos_quadruplets = None
         self.discrete_nmaxs = None
-        self.discrete_shuffle_pix = None
+        self.discrete_nmaxs_triplets = None
+        self.discrete_nmaxs_quadruplets = None
         self.discrete_memory_bound = None
-        self.discrete_nbins_phi_triplets = None
         self.discrete_triplet_oversample = None
+        self.discrete_subgrid_nodes = None
         self.discrete_quad_theta_min = None
         self.discrete_quad_theta_max = None
         self.discrete_quad_binsize = None
-        self.discrete_quad_nbins_phi = None
         self.discrete_quad_richardson = None
+        self.discrete_q_count_min = None
         self.discrete_frompairs_suppression_file = None
-        self.discrete_frompairs_thin = None
         self.discrete_thinning_factor = None
-        self.discrete_n_coarse = None
-        self.discrete_slab_width = None
-        self.discrete_nr_block = None
-        self.discrete_v2_block = None
         self.discrete_path_multiplets = None
         self.discrete_store_multiplets = None
         self.discrete_save_before_projection = None
@@ -1423,13 +1419,6 @@ class Input:
                             "of " + ", ".join(methods_avail) + " ('frompairs' only " +
                             "for the quadruplets). Must be adjusted in config file " +
                             config_name + ".")
-        if (self.discrete_method_triplets == 'continuous') != \
-           (self.discrete_method_quadruplets == 'continuous'):
-            raise Exception("ConfigError: [" + section + "]: orpheus evaluates the " +
-                            "continuous mixed and sample-variance terms together, so " +
-                            "'method_triplets' and 'method_quadruplets' must either both " +
-                            "or neither be 'continuous'. Must be adjusted in config file " +
-                            config_name + ".")
 
         if 'replace_terms' in settings:
             self.discrete_replace_terms = \
@@ -1445,11 +1434,10 @@ class Input:
         if 'phidist_min' in settings:
             self.discrete_phidist_min = float(settings['phidist_min'])
         else:
-            self.discrete_phidist_min = 1e-4
+            self.discrete_phidist_min = 0.05
+        # left at None, it is the largest separation in the catalogue (or 1e4 without one)
         if 'phidist_max' in settings and settings['phidist_max'].strip() != '':
             self.discrete_phidist_max = float(settings['phidist_max'])
-        else:
-            self.discrete_phidist_max = 1e4
         if 'phidist_bins' in settings:
             self.discrete_phidist_bins = int(settings['phidist_bins'])
         else:
@@ -1457,7 +1445,7 @@ class Input:
         if 'varphi_bins' in settings:
             self.discrete_varphi_bins = int(settings['varphi_bins'])
         else:
-            self.discrete_varphi_bins = 1024
+            self.discrete_varphi_bins = 2048
         if 'xi_theta_bins' in settings:
             self.discrete_xi_theta_bins = int(settings['xi_theta_bins'])
         else:
@@ -1484,13 +1472,6 @@ class Input:
             self.discrete_col_name_pos2 = 'DEC'
         if 'col_name_weight' in settings and settings['col_name_weight'].strip() != '':
             self.discrete_col_name_weight = settings['col_name_weight'].strip()
-        if 'npatches' in settings:
-            self.discrete_npatches = int(settings['npatches'])
-        else:
-            self.discrete_npatches = 10
-            if needs_catalog:
-                print("ConfigWarning: [" + section + "]: 'npatches' is not " +
-                      "specified and set to 10.")
         if 'rmin_pixsize' in settings:
             self.discrete_rmin_pixsize = float(settings['rmin_pixsize'])
         else:
@@ -1512,69 +1493,66 @@ class Input:
         if 'tree_resos_triplets' in settings and settings['tree_resos_triplets'].strip() != '':
             self.discrete_tree_resos_triplets = \
                 np.array(settings['tree_resos_triplets'].split(',')).astype(float)
-        if 'tree_method' in settings:
-            self.discrete_tree_method = settings['tree_method'].strip()
-        else:
-            self.discrete_tree_method = 'DoubleTree'
+        # tree settings of the quadruplet counts only (default: rmin_pixsize and the
+        # tree_resos of orpheus for them, 0, 0.5, 1, 2, 4, 8, 16)
+        if 'rmin_pixsize_quadruplets' in settings and \
+           settings['rmin_pixsize_quadruplets'].strip() != '':
+            self.discrete_rmin_pixsize_quadruplets = float(settings['rmin_pixsize_quadruplets'])
+        if 'tree_resos_quadruplets' in settings and \
+           settings['tree_resos_quadruplets'].strip() != '':
+            self.discrete_tree_resos_quadruplets = \
+                np.array(settings['tree_resos_quadruplets'].split(',')).astype(float)
         if 'nmaxs' in settings:
             self.discrete_nmaxs = int(settings['nmaxs'])
         else:
-            self.discrete_nmaxs = 25
+            self.discrete_nmaxs = 30
             if needs_catalog:
                 print("ConfigWarning: [" + section + "]: 'nmaxs' is not " +
-                      "specified and set to 25.")
-        if 'shuffle_pix' in settings:
-            self.discrete_shuffle_pix = int(settings['shuffle_pix'])
-        else:
-            self.discrete_shuffle_pix = 1
+                      "specified and set to 30.")
+        # largest multipole of the triplets or the quadruplets only (default: nmaxs)
+        if 'nmaxs_triplets' in settings and settings['nmaxs_triplets'].strip() != '':
+            self.discrete_nmaxs_triplets = int(settings['nmaxs_triplets'])
+        if 'nmaxs_quadruplets' in settings and settings['nmaxs_quadruplets'].strip() != '':
+            self.discrete_nmaxs_quadruplets = int(settings['nmaxs_quadruplets'])
         if 'memory_bound' in settings:
             self.discrete_memory_bound = float(settings['memory_bound'])
         else:
             self.discrete_memory_bound = 512.
-        if 'nbins_phi_triplets' in settings:
-            self.discrete_nbins_phi_triplets = int(settings['nbins_phi_triplets'])
-        else:
-            self.discrete_nbins_phi_triplets = 512
         # left at None, the oversampling is set from the width of the theta bins
         if 'triplet_oversample' in settings and settings['triplet_oversample'].strip() != '':
             self.discrete_triplet_oversample = int(settings['triplet_oversample'])
+        # left at None, the radial nodes of the sample variance per theta bin are set from its width
+        if 'subgrid_nodes' in settings and settings['subgrid_nodes'].strip() != '':
+            self.discrete_subgrid_nodes = int(settings['subgrid_nodes'])
+            if self.discrete_subgrid_nodes < 1:
+                raise Exception("ConfigError: [" + section + "]: 'subgrid_nodes' must " +
+                                "be a positive integer. Must be adjusted in config " +
+                                "file " + config_name + ".")
 
-        # Binning of the measured quadruplet density
-        if 'quad_theta_min' in settings:
+        # Binning of the measured quadruplet density, left at None from the
+        # first theta edge to the largest separation in the catalogue
+        if 'quad_theta_min' in settings and settings['quad_theta_min'].strip() != '':
             self.discrete_quad_theta_min = float(settings['quad_theta_min'])
-        else:
-            self.discrete_quad_theta_min = 0.25
         if 'quad_theta_max' in settings and settings['quad_theta_max'].strip() != '':
             self.discrete_quad_theta_max = float(settings['quad_theta_max'])
-        else:
-            self.discrete_quad_theta_max = self.discrete_phidist_max
-            if self.discrete_method_quadruplets == 'discrete':
-                print("ConfigWarning: [" + section + "]: 'quad_theta_max' is " +
-                      "not specified and set to 'phidist_max' = " +
-                      str(self.discrete_phidist_max) + " arcmin.")
         if 'quad_binsize' in settings:
             self.discrete_quad_binsize = float(settings['quad_binsize'])
         else:
-            self.discrete_quad_binsize = 0.2
-        if 'quad_nbins_phi' in settings:
-            self.discrete_quad_nbins_phi = int(settings['quad_nbins_phi'])
-        else:
-            self.discrete_quad_nbins_phi = 64
+            self.discrete_quad_binsize = 0.1
         if 'quad_richardson' in settings:
             self.discrete_quad_richardson = settings.getboolean('quad_richardson')
         else:
             self.discrete_quad_richardson = False
+        # left at None, orpheus merges the radial bins with fewer than 1000 quadruplets per cell
+        if 'q_count_min' in settings and settings['q_count_min'].strip() != '':
+            self.discrete_q_count_min = float(settings['q_count_min'])
 
         # Pair-count suppression for the quadruplet density 'frompairs'
         if 'frompairs_suppression_file' in settings and \
            settings['frompairs_suppression_file'].strip() != '':
             self.discrete_frompairs_suppression_file = \
                 settings['frompairs_suppression_file'].strip()
-        if 'frompairs_thin' in settings:
-            self.discrete_frompairs_thin = int(settings['frompairs_thin'])
-        else:
-            self.discrete_frompairs_thin = 10
-        # Thinning of the catalogue for the triplet and quadruplet counts
+        # Thinning of the catalogue for the triplet and quadruplet counts and the suppression
         if 'thinning_factor' in settings and settings['thinning_factor'].strip() != '':
             self.discrete_thinning_factor = float(settings['thinning_factor'])
         else:
@@ -1592,34 +1570,7 @@ class Input:
                             "measure the pair counts on. Must be adjusted in config " +
                             "file " + config_name + ".")
 
-        # Coarse grid for the hybrid computation and the multiplet cache
-        if 'n_coarse' in settings and settings['n_coarse'].strip() != '':
-            self.discrete_n_coarse = int(settings['n_coarse'])
-        if 'slab_width' in settings:
-            self.discrete_slab_width = \
-                np.array(settings['slab_width'].split(',')).astype(float)
-        else:
-            self.discrete_slab_width = np.array([1.35, 1.35, 1.9])
-        if len(self.discrete_slab_width) != 3:
-            raise Exception("ConfigError: [" + section + "]: 'slab_width' needs " +
-                            "three values for xi_pp, xi_mm and xi_pm. Must be " +
-                            "adjusted in config file " + config_name + ".")
-
-        # Tiling of the quadruplet integral, bounds its memory but not its result
-        if 'nr_block' in settings and settings['nr_block'].strip() != '':
-            self.discrete_nr_block = int(settings['nr_block'])
-            if self.discrete_nr_block < 1:
-                raise Exception("ConfigError: [" + section + "]: 'nr_block' must " +
-                                "be a positive integer or empty (no tiling). Must " +
-                                "be adjusted in config file " + config_name + ".")
-        if 'v2_block' in settings and settings['v2_block'].strip() != '':
-            self.discrete_v2_block = int(settings['v2_block'])
-            if self.discrete_v2_block < 1:
-                raise Exception("ConfigError: [" + section + "]: 'v2_block' must " +
-                                "be a positive integer. Must be adjusted in config " +
-                                "file " + config_name + ".")
-        else:
-            self.discrete_v2_block = 16
+        # The multiplet cache
         if 'path_multiplets' in settings and settings['path_multiplets'].strip() != '':
             self.discrete_path_multiplets = settings['path_multiplets'].strip()
         if 'store_multiplets' in settings:
@@ -4114,16 +4065,14 @@ class Input:
         keys = ['do_discrete', 'method', 'method_pairs', 'method_triplets',
                 'method_quadruplets', 'replace_terms', 'phidist_min', 'phidist_max',
                 'phidist_bins', 'varphi_bins', 'xi_theta_bins', 'catalog_file',
-                'col_name_pos1', 'col_name_pos2', 'col_name_weight', 'npatches',
+                'col_name_pos1', 'col_name_pos2', 'col_name_weight',
                 'rmin_pixsize', 'tree_resos', 'rmin_pixsize_triplets', 'tree_resos_triplets',
-                'rmin_pixsize_pairs',
-                'tree_method', 'nmaxs', 'shuffle_pix',
-                'memory_bound', 'nbins_phi_triplets', 'triplet_oversample',
-                'quad_theta_min', 'quad_theta_max', 'quad_binsize', 'quad_nbins_phi',
-                'quad_richardson', 'frompairs_suppression_file', 'frompairs_thin', 'thinning_factor',
-                'n_coarse',
-                'slab_width', 'nr_block', 'v2_block', 'path_multiplets',
-                'store_multiplets', 'save_before_projection']
+                'rmin_pixsize_pairs', 'rmin_pixsize_quadruplets', 'tree_resos_quadruplets',
+                'nmaxs', 'nmaxs_triplets', 'nmaxs_quadruplets',
+                'memory_bound', 'triplet_oversample', 'subgrid_nodes',
+                'quad_theta_min', 'quad_theta_max', 'quad_binsize',
+                'quad_richardson', 'q_count_min', 'frompairs_suppression_file', 'thinning_factor',
+                'path_multiplets', 'store_multiplets', 'save_before_projection']
         values = [self.discrete_do_discrete, self.discrete_method, self.discrete_method_pairs,
                   self.discrete_method_triplets, self.discrete_method_quadruplets,
                   self.discrete_replace_terms, self.discrete_phidist_min,
@@ -4131,26 +4080,26 @@ class Input:
                   self.discrete_varphi_bins, self.discrete_xi_theta_bins,
                   self.discrete_catalog_file, self.discrete_col_name_pos1,
                   self.discrete_col_name_pos2, self.discrete_col_name_weight,
-                  self.discrete_npatches, self.discrete_rmin_pixsize,
+                  self.discrete_rmin_pixsize,
                   self.discrete_tree_resos, self.discrete_rmin_pixsize_triplets,
                   self.discrete_tree_resos_triplets, self.discrete_rmin_pixsize_pairs,
-                  self.discrete_tree_method, self.discrete_nmaxs,
-                  self.discrete_shuffle_pix, self.discrete_memory_bound,
-                  self.discrete_nbins_phi_triplets, self.discrete_triplet_oversample,
+                  self.discrete_rmin_pixsize_quadruplets, self.discrete_tree_resos_quadruplets,
+                  self.discrete_nmaxs,
+                  self.discrete_nmaxs_triplets, self.discrete_nmaxs_quadruplets,
+                  self.discrete_memory_bound,
+                  self.discrete_triplet_oversample, self.discrete_subgrid_nodes,
                   self.discrete_quad_theta_min, self.discrete_quad_theta_max,
-                  self.discrete_quad_binsize, self.discrete_quad_nbins_phi,
-                  self.discrete_quad_richardson,
-                  self.discrete_frompairs_suppression_file, self.discrete_frompairs_thin,
+                  self.discrete_quad_binsize,
+                  self.discrete_quad_richardson, self.discrete_q_count_min,
+                  self.discrete_frompairs_suppression_file,
                   self.discrete_thinning_factor,
-                  self.discrete_n_coarse, self.discrete_slab_width,
-                  self.discrete_nr_block, self.discrete_v2_block,
                   self.discrete_path_multiplets, self.discrete_store_multiplets,
                   self.discrete_save_before_projection]
         self.covTHETAspace_discrete_settings = dict(zip(keys, values))
         if self.discrete_do_discrete:
             self.covTHETAspace_discrete_settings_abr.update(
                 {k: v for k, v in zip(keys, values) if v is not None})
-            for key in ['replace_terms', 'tree_resos', 'tree_resos_triplets', 'slab_width']:
+            for key in ['replace_terms', 'tree_resos', 'tree_resos_triplets', 'tree_resos_quadruplets']:
                 if self.covTHETAspace_discrete_settings[key] is not None:
                     self.covTHETAspace_discrete_settings_abr[key] = \
                         ', '.join(map(str, self.covTHETAspace_discrete_settings[key]))
